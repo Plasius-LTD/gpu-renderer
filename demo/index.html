@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@plasius/gpu-renderer demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>@plasius/gpu-renderer</h1>
+      <p class="subtitle">WebGPU clear-pass runtime demo (no Three.js).</p>
+
+      <div class="controls">
+        <button id="start">Start</button>
+        <button id="stop">Stop</button>
+        <button id="step">Render Once</button>
+      </div>
+
+      <canvas id="scene" width="960" height="540"></canvas>
+      <pre id="log" class="log"></pre>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
