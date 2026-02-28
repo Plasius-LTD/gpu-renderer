@@ -1,6 +1,6 @@
 {
   "name": "@plasius/gpu-renderer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Framework-agnostic WebGPU renderer runtime for Plasius projects.",
   "type": "module",
   "sideEffects": false,
@@ -43,7 +43,7 @@
   "author": "Plasius LTD <development@plasius.co.uk>",
   "license": "Apache-2.0",
   "dependencies": {
-    "@plasius/gpu-xr": "^0.1.0"
+    "@plasius/gpu-xr": "^0.1.1"
   },
   "devDependencies": {
     "c8": "^10.1.3",
