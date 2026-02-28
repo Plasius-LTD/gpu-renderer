@@ -23,6 +23,20 @@ All notable changes to this project will be documented in this file.
 - **Security**
   - (placeholder)
 
+## [0.1.1] - 2026-02-28
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
 ## [0.1.0] - 2026-02-11
 
 - **Added**
@@ -36,3 +50,4 @@ All notable changes to this project will be documented in this file.
 
 - **Security**
   - (placeholder)
+[0.1.1]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.1
