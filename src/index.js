@@ -76,7 +76,7 @@ function resolveCanvas(canvasOrSelector, documentOverride) {
       : DEFAULT_CANVAS_SELECTOR;
   const resolved = doc.querySelector(selector);
   if (!resolved) {
-    throw new Error(`Unable to find canvas for selector \"${selector}\".`);
+    throw new Error(`Unable to find canvas for selector "${selector}".`);
   }
   return resolved;
 }

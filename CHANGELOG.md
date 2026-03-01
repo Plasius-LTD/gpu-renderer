@@ -12,16 +12,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - `lint`, `typecheck`, and security audit scripts for local and CI enforcement.
 
 - **Changed**
-  - (placeholder)
+  - CI now fails early on lint/typecheck/runtime dependency audit before build/test.
 
 - **Fixed**
-  - (placeholder)
+  - Pack-check regex cleanup to remove an unnecessary path escape.
 
 - **Security**
-  - (placeholder)
+  - Runtime dependency vulnerability checks are now enforced in CI.
 
 ## [0.1.1] - 2026-02-28
 
