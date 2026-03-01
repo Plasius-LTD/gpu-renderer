@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.1.2] - 2026-03-01
+
+- **Added**
   - `lint`, `typecheck`, and security audit scripts for local and CI enforcement.
 
 - **Changed**
@@ -51,3 +65,4 @@ All notable changes to this project will be documented in this file.
 - **Security**
   - (placeholder)
 [0.1.1]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.1
+[0.1.2]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.2
