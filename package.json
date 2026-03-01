@@ -49,7 +49,7 @@
   "author": "Plasius LTD <development@plasius.co.uk>",
   "license": "Apache-2.0",
   "dependencies": {
-    "@plasius/gpu-xr": "^0.1.1"
+    "@plasius/gpu-xr": "^0.1.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
