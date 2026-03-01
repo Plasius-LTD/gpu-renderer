@@ -1,6 +1,6 @@
 {
   "name": "@plasius/gpu-renderer",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Framework-agnostic WebGPU renderer runtime for Plasius projects.",
   "type": "module",
   "sideEffects": false,
