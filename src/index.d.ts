@@ -1,5 +1,16 @@
 export type RendererColor = string | [number, number, number, number?];
 
+export interface RendererFrameEvent {
+  frame: number;
+  frameId: string;
+  frameTimeMs?: number;
+  timestamp: number;
+  device: GPUDevice;
+  context: GPUCanvasContext;
+  canvas: HTMLCanvasElement;
+  xrActive: boolean;
+}
+
 export interface RendererSnapshot {
   running: boolean;
   frame: number;
@@ -11,22 +22,32 @@ export interface RendererSnapshot {
 }
 
 export interface RendererHooks {
+  onFrameStart?: (event: RendererFrameEvent) => void;
   onBeforeEncode?: (event: {
     frame: number;
+    frameNumber: number;
+    frameId: string;
+    frameTimeMs?: number;
     timestamp: number;
     device: GPUDevice;
     context: GPUCanvasContext;
     encoder: GPUCommandEncoder;
     pass: GPURenderPassEncoder;
     canvas: HTMLCanvasElement;
+    xrActive: boolean;
   }) => void;
   onAfterSubmit?: (event: {
     frame: number;
+    frameNumber: number;
+    frameId: string;
+    frameTimeMs?: number;
     timestamp: number;
     device: GPUDevice;
     context: GPUCanvasContext;
     canvas: HTMLCanvasElement;
+    xrActive: boolean;
   }) => void;
+  onFrameComplete?: (event: RendererFrameEvent) => void;
 }
 
 export interface CreateGpuRendererOptions extends RendererHooks {
@@ -39,6 +60,12 @@ export interface CreateGpuRendererOptions extends RendererHooks {
   clearColor?: RendererColor;
   requestAnimationFrame?: (cb: FrameRequestCallback) => number;
   cancelAnimationFrame?: (id: number) => void;
+  frameIdFactory?: (event: {
+    frame: number;
+    timestamp: number;
+    canvas: HTMLCanvasElement;
+    xrActive: boolean;
+  }) => string;
 }
 
 export interface GpuRenderer {
@@ -46,7 +73,12 @@ export interface GpuRenderer {
   context: GPUCanvasContext;
   device: GPUDevice;
   format: GPUTextureFormat | string;
-  renderOnce(timestamp?: number): { frame: number; timestamp: number };
+  renderOnce(timestamp?: number): {
+    frame: number;
+    frameId: string;
+    frameTimeMs?: number;
+    timestamp: number;
+  };
   start(): boolean;
   stop(): boolean;
   resize(cssWidth: number, cssHeight: number, devicePixelRatio?: number): {
@@ -74,6 +106,31 @@ export function supportsWebGpu(options?: { navigator?: Navigator | { gpu?: GPU }
 
 export function createGpuRenderer(options?: CreateGpuRendererOptions): Promise<GpuRenderer>;
 
+export interface RendererDebugHooksOptions {
+  debugSession: {
+    recordFrame(sample: {
+      frameId?: string;
+      frameTimeMs: number;
+      targetFrameTimeMs?: number;
+      dropped?: boolean;
+    }): boolean;
+  };
+  targetFrameTimeMs?: number;
+  targetFrameRate?: number;
+  getTargetFrameTimeMs?: (event: RendererFrameEvent) => number | undefined;
+  onFrameStart?: (event: RendererFrameEvent & { owner: "renderer" }) => void;
+  onFrameComplete?: (
+    event: RendererFrameEvent & {
+      owner: "renderer";
+      targetFrameTimeMs?: number;
+    }
+  ) => void;
+}
+
+export function createRendererDebugHooks(
+  options: RendererDebugHooksOptions
+): Pick<RendererHooks, "onFrameStart" | "onFrameComplete">;
+
 export function bindRendererToXrManager(
   renderer: Pick<GpuRenderer, "setXrActive">,
   xrManager: {
@@ -88,3 +145,4 @@ export function bindRendererToXrManager(
 ): () => void;
 
 export const defaultRendererClearColor: readonly [number, number, number, number];
+export const rendererDebugOwner: "renderer";

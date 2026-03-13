@@ -1,5 +1,6 @@
 const DEFAULT_CLEAR_COLOR = Object.freeze([0.07, 0.11, 0.18, 1.0]);
 const DEFAULT_CANVAS_SELECTOR = "canvas[data-plasius-gpu-renderer]";
+export const rendererDebugOwner = "renderer";
 
 function clamp01(value) {
   return Math.min(1, Math.max(0, value));
@@ -41,11 +42,136 @@ function normalizeColor(value) {
   return [...DEFAULT_CLEAR_COLOR];
 }
 
+function readPositiveNumber(name, value) {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a finite number greater than zero.`);
+  }
+  return value;
+}
+
 function now() {
   if (typeof performance !== "undefined" && typeof performance.now === "function") {
     return performance.now();
   }
   return Date.now();
+}
+
+function normalizeFrameId(value) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error("frameIdFactory must return a non-empty string.");
+  }
+  return value.trim();
+}
+
+function resolveTargetFrameTimeMs(options, event) {
+  const {
+    targetFrameTimeMs: fixedTargetFrameTimeMs,
+    targetFrameRate,
+    getTargetFrameTimeMs,
+  } = options;
+
+  if (typeof getTargetFrameTimeMs === "function") {
+    const resolved = getTargetFrameTimeMs(event);
+    return readPositiveNumber("getTargetFrameTimeMs()", resolved);
+  }
+
+  if (fixedTargetFrameTimeMs !== undefined) {
+    return fixedTargetFrameTimeMs;
+  }
+
+  if (targetFrameRate !== undefined) {
+    return 1000 / targetFrameRate;
+  }
+
+  return undefined;
+}
+
+export function createRendererDebugHooks(options = {}) {
+  const {
+    debugSession,
+    targetFrameTimeMs,
+    targetFrameRate,
+    getTargetFrameTimeMs,
+    onFrameStart,
+    onFrameComplete,
+  } = options;
+
+  if (!debugSession || typeof debugSession.recordFrame !== "function") {
+    throw new Error(
+      "debugSession must expose recordFrame(sample). Use @plasius/gpu-debug createGpuDebugSession()."
+    );
+  }
+
+  const fixedTargetFrameTimeMs = readPositiveNumber(
+    "targetFrameTimeMs",
+    targetFrameTimeMs
+  );
+  const fixedTargetFrameRate = readPositiveNumber(
+    "targetFrameRate",
+    targetFrameRate
+  );
+
+  if (
+    fixedTargetFrameTimeMs !== undefined &&
+    fixedTargetFrameRate !== undefined
+  ) {
+    throw new Error(
+      "Provide either targetFrameTimeMs or targetFrameRate, not both."
+    );
+  }
+
+  if (
+    getTargetFrameTimeMs !== undefined &&
+    typeof getTargetFrameTimeMs !== "function"
+  ) {
+    throw new Error("getTargetFrameTimeMs must be a function when provided.");
+  }
+
+  const resolvedOptions = {
+    targetFrameTimeMs: fixedTargetFrameTimeMs,
+    targetFrameRate: fixedTargetFrameRate,
+    getTargetFrameTimeMs,
+  };
+
+  return {
+    onFrameStart(event) {
+      if (typeof onFrameStart === "function") {
+        onFrameStart({
+          ...event,
+          owner: rendererDebugOwner,
+        });
+      }
+    },
+    onFrameComplete(event) {
+      const resolvedTargetFrameTimeMs = resolveTargetFrameTimeMs(
+        resolvedOptions,
+        event
+      );
+
+      if (
+        typeof event.frameTimeMs === "number" &&
+        Number.isFinite(event.frameTimeMs) &&
+        event.frameTimeMs > 0
+      ) {
+        debugSession.recordFrame({
+          frameId: event.frameId,
+          frameTimeMs: event.frameTimeMs,
+          targetFrameTimeMs: resolvedTargetFrameTimeMs,
+        });
+      }
+
+      if (typeof onFrameComplete === "function") {
+        onFrameComplete({
+          ...event,
+          owner: rendererDebugOwner,
+          targetFrameTimeMs: resolvedTargetFrameTimeMs,
+        });
+      }
+    },
+  };
 }
 
 function readNavigator(navigatorOverride) {
@@ -139,8 +265,11 @@ export async function createGpuRenderer(options = {}) {
     clearColor = DEFAULT_CLEAR_COLOR,
     requestAnimationFrame = globalThis.requestAnimationFrame?.bind(globalThis),
     cancelAnimationFrame = globalThis.cancelAnimationFrame?.bind(globalThis),
+    frameIdFactory,
+    onFrameStart,
     onBeforeEncode,
     onAfterSubmit,
+    onFrameComplete,
   } = options;
 
   const gpu = readGpu(navigatorOverride);
@@ -178,6 +307,33 @@ export async function createGpuRenderer(options = {}) {
       throw new Error("Renderer was destroyed.");
     }
 
+    const frameNumber = frame + 1;
+    const frameId = normalizeFrameId(
+      typeof frameIdFactory === "function"
+        ? frameIdFactory({
+            frame: frameNumber,
+            timestamp,
+            canvas: targetCanvas,
+            xrActive,
+          })
+        : `renderer.frame.${frameNumber}`
+    );
+    const frameTimeMs =
+      lastTimestamp > 0 ? Math.max(0, timestamp - lastTimestamp) : undefined;
+
+    if (typeof onFrameStart === "function") {
+      onFrameStart({
+        frame: frameNumber,
+        frameId,
+        frameTimeMs,
+        timestamp,
+        device,
+        context,
+        canvas: targetCanvas,
+        xrActive,
+      });
+    }
+
     const texture = context.getCurrentTexture?.();
     if (!texture || typeof texture.createView !== "function") {
       throw new Error("WebGPU context returned an invalid current texture.");
@@ -193,12 +349,16 @@ export async function createGpuRenderer(options = {}) {
     if (typeof onBeforeEncode === "function") {
       onBeforeEncode({
         frame,
+        frameNumber,
+        frameId,
+        frameTimeMs,
         timestamp,
         device,
         context,
         encoder,
         pass,
         canvas: targetCanvas,
+        xrActive,
       });
     }
 
@@ -209,21 +369,40 @@ export async function createGpuRenderer(options = {}) {
     const commandBuffer = encoder.finish();
     device.queue.submit([commandBuffer]);
 
-    frame += 1;
+    frame = frameNumber;
     lastTimestamp = timestamp;
 
     if (typeof onAfterSubmit === "function") {
       onAfterSubmit({
-        frame,
+        frame: frameNumber,
+        frameNumber,
+        frameId,
+        frameTimeMs,
         timestamp,
         device,
         context,
         canvas: targetCanvas,
+        xrActive,
+      });
+    }
+
+    if (typeof onFrameComplete === "function") {
+      onFrameComplete({
+        frame: frameNumber,
+        frameId,
+        frameTimeMs,
+        timestamp,
+        device,
+        context,
+        canvas: targetCanvas,
+        xrActive,
       });
     }
 
     return {
-      frame,
+      frame: frameNumber,
+      frameId,
+      frameTimeMs,
       timestamp,
     };
   };

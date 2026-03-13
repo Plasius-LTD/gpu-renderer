@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   bindRendererToXrManager,
   createGpuRenderer,
+  createRendererDebugHooks,
   defaultRendererClearColor,
+  rendererDebugOwner,
   supportsWebGpu,
 } from "../src/index.js";
 
@@ -150,6 +152,49 @@ test("createGpuRenderer renders and updates snapshot", async () => {
   renderer.destroy();
 });
 
+test("createGpuRenderer emits frame lifecycle hooks with frame ids", async () => {
+  const device = new FakeDevice();
+  const gpu = new FakeGpu(new FakeAdapter(device));
+  const canvas = createFakeCanvas();
+  const events = [];
+
+  const renderer = await createGpuRenderer({
+    canvas,
+    navigator: { gpu },
+    frameIdFactory: ({ frame, xrActive }) => `frame-${frame}-${xrActive}`,
+    onFrameStart(event) {
+      events.push(["start", event.frame, event.frameId, event.frameTimeMs]);
+    },
+    onFrameComplete(event) {
+      events.push(["complete", event.frame, event.frameId, event.frameTimeMs]);
+    },
+  });
+
+  const first = renderer.renderOnce(100);
+  const second = renderer.renderOnce(116.5);
+
+  assert.deepEqual(first, {
+    frame: 1,
+    frameId: "frame-1-false",
+    frameTimeMs: undefined,
+    timestamp: 100,
+  });
+  assert.deepEqual(second, {
+    frame: 2,
+    frameId: "frame-2-false",
+    frameTimeMs: 16.5,
+    timestamp: 116.5,
+  });
+  assert.deepEqual(events, [
+    ["start", 1, "frame-1-false", undefined],
+    ["complete", 1, "frame-1-false", undefined],
+    ["start", 2, "frame-2-false", 16.5],
+    ["complete", 2, "frame-2-false", 16.5],
+  ]);
+
+  renderer.destroy();
+});
+
 test("renderer start/stop uses injected animation frame handlers", async () => {
   const device = new FakeDevice();
   const gpu = new FakeGpu(new FakeAdapter(device));
@@ -178,6 +223,105 @@ test("renderer start/stop uses injected animation frame handlers", async () => {
   assert.equal(canceled, 42);
 
   renderer.destroy();
+});
+
+test("createRendererDebugHooks records frame samples against a debug session", () => {
+  const frameSamples = [];
+  const hooks = createRendererDebugHooks({
+    debugSession: {
+      recordFrame(sample) {
+        frameSamples.push(sample);
+        return true;
+      },
+    },
+    targetFrameRate: 72,
+  });
+
+  hooks.onFrameComplete({
+    frame: 12,
+    frameId: "renderer.frame.12",
+    frameTimeMs: 13.8,
+    timestamp: 250,
+    device: { label: "device" },
+    context: { label: "context" },
+    canvas: { width: 1280, height: 720 },
+    xrActive: true,
+  });
+
+  assert.deepEqual(frameSamples, [
+    {
+      frameId: "renderer.frame.12",
+      frameTimeMs: 13.8,
+      targetFrameTimeMs: 1000 / 72,
+    },
+  ]);
+});
+
+test("createRendererDebugHooks forwards owner metadata and dynamic targets", () => {
+  const callbacks = [];
+  const hooks = createRendererDebugHooks({
+    debugSession: {
+      recordFrame() {
+        return true;
+      },
+    },
+    getTargetFrameTimeMs(event) {
+      return event.xrActive ? 1000 / 90 : 1000 / 60;
+    },
+    onFrameStart(event) {
+      callbacks.push(["start", event.owner, event.frameId]);
+    },
+    onFrameComplete(event) {
+      callbacks.push([
+        "complete",
+        event.owner,
+        event.frameId,
+        event.targetFrameTimeMs,
+      ]);
+    },
+  });
+
+  hooks.onFrameStart({
+    frame: 1,
+    frameId: "renderer.frame.1",
+    frameTimeMs: undefined,
+    timestamp: 100,
+    device: { label: "device" },
+    context: { label: "context" },
+    canvas: { width: 800, height: 600 },
+    xrActive: false,
+  });
+  hooks.onFrameComplete({
+    frame: 1,
+    frameId: "renderer.frame.1",
+    frameTimeMs: 16,
+    timestamp: 100,
+    device: { label: "device" },
+    context: { label: "context" },
+    canvas: { width: 800, height: 600 },
+    xrActive: false,
+  });
+
+  assert.deepEqual(callbacks, [
+    ["start", rendererDebugOwner, "renderer.frame.1"],
+    ["complete", rendererDebugOwner, "renderer.frame.1", 1000 / 60],
+  ]);
+});
+
+test("createRendererDebugHooks validates options", () => {
+  assert.throws(
+    () => createRendererDebugHooks({ debugSession: {} }),
+    /debugSession must expose recordFrame/
+  );
+  assert.throws(
+    () =>
+      createRendererDebugHooks({
+        debugSession: { recordFrame() { return true; } },
+        targetFrameRate: 60,
+        targetFrameTimeMs: 16.6,
+      }),
+    /Provide either targetFrameTimeMs or targetFrameRate/
+  );
 });
 
 test("bindRendererToXrManager toggles xr active state", () => {

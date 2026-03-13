@@ -37,6 +37,27 @@ renderer.resize(window.innerWidth, window.innerHeight);
 renderer.start();
 ```
 
+## Adaptive Frame Hooks
+
+`@plasius/gpu-renderer` now exposes frame lifecycle hooks so the app can pass
+negotiated frame targets from `@plasius/gpu-performance` and opt into renderer
+frame sampling for `@plasius/gpu-debug`.
+
+```js
+import { createGpuRenderer, createRendererDebugHooks } from "@plasius/gpu-renderer";
+
+const rendererDebugHooks = createRendererDebugHooks({
+  debugSession,
+  getTargetFrameTimeMs: () => governor.getSnapshot().targetFrameTimeMs,
+});
+
+const renderer = await createGpuRenderer({
+  canvas: "#scene",
+  frameIdFactory: ({ frame, xrActive }) => `scene.${xrActive ? "xr" : "flat"}.${frame}`,
+  ...rendererDebugHooks,
+});
+```
+
 ## XR integration
 
 ```js
@@ -56,8 +77,10 @@ renderer.bindXrManager(xr, {
 
 - `supportsWebGpu(options)`
 - `createGpuRenderer(options)`
+- `createRendererDebugHooks(options)`
 - `bindRendererToXrManager(renderer, xrManager, options)`
 - `defaultRendererClearColor`
+- `rendererDebugOwner`
 
 ## Demo
 
@@ -86,3 +109,4 @@ npm run pack:check
 - `src/index.d.ts`: public API typings.
 - `tests/package.test.js`: unit tests for renderer lifecycle behavior.
 - `docs/adrs/*`: architecture decisions for renderer runtime design.
+- `docs/tdrs/*`: technical direction for frame hook integration.

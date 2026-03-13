@@ -12,10 +12,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added frame lifecycle hooks and frame-id generation support to
+    `createGpuRenderer(...)`.
+  - Added `createRendererDebugHooks(...)` for opt-in `@plasius/gpu-debug`
+    frame sampling tied to negotiated frame targets.
+  - Added ADR, TDR, and design docs for renderer frame hook integration.
 
 - **Changed**
-  - (placeholder)
+  - Clarified renderer guidance for adaptive frame targets and debug
+    instrumentation.
 
 - **Fixed**
   - (placeholder)
