@@ -20,6 +20,8 @@ small `createRendererDebugHooks(...)` helper.
 - `createRendererDebugHooks(...)` records frame samples into
   `@plasius/gpu-debug` and accepts negotiated target frame times from
   `@plasius/gpu-performance`.
+- Renderer worker-manifest exports remain a separate contract for DAG
+  scheduling, so frame correlation and worker topology stay decoupled.
 - Renderer remains framework-agnostic and does not own analytics/export logic.
 
 ## Consequences

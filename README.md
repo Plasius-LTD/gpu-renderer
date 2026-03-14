@@ -58,6 +58,29 @@ const renderer = await createGpuRenderer({
 });
 ```
 
+## Worker DAG Manifests
+
+The renderer also publishes worker-facing frame-stage manifests so
+`@plasius/gpu-performance` and `@plasius/gpu-worker` can reason about renderer
+work as a multi-root DAG instead of a flat queue.
+
+```js
+import { getRendererWorkerManifest } from "@plasius/gpu-renderer";
+
+const realtimeManifest = getRendererWorkerManifest();
+const xrManifest = getRendererWorkerManifest("xr");
+
+console.log(realtimeManifest.jobs.map((job) => job.worker.jobType));
+console.log(xrManifest.jobs.find((job) => job.key === "lateLatch"));
+```
+
+- `realtime` publishes `acquire`, `visibility`, `mainEncode`, `postProcess`,
+  and `submit`.
+- `xr` publishes `acquire`, `visibility`, `lateLatch`, `mainEncode`, and
+  `submit`.
+- Jobs include queue class, priority, dependencies, adaptive budget levels, and
+  debug metadata such as allocation tags.
+
 ## XR integration
 
 ```js
@@ -78,9 +101,16 @@ renderer.bindXrManager(xr, {
 - `supportsWebGpu(options)`
 - `createGpuRenderer(options)`
 - `createRendererDebugHooks(options)`
+- `getRendererWorkerProfile(name?)`
+- `getRendererWorkerManifest(name?)`
 - `bindRendererToXrManager(renderer, xrManager, options)`
 - `defaultRendererClearColor`
 - `rendererDebugOwner`
+- `rendererWorkerQueueClass`
+- `defaultRendererWorkerProfile`
+- `rendererWorkerProfiles`
+- `rendererWorkerProfileNames`
+- `rendererWorkerManifests`
 
 ## Demo
 
@@ -108,5 +138,6 @@ npm run pack:check
 - `src/index.js`: WebGPU renderer runtime and XR binding helper.
 - `src/index.d.ts`: public API typings.
 - `tests/package.test.js`: unit tests for renderer lifecycle behavior.
+- `docs/design/worker-manifest-integration.md`: renderer frame-stage DAG model.
 - `docs/adrs/*`: architecture decisions for renderer runtime design.
 - `docs/tdrs/*`: technical direction for frame hook integration.

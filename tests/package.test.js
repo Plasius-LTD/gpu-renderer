@@ -4,8 +4,15 @@ import {
   bindRendererToXrManager,
   createGpuRenderer,
   createRendererDebugHooks,
+  defaultRendererWorkerProfile,
   defaultRendererClearColor,
+  getRendererWorkerManifest,
+  getRendererWorkerProfile,
   rendererDebugOwner,
+  rendererWorkerManifests,
+  rendererWorkerProfileNames,
+  rendererWorkerProfiles,
+  rendererWorkerQueueClass,
   supportsWebGpu,
 } from "../src/index.js";
 
@@ -306,6 +313,117 @@ test("createRendererDebugHooks forwards owner metadata and dynamic targets", () 
     ["start", rendererDebugOwner, "renderer.frame.1"],
     ["complete", rendererDebugOwner, "renderer.frame.1", 1000 / 60],
   ]);
+});
+
+test("renderer worker profiles expose realtime and xr frame-stage DAGs", () => {
+  assert.deepEqual(rendererWorkerProfileNames, ["realtime", "xr"]);
+  assert.equal(defaultRendererWorkerProfile, "realtime");
+  assert.deepEqual(rendererWorkerProfiles.realtime, {
+    name: "realtime",
+    description:
+      "Frame-stage DAG for flat rendering with visibility, main encode, post-processing, and submit.",
+    jobs: ["acquire", "visibility", "mainEncode", "postProcess", "submit"],
+  });
+  assert.deepEqual(getRendererWorkerProfile("xr"), {
+    name: "xr",
+    description:
+      "Frame-stage DAG for XR rendering with late-latch coordination before main encode and submit.",
+    jobs: ["acquire", "visibility", "lateLatch", "mainEncode", "submit"],
+  });
+});
+
+test("renderer worker manifests publish queue, priority, and dependency metadata", () => {
+  const realtime = getRendererWorkerManifest();
+  const xr = getRendererWorkerManifest("xr");
+
+  assert.equal(realtime, rendererWorkerManifests.realtime);
+  assert.equal(realtime.owner, rendererDebugOwner);
+  assert.equal(realtime.queueClass, rendererWorkerQueueClass);
+  assert.equal(realtime.schedulerMode, "dag");
+  assert.deepEqual(realtime.suggestedAllocationIds, [
+    "renderer.surface.current",
+    "renderer.visibility.worklist",
+    "renderer.post-process.history",
+  ]);
+
+  assert.deepEqual(
+    realtime.jobs.map((job) => ({
+      key: job.key,
+      priority: job.worker.priority,
+      dependencies: job.worker.dependencies,
+    })),
+    [
+      { key: "acquire", priority: 5, dependencies: [] },
+      { key: "visibility", priority: 4, dependencies: [] },
+      {
+        key: "mainEncode",
+        priority: 4,
+        dependencies: [
+          "renderer.realtime.acquire",
+          "renderer.realtime.visibility",
+        ],
+      },
+      {
+        key: "postProcess",
+        priority: 3,
+        dependencies: ["renderer.realtime.mainEncode"],
+      },
+      {
+        key: "submit",
+        priority: 2,
+        dependencies: ["renderer.realtime.postProcess"],
+      },
+    ]
+  );
+  assert.deepEqual(
+    realtime.jobs.find((job) => job.key === "postProcess").debug.tags,
+    ["renderer", "realtime", "postProcess", "post-processing"]
+  );
+
+  assert.equal(xr.profile, "xr");
+  assert.deepEqual(
+    xr.jobs.map((job) => ({
+      key: job.key,
+      priority: job.worker.priority,
+      dependencies: job.worker.dependencies,
+    })),
+    [
+      { key: "acquire", priority: 5, dependencies: [] },
+      { key: "visibility", priority: 4, dependencies: [] },
+      {
+        key: "lateLatch",
+        priority: 5,
+        dependencies: ["renderer.xr.acquire"],
+      },
+      {
+        key: "mainEncode",
+        priority: 4,
+        dependencies: ["renderer.xr.visibility", "renderer.xr.lateLatch"],
+      },
+      {
+        key: "submit",
+        priority: 2,
+        dependencies: ["renderer.xr.mainEncode"],
+      },
+    ]
+  );
+  assert.deepEqual(
+    xr.jobs.find((job) => job.key === "mainEncode").performance.levels.map(
+      (level) => level.id
+    ),
+    ["low", "medium", "high"]
+  );
+});
+
+test("renderer worker helpers reject unknown profile names", () => {
+  assert.throws(
+    () => getRendererWorkerProfile("cinematic"),
+    /Unknown renderer worker profile "cinematic"/
+  );
+  assert.throws(
+    () => getRendererWorkerManifest("cinematic"),
+    /Unknown renderer worker profile "cinematic"/
+  );
 });
 
 test("createRendererDebugHooks validates options", () => {

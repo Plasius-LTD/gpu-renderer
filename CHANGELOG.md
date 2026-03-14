@@ -17,10 +17,16 @@ All notable changes to this project will be documented in this file.
   - Added `createRendererDebugHooks(...)` for opt-in `@plasius/gpu-debug`
     frame sampling tied to negotiated frame targets.
   - Added ADR, TDR, and design docs for renderer frame hook integration.
+  - Added renderer worker profile and manifest exports for `realtime` and `xr`
+    DAG scheduling across `@plasius/gpu-worker` and
+    `@plasius/gpu-performance`.
+  - Added ADR, TDR, and design docs for renderer frame-stage DAG manifests.
 
 - **Changed**
   - Clarified renderer guidance for adaptive frame targets and debug
     instrumentation.
+  - Clarified that frame hooks cover correlation while worker manifests cover
+    renderer stage scheduling.
 
 - **Fixed**
   - (placeholder)

@@ -144,5 +144,89 @@ export function bindRendererToXrManager(
   }
 ): () => void;
 
+export type RendererWorkerProfileName = "realtime" | "xr";
+
+export interface RendererWorkerBudgetLevelConfig {
+  maxDispatchesPerFrame: number;
+  maxJobsPerDispatch: number;
+  cadenceDivisor: number;
+  workgroupScale: number;
+  maxQueueDepth: number;
+  metadata: Readonly<{
+    owner: typeof rendererDebugOwner;
+    queueClass: typeof rendererWorkerQueueClass;
+    jobType: string;
+    quality: string;
+  }>;
+}
+
+export interface RendererWorkerBudgetLevel {
+  id: string;
+  estimatedCostMs: number;
+  config: RendererWorkerBudgetLevelConfig;
+}
+
+export interface RendererWorkerProfile {
+  readonly name: RendererWorkerProfileName;
+  readonly description: string;
+  readonly jobs: readonly string[];
+}
+
+export interface RendererWorkerManifestJob {
+  readonly key: string;
+  readonly label: string;
+  readonly worker: Readonly<{
+    jobType: string;
+    queueClass: typeof rendererWorkerQueueClass;
+    priority: number;
+    dependencies: readonly string[];
+    schedulerMode: "dag";
+  }>;
+  readonly performance: Readonly<{
+    id: string;
+    jobType: string;
+    queueClass: typeof rendererWorkerQueueClass;
+    domain: "resolution" | "geometry" | "post-processing" | "xr";
+    authority: "visual";
+    importance: "high" | "critical";
+    levels: readonly RendererWorkerBudgetLevel[];
+  }>;
+  readonly debug: Readonly<{
+    owner: typeof rendererDebugOwner;
+    queueClass: typeof rendererWorkerQueueClass;
+    jobType: string;
+    tags: readonly string[];
+    suggestedAllocationIds: readonly string[];
+  }>;
+}
+
+export interface RendererWorkerManifest {
+  readonly schemaVersion: 1;
+  readonly owner: typeof rendererDebugOwner;
+  readonly profile: RendererWorkerProfileName;
+  readonly description: string;
+  readonly queueClass: typeof rendererWorkerQueueClass;
+  readonly schedulerMode: "dag";
+  readonly suggestedAllocationIds: readonly string[];
+  readonly jobs: readonly RendererWorkerManifestJob[];
+}
+
+export function getRendererWorkerProfile(
+  name?: RendererWorkerProfileName
+): RendererWorkerProfile;
+
+export function getRendererWorkerManifest(
+  name?: RendererWorkerProfileName
+): RendererWorkerManifest;
+
 export const defaultRendererClearColor: readonly [number, number, number, number];
 export const rendererDebugOwner: "renderer";
+export const rendererWorkerQueueClass: "render";
+export const defaultRendererWorkerProfile: "realtime";
+export const rendererWorkerProfileNames: readonly RendererWorkerProfileName[];
+export const rendererWorkerProfiles: Readonly<
+  Record<RendererWorkerProfileName, RendererWorkerProfile>
+>;
+export const rendererWorkerManifests: Readonly<
+  Record<RendererWorkerProfileName, RendererWorkerManifest>
+>;

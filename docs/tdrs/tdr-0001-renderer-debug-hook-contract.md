@@ -21,6 +21,9 @@ Use a two-part contract:
 The helper records frame samples only. It does not invent queue depth, GPU busy
 time, or memory metrics that the renderer cannot measure authoritatively.
 
+Worker DAG manifests are defined separately so debug sampling does not become
+coupled to worker-topology exports.
+
 ## Implementation Notes
 
 - `frameIdFactory(...)` lets callers align renderer frames with worker and XR
