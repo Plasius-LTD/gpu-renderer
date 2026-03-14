@@ -27,6 +27,8 @@ All notable changes to this project will be documented in this file.
     instrumentation.
   - Clarified that frame hooks cover correlation while worker manifests cover
     renderer stage scheduling.
+  - Raised the minimum `@plasius/gpu-xr` dependency to `^0.1.7` so npm
+    installs resolve the published adaptive XR session helpers by default.
   - Updated GitHub Actions workflows to run JavaScript actions on Node 24,
     refreshed core workflow action versions, and switched Codecov uploads to
     the Codecov CLI.
