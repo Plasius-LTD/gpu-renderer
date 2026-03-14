@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.1.7] - 2026-03-14
+
+- **Added**
   - Added frame lifecycle hooks and frame-id generation support to
     `createGpuRenderer(...)`.
   - Added `createRendererDebugHooks(...)` for opt-in `@plasius/gpu-debug`
@@ -97,3 +111,4 @@ All notable changes to this project will be documented in this file.
 [0.1.1]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.1
 [0.1.2]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.2
 [0.1.6]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.6
+[0.1.7]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.7
