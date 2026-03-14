@@ -27,6 +27,8 @@ All notable changes to this project will be documented in this file.
     instrumentation.
   - Clarified that frame hooks cover correlation while worker manifests cover
     renderer stage scheduling.
+  - Updated GitHub Actions workflows to run JavaScript actions on Node 24 and
+    refreshed core workflow action versions.
 
 - **Fixed**
   - (placeholder)
