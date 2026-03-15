@@ -14,9 +14,15 @@ All notable changes to this project will be documented in this file.
 - **Added**
   - ADR, TDR, and test-first planning coverage for the ray-tracing-first
     hybrid render graph and range-banded scene representations.
+  - Added `createRayTracingRenderPlan(...)` plus public render-stage,
+    representation-band, and acceleration-structure policy exports.
+  - Expanded renderer worker manifests with stable visual snapshot input
+    boundaries and RT-first render-planning metadata.
+  - Added tests covering stable snapshot ingestion, required denoise/temporal
+    stages, representation-band policies, and acceleration-structure classes.
 
 - **Changed**
-  - (placeholder)
+  - TDR-0003 now reflects the implemented RT-first render-planning helpers.
 
 - **Fixed**
   - (placeholder)

@@ -81,6 +81,28 @@ console.log(xrManifest.jobs.find((job) => job.key === "lateLatch"));
 - Jobs include queue class, priority, dependencies, adaptive budget levels, and
   debug metadata such as allocation tags.
 
+## Ray-Tracing-First Planning
+
+The renderer now publishes a stable-snapshot render plan for the premium
+ray-tracing-first frame model.
+
+```js
+import { createRayTracingRenderPlan } from "@plasius/gpu-renderer";
+
+const plan = createRayTracingRenderPlan({
+  snapshotId: "visual-snapshot-42",
+});
+
+console.log(plan.inputBoundary);
+console.log(plan.renderStages.map((stage) => stage.key));
+console.log(plan.representationBands);
+```
+
+The plan makes the stable visual snapshot boundary explicit, publishes the
+required RT-first stage ordering, and exposes representation-band plus
+acceleration-structure update policy metadata for downstream lighting and
+performance packages.
+
 ## XR integration
 
 ```js
@@ -103,6 +125,7 @@ renderer.bindXrManager(xr, {
 - `createRendererDebugHooks(options)`
 - `getRendererWorkerProfile(name?)`
 - `getRendererWorkerManifest(name?)`
+- `createRayTracingRenderPlan(options)`
 - `bindRendererToXrManager(renderer, xrManager, options)`
 - `defaultRendererClearColor`
 - `rendererDebugOwner`

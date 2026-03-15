@@ -1,25 +1,114 @@
-import { describe, test } from "node:test";
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  createRayTracingRenderPlan,
+  getRendererWorkerManifest,
+  rendererAccelerationStructureUpdateClasses,
+  rendererRayTracingStageOrder,
+  rendererRepresentationBands,
+} from "../src/index.js";
 
-describe("ray-tracing-first renderer contract", () => {
-  test.todo(
-    "will consume a stable visual snapshot boundary instead of in-flight simulation state"
+test("ray-tracing-first render plans consume a stable visual snapshot boundary", () => {
+  const plan = createRayTracingRenderPlan({
+    snapshotId: "visual-snapshot-9001",
+  });
+
+  assert.deepEqual(plan.inputBoundary, {
+    type: "stable-visual-snapshot",
+    owner: "renderer",
+    profile: "realtime",
+    authority: "visual",
+    source: "scene-preparation",
+    stable: true,
+    snapshotId: "visual-snapshot-9001",
+  });
+  assert.equal(plan.workerManifest.inputBoundary.stable, true);
+});
+
+test("ray-tracing-first render plans publish explicit stage ordering and representation bands", () => {
+  const plan = createRayTracingRenderPlan({
+    snapshotId: "visual-snapshot-9002",
+  });
+
+  assert.deepEqual(
+    plan.renderStages.map((stage) => stage.key),
+    [...rendererRayTracingStageOrder]
   );
-  test.todo(
-    "will publish an explicit render ordering for primary visibility, shadow assist, opaque foundation, RT lighting, RT reflections, RT GI, denoise, transparents, composition, and present"
-  );
-  test.todo(
-    "will expose near, mid, far, and horizon representation bands for renderer planning"
+  assert.deepEqual(rendererRepresentationBands, [
+    "near",
+    "mid",
+    "far",
+    "horizon",
+  ]);
+  assert.deepEqual(
+    plan.representationBands.map((band) => band.band),
+    [...rendererRepresentationBands]
   );
 });
 
-describe("ray-tracing-first renderer unit planning", () => {
-  test.todo(
-    "will classify acceleration-structure updates for static, rigid-dynamic, deforming, and proxy representations"
+test("renderer manifests classify acceleration-structure updates and required denoise stages", () => {
+  const manifest = getRendererWorkerManifest();
+
+  assert.deepEqual(rendererAccelerationStructureUpdateClasses, [
+    "static",
+    "rigid-dynamic",
+    "deforming",
+    "proxy",
+  ]);
+  assert.deepEqual(
+    manifest.accelerationStructureUpdates.map((entry) => entry.updateClass),
+    [...rendererAccelerationStructureUpdateClasses]
   );
-  test.todo(
-    "will retain premium RT participation for near-field content while allowing cheaper proxy or cached distant representations"
+  assert.equal(
+    manifest.renderStages.find((stage) => stage.key === "denoiseTemporal")
+      .required,
+    true
   );
-  test.todo(
-    "will treat temporal accumulation and denoising as required frame stages rather than optional post effects"
+});
+
+test("ray-tracing-first render plans retain premium near-field RT while allowing cheaper distant representations", () => {
+  const plan = createRayTracingRenderPlan({
+    snapshotId: "visual-snapshot-9003",
+  });
+
+  const near = plan.representationBands.find((band) => band.band === "near");
+  const far = plan.representationBands.find((band) => band.band === "far");
+  const horizon = plan.representationBands.find(
+    (band) => band.band === "horizon"
+  );
+
+  assert.equal(near.rtParticipation, "premium");
+  assert.equal(far.rtParticipation, "proxy");
+  assert.equal(horizon.rtParticipation, "disabled");
+  assert.equal(far.shadowSource, "merged-proxy-casters");
+});
+
+test("ray-tracing-first render plans can normalize external representation descriptors", () => {
+  const plan = createRayTracingRenderPlan({
+    snapshotId: "visual-snapshot-9004",
+    profile: "xr",
+    representations: [
+      {
+        band: "near",
+        output: "liveGeometry",
+        origin: "world-generator",
+      },
+      {
+        band: "far",
+        output: "mergedProxy",
+        origin: "world-generator",
+      },
+    ],
+  });
+
+  assert.equal(plan.profile, "xr");
+  assert.deepEqual(
+    plan.representationBands.map((band) => band.band),
+    ["near", "far"]
+  );
+  assert.equal(
+    plan.renderStages.find((stage) => stage.key === "primaryVisibility")
+      .workerJobKeys.includes("lateLatch"),
+    true
   );
 });

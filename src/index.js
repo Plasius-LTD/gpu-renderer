@@ -3,6 +3,106 @@ const DEFAULT_CANVAS_SELECTOR = "canvas[data-plasius-gpu-renderer]";
 export const rendererDebugOwner = "renderer";
 export const rendererWorkerQueueClass = "render";
 export const defaultRendererWorkerProfile = "realtime";
+export const rendererRepresentationBands = Object.freeze([
+  "near",
+  "mid",
+  "far",
+  "horizon",
+]);
+export const rendererAccelerationStructureUpdateClasses = Object.freeze([
+  "static",
+  "rigid-dynamic",
+  "deforming",
+  "proxy",
+]);
+export const rendererRayTracingStageOrder = Object.freeze([
+  "primaryVisibility",
+  "shadowAssist",
+  "opaqueFoundation",
+  "rtDirectLighting",
+  "rtReflections",
+  "rtGlobalIllumination",
+  "denoiseTemporal",
+  "transparents",
+  "composition",
+  "present",
+]);
+
+const rendererRayTracingStageDefinitions = Object.freeze(
+  rendererRayTracingStageOrder.map((key, index) =>
+    Object.freeze({
+      key,
+      order: index + 1,
+      required: true,
+      description:
+        {
+          primaryVisibility: "Primary visibility and depth preparation.",
+          shadowAssist: "Shadow assist passes and regional shadow preparation.",
+          opaqueFoundation: "Main opaque foundation for shading and tracing inputs.",
+          rtDirectLighting: "Ray-traced direct lighting and premium shadows.",
+          rtReflections: "Ray-traced reflections for important surfaces.",
+          rtGlobalIllumination: "Selective ray-traced indirect lighting and GI.",
+          denoiseTemporal: "Required denoise and temporal accumulation stage.",
+          transparents: "Transparents, particles, and volumetrics composition.",
+          composition: "Final world composition and color resolve.",
+          present: "Presentation to the active surface.",
+        }[key],
+    })
+  )
+);
+
+const rendererRepresentationBandPolicies = Object.freeze({
+  near: Object.freeze({
+    band: "near",
+    rasterMode: "full-live",
+    rtParticipation: "premium",
+    shadowSource: "ray-traced-primary",
+    temporalReuse: "balanced",
+    updateCadenceDivisor: 1,
+  }),
+  mid: Object.freeze({
+    band: "mid",
+    rasterMode: "simplified-live",
+    rtParticipation: "selective",
+    shadowSource: "regional-raster-and-proxy",
+    temporalReuse: "aggressive",
+    updateCadenceDivisor: 2,
+  }),
+  far: Object.freeze({
+    band: "far",
+    rasterMode: "proxy-or-cached",
+    rtParticipation: "proxy",
+    shadowSource: "merged-proxy-casters",
+    temporalReuse: "high",
+    updateCadenceDivisor: 8,
+  }),
+  horizon: Object.freeze({
+    band: "horizon",
+    rasterMode: "horizon-shell",
+    rtParticipation: "disabled",
+    shadowSource: "baked-impression",
+    temporalReuse: "cached",
+    updateCadenceDivisor: 60,
+  }),
+});
+
+const rendererAccelerationStructurePolicies = Object.freeze(
+  rendererAccelerationStructureUpdateClasses.map((updateClass) =>
+    Object.freeze({
+      updateClass,
+      description:
+        {
+          static: "Stable static world geometry with infrequent rebuilds.",
+          "rigid-dynamic":
+            "Rigid transforms that can be refit or relinked without full deformation updates.",
+          deforming:
+            "Skinned or vertex-deforming content treated as a managed RT cost center.",
+          proxy:
+            "Low-cost RT proxy or distant representation updates.",
+        }[updateClass],
+    })
+  )
+);
 
 function buildRendererWorkerBudgetLevels(jobType, queueClass, levels) {
   return Object.freeze(
@@ -362,6 +462,75 @@ const rendererWorkerProfileSpecs = {
   },
 };
 
+function buildRendererInputBoundary(profile) {
+  return Object.freeze({
+    type: "stable-visual-snapshot",
+    owner: rendererDebugOwner,
+    profile,
+    authority: "visual",
+    source: "scene-preparation",
+    stable: true,
+  });
+}
+
+function buildRendererRenderStages(profile) {
+  return Object.freeze(
+    rendererRayTracingStageDefinitions.map((stage) =>
+      Object.freeze({
+        ...stage,
+        profile,
+        workerJobKeys:
+          profile === "xr" && stage.key === "primaryVisibility"
+            ? Object.freeze(["lateLatch", "visibility"])
+            : stage.key === "present"
+              ? Object.freeze(["submit"])
+              : stage.key === "denoiseTemporal" ||
+                  stage.key === "transparents" ||
+                  stage.key === "composition"
+                ? Object.freeze(["postProcess"])
+                : stage.key === "primaryVisibility"
+                  ? Object.freeze(["visibility"])
+                  : stage.key === "shadowAssist" ||
+                      stage.key === "opaqueFoundation" ||
+                      stage.key === "rtDirectLighting" ||
+                      stage.key === "rtReflections" ||
+                      stage.key === "rtGlobalIllumination"
+                    ? Object.freeze(["mainEncode"])
+                    : Object.freeze(["mainEncode"]),
+      })
+    )
+  );
+}
+
+function buildRendererRepresentationBands(profile) {
+  return Object.freeze(
+    rendererRepresentationBands.map((band) =>
+      Object.freeze({
+        ...rendererRepresentationBandPolicies[band],
+        profile,
+      })
+    )
+  );
+}
+
+function buildRendererAccelerationStructureUpdates(profile) {
+  return Object.freeze(
+    rendererAccelerationStructurePolicies.map((policy) =>
+      Object.freeze({
+        ...policy,
+        profile,
+      })
+    )
+  );
+}
+
+function assertRendererIdentifier(name, value) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${name} must be a non-empty string.`);
+  }
+  return value.trim();
+}
+
 function buildRendererWorkerProfile(name, spec) {
   return Object.freeze({
     name,
@@ -415,6 +584,10 @@ function buildRendererWorkerManifest(name, spec) {
     description: spec.description,
     queueClass: rendererWorkerQueueClass,
     schedulerMode: "dag",
+    inputBoundary: buildRendererInputBoundary(name),
+    renderStages: buildRendererRenderStages(name),
+    representationBands: buildRendererRepresentationBands(name),
+    accelerationStructureUpdates: buildRendererAccelerationStructureUpdates(name),
     suggestedAllocationIds: Object.freeze([...spec.suggestedAllocationIds]),
     jobs: Object.freeze(
       Object.entries(spec.jobs).map(([jobName, jobSpec]) =>
@@ -462,6 +635,51 @@ export function getRendererWorkerManifest(name = defaultRendererWorkerProfile) {
     throw new Error(`Unknown renderer worker profile "${name}". Available: ${available}.`);
   }
   return manifest;
+}
+
+export function createRayTracingRenderPlan(options = {}) {
+  const profile = options.profile ?? defaultRendererWorkerProfile;
+  const snapshotId = assertRendererIdentifier(
+    "snapshotId",
+    options.snapshotId
+  );
+  const workerManifest = getRendererWorkerManifest(profile);
+  const representations = Array.isArray(options.representations)
+    ? Object.freeze(
+        options.representations.map((representation, index) => {
+          if (!representation || typeof representation !== "object") {
+            throw new Error(`representations[${index}] must be an object.`);
+          }
+          const band = assertRendererIdentifier(
+            `representations[${index}].band`,
+            representation.band
+          );
+          if (!rendererRepresentationBands.includes(band)) {
+            throw new Error(
+              `representations[${index}].band must be one of: ${rendererRepresentationBands.join(", ")}.`
+            );
+          }
+          return Object.freeze({
+            ...representation,
+            band,
+          });
+        })
+      )
+    : workerManifest.representationBands;
+
+  return Object.freeze({
+    schemaVersion: 1,
+    owner: rendererDebugOwner,
+    profile,
+    inputBoundary: Object.freeze({
+      ...workerManifest.inputBoundary,
+      snapshotId,
+    }),
+    renderStages: workerManifest.renderStages,
+    representationBands: representations,
+    accelerationStructureUpdates: workerManifest.accelerationStructureUpdates,
+    workerManifest,
+  });
 }
 
 function clamp01(value) {

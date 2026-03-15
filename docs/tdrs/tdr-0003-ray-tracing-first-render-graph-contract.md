@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Goal
 
@@ -50,3 +50,11 @@ Unit tests should prove that:
   content move to cheaper representations
 - acceleration-structure update planning can classify static, dynamic, and
   deforming work separately
+
+## Implementation Notes
+
+The first public implementation now ships as
+`createRayTracingRenderPlan(...)` plus expanded renderer worker-manifest
+metadata. The package now publishes a stable snapshot boundary, explicit RT
+stage ordering, representation-band policies, and acceleration-structure update
+classes without coupling consumers to renderer-internal pass code.

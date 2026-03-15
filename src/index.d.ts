@@ -145,6 +145,64 @@ export function bindRendererToXrManager(
 ): () => void;
 
 export type RendererWorkerProfileName = "realtime" | "xr";
+export type RendererRepresentationBand = "near" | "mid" | "far" | "horizon";
+export type RendererAccelerationStructureUpdateClass =
+  | "static"
+  | "rigid-dynamic"
+  | "deforming"
+  | "proxy";
+
+export interface RendererInputBoundary {
+  readonly type: "stable-visual-snapshot";
+  readonly owner: typeof rendererDebugOwner;
+  readonly profile: RendererWorkerProfileName;
+  readonly authority: "visual";
+  readonly source: "scene-preparation";
+  readonly stable: true;
+}
+
+export interface RendererRenderStage {
+  readonly key:
+    | "primaryVisibility"
+    | "shadowAssist"
+    | "opaqueFoundation"
+    | "rtDirectLighting"
+    | "rtReflections"
+    | "rtGlobalIllumination"
+    | "denoiseTemporal"
+    | "transparents"
+    | "composition"
+    | "present";
+  readonly order: number;
+  readonly required: true;
+  readonly description: string;
+  readonly profile: RendererWorkerProfileName;
+  readonly workerJobKeys: readonly string[];
+}
+
+export interface RendererRepresentationPolicy {
+  readonly band: RendererRepresentationBand;
+  readonly profile: RendererWorkerProfileName;
+  readonly rasterMode:
+    | "full-live"
+    | "simplified-live"
+    | "proxy-or-cached"
+    | "horizon-shell";
+  readonly rtParticipation: "premium" | "selective" | "proxy" | "disabled";
+  readonly shadowSource:
+    | "ray-traced-primary"
+    | "regional-raster-and-proxy"
+    | "merged-proxy-casters"
+    | "baked-impression";
+  readonly temporalReuse: "balanced" | "aggressive" | "high" | "cached";
+  readonly updateCadenceDivisor: number;
+}
+
+export interface RendererAccelerationStructureUpdatePolicy {
+  readonly updateClass: RendererAccelerationStructureUpdateClass;
+  readonly description: string;
+  readonly profile: RendererWorkerProfileName;
+}
 
 export interface RendererWorkerBudgetLevelConfig {
   maxDispatchesPerFrame: number;
@@ -207,8 +265,30 @@ export interface RendererWorkerManifest {
   readonly description: string;
   readonly queueClass: typeof rendererWorkerQueueClass;
   readonly schedulerMode: "dag";
+  readonly inputBoundary: RendererInputBoundary;
+  readonly renderStages: readonly RendererRenderStage[];
+  readonly representationBands: readonly RendererRepresentationPolicy[];
+  readonly accelerationStructureUpdates: readonly RendererAccelerationStructureUpdatePolicy[];
   readonly suggestedAllocationIds: readonly string[];
   readonly jobs: readonly RendererWorkerManifestJob[];
+}
+
+export interface RayTracingRenderPlan {
+  readonly schemaVersion: 1;
+  readonly owner: typeof rendererDebugOwner;
+  readonly profile: RendererWorkerProfileName;
+  readonly inputBoundary: RendererInputBoundary & {
+    readonly snapshotId: string;
+  };
+  readonly renderStages: readonly RendererRenderStage[];
+  readonly representationBands: readonly (
+    | RendererRepresentationPolicy
+    | {
+        readonly band: RendererRepresentationBand;
+      }
+  )[];
+  readonly accelerationStructureUpdates: readonly RendererAccelerationStructureUpdatePolicy[];
+  readonly workerManifest: RendererWorkerManifest;
 }
 
 export function getRendererWorkerProfile(
@@ -218,6 +298,22 @@ export function getRendererWorkerProfile(
 export function getRendererWorkerManifest(
   name?: RendererWorkerProfileName
 ): RendererWorkerManifest;
+
+export function createRayTracingRenderPlan(options: {
+  snapshotId: string;
+  profile?: RendererWorkerProfileName;
+  representations?: readonly (
+    | RendererRepresentationPolicy
+    | {
+        readonly band: RendererRepresentationBand;
+        readonly [key: string]: unknown;
+      }
+  )[];
+}): RayTracingRenderPlan;
+
+export const rendererRepresentationBands: readonly RendererRepresentationBand[];
+export const rendererAccelerationStructureUpdateClasses: readonly RendererAccelerationStructureUpdateClass[];
+export const rendererRayTracingStageOrder: readonly RendererRenderStage["key"][];
 
 export const defaultRendererClearColor: readonly [number, number, number, number];
 export const rendererDebugOwner: "renderer";
