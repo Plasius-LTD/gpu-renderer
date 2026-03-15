@@ -12,7 +12,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - ADR, TDR, and test-first planning coverage for the ray-tracing-first
+    hybrid render graph and range-banded scene representations.
 
 - **Changed**
   - (placeholder)
