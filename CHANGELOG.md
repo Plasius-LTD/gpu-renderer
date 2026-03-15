@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.1.8] - 2026-03-15
+
+- **Added**
   - ADR, TDR, and test-first planning coverage for the ray-tracing-first
     hybrid render graph and range-banded scene representations.
   - Added `createRayTracingRenderPlan(...)` plus public render-stage,
@@ -119,3 +133,4 @@ All notable changes to this project will be documented in this file.
 [0.1.2]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.2
 [0.1.6]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.6
 [0.1.7]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.7
+[0.1.8]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.8
