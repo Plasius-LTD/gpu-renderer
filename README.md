@@ -146,6 +146,9 @@ npm run demo
 
 Then open `http://localhost:8000/gpu-renderer/demo/`.
 
+The demo now reports explicit canvas state so it is clear whether the renderer
+is mounted, idle, running, or blocked by secure-context / WebGPU support.
+
 ## Development Checks
 
 ```sh

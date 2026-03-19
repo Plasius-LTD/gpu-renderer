@@ -20,6 +20,45 @@ body {
   margin: 0.3rem 0 1rem;
 }
 
+.display-state {
+  margin-bottom: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.8rem;
+  background: rgba(8, 16, 28, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.display-badge {
+  display: inline-flex;
+  margin: 0 0 0.45rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(170, 196, 227, 0.16);
+}
+
+.display-badge[data-tone="success"] {
+  background: rgba(74, 201, 135, 0.16);
+  border-color: rgba(74, 201, 135, 0.32);
+}
+
+.display-badge[data-tone="warn"] {
+  background: rgba(255, 189, 89, 0.16);
+  border-color: rgba(255, 189, 89, 0.32);
+}
+
+.display-badge[data-tone="error"] {
+  background: rgba(255, 102, 102, 0.16);
+  border-color: rgba(255, 102, 102, 0.32);
+}
+
+.display-details {
+  margin: 0;
+  color: #d4e2f3;
+}
+
 .controls {
   display: flex;
   gap: 0.6rem;
