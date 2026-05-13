@@ -49,16 +49,16 @@
   "author": "Plasius LTD <development@plasius.co.uk>",
   "license": "Apache-2.0",
   "dependencies": {
-    "@plasius/gpu-shared": "^0.1.4",
-    "@plasius/gpu-xr": "^0.1.8"
+    "@plasius/gpu-shared": "^0.1.9",
+    "@plasius/gpu-xr": "^0.1.11"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "c8": "^11.0.0",
-    "eslint": "^10.1.0",
-    "globals": "^17.3.0",
-    "tsup": "^8.5.0",
-    "typescript": "^6.0.2"
+    "eslint": "^10.3.0",
+    "globals": "^17.6.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
   },
   "repository": {
     "type": "git",
