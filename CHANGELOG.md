@@ -12,7 +12,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added wavefront path-tracing queue/buffer contracts and bounce-schedule
+    metadata beneath `createRayTracingRenderPlan(...)`.
 
 - **Changed**
   - (placeholder)
