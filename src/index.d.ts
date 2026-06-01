@@ -151,6 +151,19 @@ export type RendererAccelerationStructureUpdateClass =
   | "rigid-dynamic"
   | "deforming"
   | "proxy";
+export type RendererWavefrontHitType =
+  | "surface"
+  | "emissive"
+  | "environment"
+  | "transparent"
+  | "miss";
+export type RendererWavefrontPassKey =
+  | "generatePrimaryRays"
+  | "intersectActiveQueue"
+  | "resolveSurfaceRecords"
+  | "accumulateTerminalRadiance"
+  | "scatterContinuations"
+  | "compactAndSwapQueues";
 
 export interface RendererInputBoundary {
   readonly type: "stable-visual-snapshot";
@@ -288,7 +301,73 @@ export interface RayTracingRenderPlan {
       }
   )[];
   readonly accelerationStructureUpdates: readonly RendererAccelerationStructureUpdatePolicy[];
+  readonly wavefront: RendererWavefrontPathTracingPlan;
   readonly workerManifest: RendererWorkerManifest;
+}
+
+export interface RendererWavefrontFieldContract {
+  readonly name: string;
+  readonly type: string;
+  readonly description: string;
+}
+
+export interface RendererWavefrontRecordContract {
+  readonly schemaVersion: typeof rendererWavefrontBufferSchemaVersion;
+  readonly recordName: string;
+  readonly fields: readonly RendererWavefrontFieldContract[];
+}
+
+export interface RendererWavefrontQueueDescriptor {
+  readonly name: "active" | "next";
+  readonly role: "current-bounce" | "next-bounce";
+}
+
+export interface RendererWavefrontBounceStep {
+  readonly bounce: number;
+  readonly readQueue: "active" | "next";
+  readonly writeQueue: "active" | "next";
+  readonly passOrder: readonly RendererWavefrontPassKey[];
+}
+
+export interface RendererWavefrontTerminationPolicy {
+  readonly terminalHitTypes: readonly RendererWavefrontHitType[];
+  readonly continuationHitTypes: readonly RendererWavefrontHitType[];
+  readonly emissive: Readonly<{
+    action: "accumulate-and-stop";
+    contributesRadiance: true;
+  }>;
+  readonly environment: Readonly<{
+    action: "accumulate-and-stop";
+    contributesRadiance: true;
+  }>;
+  readonly miss: Readonly<{
+    action: "accumulate-environment-or-dark-stop";
+    contributesRadiance: true;
+  }>;
+}
+
+export interface RendererWavefrontPathTracingPlan {
+  readonly schemaVersion: typeof rendererWavefrontBufferSchemaVersion;
+  readonly owner: typeof rendererDebugOwner;
+  readonly maxDepth: number;
+  readonly queueCapacity: number;
+  readonly explicitLightSampling: boolean;
+  readonly accumulationResetEpoch: number;
+  readonly queueLayout: Readonly<{
+    strategy: typeof rendererWavefrontQueuePairStrategy;
+    compactAfterScatter: true;
+    queues: readonly RendererWavefrontQueueDescriptor[];
+  }>;
+  readonly bufferContracts: Readonly<{
+    ray: RendererWavefrontRecordContract;
+    hit: RendererWavefrontRecordContract;
+    surface: RendererWavefrontRecordContract;
+    materialReference: RendererWavefrontRecordContract;
+    mediumReference: RendererWavefrontRecordContract;
+    accumulation: RendererWavefrontRecordContract;
+  }>;
+  readonly bounceSchedule: readonly RendererWavefrontBounceStep[];
+  readonly terminationPolicy: RendererWavefrontTerminationPolicy;
 }
 
 export function getRendererWorkerProfile(
@@ -309,11 +388,28 @@ export function createRayTracingRenderPlan(options: {
         readonly [key: string]: unknown;
       }
   )[];
+  wavefront?: {
+    maxDepth?: number;
+    queueCapacity?: number;
+    explicitLightSampling?: boolean;
+    accumulationResetEpoch?: number;
+  };
 }): RayTracingRenderPlan;
+
+export function createWavefrontPathTracingPlan(options?: {
+  maxDepth?: number;
+  queueCapacity?: number;
+  explicitLightSampling?: boolean;
+  accumulationResetEpoch?: number;
+}): RendererWavefrontPathTracingPlan;
 
 export const rendererRepresentationBands: readonly RendererRepresentationBand[];
 export const rendererAccelerationStructureUpdateClasses: readonly RendererAccelerationStructureUpdateClass[];
 export const rendererRayTracingStageOrder: readonly RendererRenderStage["key"][];
+export const rendererWavefrontBufferSchemaVersion: 1;
+export const rendererWavefrontQueuePairStrategy: "ping-pong-active-next";
+export const rendererWavefrontHitTypes: readonly RendererWavefrontHitType[];
+export const rendererWavefrontPassOrder: readonly RendererWavefrontPassKey[];
 
 export const defaultRendererClearColor: readonly [number, number, number, number];
 export const rendererDebugOwner: "renderer";

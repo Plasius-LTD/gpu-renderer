@@ -96,12 +96,15 @@ const plan = createRayTracingRenderPlan({
 console.log(plan.inputBoundary);
 console.log(plan.renderStages.map((stage) => stage.key));
 console.log(plan.representationBands);
+console.log(plan.wavefront.queueLayout.strategy);
 ```
 
 The plan makes the stable visual snapshot boundary explicit, publishes the
 required RT-first stage ordering, and exposes representation-band plus
 acceleration-structure update policy metadata for downstream lighting and
-performance packages.
+performance packages. It now also exposes the renderer-owned wavefront queue
+model, versioned ray/hit/surface/material/medium/accumulation contracts, and
+the termination policy for emissive/environment path completion.
 
 ## XR integration
 
