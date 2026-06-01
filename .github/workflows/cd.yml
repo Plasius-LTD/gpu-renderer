@@ -19,11 +19,14 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: write
   id-token: write # for npm provenance (requires Node 18+ and npm >=9)
   attestations: write
 
 env:
+  FALLBACK_RUNNER_LABEL: ubuntu-latest
+  SELF_HOSTED_RUNNER_LABELS: '["self-hosted","Linux","X64"]'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -86,7 +89,7 @@ jobs:
 
           echo "New version: $NEW_VER"
           git push --follow-tags
-          
+
           # Expose tag (vX.Y.Z) and version (X.Y.Z) for later steps
           VER_NO_V=${NEW_VER#v}
           echo "tag=$NEW_VER" >> "$GITHUB_OUTPUT"
@@ -99,13 +102,13 @@ jobs:
           else
             echo "flags=--access public" >> "$GITHUB_OUTPUT"
           fi
-          
+
       - name: Install deps (CI)
         run: npm ci
 
       - name: Test (coverage)
         run: npm run test:coverage
-        
+
       - name: Install Codecov CLI
         run: python3 -m pip install --upgrade codecov-cli
 
