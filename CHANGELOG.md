@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.1.13] - 2026-06-01
+
+- **Added**
   - Added wavefront path-tracing queue/buffer contracts and bounce-schedule
     metadata beneath `createRayTracingRenderPlan(...)`.
 
@@ -195,3 +209,4 @@ All notable changes to this project will be documented in this file.
 [0.1.10]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.10
 [0.1.11]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.11
 [0.1.12]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.12
+[0.1.13]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.13
