@@ -14,9 +14,13 @@ All notable changes to this project will be documented in this file.
 - **Added**
   - Added wavefront path-tracing queue/buffer contracts and bounce-schedule
     metadata beneath `createRayTracingRenderPlan(...)`.
+  - Added a WebGPU compute wavefront path-tracing runner with storage-buffer
+    ray queues, indirect continuation dispatch, GPU accumulation, and storage
+    texture output.
 
 - **Changed**
-  - (placeholder)
+  - Clarified that CPU path tracing is not the renderer implementation path for
+    `gpu-*`; CPU tracing may only be used as fallback or reference validation.
 
 - **Fixed**
   - (placeholder)

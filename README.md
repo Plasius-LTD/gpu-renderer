@@ -106,6 +106,42 @@ performance packages. It now also exposes the renderer-owned wavefront queue
 model, versioned ray/hit/surface/material/medium/accumulation contracts, and
 the termination policy for emissive/environment path completion.
 
+## WebGPU Wavefront Path Tracing
+
+The executable wavefront path-tracing path is WebGPU compute based. CPU
+reference tracing is not the renderer path for `gpu-*`; it may only be used by
+tests or browser fallback messaging where WebGPU is unavailable.
+
+```js
+import { renderWavefrontPathTracingComputeFrame } from "@plasius/gpu-renderer";
+
+const stats = await renderWavefrontPathTracingComputeFrame({
+  canvas: document.querySelector("#scene"),
+  width: 1280,
+  height: 720,
+  maxDepth: 5,
+});
+
+console.log(stats.plan.mode); // "webgpu-compute"
+console.log(stats.plan.dispatch.primaryWorkgroups);
+```
+
+The compute runner:
+
+- dispatches one primary ray per screen pixel into GPU storage-buffer queues
+- stores active and next continuation rays in ping-pong buffers
+- runs each bounce as a breadth-first compute pass
+- uses GPU-written indirect dispatch arguments for compacted continuation
+  queues, avoiding CPU readback between bounces
+- writes accumulated colour into a WebGPU storage texture for presentation
+- reads back only compact end-of-frame stats when requested
+
+At the default workgroup size of 64, 720p dispatches 14,400 primary workgroups
+for 921,600 rays, and 1080p dispatches 32,400 primary workgroups for 2,073,600
+rays. Later bounces are dispatched from compacted active queues, so paths that
+hit emissive geometry, the skybox/environment, ambient fallback, or max depth
+stop contributing to continuation work.
+
 ## XR integration
 
 ```js
@@ -129,6 +165,10 @@ renderer.bindXrManager(xr, {
 - `getRendererWorkerProfile(name?)`
 - `getRendererWorkerManifest(name?)`
 - `createRayTracingRenderPlan(options)`
+- `createWavefrontPathTracingComputeConfig(options)`
+- `createWavefrontPathTracingComputeRenderer(options)`
+- `renderWavefrontPathTracingComputeFrame(options)`
+- `supportsWavefrontPathTracingCompute(options)`
 - `bindRendererToXrManager(renderer, xrManager, options)`
 - `defaultRendererClearColor`
 - `rendererDebugOwner`
@@ -137,6 +177,8 @@ renderer.bindXrManager(xr, {
 - `rendererWorkerProfiles`
 - `rendererWorkerProfileNames`
 - `rendererWorkerManifests`
+- `rendererWavefrontComputeMode`
+- `rendererWavefrontComputeWorkgroupSize`
 
 ## Demo
 
@@ -165,6 +207,7 @@ npm run pack:check
 ## Files
 
 - `src/index.js`: WebGPU renderer runtime and XR binding helper.
+- `src/wavefront-compute.js`: WebGPU compute wavefront path-tracing runner.
 - `src/index.d.ts`: public API typings.
 - `tests/package.test.js`: unit tests for renderer lifecycle behavior.
 - `docs/design/worker-manifest-integration.md`: renderer frame-stage DAG model.

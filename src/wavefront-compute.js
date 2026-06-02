@@ -1,0 +1,1004 @@
+export const rendererWavefrontComputeMode = "webgpu-compute";
+export const rendererWavefrontComputeWorkgroupSize = 64;
+export const rendererWavefrontComputeStatsStride = 8;
+
+const DEFAULT_WIDTH = 1280;
+const DEFAULT_HEIGHT = 720;
+const DEFAULT_MAX_DEPTH = 5;
+const DEFAULT_FORMAT = "rgba8unorm";
+const CONFIG_BYTE_LENGTH = 112;
+const PASS_BYTE_LENGTH = 16;
+const RAY_RECORD_BYTE_LENGTH = 80;
+const COUNTER_BYTE_LENGTH = 8 * Uint32Array.BYTES_PER_ELEMENT;
+const INDIRECT_BYTE_LENGTH = 3 * Uint32Array.BYTES_PER_ELEMENT;
+const CAMERA = Object.freeze({
+  origin: Object.freeze([0, 0.45, 2.85, 0]),
+  forward: Object.freeze([-0.019916939, -0.13692907, -0.99038124, 0]),
+  right: Object.freeze([0.9997977, 0, -0.02011397, 0]),
+  up: Object.freeze([-0.0027546, 0.9905942, -0.13690137, 0]),
+});
+const AMBIENT = Object.freeze([0.0216, 0.02448, 0.0288, 1]);
+
+function readPositiveInteger(name, value) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return value;
+}
+
+function clampInteger(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function alignTo4(value) {
+  return Math.ceil(value / 4) * 4;
+}
+
+function assertGpuConstants() {
+  const { GPUBufferUsage, GPUMapMode, GPUShaderStage, GPUTextureUsage } = globalThis;
+  if (!GPUBufferUsage || !GPUMapMode || !GPUShaderStage || !GPUTextureUsage) {
+    throw new Error("WebGPU constants are unavailable in this runtime.");
+  }
+  return { GPUBufferUsage, GPUMapMode, GPUShaderStage, GPUTextureUsage };
+}
+
+function readNavigator(navigatorOverride) {
+  const currentNavigator = navigatorOverride ?? globalThis.navigator;
+  if (!currentNavigator || typeof currentNavigator !== "object") {
+    throw new Error("Navigator unavailable. Provide a browser-like navigator object.");
+  }
+  return currentNavigator;
+}
+
+function readGpu(navigatorOverride) {
+  const currentNavigator = readNavigator(navigatorOverride);
+  const gpu = currentNavigator.gpu;
+  if (!gpu || typeof gpu.requestAdapter !== "function") {
+    throw new Error("WebGPU runtime unavailable. navigator.gpu is missing.");
+  }
+  return gpu;
+}
+
+function resolveCanvas(canvas) {
+  if (!canvas || typeof canvas !== "object") {
+    throw new Error("canvas must be an HTMLCanvasElement with a WebGPU context.");
+  }
+  return canvas;
+}
+
+function createBuffer(device, label, size, usage) {
+  return device.createBuffer({
+    label,
+    size: alignTo4(size),
+    usage,
+  });
+}
+
+function writeVec4(target, offset, value) {
+  target.set(value, offset);
+}
+
+function buildConfigBufferData(config, frameIndex) {
+  const buffer = new ArrayBuffer(CONFIG_BYTE_LENGTH);
+  const dataView = new DataView(buffer);
+  dataView.setUint32(0, config.width, true);
+  dataView.setUint32(4, config.height, true);
+  dataView.setUint32(8, config.maxDepth, true);
+  dataView.setUint32(12, config.queueCapacity, true);
+  dataView.setUint32(16, frameIndex, true);
+  dataView.setUint32(20, config.samples, true);
+  dataView.setUint32(24, config.denoise ? 1 : 0, true);
+  const floatView = new Float32Array(buffer);
+  writeVec4(floatView, 8, CAMERA.origin);
+  writeVec4(floatView, 12, CAMERA.forward);
+  writeVec4(floatView, 16, CAMERA.right);
+  writeVec4(floatView, 20, CAMERA.up);
+  writeVec4(floatView, 24, AMBIENT);
+  return buffer;
+}
+
+function buildPassBufferData(bounce) {
+  const values = new Uint32Array(PASS_BYTE_LENGTH / Uint32Array.BYTES_PER_ELEMENT);
+  values[0] = bounce;
+  values[1] = bounce % 2;
+  return values;
+}
+
+function parseStats(data, config) {
+  const bounces = [];
+  const termination = {
+    emissive: 0,
+    environment: 0,
+    ambientFallback: 0,
+    maxDepth: 0,
+  };
+  let queueOverflow = 0;
+
+  for (let bounce = 0; bounce < config.maxDepth; bounce += 1) {
+    const offset = bounce * rendererWavefrontComputeStatsStride;
+    const entry = {
+      bounce,
+      active: data[offset],
+      surfaceHits: data[offset + 1],
+      emissiveHits: data[offset + 2],
+      environmentHits: data[offset + 3],
+      spawned: data[offset + 4],
+      ambientFallback: data[offset + 5],
+      queueOverflow: data[offset + 6],
+      maxDepth: data[offset + 7],
+    };
+    termination.emissive += entry.emissiveHits;
+    termination.environment += entry.environmentHits;
+    termination.ambientFallback += entry.ambientFallback;
+    termination.maxDepth += entry.maxDepth;
+    queueOverflow += entry.queueOverflow;
+    bounces.push(Object.freeze(entry));
+  }
+
+  return Object.freeze({
+    bounces: Object.freeze(bounces),
+    termination: Object.freeze(termination),
+    queueOverflow,
+  });
+}
+
+function createPassBindGroup(device, layout, resources, passBuffer, outputView) {
+  return device.createBindGroup({
+    label: "plasius.wavefront.bindGroup",
+    layout,
+    entries: [
+      { binding: 0, resource: { buffer: resources.configBuffer } },
+      { binding: 1, resource: { buffer: passBuffer } },
+      { binding: 2, resource: { buffer: resources.activeQueueBuffer } },
+      { binding: 3, resource: { buffer: resources.nextQueueBuffer } },
+      { binding: 4, resource: { buffer: resources.accumulationBuffer } },
+      { binding: 5, resource: { buffer: resources.counterBuffer } },
+      { binding: 6, resource: { buffer: resources.statsBuffer } },
+      { binding: 7, resource: { buffer: resources.activeIndirectBuffer } },
+      { binding: 8, resource: { buffer: resources.nextIndirectBuffer } },
+      { binding: 9, resource: outputView },
+    ],
+  });
+}
+
+function createPipelines(device, shaderSource, format = DEFAULT_FORMAT) {
+  const { GPUShaderStage } = assertGpuConstants();
+  const bindGroupLayout = device.createBindGroupLayout({
+    label: "plasius.wavefront.bindGroupLayout",
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+      { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+      { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+      {
+        binding: 9,
+        visibility: GPUShaderStage.COMPUTE,
+        storageTexture: { access: "write-only", format },
+      },
+    ],
+  });
+  const layout = device.createPipelineLayout({
+    label: "plasius.wavefront.pipelineLayout",
+    bindGroupLayouts: [bindGroupLayout],
+  });
+  const module = device.createShaderModule({
+    label: "plasius.wavefront.compute.shader",
+    code: shaderSource,
+  });
+  const generate = device.createComputePipeline({
+    label: "plasius.wavefront.generatePrimaryRays",
+    layout,
+    compute: { module, entryPoint: "generatePrimaryRays" },
+  });
+  const trace = device.createComputePipeline({
+    label: "plasius.wavefront.traceBounce",
+    layout,
+    compute: { module, entryPoint: "traceBounce" },
+  });
+  const finalize = device.createComputePipeline({
+    label: "plasius.wavefront.compactAndSwapQueues",
+    layout,
+    compute: { module, entryPoint: "compactAndSwapQueues" },
+  });
+  const resolve = device.createComputePipeline({
+    label: "plasius.wavefront.resolveOutput",
+    layout,
+    compute: { module, entryPoint: "resolveOutput" },
+  });
+  return { bindGroupLayout, generate, trace, finalize, resolve };
+}
+
+function createResources(device, config) {
+  const { GPUBufferUsage } = assertGpuConstants();
+  const rayQueueBytes = config.queueCapacity * RAY_RECORD_BYTE_LENGTH;
+  const accumulationBytes = config.primaryRayCount * 4 * Float32Array.BYTES_PER_ELEMENT;
+  const statsBytes =
+    config.maxDepth * rendererWavefrontComputeStatsStride * Uint32Array.BYTES_PER_ELEMENT;
+
+  return {
+    configBuffer: createBuffer(
+      device,
+      "plasius.wavefront.config",
+      CONFIG_BYTE_LENGTH,
+      GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    ),
+    activeQueueBuffer: createBuffer(
+      device,
+      "plasius.wavefront.activeQueue",
+      rayQueueBytes,
+      GPUBufferUsage.STORAGE
+    ),
+    nextQueueBuffer: createBuffer(
+      device,
+      "plasius.wavefront.nextQueue",
+      rayQueueBytes,
+      GPUBufferUsage.STORAGE
+    ),
+    accumulationBuffer: createBuffer(
+      device,
+      "plasius.wavefront.accumulation",
+      accumulationBytes,
+      GPUBufferUsage.STORAGE
+    ),
+    counterBuffer: createBuffer(
+      device,
+      "plasius.wavefront.counters",
+      COUNTER_BYTE_LENGTH,
+      GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    ),
+    statsBuffer: createBuffer(
+      device,
+      "plasius.wavefront.stats",
+      statsBytes,
+      GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST
+    ),
+    statsReadbackBuffer: createBuffer(
+      device,
+      "plasius.wavefront.stats.readback",
+      statsBytes,
+      GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST
+    ),
+    activeIndirectBuffer: createBuffer(
+      device,
+      "plasius.wavefront.activeIndirect",
+      INDIRECT_BYTE_LENGTH,
+      GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST
+    ),
+    nextIndirectBuffer: createBuffer(
+      device,
+      "plasius.wavefront.nextIndirect",
+      INDIRECT_BYTE_LENGTH,
+      GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST
+    ),
+    passBuffers: Array.from({ length: config.maxDepth }, (_, bounce) => {
+      const passBuffer = createBuffer(
+        device,
+        `plasius.wavefront.pass.${bounce}`,
+        PASS_BYTE_LENGTH,
+        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+      );
+      device.queue.writeBuffer(passBuffer, 0, buildPassBufferData(bounce));
+      return passBuffer;
+    }),
+  };
+}
+
+async function readStatsBuffer(device, resources, config) {
+  const { GPUMapMode } = assertGpuConstants();
+  await device.queue.onSubmittedWorkDone();
+  await resources.statsReadbackBuffer.mapAsync(GPUMapMode.READ);
+  const mapped = resources.statsReadbackBuffer.getMappedRange();
+  const values = new Uint32Array(mapped.slice(0));
+  resources.statsReadbackBuffer.unmap();
+  return parseStats(values, config);
+}
+
+export function supportsWavefrontPathTracingCompute(options = {}) {
+  try {
+    const gpu = readGpu(options.navigator);
+    return Boolean(gpu);
+  } catch {
+    return false;
+  }
+}
+
+export function createWavefrontPathTracingComputeConfig(options = {}) {
+  const width = readPositiveInteger("width", options.width ?? DEFAULT_WIDTH);
+  const height = readPositiveInteger("height", options.height ?? DEFAULT_HEIGHT);
+  const samples = readPositiveInteger("samples", options.samples ?? 1);
+  if (samples !== 1) {
+    throw new Error("WebGPU wavefront compute currently supports exactly one sample per pixel.");
+  }
+  const maxDepth = clampInteger(
+    readPositiveInteger("maxDepth", options.maxDepth ?? DEFAULT_MAX_DEPTH),
+    1,
+    8
+  );
+  const workgroupSize = readPositiveInteger(
+    "workgroupSize",
+    options.workgroupSize ?? rendererWavefrontComputeWorkgroupSize
+  );
+  const primaryRayCount = width * height * samples;
+  const queueCapacity = readPositiveInteger(
+    "queueCapacity",
+    options.queueCapacity ?? primaryRayCount
+  );
+
+  if (queueCapacity < primaryRayCount) {
+    throw new Error("queueCapacity must be at least width * height * samples.");
+  }
+
+  return Object.freeze({
+    mode: rendererWavefrontComputeMode,
+    width,
+    height,
+    samples,
+    maxDepth,
+    queueCapacity,
+    primaryRayCount,
+    workgroupSize,
+    primaryWorkgroups: Math.ceil(primaryRayCount / workgroupSize),
+    bouncePasses: maxDepth,
+    indirectDispatch: true,
+    cpuReference: false,
+    denoise: options.denoise === true,
+    format: options.format ?? DEFAULT_FORMAT,
+  });
+}
+
+export async function createWavefrontPathTracingComputeRenderer(options = {}) {
+  const { GPUTextureUsage } = assertGpuConstants();
+  const config = createWavefrontPathTracingComputeConfig(options);
+  const canvas = resolveCanvas(options.canvas);
+  canvas.width = config.width;
+  canvas.height = config.height;
+
+  const gpu = options.gpu ?? readGpu(options.navigator);
+  const adapter =
+    options.adapter ?? (await gpu.requestAdapter({ powerPreference: "high-performance" }));
+  if (!adapter) {
+    throw new Error("Unable to obtain GPU adapter for wavefront path tracing.");
+  }
+  const device = options.device ?? (await adapter.requestDevice());
+  const context = options.context ?? canvas.getContext?.("webgpu");
+  if (!context) {
+    throw new Error("Unable to obtain WebGPU canvas context for wavefront path tracing.");
+  }
+  const format = config.format;
+  context.configure({
+    device,
+    format,
+    alphaMode: "opaque",
+    usage:
+      GPUTextureUsage.RENDER_ATTACHMENT |
+      GPUTextureUsage.STORAGE_BINDING |
+      GPUTextureUsage.COPY_SRC,
+  });
+
+  const shaderSource = createWavefrontPathTracingComputeShaderSource({
+    workgroupSize: config.workgroupSize,
+  });
+  const pipelines = createPipelines(device, shaderSource, format);
+  const resources = createResources(device, config);
+  const bindGroupLayout = pipelines.bindGroupLayout;
+  let frameIndex = 0;
+
+  return {
+    config,
+    device,
+    context,
+    canvas,
+    async renderFrame(renderOptions = {}) {
+      const startedAt = performance.now();
+      frameIndex += 1;
+      const texture = context.getCurrentTexture();
+      const outputView = texture.createView();
+      const bindGroups = resources.passBuffers.map((passBuffer) =>
+        createPassBindGroup(device, bindGroupLayout, resources, passBuffer, outputView)
+      );
+      const encoder = device.createCommandEncoder({
+        label: `plasius.wavefront.frame.${frameIndex}`,
+      });
+
+      device.queue.writeBuffer(resources.configBuffer, 0, buildConfigBufferData(config, frameIndex));
+      encoder.clearBuffer(resources.statsBuffer);
+
+      const generatePass = encoder.beginComputePass({
+        label: "plasius.wavefront.generatePrimaryRays",
+      });
+      generatePass.setPipeline(pipelines.generate);
+      generatePass.setBindGroup(0, bindGroups[0]);
+      generatePass.dispatchWorkgroups(config.primaryWorkgroups);
+      generatePass.end();
+
+      for (let bounce = 0; bounce < config.maxDepth; bounce += 1) {
+        const readIndirect =
+          bounce % 2 === 0
+            ? resources.activeIndirectBuffer
+            : resources.nextIndirectBuffer;
+
+        const tracePass = encoder.beginComputePass({
+          label: `plasius.wavefront.traceBounce.${bounce}`,
+        });
+        tracePass.setPipeline(pipelines.trace);
+        tracePass.setBindGroup(0, bindGroups[bounce]);
+        tracePass.dispatchWorkgroupsIndirect(readIndirect, 0);
+        tracePass.end();
+
+        const compactPass = encoder.beginComputePass({
+          label: `plasius.wavefront.compactAndSwapQueues.${bounce}`,
+        });
+        compactPass.setPipeline(pipelines.finalize);
+        compactPass.setBindGroup(0, bindGroups[bounce]);
+        compactPass.dispatchWorkgroups(1);
+        compactPass.end();
+      }
+
+      const resolvePass = encoder.beginComputePass({
+        label: "plasius.wavefront.resolveOutput",
+      });
+      resolvePass.setPipeline(pipelines.resolve);
+      resolvePass.setBindGroup(0, bindGroups[0]);
+      resolvePass.dispatchWorkgroups(config.primaryWorkgroups);
+      resolvePass.end();
+
+      if (renderOptions.readStats !== false) {
+        encoder.copyBufferToBuffer(
+          resources.statsBuffer,
+          0,
+          resources.statsReadbackBuffer,
+          0,
+          resources.statsReadbackBuffer.size
+        );
+      }
+
+      device.queue.submit([encoder.finish()]);
+
+      const stats =
+        renderOptions.readStats === false
+          ? {
+              bounces: [],
+              termination: { emissive: 0, environment: 0, ambientFallback: 0, maxDepth: 0 },
+              queueOverflow: 0,
+            }
+          : await readStatsBuffer(device, resources, config);
+      const renderMs = performance.now() - startedAt;
+      return Object.freeze({
+        plan: Object.freeze({
+          mode: rendererWavefrontComputeMode,
+          maxDepth: config.maxDepth,
+          queueCapacity: config.queueCapacity,
+          dispatch: Object.freeze({
+            workgroupSize: config.workgroupSize,
+            primaryWorkgroups: config.primaryWorkgroups,
+            indirectDispatch: true,
+          }),
+        }),
+        settings: config,
+        renderMs,
+        queueOverflow: stats.queueOverflow,
+        bounces: stats.bounces,
+        termination: stats.termination,
+      });
+    },
+    destroy() {
+      for (const buffer of Object.values(resources)) {
+        if (Array.isArray(buffer)) {
+          for (const item of buffer) {
+            item.destroy?.();
+          }
+        } else {
+          buffer.destroy?.();
+        }
+      }
+    },
+  };
+}
+
+export async function renderWavefrontPathTracingComputeFrame(options = {}) {
+  const renderer = await createWavefrontPathTracingComputeRenderer(options);
+  try {
+    return await renderer.renderFrame(options);
+  } finally {
+    if (options.destroy !== false) {
+      renderer.destroy();
+    }
+  }
+}
+
+export function createWavefrontPathTracingComputeShaderSource(options = {}) {
+  const workgroupSize = readPositiveInteger(
+    "workgroupSize",
+    options.workgroupSize ?? rendererWavefrontComputeWorkgroupSize
+  );
+
+  return `
+struct RenderConfig {
+  width: u32,
+  height: u32,
+  maxDepth: u32,
+  queueCapacity: u32,
+  frameIndex: u32,
+  samples: u32,
+  denoise: u32,
+  _pad0: u32,
+  cameraOrigin: vec4<f32>,
+  cameraForward: vec4<f32>,
+  cameraRight: vec4<f32>,
+  cameraUp: vec4<f32>,
+  ambient: vec4<f32>,
+}
+
+struct PassConfig {
+  bounce: u32,
+  readQueue: u32,
+  _pad0: u32,
+  _pad1: u32,
+}
+
+struct RayRecord {
+  rayId: u32,
+  parentRayId: u32,
+  sourcePixelId: u32,
+  sampleId: u32,
+  bounce: u32,
+  mediumRefId: u32,
+  flags: u32,
+  _pad0: u32,
+  origin: vec4<f32>,
+  direction: vec4<f32>,
+  throughput: vec4<f32>,
+}
+
+struct Counters {
+  activeCount: atomic<u32>,
+  nextCount: atomic<u32>,
+  terminalCount: atomic<u32>,
+  environmentCount: atomic<u32>,
+  emissiveCount: atomic<u32>,
+  ambientCount: atomic<u32>,
+  surfaceCount: atomic<u32>,
+  overflowCount: atomic<u32>,
+}
+
+struct Hit {
+  hit: u32,
+  hitType: u32,
+  materialKind: u32,
+  frontFace: u32,
+  distance: f32,
+  ior: f32,
+  _pad0: f32,
+  _pad1: f32,
+  position: vec4<f32>,
+  normal: vec4<f32>,
+  color: vec4<f32>,
+  emission: vec4<f32>,
+}
+
+@group(0) @binding(0) var<uniform> config: RenderConfig;
+@group(0) @binding(1) var<uniform> pass: PassConfig;
+@group(0) @binding(2) var<storage, read_write> activeQueue: array<RayRecord>;
+@group(0) @binding(3) var<storage, read_write> nextQueue: array<RayRecord>;
+@group(0) @binding(4) var<storage, read_write> accumulation: array<vec4<f32>>;
+@group(0) @binding(5) var<storage, read_write> counters: Counters;
+@group(0) @binding(6) var<storage, read_write> stats: array<atomic<u32>>;
+@group(0) @binding(7) var<storage, read_write> activeIndirect: array<u32>;
+@group(0) @binding(8) var<storage, read_write> nextIndirect: array<u32>;
+@group(0) @binding(9) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+
+fn safeNormalize(value: vec3<f32>) -> vec3<f32> {
+  let len = length(value);
+  if (len <= 0.000001) {
+    return vec3<f32>(0.0, 1.0, 0.0);
+  }
+  return value / len;
+}
+
+fn hash(seed: f32) -> f32 {
+  return fract(sin(seed * 12.9898 + 78.233) * 43758.5453);
+}
+
+fn mix3(a: vec3<f32>, b: vec3<f32>, t: f32) -> vec3<f32> {
+  return a + (b - a) * t;
+}
+
+fn sampleEnvironment(direction: vec3<f32>) -> vec3<f32> {
+  let t = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
+  let base = mix3(vec3<f32>(0.018, 0.022, 0.04), mix3(vec3<f32>(0.08, 0.18, 0.24), vec3<f32>(0.38, 0.56, 0.72), t), 0.84);
+  let glint = pow(clamp(dot(direction, safeNormalize(vec3<f32>(0.26, 0.82, -0.52))), 0.0, 1.0), 180.0);
+  return base + vec3<f32>(1.0, 0.72, 0.34) * glint * 8.0;
+}
+
+fn ambientResidual(materialColor: vec3<f32>) -> vec3<f32> {
+  return config.ambient.rgb * mix3(vec3<f32>(1.0), materialColor, 0.35);
+}
+
+fn rayDirection(pixelX: u32, pixelY: u32) -> vec3<f32> {
+  let aspect = f32(config.width) / f32(config.height);
+  let viewScale = tan(47.0 * 0.01745329252 * 0.5);
+  let ndcX = ((f32(pixelX) + 0.5) / f32(config.width)) * 2.0 - 1.0;
+  let ndcY = 1.0 - ((f32(pixelY) + 0.5) / f32(config.height)) * 2.0;
+  return safeNormalize(
+    config.cameraForward.xyz +
+    config.cameraRight.xyz * ndcX * aspect * viewScale +
+    config.cameraUp.xyz * ndcY * viewScale
+  );
+}
+
+fn emptyHit() -> Hit {
+  return Hit(
+    0u,
+    3u,
+    0u,
+    0u,
+    1000000.0,
+    1.0,
+    0.0,
+    0.0,
+    vec4<f32>(0.0),
+    vec4<f32>(0.0, 1.0, 0.0, 0.0),
+    vec4<f32>(1.0),
+    vec4<f32>(0.0)
+  );
+}
+
+fn makeHit(
+  distance: f32,
+  position: vec3<f32>,
+  outwardNormal: vec3<f32>,
+  rayDirectionValue: vec3<f32>,
+  materialKind: u32,
+  color: vec3<f32>,
+  emission: vec3<f32>,
+  ior: f32
+) -> Hit {
+  let frontFace = dot(rayDirectionValue, outwardNormal) < 0.0;
+  var normal = outwardNormal;
+  if (!frontFace) {
+    normal = -outwardNormal;
+  }
+  var hitType = 1u;
+  if (materialKind == 5u) {
+    hitType = 2u;
+  }
+  return Hit(
+    1u,
+    hitType,
+    materialKind,
+    select(0u, 1u, frontFace),
+    distance,
+    ior,
+    0.0,
+    0.0,
+    vec4<f32>(position, 0.0),
+    vec4<f32>(normal, 0.0),
+    vec4<f32>(color, 1.0),
+    vec4<f32>(emission, 0.0)
+  );
+}
+
+fn intersectSphere(
+  ray: RayRecord,
+  center: vec3<f32>,
+  radius: f32,
+  materialKind: u32,
+  color: vec3<f32>,
+  emission: vec3<f32>,
+  ior: f32
+) -> Hit {
+  let oc = ray.origin.xyz - center;
+  let halfB = dot(oc, ray.direction.xyz);
+  let c = dot(oc, oc) - radius * radius;
+  let discriminant = halfB * halfB - c;
+  if (discriminant < 0.0) {
+    return emptyHit();
+  }
+  let root = sqrt(discriminant);
+  let first = -halfB - root;
+  let second = -halfB + root;
+  var distance = first;
+  if (distance <= 0.001) {
+    distance = second;
+  }
+  if (distance <= 0.001) {
+    return emptyHit();
+  }
+  let position = ray.origin.xyz + ray.direction.xyz * distance;
+  let normal = safeNormalize(position - center);
+  return makeHit(distance, position, normal, ray.direction.xyz, materialKind, color, emission, ior);
+}
+
+fn inRange(value: f32, minValue: f32, maxValue: f32) -> bool {
+  return value >= minValue && value <= maxValue;
+}
+
+fn intersectPlane(
+  ray: RayRecord,
+  point: vec3<f32>,
+  normalValue: vec3<f32>,
+  boundsMin: vec3<f32>,
+  boundsMax: vec3<f32>,
+  materialKind: u32,
+  color: vec3<f32>,
+  emission: vec3<f32>,
+  ior: f32
+) -> Hit {
+  let normal = safeNormalize(normalValue);
+  let denominator = dot(normal, ray.direction.xyz);
+  if (abs(denominator) < 0.001) {
+    return emptyHit();
+  }
+  let distance = dot(point - ray.origin.xyz, normal) / denominator;
+  if (distance <= 0.001) {
+    return emptyHit();
+  }
+  let position = ray.origin.xyz + ray.direction.xyz * distance;
+  if (
+    !inRange(position.x, boundsMin.x, boundsMax.x) ||
+    !inRange(position.y, boundsMin.y, boundsMax.y) ||
+    !inRange(position.z, boundsMin.z, boundsMax.z)
+  ) {
+    return emptyHit();
+  }
+  return makeHit(distance, position, normal, ray.direction.xyz, materialKind, color, emission, ior);
+}
+
+fn nearest(a: Hit, b: Hit) -> Hit {
+  if (b.hit == 1u && b.distance < a.distance) {
+    return b;
+  }
+  return a;
+}
+
+fn intersectScene(ray: RayRecord) -> Hit {
+  var hit = emptyHit();
+  hit = nearest(hit, intersectSphere(ray, vec3<f32>(-0.95, -0.08, -1.0), 0.68, 1u, vec3<f32>(0.74, 0.42, 0.28), vec3<f32>(0.0), 1.0));
+  hit = nearest(hit, intersectSphere(ray, vec3<f32>(0.68, -0.2, -1.35), 0.48, 2u, vec3<f32>(0.92, 0.86, 0.72), vec3<f32>(0.0), 1.0));
+  hit = nearest(hit, intersectSphere(ray, vec3<f32>(0.08, -0.28, -0.25), 0.34, 3u, vec3<f32>(0.74, 0.9, 1.0), vec3<f32>(0.0), 1.45));
+  hit = nearest(hit, intersectSphere(ray, vec3<f32>(0.25, 1.3, -1.7), 0.32, 5u, vec3<f32>(1.0, 0.78, 0.43), vec3<f32>(9.5, 6.4, 3.1), 1.0));
+  hit = nearest(hit, intersectSphere(ray, vec3<f32>(-1.72, -0.12, -0.42), 0.22, 6u, vec3<f32>(0.02, 0.018, 0.015), vec3<f32>(0.0), 1.0));
+  hit = nearest(hit, intersectPlane(ray, vec3<f32>(0.0, -0.58, 0.0), vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(-2.5, -0.59, -3.2), vec3<f32>(2.5, -0.57, 0.9), 4u, vec3<f32>(0.45, 0.78, 0.92), vec3<f32>(0.0), 1.33));
+  hit = nearest(hit, intersectPlane(ray, vec3<f32>(0.0, -0.64, -2.55), vec3<f32>(0.0, 0.12, 1.0), vec3<f32>(-2.8, -0.65, -2.75), vec3<f32>(2.8, 2.2, -2.25), 1u, vec3<f32>(0.74, 0.42, 0.28), vec3<f32>(0.0), 1.0));
+  return hit;
+}
+
+fn reflectDirection(direction: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+  return safeNormalize(direction - normal * 2.0 * dot(direction, normal));
+}
+
+fn refractDirection(direction: vec3<f32>, normal: vec3<f32>, etaRatio: f32) -> vec3<f32> {
+  let cosTheta = min(dot(-direction, normal), 1.0);
+  let perpendicular = (direction + normal * cosTheta) * etaRatio;
+  let k = 1.0 - dot(perpendicular, perpendicular);
+  if (k < 0.0) {
+    return vec3<f32>(9999.0);
+  }
+  return safeNormalize(perpendicular - normal * sqrt(k));
+}
+
+fn hemisphereDirection(normal: vec3<f32>, seed: f32) -> vec3<f32> {
+  let u = hash(seed + 3.17);
+  let v = hash(seed + 9.91);
+  let phi = 6.28318530718 * u;
+  let cosTheta = sqrt(1.0 - v);
+  let sinTheta = sqrt(v);
+  var tangent = vec3<f32>(1.0, 0.0, 0.0);
+  if (abs(normal.y) < 0.92) {
+    tangent = safeNormalize(cross(vec3<f32>(0.0, 1.0, 0.0), normal));
+  }
+  let bitangent = cross(normal, tangent);
+  return safeNormalize(tangent * cos(phi) * sinTheta + bitangent * sin(phi) * sinTheta + normal * cosTheta);
+}
+
+fn addRadiance(pixelId: u32, throughput: vec3<f32>, radiance: vec3<f32>) {
+  accumulation[pixelId] = accumulation[pixelId] + vec4<f32>(throughput * radiance, 1.0);
+}
+
+fn writeContinuation(ray: RayRecord, hit: Hit, direction: vec3<f32>, throughput: vec3<f32>, flags: u32, mediumRefId: u32) {
+  let slot = atomicAdd(&counters.nextCount, 1u);
+  if (slot >= config.queueCapacity) {
+    atomicAdd(&counters.overflowCount, 1u);
+    atomicAdd(&stats[pass.bounce * ${rendererWavefrontComputeStatsStride}u + 6u], 1u);
+    return;
+  }
+  let nextRay = RayRecord(
+    ray.rayId + config.queueCapacity * (pass.bounce + 1u),
+    ray.rayId,
+    ray.sourcePixelId,
+    ray.sampleId,
+    pass.bounce + 1u,
+    mediumRefId,
+    flags,
+    0u,
+    vec4<f32>(hit.position.xyz + hit.normal.xyz * 0.008, 0.0),
+    vec4<f32>(direction, 0.0),
+    vec4<f32>(throughput, 0.0)
+  );
+  if (pass.readQueue == 0u) {
+    nextQueue[slot] = nextRay;
+  } else {
+    activeQueue[slot] = nextRay;
+  }
+  atomicAdd(&stats[pass.bounce * ${rendererWavefrontComputeStatsStride}u + 4u], 1u);
+}
+
+fn toneMap(color: vec3<f32>) -> vec3<f32> {
+  let mapped = color / (vec3<f32>(1.0) + color);
+  return pow(clamp(mapped, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+}
+
+@compute @workgroup_size(${workgroupSize}, 1, 1)
+fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  let pixelId = globalId.x;
+  let total = config.width * config.height * config.samples;
+  if (pixelId == 0u) {
+    atomicStore(&counters.activeCount, total);
+    atomicStore(&counters.nextCount, 0u);
+    atomicStore(&counters.terminalCount, 0u);
+    atomicStore(&counters.environmentCount, 0u);
+    atomicStore(&counters.emissiveCount, 0u);
+    atomicStore(&counters.ambientCount, 0u);
+    atomicStore(&counters.surfaceCount, 0u);
+    atomicStore(&counters.overflowCount, 0u);
+    activeIndirect[0] = max(1u, (total + ${workgroupSize - 1}u) / ${workgroupSize}u);
+    activeIndirect[1] = 1u;
+    activeIndirect[2] = 1u;
+    nextIndirect[0] = 1u;
+    nextIndirect[1] = 1u;
+    nextIndirect[2] = 1u;
+  }
+  if (pixelId >= total) {
+    return;
+  }
+  let x = pixelId % config.width;
+  let y = pixelId / config.width;
+  accumulation[pixelId] = vec4<f32>(0.0);
+  activeQueue[pixelId] = RayRecord(
+    pixelId,
+    0u,
+    pixelId,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    config.cameraOrigin,
+    vec4<f32>(rayDirection(x, y), 0.0),
+    vec4<f32>(1.0, 1.0, 1.0, 0.0)
+  );
+}
+
+@compute @workgroup_size(${workgroupSize}, 1, 1)
+fn traceBounce(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  let index = globalId.x;
+  let activeCount = atomicLoad(&counters.activeCount);
+  if (index >= activeCount) {
+    return;
+  }
+  var ray: RayRecord;
+  if (pass.readQueue == 0u) {
+    ray = activeQueue[index];
+  } else {
+    ray = nextQueue[index];
+  }
+  let statsBase = pass.bounce * ${rendererWavefrontComputeStatsStride}u;
+  atomicAdd(&stats[statsBase], 1u);
+  let hit = intersectScene(ray);
+
+  if (hit.hit == 0u) {
+    addRadiance(ray.sourcePixelId, ray.throughput.rgb, sampleEnvironment(ray.direction.xyz));
+    atomicAdd(&counters.terminalCount, 1u);
+    atomicAdd(&counters.environmentCount, 1u);
+    atomicAdd(&stats[statsBase + 3u], 1u);
+    return;
+  }
+
+  if (hit.materialKind == 5u) {
+    addRadiance(ray.sourcePixelId, ray.throughput.rgb, hit.emission.rgb);
+    atomicAdd(&counters.terminalCount, 1u);
+    atomicAdd(&counters.emissiveCount, 1u);
+    atomicAdd(&stats[statsBase + 2u], 1u);
+    return;
+  }
+
+  atomicAdd(&counters.surfaceCount, 1u);
+  atomicAdd(&stats[statsBase + 1u], 1u);
+
+  if (hit.materialKind == 6u) {
+    addRadiance(ray.sourcePixelId, ray.throughput.rgb, ambientResidual(hit.color.rgb));
+    atomicAdd(&counters.terminalCount, 1u);
+    atomicAdd(&counters.ambientCount, 1u);
+    atomicAdd(&stats[statsBase + 5u], 1u);
+    return;
+  }
+
+  if (pass.bounce + 1u >= config.maxDepth) {
+    addRadiance(ray.sourcePixelId, ray.throughput.rgb, ambientResidual(hit.color.rgb));
+    atomicAdd(&counters.terminalCount, 1u);
+    atomicAdd(&counters.ambientCount, 1u);
+    atomicAdd(&stats[statsBase + 5u], 1u);
+    atomicAdd(&stats[statsBase + 7u], 1u);
+    return;
+  }
+
+  let seed = f32(ray.sourcePixelId * 97u + ray.sampleId * 13u + pass.bounce * 31u + config.frameIndex);
+  var direction = vec3<f32>(0.0);
+  var throughput = ray.throughput.rgb * hit.color.rgb;
+  var mediumRefId = ray.mediumRefId;
+  var flags = ray.flags;
+
+  if (hit.materialKind == 2u) {
+    direction = reflectDirection(ray.direction.xyz, hit.normal.xyz);
+    throughput = throughput * 0.92;
+    flags = flags | 1u;
+  } else if (hit.materialKind == 3u) {
+    let eta = select(hit.ior, 1.0 / hit.ior, hit.frontFace == 1u);
+    let refracted = refractDirection(ray.direction.xyz, hit.normal.xyz, eta);
+    if (refracted.x > 9000.0) {
+      direction = reflectDirection(ray.direction.xyz, hit.normal.xyz);
+      throughput = throughput * 0.82;
+      flags = flags | 1u;
+    } else {
+      direction = refracted;
+      throughput = throughput * 0.9;
+      mediumRefId = select(0u, 3u, hit.frontFace == 1u);
+      flags = flags | 2u;
+    }
+  } else if (hit.materialKind == 4u) {
+    let transmission = refractDirection(ray.direction.xyz, hit.normal.xyz, select(hit.ior, 1.0 / hit.ior, hit.frontFace == 1u));
+    if (hash(seed) > 0.38 && transmission.x < 9000.0) {
+      direction = transmission;
+    } else {
+      direction = reflectDirection(ray.direction.xyz, hit.normal.xyz);
+    }
+    throughput = throughput * 0.72;
+    mediumRefId = 4u;
+    flags = flags | 4u;
+  } else {
+    direction = hemisphereDirection(hit.normal.xyz, seed);
+    throughput = throughput * clamp(dot(direction, hit.normal.xyz), 0.18, 1.0) * 0.84;
+  }
+
+  writeContinuation(ray, hit, direction, throughput, flags, mediumRefId);
+}
+
+@compute @workgroup_size(1, 1, 1)
+fn compactAndSwapQueues(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  if (globalId.x > 0u) {
+    return;
+  }
+  let count = atomicLoad(&counters.nextCount);
+  let groups = max(1u, (count + ${workgroupSize - 1}u) / ${workgroupSize}u);
+  atomicStore(&counters.activeCount, count);
+  atomicStore(&counters.nextCount, 0u);
+  if (pass.readQueue == 0u) {
+    nextIndirect[0] = groups;
+    nextIndirect[1] = 1u;
+    nextIndirect[2] = 1u;
+  } else {
+    activeIndirect[0] = groups;
+    activeIndirect[1] = 1u;
+    activeIndirect[2] = 1u;
+  }
+}
+
+@compute @workgroup_size(${workgroupSize}, 1, 1)
+fn resolveOutput(@builtin(global_invocation_id) globalId: vec3<u32>) {
+  let pixelId = globalId.x;
+  let total = config.width * config.height;
+  if (pixelId >= total) {
+    return;
+  }
+  let x = pixelId % config.width;
+  let y = pixelId / config.width;
+  let color = toneMap(accumulation[pixelId].rgb);
+  textureStore(outputTexture, vec2<i32>(i32(x), i32(y)), vec4<f32>(color, 1.0));
+}
+`;
+}
