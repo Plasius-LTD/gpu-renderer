@@ -947,6 +947,7 @@ export async function createGpuRenderer(options = {}) {
     cancelAnimationFrame = globalThis.cancelAnimationFrame?.bind(globalThis),
     frameIdFactory,
     onFrameStart,
+    onEncodeFrame,
     onBeforeEncode,
     onAfterSubmit,
     onFrameComplete,
@@ -1024,10 +1025,9 @@ export async function createGpuRenderer(options = {}) {
     });
     const view = texture.createView();
 
-    const pass = encoder.beginRenderPass(createRenderPassDescriptor(view, clear));
-
-    if (typeof onBeforeEncode === "function") {
-      onBeforeEncode({
+    const useDefaultEncoding =
+      typeof onEncodeFrame !== "function" ||
+      onEncodeFrame({
         frame,
         frameNumber,
         frameId,
@@ -1036,14 +1036,35 @@ export async function createGpuRenderer(options = {}) {
         device,
         context,
         encoder,
-        pass,
+        texture,
+        view,
         canvas: targetCanvas,
+        clearColor: [...clear],
         xrActive,
-      });
-    }
+      }) === false;
 
-    if (typeof pass.end === "function") {
-      pass.end();
+    if (useDefaultEncoding) {
+      const pass = encoder.beginRenderPass(createRenderPassDescriptor(view, clear));
+
+      if (typeof onBeforeEncode === "function") {
+        onBeforeEncode({
+          frame,
+          frameNumber,
+          frameId,
+          frameTimeMs,
+          timestamp,
+          device,
+          context,
+          encoder,
+          pass,
+          canvas: targetCanvas,
+          xrActive,
+        });
+      }
+
+      if (typeof pass.end === "function") {
+        pass.end();
+      }
     }
 
     const commandBuffer = encoder.finish();

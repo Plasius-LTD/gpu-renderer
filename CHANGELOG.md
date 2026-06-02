@@ -12,10 +12,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added a current-state review and wavefront path tracing architecture design
+    for pass-based screen-ray rendering across the `gpu-*` package family.
+  - Added `onEncodeFrame(...)` so applications can own full WebGPU command
+    encoding for multi-pass render targets, ray-query resolves, denoise passes,
+    and custom presentation flows before falling back to the default pass.
 
 - **Changed**
-  - (placeholder)
+  - The browser demo now opts into the shared
+    `gpu-renderer.hit-driven-pathtrace.enabled` flag and reports the resolved
+    default-on path-trace mode in renderer telemetry.
 
 - **Fixed**
   - (placeholder)

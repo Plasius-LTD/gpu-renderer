@@ -58,6 +58,31 @@ const renderer = await createGpuRenderer({
 });
 ```
 
+Apps that need explicit render targets, ray-query resolve passes, denoise
+passes, or other multi-pass composition can use `onEncodeFrame(...)`. This hook
+runs after the swapchain texture is acquired but before the renderer opens a
+default render pass. When supplied, it owns command encoding for the frame; it
+can return `false` to fall back to the default `onBeforeEncode(...)` path.
+
+```js
+const renderer = await createGpuRenderer({
+  canvas: "#scene",
+  onEncodeFrame({ device, encoder, view, clearColor }) {
+    const scenePass = encoder.beginRenderPass({
+      colorAttachments: [{ view: offscreenView, loadOp: "clear", clearValue: clearColor, storeOp: "store" }],
+    });
+    encodeScene(scenePass);
+    scenePass.end();
+
+    const presentPass = encoder.beginRenderPass({
+      colorAttachments: [{ view, loadOp: "clear", clearValue: clearColor, storeOp: "store" }],
+    });
+    encodePostProcess(presentPass);
+    presentPass.end();
+  },
+});
+```
+
 ## Worker DAG Manifests
 
 The renderer also publishes worker-facing frame-stage manifests so
@@ -148,6 +173,9 @@ Then open `http://localhost:8000/gpu-renderer/demo/`.
 
 The demo now reports explicit canvas state so it is clear whether the renderer
 is mounted, idle, running, or blocked by secure-context / WebGPU support.
+It also opts into the shared `gpu-renderer.hit-driven-pathtrace.enabled` flag,
+which defaults on in `@plasius/gpu-shared` and is reported in the demo telemetry
+and `render_game_to_text()` snapshot.
 
 ## Development Checks
 
@@ -165,5 +193,7 @@ npm run pack:check
 - `src/index.d.ts`: public API typings.
 - `tests/package.test.js`: unit tests for renderer lifecycle behavior.
 - `docs/design/worker-manifest-integration.md`: renderer frame-stage DAG model.
+- `docs/design/wavefront-path-tracing-architecture.md`: current-state review and
+  proposed pass-based screen-ray path tracing architecture.
 - `docs/adrs/*`: architecture decisions for renderer runtime design.
 - `docs/tdrs/*`: technical direction for frame hook integration.

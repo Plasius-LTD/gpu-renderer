@@ -11,6 +11,14 @@ export interface RendererFrameEvent {
   xrActive: boolean;
 }
 
+export interface RendererEncodeFrameEvent extends RendererFrameEvent {
+  frameNumber: number;
+  encoder: GPUCommandEncoder;
+  texture: GPUTexture;
+  view: GPUTextureView;
+  clearColor: [number, number, number, number];
+}
+
 export interface RendererSnapshot {
   running: boolean;
   frame: number;
@@ -23,6 +31,11 @@ export interface RendererSnapshot {
 
 export interface RendererHooks {
   onFrameStart?: (event: RendererFrameEvent) => void;
+  /**
+   * Owns frame encoding before the renderer opens a default swapchain pass.
+   * Return false to fall back to the default pass and onBeforeEncode hook.
+   */
+  onEncodeFrame?: (event: RendererEncodeFrameEvent) => false | void;
   onBeforeEncode?: (event: {
     frame: number;
     frameNumber: number;

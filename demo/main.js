@@ -9,6 +9,9 @@ import {
 } from "../dist/index.js";
 import { mountGpuShowcase } from "../node_modules/@plasius/gpu-shared/dist/index.js";
 
+const GPU_RENDERER_HIT_DRIVEN_PATHTRACE_FEATURE =
+  "gpu-renderer.hit-driven-pathtrace.enabled";
+
 const root = globalThis.document?.getElementById("app");
 if (!root) {
   throw new Error("Renderer demo root element was not found.");
@@ -85,6 +88,7 @@ function createState() {
     renderer: null,
     snapshot: null,
     lastRender: null,
+    hitDrivenPathtraceEnabled: true,
     accumulator: 0,
     lastTargetFrameTimeMs: 1000 / 30,
   };
@@ -129,6 +133,7 @@ function ensureRenderer(state) {
 
 function updateState(state, scene, dt) {
   state.profile = scene.stress ? "xr" : defaultRendererWorkerProfile;
+  state.hitDrivenPathtraceEnabled = scene.hitDrivenPathtraceEnabled !== false;
   ensureRenderer(state);
 
   if (!state.renderer) {
@@ -165,6 +170,8 @@ function describeState(state, scene) {
   const selectiveBands = plan.representationBands.filter(
     (band) => "rtParticipation" in band && band.rtParticipation === "selective"
   ).length;
+  const hitDrivenPathtraceEnabled = scene.hitDrivenPathtraceEnabled !== false;
+  state.hitDrivenPathtraceEnabled = hitDrivenPathtraceEnabled;
 
   const status = state.initError
     ? `Renderer init failed · ${state.initError}`
@@ -193,6 +200,7 @@ function describeState(state, scene) {
       `snapshot id: ${plan.inputBoundary.snapshotId}`,
       `render stages: ${plan.renderStages.length}`,
       `representation bands: ${plan.representationBands.length}`,
+      `hit-driven path trace: ${hitDrivenPathtraceEnabled ? "enabled" : "disabled"}`,
     ],
     qualityMetrics: [
       `worker jobs: ${manifest.jobs.length}`,
@@ -215,6 +223,10 @@ function describeState(state, scene) {
     ],
     textState: {
       profile: state.profile,
+      hitDrivenPathtraceEnabled,
+      featureFlags: {
+        [GPU_RENDERER_HIT_DRIVEN_PATHTRACE_FEATURE]: hitDrivenPathtraceEnabled,
+      },
       renderPlanStageOrder: plan.renderStages.map((stage) => stage.key),
       offscreenSnapshot,
       frameStats,
@@ -250,6 +262,9 @@ const showcase = await mountGpuShowcase({
   updateState,
   describeState,
   destroyState,
+  featureFlags: {
+    [GPU_RENDERER_HIT_DRIVEN_PATHTRACE_FEATURE]: true,
+  },
 });
 
 window.addEventListener("pagehide", () => showcase.destroy(), { once: true });

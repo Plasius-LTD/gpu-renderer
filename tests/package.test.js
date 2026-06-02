@@ -29,11 +29,13 @@ class FakeRenderPass {
 class FakeCommandEncoder {
   constructor() {
     this.pass = new FakeRenderPass();
+    this.passes = [];
     this.lastDescriptor = null;
   }
 
   beginRenderPass(descriptor) {
     this.lastDescriptor = descriptor;
+    this.passes.push({ descriptor, pass: this.pass });
     return this.pass;
   }
 
@@ -45,6 +47,7 @@ class FakeCommandEncoder {
 class FakeDevice {
   constructor() {
     this.encoderCount = 0;
+    this.encoders = [];
     this.submissions = 0;
     this.queue = {
       submit: (buffers) => {
@@ -55,7 +58,9 @@ class FakeDevice {
 
   createCommandEncoder() {
     this.encoderCount += 1;
-    return new FakeCommandEncoder();
+    const encoder = new FakeCommandEncoder();
+    this.encoders.push(encoder);
+    return encoder;
   }
 }
 
@@ -198,6 +203,85 @@ test("createGpuRenderer emits frame lifecycle hooks with frame ids", async () =>
     ["start", 2, "frame-2-false", 16.5],
     ["complete", 2, "frame-2-false", 16.5],
   ]);
+
+  renderer.destroy();
+});
+
+test("createGpuRenderer lets onEncodeFrame own custom frame encoding", async () => {
+  const device = new FakeDevice();
+  const gpu = new FakeGpu(new FakeAdapter(device));
+  const canvas = createFakeCanvas();
+  const events = [];
+
+  const renderer = await createGpuRenderer({
+    canvas,
+    navigator: { gpu },
+    clearColor: [0.1, 0.2, 0.3, 1],
+    onEncodeFrame(event) {
+      events.push({
+        frame: event.frame,
+        frameNumber: event.frameNumber,
+        viewType: event.view.type,
+        clearColor: event.clearColor,
+      });
+      const pass = event.encoder.beginRenderPass({
+        colorAttachments: [
+          {
+            view: event.view,
+            loadOp: "clear",
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            storeOp: "store",
+          },
+        ],
+      });
+      pass.end();
+    },
+    onBeforeEncode() {
+      throw new Error("onBeforeEncode should not run when onEncodeFrame owns encoding.");
+    },
+  });
+
+  renderer.renderOnce(100);
+
+  assert.equal(device.encoderCount, 1);
+  assert.equal(device.submissions, 1);
+  assert.equal(device.encoders[0].passes.length, 1);
+  assert.equal(device.encoders[0].pass.ended, true);
+  assert.deepEqual(events, [
+    {
+      frame: 0,
+      frameNumber: 1,
+      viewType: "texture-view",
+      clearColor: [0.1, 0.2, 0.3, 1],
+    },
+  ]);
+
+  renderer.destroy();
+});
+
+test("createGpuRenderer falls back to default encoding when onEncodeFrame returns false", async () => {
+  const device = new FakeDevice();
+  const gpu = new FakeGpu(new FakeAdapter(device));
+  const canvas = createFakeCanvas();
+  let beforeEncodeCalled = false;
+
+  const renderer = await createGpuRenderer({
+    canvas,
+    navigator: { gpu },
+    onEncodeFrame() {
+      return false;
+    },
+    onBeforeEncode() {
+      beforeEncodeCalled = true;
+    },
+  });
+
+  renderer.renderOnce(100);
+
+  assert.equal(device.encoderCount, 1);
+  assert.equal(device.encoders[0].passes.length, 1);
+  assert.equal(device.encoders[0].pass.ended, true);
+  assert.equal(beforeEncodeCalled, true);
 
   renderer.destroy();
 });
