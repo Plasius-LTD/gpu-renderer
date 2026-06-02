@@ -403,6 +403,43 @@ export function createWavefrontPathTracingPlan(options?: {
   accumulationResetEpoch?: number;
 }): RendererWavefrontPathTracingPlan;
 
+export interface WavefrontPathTracingComputeTile {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly pixelCount: number;
+  readonly workgroups: number;
+}
+
+export type WavefrontPathTracingSceneObjectKind = "box" | "sphere";
+
+export interface WavefrontPathTracingSceneObject {
+  readonly kind?: WavefrontPathTracingSceneObjectKind;
+  readonly type?: WavefrontPathTracingSceneObjectKind;
+  readonly materialKind?: 1 | 2 | 3 | 4 | 5 | 6;
+  readonly color?: readonly [number, number, number] | readonly [number, number, number, number];
+  readonly emission?: readonly [number, number, number] | readonly [number, number, number, number];
+  readonly ior?: number;
+  readonly bounds?: Readonly<{
+    readonly min: readonly [number, number, number];
+    readonly max: readonly [number, number, number];
+  }>;
+  readonly min?: readonly [number, number, number];
+  readonly max?: readonly [number, number, number];
+  readonly center?: readonly [number, number, number];
+  readonly radius?: number;
+}
+
+export interface WavefrontPathTracingNormalizedSceneObject {
+  readonly kind: 1 | 2;
+  readonly materialKind: 1 | 2 | 3 | 4 | 5 | 6;
+  readonly boundsMin: readonly [number, number, number, number];
+  readonly boundsMax: readonly [number, number, number, number];
+  readonly color: readonly [number, number, number, number];
+  readonly emission: readonly [number, number, number, number];
+}
+
 export interface WavefrontPathTracingComputeConfig {
   readonly mode: typeof rendererWavefrontComputeMode;
   readonly width: number;
@@ -414,10 +451,27 @@ export interface WavefrontPathTracingComputeConfig {
   readonly workgroupSize: number;
   readonly primaryWorkgroups: number;
   readonly bouncePasses: number;
-  readonly indirectDispatch: true;
+  readonly indirectDispatch: false;
   readonly cpuReference: false;
   readonly denoise: boolean;
   readonly format: GPUTextureFormat | "rgba8unorm";
+  readonly tileWidth: number;
+  readonly tileHeight: number;
+  readonly tilePixelCapacity: number;
+  readonly sceneObjects: readonly WavefrontPathTracingNormalizedSceneObject[];
+  readonly sceneObjectCount: number;
+  readonly sceneObjectCapacity: number;
+  readonly tileCountX: number;
+  readonly tileCountY: number;
+  readonly tileCount: number;
+  readonly maxTileWorkgroups: number;
+  readonly tiles: readonly WavefrontPathTracingComputeTile[];
+}
+
+export interface WavefrontPathTracingOutputProbe {
+  readonly sampledPixels: number;
+  readonly nonZeroSamples: number;
+  readonly maxChannel: number;
 }
 
 export interface WavefrontPathTracingComputeStats {
@@ -428,12 +482,17 @@ export interface WavefrontPathTracingComputeStats {
     dispatch: Readonly<{
       workgroupSize: number;
       primaryWorkgroups: number;
-      indirectDispatch: true;
+      indirectDispatch: false;
+      tileWidth: number;
+      tileHeight: number;
+      tileCount: number;
+      maxTileWorkgroups: number;
     }>;
   }>;
   readonly settings: WavefrontPathTracingComputeConfig;
   readonly renderMs: number;
   readonly queueOverflow: number;
+  readonly outputProbe: WavefrontPathTracingOutputProbe | null;
   readonly bounces: readonly {
     readonly bounce: number;
     readonly active: number;
@@ -458,7 +517,10 @@ export interface WavefrontPathTracingComputeRenderer {
   readonly device: GPUDevice;
   readonly context: GPUCanvasContext;
   readonly canvas: HTMLCanvasElement;
-  renderFrame(options?: { readStats?: boolean }): Promise<WavefrontPathTracingComputeStats>;
+  renderFrame(options?: {
+    readStats?: boolean;
+    readOutputProbe?: boolean;
+  }): Promise<WavefrontPathTracingComputeStats>;
   destroy(): void;
 }
 
@@ -475,6 +537,10 @@ export function createWavefrontPathTracingComputeConfig(options?: {
   workgroupSize?: number;
   denoise?: boolean;
   format?: GPUTextureFormat | "rgba8unorm";
+  tileWidth?: number;
+  tileHeight?: number;
+  sceneObjects?: readonly WavefrontPathTracingSceneObject[];
+  sceneObjectLimit?: number;
 }): WavefrontPathTracingComputeConfig;
 
 export function createWavefrontPathTracingComputeShaderSource(options?: {
@@ -491,6 +557,10 @@ export function createWavefrontPathTracingComputeRenderer(options: {
   workgroupSize?: number;
   denoise?: boolean;
   format?: GPUTextureFormat | "rgba8unorm";
+  tileWidth?: number;
+  tileHeight?: number;
+  sceneObjects?: readonly WavefrontPathTracingSceneObject[];
+  sceneObjectLimit?: number;
   navigator?: Navigator | { gpu?: GPU };
   gpu?: GPU;
   adapter?: GPUAdapter;
@@ -508,12 +578,17 @@ export function renderWavefrontPathTracingComputeFrame(options: {
   workgroupSize?: number;
   denoise?: boolean;
   format?: GPUTextureFormat | "rgba8unorm";
+  tileWidth?: number;
+  tileHeight?: number;
+  sceneObjects?: readonly WavefrontPathTracingSceneObject[];
+  sceneObjectLimit?: number;
   navigator?: Navigator | { gpu?: GPU };
   gpu?: GPU;
   adapter?: GPUAdapter;
   device?: GPUDevice;
   context?: GPUCanvasContext;
   readStats?: boolean;
+  readOutputProbe?: boolean;
   destroy?: boolean;
 }): Promise<WavefrontPathTracingComputeStats>;
 
@@ -525,8 +600,8 @@ export const rendererWavefrontQueuePairStrategy: "ping-pong-active-next";
 export const rendererWavefrontHitTypes: readonly RendererWavefrontHitType[];
 export const rendererWavefrontPassOrder: readonly RendererWavefrontPassKey[];
 export const rendererWavefrontComputeMode: "webgpu-compute";
-export const rendererWavefrontComputeWorkgroupSize: 64;
 export const rendererWavefrontComputeStatsStride: 8;
+export const rendererWavefrontComputeWorkgroupSize: 64;
 
 export const defaultRendererClearColor: readonly [number, number, number, number];
 export const rendererDebugOwner: "renderer";

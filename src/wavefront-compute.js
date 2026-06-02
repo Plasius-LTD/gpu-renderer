@@ -1,39 +1,39 @@
-export const rendererWavefrontComputeMode = "webgpu-compute";
-export const rendererWavefrontComputeWorkgroupSize = 64;
-export const rendererWavefrontComputeStatsStride = 8;
-
-const DEFAULT_WIDTH = 1280;
-const DEFAULT_HEIGHT = 720;
-const DEFAULT_MAX_DEPTH = 5;
-const DEFAULT_FORMAT = "rgba8unorm";
-const CONFIG_BYTE_LENGTH = 112;
-const PASS_BYTE_LENGTH = 16;
-const RAY_RECORD_BYTE_LENGTH = 80;
-const COUNTER_BYTE_LENGTH = 8 * Uint32Array.BYTES_PER_ELEMENT;
-const INDIRECT_BYTE_LENGTH = 3 * Uint32Array.BYTES_PER_ELEMENT;
-const CAMERA = Object.freeze({
+var rendererWavefrontComputeMode = "webgpu-compute";
+var rendererWavefrontComputeWorkgroupSize = 64;
+var rendererWavefrontComputeStatsStride = 8;
+var DEFAULT_WIDTH = 1280;
+var DEFAULT_HEIGHT = 720;
+var DEFAULT_MAX_DEPTH = 5;
+var DEFAULT_FORMAT = "rgba8unorm";
+var CONFIG_BYTE_LENGTH = 144;
+var PASS_BYTE_LENGTH = 16;
+var RAY_RECORD_BYTE_LENGTH = 80;
+var SCENE_OBJECT_RECORD_BYTE_LENGTH = 80;
+var DEFAULT_SCENE_OBJECT_LIMIT = 128;
+var COUNTER_BYTE_LENGTH = 8 * Uint32Array.BYTES_PER_ELEMENT;
+var INDIRECT_BYTE_LENGTH = 3 * Uint32Array.BYTES_PER_ELEMENT;
+var CAMERA = Object.freeze({
   origin: Object.freeze([0, 0.45, 2.85, 0]),
   forward: Object.freeze([-0.019916939, -0.13692907, -0.99038124, 0]),
   right: Object.freeze([0.9997977, 0, -0.02011397, 0]),
-  up: Object.freeze([-0.0027546, 0.9905942, -0.13690137, 0]),
+  up: Object.freeze([-27546e-7, 0.9905942, -0.13690137, 0])
 });
-const AMBIENT = Object.freeze([0.0216, 0.02448, 0.0288, 1]);
-
+var AMBIENT = Object.freeze([0.0216, 0.02448, 0.0288, 1]);
 function readPositiveInteger(name, value) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer.`);
   }
   return value;
 }
-
 function clampInteger(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
-
 function alignTo4(value) {
   return Math.ceil(value / 4) * 4;
 }
-
+function alignTo256(value) {
+  return Math.ceil(value / 256) * 256;
+}
 function assertGpuConstants() {
   const { GPUBufferUsage, GPUMapMode, GPUShaderStage, GPUTextureUsage } = globalThis;
   if (!GPUBufferUsage || !GPUMapMode || !GPUShaderStage || !GPUTextureUsage) {
@@ -41,7 +41,6 @@ function assertGpuConstants() {
   }
   return { GPUBufferUsage, GPUMapMode, GPUShaderStage, GPUTextureUsage };
 }
-
 function readNavigator(navigatorOverride) {
   const currentNavigator = navigatorOverride ?? globalThis.navigator;
   if (!currentNavigator || typeof currentNavigator !== "object") {
@@ -49,7 +48,6 @@ function readNavigator(navigatorOverride) {
   }
   return currentNavigator;
 }
-
 function readGpu(navigatorOverride) {
   const currentNavigator = readNavigator(navigatorOverride);
   const gpu = currentNavigator.gpu;
@@ -58,27 +56,23 @@ function readGpu(navigatorOverride) {
   }
   return gpu;
 }
-
 function resolveCanvas(canvas) {
   if (!canvas || typeof canvas !== "object") {
     throw new Error("canvas must be an HTMLCanvasElement with a WebGPU context.");
   }
   return canvas;
 }
-
 function createBuffer(device, label, size, usage) {
   return device.createBuffer({
     label,
     size: alignTo4(size),
-    usage,
+    usage
   });
 }
-
 function writeVec4(target, offset, value) {
   target.set(value, offset);
 }
-
-function buildConfigBufferData(config, frameIndex) {
+function buildConfigBufferData(config, frameIndex, tile) {
   const buffer = new ArrayBuffer(CONFIG_BYTE_LENGTH);
   const dataView = new DataView(buffer);
   dataView.setUint32(0, config.width, true);
@@ -88,32 +82,35 @@ function buildConfigBufferData(config, frameIndex) {
   dataView.setUint32(16, frameIndex, true);
   dataView.setUint32(20, config.samples, true);
   dataView.setUint32(24, config.denoise ? 1 : 0, true);
+  dataView.setUint32(28, tile.x, true);
+  dataView.setUint32(32, tile.y, true);
+  dataView.setUint32(36, tile.width, true);
+  dataView.setUint32(40, tile.height, true);
+  dataView.setUint32(44, tile.pixelCount, true);
+  dataView.setUint32(48, config.sceneObjectCount, true);
   const floatView = new Float32Array(buffer);
-  writeVec4(floatView, 8, CAMERA.origin);
-  writeVec4(floatView, 12, CAMERA.forward);
-  writeVec4(floatView, 16, CAMERA.right);
-  writeVec4(floatView, 20, CAMERA.up);
-  writeVec4(floatView, 24, AMBIENT);
+  writeVec4(floatView, 16, CAMERA.origin);
+  writeVec4(floatView, 20, CAMERA.forward);
+  writeVec4(floatView, 24, CAMERA.right);
+  writeVec4(floatView, 28, CAMERA.up);
+  writeVec4(floatView, 32, AMBIENT);
   return buffer;
 }
-
 function buildPassBufferData(bounce) {
   const values = new Uint32Array(PASS_BYTE_LENGTH / Uint32Array.BYTES_PER_ELEMENT);
   values[0] = bounce;
   values[1] = bounce % 2;
   return values;
 }
-
 function parseStats(data, config) {
   const bounces = [];
   const termination = {
     emissive: 0,
     environment: 0,
     ambientFallback: 0,
-    maxDepth: 0,
+    maxDepth: 0
   };
   let queueOverflow = 0;
-
   for (let bounce = 0; bounce < config.maxDepth; bounce += 1) {
     const offset = bounce * rendererWavefrontComputeStatsStride;
     const entry = {
@@ -125,7 +122,7 @@ function parseStats(data, config) {
       spawned: data[offset + 4],
       ambientFallback: data[offset + 5],
       queueOverflow: data[offset + 6],
-      maxDepth: data[offset + 7],
+      maxDepth: data[offset + 7]
     };
     termination.emissive += entry.emissiveHits;
     termination.environment += entry.environmentHits;
@@ -134,14 +131,181 @@ function parseStats(data, config) {
     queueOverflow += entry.queueOverflow;
     bounces.push(Object.freeze(entry));
   }
-
   return Object.freeze({
     bounces: Object.freeze(bounces),
     termination: Object.freeze(termination),
-    queueOverflow,
+    queueOverflow
   });
 }
-
+function createWavefrontTiles(config) {
+  const tiles = [];
+  for (let y = 0; y < config.height; y += config.tileHeight) {
+    for (let x = 0; x < config.width; x += config.tileWidth) {
+      const width = Math.min(config.tileWidth, config.width - x);
+      const height = Math.min(config.tileHeight, config.height - y);
+      const pixelCount = width * height * config.samples;
+      tiles.push(Object.freeze({
+        x,
+        y,
+        width,
+        height,
+        pixelCount,
+        workgroups: Math.ceil(pixelCount / config.workgroupSize)
+      }));
+    }
+  }
+  return Object.freeze(tiles);
+}
+function readSceneVec3(name, value, fallback) {
+  if (value == null) {
+    return fallback;
+  }
+  if (!Array.isArray(value) && !(ArrayBuffer.isView(value) && value.length != null)) {
+    throw new Error(`${name} must be an array-like vec3.`);
+  }
+  if (value.length < 3) {
+    throw new Error(`${name} must contain at least three numeric values.`);
+  }
+  const result = [Number(value[0]), Number(value[1]), Number(value[2])];
+  if (!result.every(Number.isFinite)) {
+    throw new Error(`${name} must contain finite numeric values.`);
+  }
+  return result;
+}
+function readSceneVec4(name, value, fallback) {
+  const vec3 = readSceneVec3(name, value, fallback);
+  const alpha = value != null && value.length >= 4 ? Number(value[3]) : fallback[3] ?? 1;
+  if (!Number.isFinite(alpha)) {
+    throw new Error(`${name} alpha must be finite when provided.`);
+  }
+  return [vec3[0], vec3[1], vec3[2], alpha];
+}
+function normalizeMaterialKind(value) {
+  if (value == null) {
+    return 1;
+  }
+  const materialKind = Number(value);
+  if (!Number.isInteger(materialKind) || materialKind < 1 || materialKind > 6) {
+    throw new Error("scene object materialKind must be an integer between 1 and 6.");
+  }
+  return materialKind;
+}
+function normalizeSceneObject(object, index) {
+  if (!object || typeof object !== "object") {
+    throw new Error(`sceneObjects[${index}] must be an object.`);
+  }
+  const kindName = object.kind ?? object.type ?? "box";
+  const kind = kindName === "sphere" ? 2 : 1;
+  const materialKind = normalizeMaterialKind(object.materialKind);
+  const color = readSceneVec4(`sceneObjects[${index}].color`, object.color, [0.65, 0.58, 0.48, 1]);
+  const emission = readSceneVec4(`sceneObjects[${index}].emission`, object.emission, [0, 0, 0, 0]);
+  const ior = Number(object.ior ?? 1);
+  if (!Number.isFinite(ior) || ior <= 0) {
+    throw new Error(`sceneObjects[${index}].ior must be a positive finite number.`);
+  }
+  if (kind === 2) {
+    const center = readSceneVec3(`sceneObjects[${index}].center`, object.center, [0, 0, -1]);
+    const radius = Number(object.radius ?? 0.25);
+    if (!Number.isFinite(radius) || radius <= 0) {
+      throw new Error(`sceneObjects[${index}].radius must be a positive finite number.`);
+    }
+    return Object.freeze({
+      kind,
+      materialKind,
+      boundsMin: Object.freeze([center[0] - radius, center[1] - radius, center[2] - radius, ior]),
+      boundsMax: Object.freeze([center[0] + radius, center[1] + radius, center[2] + radius, radius]),
+      color: Object.freeze(color),
+      emission: Object.freeze(emission)
+    });
+  }
+  const bounds = object.bounds ?? object;
+  const min = readSceneVec3(`sceneObjects[${index}].bounds.min`, bounds.min, [-0.5, -0.5, -1.5]);
+  const max = readSceneVec3(`sceneObjects[${index}].bounds.max`, bounds.max, [0.5, 0.5, -0.5]);
+  if (min.some((value, axis) => value >= max[axis])) {
+    throw new Error(`sceneObjects[${index}] bounds min values must be lower than max values.`);
+  }
+  return Object.freeze({
+    kind,
+    materialKind,
+    boundsMin: Object.freeze([min[0], min[1], min[2], ior]),
+    boundsMax: Object.freeze([max[0], max[1], max[2], 0]),
+    color: Object.freeze(color),
+    emission: Object.freeze(emission)
+  });
+}
+function normalizeSceneObjects(value, limit = DEFAULT_SCENE_OBJECT_LIMIT) {
+  if (value == null) {
+    return Object.freeze([]);
+  }
+  if (!Array.isArray(value)) {
+    throw new Error("sceneObjects must be an array when provided.");
+  }
+  if (value.length > limit) {
+    throw new Error(`sceneObjects supports at most ${limit} analytic objects.`);
+  }
+  return Object.freeze(value.map(normalizeSceneObject));
+}
+function buildSceneObjectBufferData(config) {
+  const buffer = new ArrayBuffer(config.sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTE_LENGTH);
+  const dataView = new DataView(buffer);
+  const floatView = new Float32Array(buffer);
+  config.sceneObjects.forEach((object, index) => {
+    const byteOffset = index * SCENE_OBJECT_RECORD_BYTE_LENGTH;
+    const floatOffset = byteOffset / Float32Array.BYTES_PER_ELEMENT;
+    dataView.setUint32(byteOffset, object.kind, true);
+    dataView.setUint32(byteOffset + 4, object.materialKind, true);
+    dataView.setUint32(byteOffset + 8, 0, true);
+    dataView.setUint32(byteOffset + 12, 0, true);
+    writeVec4(floatView, floatOffset + 4, object.boundsMin);
+    writeVec4(floatView, floatOffset + 8, object.boundsMax);
+    writeVec4(floatView, floatOffset + 12, object.color);
+    writeVec4(floatView, floatOffset + 16, object.emission);
+  });
+  return buffer;
+}
+function getOutputProbeByteLength(config) {
+  return alignTo256(config.width * 4) * config.height;
+}
+function getOutputProbeBytesPerRow(config) {
+  return alignTo256(config.width * 4);
+}
+async function readOutputProbeBuffer(device, resources, config) {
+  const { GPUMapMode } = assertGpuConstants();
+  await device.queue.onSubmittedWorkDone();
+  await resources.outputReadbackBuffer.mapAsync(GPUMapMode.READ);
+  const mapped = resources.outputReadbackBuffer.getMappedRange();
+  const bytes = new Uint8Array(mapped.slice(0));
+  resources.outputReadbackBuffer.unmap();
+  const bytesPerRow = getOutputProbeBytesPerRow(config);
+  const stepX = Math.max(1, Math.floor(config.width / 96));
+  const stepY = Math.max(1, Math.floor(config.height / 54));
+  let sampledPixels = 0;
+  let nonZeroSamples = 0;
+  let maxChannel = 0;
+  let luminanceTotal = 0;
+  for (let y = 0; y < config.height; y += stepY) {
+    for (let x = 0; x < config.width; x += stepX) {
+      const offset = y * bytesPerRow + x * 4;
+      const r = bytes[offset] ?? 0;
+      const g = bytes[offset + 1] ?? 0;
+      const b = bytes[offset + 2] ?? 0;
+      const a = bytes[offset + 3] ?? 0;
+      const max = Math.max(r, g, b, a);
+      sampledPixels += 1;
+      if (max > 0) {
+        nonZeroSamples += 1;
+      }
+      maxChannel = Math.max(maxChannel, max);
+      luminanceTotal += r + g + b;
+    }
+  }
+  return Object.freeze({
+    sampledPixels,
+    nonZeroSamples,
+    maxChannel,
+    averageRgb: sampledPixels > 0 ? luminanceTotal / (sampledPixels * 3) : 0
+  });
+}
 function createPassBindGroup(device, layout, resources, passBuffer, outputView) {
   return device.createBindGroup({
     label: "plasius.wavefront.bindGroup",
@@ -157,11 +321,11 @@ function createPassBindGroup(device, layout, resources, passBuffer, outputView) 
       { binding: 7, resource: { buffer: resources.activeIndirectBuffer } },
       { binding: 8, resource: { buffer: resources.nextIndirectBuffer } },
       { binding: 9, resource: outputView },
-    ],
+      { binding: 10, resource: { buffer: resources.sceneObjectBuffer } }
+    ]
   });
 }
-
-function createPipelines(device, shaderSource, format = DEFAULT_FORMAT) {
+async function createPipelines(device, shaderSource, format = DEFAULT_FORMAT) {
   const { GPUShaderStage } = assertGpuConstants();
   const bindGroupLayout = device.createBindGroupLayout({
     label: "plasius.wavefront.bindGroupLayout",
@@ -178,49 +342,83 @@ function createPipelines(device, shaderSource, format = DEFAULT_FORMAT) {
       {
         binding: 9,
         visibility: GPUShaderStage.COMPUTE,
-        storageTexture: { access: "write-only", format },
+        storageTexture: { access: "write-only", format }
       },
-    ],
+      { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } }
+    ]
   });
   const layout = device.createPipelineLayout({
     label: "plasius.wavefront.pipelineLayout",
-    bindGroupLayouts: [bindGroupLayout],
+    bindGroupLayouts: [bindGroupLayout]
   });
   const module = device.createShaderModule({
     label: "plasius.wavefront.compute.shader",
-    code: shaderSource,
+    code: shaderSource
   });
-  const generate = device.createComputePipeline({
-    label: "plasius.wavefront.generatePrimaryRays",
-    layout,
-    compute: { module, entryPoint: "generatePrimaryRays" },
-  });
-  const trace = device.createComputePipeline({
-    label: "plasius.wavefront.traceBounce",
-    layout,
-    compute: { module, entryPoint: "traceBounce" },
-  });
-  const finalize = device.createComputePipeline({
-    label: "plasius.wavefront.compactAndSwapQueues",
-    layout,
-    compute: { module, entryPoint: "compactAndSwapQueues" },
-  });
-  const resolve = device.createComputePipeline({
-    label: "plasius.wavefront.resolveOutput",
-    layout,
-    compute: { module, entryPoint: "resolveOutput" },
-  });
+  if (typeof module.getCompilationInfo === "function") {
+    const info = await module.getCompilationInfo();
+    const errors = info.messages.filter((message) => message.type === "error");
+    if (errors.length > 0) {
+      throw new Error(
+        `WGSL compilation failed: ${errors.map((message) => `line ${message.lineNum}:${message.linePos} ${message.message}`).join(" | ")}`
+      );
+    }
+  }
+  const createPipeline = async (label, entryPoint) => {
+    const descriptor = {
+      label,
+      layout,
+      compute: { module, entryPoint }
+    };
+    try {
+      return typeof device.createComputePipelineAsync === "function"
+        ? await device.createComputePipelineAsync(descriptor)
+        : device.createComputePipeline(descriptor);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`WebGPU pipeline creation failed for ${entryPoint}: ${message}`, { cause: error });
+    }
+  };
+  const generate = await createPipeline(
+    "plasius.wavefront.generatePrimaryRays",
+    "generatePrimaryRays"
+  );
+  const trace = await createPipeline("plasius.wavefront.traceBounce", "traceBounce");
+  const finalize = await createPipeline(
+    "plasius.wavefront.compactAndSwapQueues",
+    "compactAndSwapQueues"
+  );
+  const resolve = await createPipeline("plasius.wavefront.resolveOutput", "resolveOutput");
   return { bindGroupLayout, generate, trace, finalize, resolve };
 }
-
 function createResources(device, config) {
-  const { GPUBufferUsage } = assertGpuConstants();
+  const { GPUBufferUsage, GPUTextureUsage } = assertGpuConstants();
   const rayQueueBytes = config.queueCapacity * RAY_RECORD_BYTE_LENGTH;
   const accumulationBytes = config.primaryRayCount * 4 * Float32Array.BYTES_PER_ELEMENT;
-  const statsBytes =
-    config.maxDepth * rendererWavefrontComputeStatsStride * Uint32Array.BYTES_PER_ELEMENT;
-
-  return {
+  const statsBytes = config.maxDepth * rendererWavefrontComputeStatsStride * Uint32Array.BYTES_PER_ELEMENT;
+  const maxStorageBufferBindingSize = device.limits?.maxStorageBufferBindingSize;
+  if (maxStorageBufferBindingSize && rayQueueBytes > maxStorageBufferBindingSize) {
+    throw new Error(
+      `Wavefront tiled ray queue requires ${rayQueueBytes.toLocaleString()} bytes per queue, but this WebGPU device exposes maxStorageBufferBindingSize=${maxStorageBufferBindingSize.toLocaleString()}. Reduce tileWidth/tileHeight or select a lower resolution.`
+    );
+  }
+  if (maxStorageBufferBindingSize && accumulationBytes > maxStorageBufferBindingSize) {
+    throw new Error(
+      `Wavefront accumulation buffer requires ${accumulationBytes.toLocaleString()} bytes, but this WebGPU device exposes maxStorageBufferBindingSize=${maxStorageBufferBindingSize.toLocaleString()}. Select a lower resolution or reduce accumulation storage until tiled accumulation is implemented.`
+    );
+  }
+  const maxBufferSize = device.limits?.maxBufferSize;
+  if (maxBufferSize && rayQueueBytes > maxBufferSize) {
+    throw new Error(
+      `Wavefront tiled ray queue requires ${rayQueueBytes.toLocaleString()} bytes per queue, but this WebGPU device exposes maxBufferSize=${maxBufferSize.toLocaleString()}. Reduce tileWidth/tileHeight or select a lower resolution.`
+    );
+  }
+  if (maxBufferSize && accumulationBytes > maxBufferSize) {
+    throw new Error(
+      `Wavefront accumulation buffer requires ${accumulationBytes.toLocaleString()} bytes, but this WebGPU device exposes maxBufferSize=${maxBufferSize.toLocaleString()}. Select a lower resolution or reduce accumulation storage until tiled accumulation is implemented.`
+    );
+  }
+  const resources = {
     configBuffer: createBuffer(
       device,
       "plasius.wavefront.config",
@@ -267,13 +465,35 @@ function createResources(device, config) {
       device,
       "plasius.wavefront.activeIndirect",
       INDIRECT_BYTE_LENGTH,
-      GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST
+      GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     ),
     nextIndirectBuffer: createBuffer(
       device,
       "plasius.wavefront.nextIndirect",
       INDIRECT_BYTE_LENGTH,
-      GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST
+      GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    ),
+    outputTexture: device.createTexture({
+      label: "plasius.wavefront.outputTexture",
+      size: {
+        width: config.width,
+        height: config.height,
+        depthOrArrayLayers: 1
+      },
+      format: config.format,
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC
+    }),
+    outputReadbackBuffer: createBuffer(
+      device,
+      "plasius.wavefront.output.readback",
+      getOutputProbeByteLength(config),
+      GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST
+    ),
+    sceneObjectBuffer: createBuffer(
+      device,
+      "plasius.wavefront.sceneObjects",
+      config.sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTE_LENGTH,
+      GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     ),
     passBuffers: Array.from({ length: config.maxDepth }, (_, bounce) => {
       const passBuffer = createBuffer(
@@ -284,10 +504,11 @@ function createResources(device, config) {
       );
       device.queue.writeBuffer(passBuffer, 0, buildPassBufferData(bounce));
       return passBuffer;
-    }),
+    })
   };
+  device.queue.writeBuffer(resources.sceneObjectBuffer, 0, buildSceneObjectBufferData(config));
+  return resources;
 }
-
 async function readStatsBuffer(device, resources, config) {
   const { GPUMapMode } = assertGpuConstants();
   await device.queue.onSubmittedWorkDone();
@@ -297,8 +518,7 @@ async function readStatsBuffer(device, resources, config) {
   resources.statsReadbackBuffer.unmap();
   return parseStats(values, config);
 }
-
-export function supportsWavefrontPathTracingCompute(options = {}) {
+function supportsWavefrontPathTracingCompute(options = {}) {
   try {
     const gpu = readGpu(options.navigator);
     return Boolean(gpu);
@@ -306,8 +526,7 @@ export function supportsWavefrontPathTracingCompute(options = {}) {
     return false;
   }
 }
-
-export function createWavefrontPathTracingComputeConfig(options = {}) {
+function createWavefrontPathTracingComputeConfig(options = {}) {
   const width = readPositiveInteger("width", options.width ?? DEFAULT_WIDTH);
   const height = readPositiveInteger("height", options.height ?? DEFAULT_HEIGHT);
   const samples = readPositiveInteger("samples", options.samples ?? 1);
@@ -324,16 +543,22 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     options.workgroupSize ?? rendererWavefrontComputeWorkgroupSize
   );
   const primaryRayCount = width * height * samples;
+  const tileWidth = readPositiveInteger("tileWidth", options.tileWidth ?? 256);
+  const tileHeight = readPositiveInteger("tileHeight", options.tileHeight ?? 256);
+  const tilePixelCapacity = tileWidth * tileHeight * samples;
+  const sceneObjectLimit = readPositiveInteger(
+    "sceneObjectLimit",
+    options.sceneObjectLimit ?? DEFAULT_SCENE_OBJECT_LIMIT
+  );
+  const sceneObjects = normalizeSceneObjects(options.sceneObjects, sceneObjectLimit);
   const queueCapacity = readPositiveInteger(
     "queueCapacity",
-    options.queueCapacity ?? primaryRayCount
+    options.queueCapacity ?? tilePixelCapacity
   );
-
-  if (queueCapacity < primaryRayCount) {
-    throw new Error("queueCapacity must be at least width * height * samples.");
+  if (queueCapacity < tilePixelCapacity) {
+    throw new Error("queueCapacity must be at least tileWidth * tileHeight * samples.");
   }
-
-  return Object.freeze({
+  const config = {
     mode: rendererWavefrontComputeMode,
     width,
     height,
@@ -341,30 +566,39 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     maxDepth,
     queueCapacity,
     primaryRayCount,
+    tileWidth,
+    tileHeight,
+    tilePixelCapacity,
+    sceneObjects,
+    sceneObjectCount: sceneObjects.length,
+    sceneObjectCapacity: Math.max(1, sceneObjectLimit),
+    tileCountX: Math.ceil(width / tileWidth),
+    tileCountY: Math.ceil(height / tileHeight),
     workgroupSize,
     primaryWorkgroups: Math.ceil(primaryRayCount / workgroupSize),
     bouncePasses: maxDepth,
-    indirectDispatch: true,
+    indirectDispatch: false,
     cpuReference: false,
     denoise: options.denoise === true,
-    format: options.format ?? DEFAULT_FORMAT,
-  });
+    format: options.format ?? DEFAULT_FORMAT
+  };
+  config.tiles = createWavefrontTiles(config);
+  config.tileCount = config.tiles.length;
+  config.maxTileWorkgroups = Math.max(...config.tiles.map((tile) => tile.workgroups));
+  return Object.freeze(config);
 }
-
-export async function createWavefrontPathTracingComputeRenderer(options = {}) {
+async function createWavefrontPathTracingComputeRenderer(options = {}) {
   const { GPUTextureUsage } = assertGpuConstants();
   const config = createWavefrontPathTracingComputeConfig(options);
   const canvas = resolveCanvas(options.canvas);
   canvas.width = config.width;
   canvas.height = config.height;
-
   const gpu = options.gpu ?? readGpu(options.navigator);
-  const adapter =
-    options.adapter ?? (await gpu.requestAdapter({ powerPreference: "high-performance" }));
+  const adapter = options.adapter ?? await gpu.requestAdapter({ powerPreference: "high-performance" });
   if (!adapter) {
     throw new Error("Unable to obtain GPU adapter for wavefront path tracing.");
   }
-  const device = options.device ?? (await adapter.requestDevice());
+  const device = options.device ?? await adapter.requestDevice();
   const context = options.context ?? canvas.getContext?.("webgpu");
   if (!context) {
     throw new Error("Unable to obtain WebGPU canvas context for wavefront path tracing.");
@@ -374,20 +608,15 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     device,
     format,
     alphaMode: "opaque",
-    usage:
-      GPUTextureUsage.RENDER_ATTACHMENT |
-      GPUTextureUsage.STORAGE_BINDING |
-      GPUTextureUsage.COPY_SRC,
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST
   });
-
   const shaderSource = createWavefrontPathTracingComputeShaderSource({
-    workgroupSize: config.workgroupSize,
+    workgroupSize: config.workgroupSize
   });
-  const pipelines = createPipelines(device, shaderSource, format);
+  const pipelines = await createPipelines(device, shaderSource, format);
   const resources = createResources(device, config);
   const bindGroupLayout = pipelines.bindGroupLayout;
   let frameIndex = 0;
-
   return {
     config,
     device,
@@ -396,57 +625,107 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     async renderFrame(renderOptions = {}) {
       const startedAt = performance.now();
       frameIndex += 1;
-      const texture = context.getCurrentTexture();
-      const outputView = texture.createView();
-      const bindGroups = resources.passBuffers.map((passBuffer) =>
-        createPassBindGroup(device, bindGroupLayout, resources, passBuffer, outputView)
-      );
-      const encoder = device.createCommandEncoder({
-        label: `plasius.wavefront.frame.${frameIndex}`,
-      });
-
-      device.queue.writeBuffer(resources.configBuffer, 0, buildConfigBufferData(config, frameIndex));
-      encoder.clearBuffer(resources.statsBuffer);
-
-      const generatePass = encoder.beginComputePass({
-        label: "plasius.wavefront.generatePrimaryRays",
-      });
-      generatePass.setPipeline(pipelines.generate);
-      generatePass.setBindGroup(0, bindGroups[0]);
-      generatePass.dispatchWorkgroups(config.primaryWorkgroups);
-      generatePass.end();
-
-      for (let bounce = 0; bounce < config.maxDepth; bounce += 1) {
-        const readIndirect =
-          bounce % 2 === 0
-            ? resources.activeIndirectBuffer
-            : resources.nextIndirectBuffer;
-
-        const tracePass = encoder.beginComputePass({
-          label: `plasius.wavefront.traceBounce.${bounce}`,
-        });
-        tracePass.setPipeline(pipelines.trace);
-        tracePass.setBindGroup(0, bindGroups[bounce]);
-        tracePass.dispatchWorkgroupsIndirect(readIndirect, 0);
-        tracePass.end();
-
-        const compactPass = encoder.beginComputePass({
-          label: `plasius.wavefront.compactAndSwapQueues.${bounce}`,
-        });
-        compactPass.setPipeline(pipelines.finalize);
-        compactPass.setBindGroup(0, bindGroups[bounce]);
-        compactPass.dispatchWorkgroups(1);
-        compactPass.end();
+      if (typeof device.pushErrorScope === "function") {
+        device.pushErrorScope("validation");
       }
-
-      const resolvePass = encoder.beginComputePass({
-        label: "plasius.wavefront.resolveOutput",
+      const texture = context.getCurrentTexture();
+      const outputView = resources.outputTexture.createView();
+      const bindGroups = resources.passBuffers.map(
+        (passBuffer) => createPassBindGroup(device, bindGroupLayout, resources, passBuffer, outputView)
+      );
+      device.queue.writeBuffer(
+        resources.statsBuffer,
+        0,
+        new Uint32Array(config.maxDepth * rendererWavefrontComputeStatsStride)
+      );
+      for (const tile of config.tiles) {
+        device.queue.writeBuffer(
+          resources.configBuffer,
+          0,
+          buildConfigBufferData(config, frameIndex, tile)
+        );
+        device.queue.writeBuffer(
+          resources.counterBuffer,
+          0,
+          new Uint32Array([
+            tile.pixelCount,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ])
+        );
+        device.queue.writeBuffer(
+          resources.activeIndirectBuffer,
+          0,
+          new Uint32Array([tile.workgroups, 1, 1])
+        );
+        device.queue.writeBuffer(resources.nextIndirectBuffer, 0, new Uint32Array([1, 1, 1]));
+        const tileEncoder = device.createCommandEncoder({
+          label: `plasius.wavefront.frame.${frameIndex}.tile.${tile.x}.${tile.y}`
+        });
+        const generatePass = tileEncoder.beginComputePass({
+          label: "plasius.wavefront.generatePrimaryRays"
+        });
+        generatePass.setPipeline(pipelines.generate);
+        generatePass.setBindGroup(0, bindGroups[0]);
+        generatePass.dispatchWorkgroups(tile.workgroups);
+        generatePass.end();
+        for (let bounce = 0; bounce < config.maxDepth; bounce += 1) {
+          const tracePass = tileEncoder.beginComputePass({
+            label: `plasius.wavefront.traceBounce.${bounce}`
+          });
+          tracePass.setPipeline(pipelines.trace);
+          tracePass.setBindGroup(0, bindGroups[bounce]);
+          tracePass.dispatchWorkgroups(tile.workgroups);
+          tracePass.end();
+          const compactPass = tileEncoder.beginComputePass({
+            label: `plasius.wavefront.compactAndSwapQueues.${bounce}`
+          });
+          compactPass.setPipeline(pipelines.finalize);
+          compactPass.setBindGroup(0, bindGroups[bounce]);
+          compactPass.dispatchWorkgroups(1);
+          compactPass.end();
+        }
+        const resolvePass = tileEncoder.beginComputePass({
+          label: "plasius.wavefront.resolveOutput"
+        });
+        resolvePass.setPipeline(pipelines.resolve);
+        resolvePass.setBindGroup(0, bindGroups[0]);
+        resolvePass.dispatchWorkgroups(tile.workgroups);
+        resolvePass.end();
+        device.queue.submit([tileEncoder.finish()]);
+      }
+      const encoder = device.createCommandEncoder({
+        label: `plasius.wavefront.frame.${frameIndex}.present`
       });
-      resolvePass.setPipeline(pipelines.resolve);
-      resolvePass.setBindGroup(0, bindGroups[0]);
-      resolvePass.dispatchWorkgroups(config.primaryWorkgroups);
-      resolvePass.end();
-
+      encoder.copyTextureToTexture(
+        { texture: resources.outputTexture },
+        { texture },
+        {
+          width: config.width,
+          height: config.height,
+          depthOrArrayLayers: 1
+        }
+      );
+      if (renderOptions.readOutputProbe !== false) {
+        encoder.copyTextureToBuffer(
+          { texture: resources.outputTexture },
+          {
+            buffer: resources.outputReadbackBuffer,
+            bytesPerRow: getOutputProbeBytesPerRow(config),
+            rowsPerImage: config.height
+          },
+          {
+            width: config.width,
+            height: config.height,
+            depthOrArrayLayers: 1
+          }
+        );
+      }
       if (renderOptions.readStats !== false) {
         encoder.copyBufferToBuffer(
           resources.statsBuffer,
@@ -456,17 +735,17 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           resources.statsReadbackBuffer.size
         );
       }
-
       device.queue.submit([encoder.finish()]);
-
-      const stats =
-        renderOptions.readStats === false
-          ? {
-              bounces: [],
-              termination: { emissive: 0, environment: 0, ambientFallback: 0, maxDepth: 0 },
-              queueOverflow: 0,
-            }
-          : await readStatsBuffer(device, resources, config);
+      const stats = renderOptions.readStats === false ? {
+        bounces: [],
+        termination: { emissive: 0, environment: 0, ambientFallback: 0, maxDepth: 0 },
+        queueOverflow: 0
+      } : await readStatsBuffer(device, resources, config);
+      const outputProbe = renderOptions.readOutputProbe === false ? null : await readOutputProbeBuffer(device, resources, config);
+      const validationError = typeof device.popErrorScope === "function" ? await device.popErrorScope() : null;
+      if (validationError) {
+        throw new Error(`WebGPU validation error: ${validationError.message}`);
+      }
       const renderMs = performance.now() - startedAt;
       return Object.freeze({
         plan: Object.freeze({
@@ -476,14 +755,19 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           dispatch: Object.freeze({
             workgroupSize: config.workgroupSize,
             primaryWorkgroups: config.primaryWorkgroups,
-            indirectDispatch: true,
-          }),
+            tileCount: config.tileCount,
+            tileWidth: config.tileWidth,
+            tileHeight: config.tileHeight,
+            maxTileWorkgroups: config.maxTileWorkgroups,
+            indirectDispatch: false
+          })
         }),
         settings: config,
         renderMs,
         queueOverflow: stats.queueOverflow,
+        outputProbe,
         bounces: stats.bounces,
-        termination: stats.termination,
+        termination: stats.termination
       });
     },
     destroy() {
@@ -496,11 +780,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           buffer.destroy?.();
         }
       }
-    },
+    }
   };
 }
-
-export async function renderWavefrontPathTracingComputeFrame(options = {}) {
+async function renderWavefrontPathTracingComputeFrame(options = {}) {
   const renderer = await createWavefrontPathTracingComputeRenderer(options);
   try {
     return await renderer.renderFrame(options);
@@ -510,13 +793,11 @@ export async function renderWavefrontPathTracingComputeFrame(options = {}) {
     }
   }
 }
-
-export function createWavefrontPathTracingComputeShaderSource(options = {}) {
+function createWavefrontPathTracingComputeShaderSource(options = {}) {
   const workgroupSize = readPositiveInteger(
     "workgroupSize",
     options.workgroupSize ?? rendererWavefrontComputeWorkgroupSize
   );
-
   return `
 struct RenderConfig {
   width: u32,
@@ -526,7 +807,15 @@ struct RenderConfig {
   frameIndex: u32,
   samples: u32,
   denoise: u32,
-  _pad0: u32,
+  tileOriginX: u32,
+  tileOriginY: u32,
+  tileWidth: u32,
+  tileHeight: u32,
+  tilePixelCount: u32,
+  sceneObjectCount: u32,
+  _configPad0: u32,
+  _configPad1: u32,
+  _configPad2: u32,
   cameraOrigin: vec4<f32>,
   cameraForward: vec4<f32>,
   cameraRight: vec4<f32>,
@@ -581,8 +870,19 @@ struct Hit {
   emission: vec4<f32>,
 }
 
+struct SceneObject {
+  kind: u32,
+  materialKind: u32,
+  _pad0: u32,
+  _pad1: u32,
+  boundsMin: vec4<f32>,
+  boundsMax: vec4<f32>,
+  color: vec4<f32>,
+  emission: vec4<f32>,
+}
+
 @group(0) @binding(0) var<uniform> config: RenderConfig;
-@group(0) @binding(1) var<uniform> pass: PassConfig;
+@group(0) @binding(1) var<uniform> bounceConfig: PassConfig;
 @group(0) @binding(2) var<storage, read_write> activeQueue: array<RayRecord>;
 @group(0) @binding(3) var<storage, read_write> nextQueue: array<RayRecord>;
 @group(0) @binding(4) var<storage, read_write> accumulation: array<vec4<f32>>;
@@ -591,6 +891,7 @@ struct Hit {
 @group(0) @binding(7) var<storage, read_write> activeIndirect: array<u32>;
 @group(0) @binding(8) var<storage, read_write> nextIndirect: array<u32>;
 @group(0) @binding(9) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(10) var<storage, read> sceneObjects: array<SceneObject>;
 
 fn safeNormalize(value: vec3<f32>) -> vec3<f32> {
   let len = length(value);
@@ -749,6 +1050,97 @@ fn intersectPlane(
   return makeHit(distance, position, normal, ray.direction.xyz, materialKind, color, emission, ior);
 }
 
+fn safeInverse(value: f32) -> f32 {
+  if (abs(value) < 0.000001) {
+    return select(-1000000.0, 1000000.0, value >= 0.0);
+  }
+  return 1.0 / value;
+}
+
+fn boxNormal(position: vec3<f32>, boundsMin: vec3<f32>, boundsMax: vec3<f32>) -> vec3<f32> {
+  let distanceToMin = abs(position - boundsMin);
+  let distanceToMax = abs(position - boundsMax);
+  let closest = min(
+    min(min(distanceToMin.x, distanceToMax.x), min(distanceToMin.y, distanceToMax.y)),
+    min(distanceToMin.z, distanceToMax.z)
+  );
+  if (closest == distanceToMin.x) {
+    return vec3<f32>(-1.0, 0.0, 0.0);
+  }
+  if (closest == distanceToMax.x) {
+    return vec3<f32>(1.0, 0.0, 0.0);
+  }
+  if (closest == distanceToMin.y) {
+    return vec3<f32>(0.0, -1.0, 0.0);
+  }
+  if (closest == distanceToMax.y) {
+    return vec3<f32>(0.0, 1.0, 0.0);
+  }
+  if (closest == distanceToMin.z) {
+    return vec3<f32>(0.0, 0.0, -1.0);
+  }
+  return vec3<f32>(0.0, 0.0, 1.0);
+}
+
+fn intersectBox(
+  ray: RayRecord,
+  boundsMin: vec3<f32>,
+  boundsMax: vec3<f32>,
+  materialKind: u32,
+  color: vec3<f32>,
+  emission: vec3<f32>,
+  ior: f32
+) -> Hit {
+  let invDir = vec3<f32>(
+    safeInverse(ray.direction.x),
+    safeInverse(ray.direction.y),
+    safeInverse(ray.direction.z)
+  );
+  let t0 = (boundsMin - ray.origin.xyz) * invDir;
+  let t1 = (boundsMax - ray.origin.xyz) * invDir;
+  let tSmall = min(t0, t1);
+  let tBig = max(t0, t1);
+  let tNear = max(max(tSmall.x, tSmall.y), tSmall.z);
+  let tFar = min(min(tBig.x, tBig.y), tBig.z);
+  if (tFar < max(tNear, 0.001)) {
+    return emptyHit();
+  }
+  var distance = tNear;
+  if (distance <= 0.001) {
+    distance = tFar;
+  }
+  if (distance <= 0.001) {
+    return emptyHit();
+  }
+  let position = ray.origin.xyz + ray.direction.xyz * distance;
+  let normal = boxNormal(position, boundsMin, boundsMax);
+  return makeHit(distance, position, normal, ray.direction.xyz, materialKind, color, emission, ior);
+}
+
+fn intersectSceneObject(ray: RayRecord, object: SceneObject) -> Hit {
+  if (object.kind == 2u) {
+    let center = (object.boundsMin.xyz + object.boundsMax.xyz) * 0.5;
+    return intersectSphere(
+      ray,
+      center,
+      object.boundsMax.w,
+      object.materialKind,
+      object.color.rgb,
+      object.emission.rgb,
+      object.boundsMin.w
+    );
+  }
+  return intersectBox(
+    ray,
+    object.boundsMin.xyz,
+    object.boundsMax.xyz,
+    object.materialKind,
+    object.color.rgb,
+    object.emission.rgb,
+    object.boundsMin.w
+  );
+}
+
 fn nearest(a: Hit, b: Hit) -> Hit {
   if (b.hit == 1u && b.distance < a.distance) {
     return b;
@@ -758,6 +1150,17 @@ fn nearest(a: Hit, b: Hit) -> Hit {
 
 fn intersectScene(ray: RayRecord) -> Hit {
   var hit = emptyHit();
+  if (config.sceneObjectCount > 0u) {
+    var objectIndex = 0u;
+    loop {
+      if (objectIndex >= config.sceneObjectCount) {
+        break;
+      }
+      hit = nearest(hit, intersectSceneObject(ray, sceneObjects[objectIndex]));
+      objectIndex = objectIndex + 1u;
+    }
+    return hit;
+  }
   hit = nearest(hit, intersectSphere(ray, vec3<f32>(-0.95, -0.08, -1.0), 0.68, 1u, vec3<f32>(0.74, 0.42, 0.28), vec3<f32>(0.0), 1.0));
   hit = nearest(hit, intersectSphere(ray, vec3<f32>(0.68, -0.2, -1.35), 0.48, 2u, vec3<f32>(0.92, 0.86, 0.72), vec3<f32>(0.0), 1.0));
   hit = nearest(hit, intersectSphere(ray, vec3<f32>(0.08, -0.28, -0.25), 0.34, 3u, vec3<f32>(0.74, 0.9, 1.0), vec3<f32>(0.0), 1.45));
@@ -804,15 +1207,15 @@ fn writeContinuation(ray: RayRecord, hit: Hit, direction: vec3<f32>, throughput:
   let slot = atomicAdd(&counters.nextCount, 1u);
   if (slot >= config.queueCapacity) {
     atomicAdd(&counters.overflowCount, 1u);
-    atomicAdd(&stats[pass.bounce * ${rendererWavefrontComputeStatsStride}u + 6u], 1u);
+    atomicAdd(&stats[bounceConfig.bounce * ${rendererWavefrontComputeStatsStride}u + 6u], 1u);
     return;
   }
   let nextRay = RayRecord(
-    ray.rayId + config.queueCapacity * (pass.bounce + 1u),
+    ray.rayId + config.queueCapacity * (bounceConfig.bounce + 1u),
     ray.rayId,
     ray.sourcePixelId,
     ray.sampleId,
-    pass.bounce + 1u,
+    bounceConfig.bounce + 1u,
     mediumRefId,
     flags,
     0u,
@@ -820,12 +1223,12 @@ fn writeContinuation(ray: RayRecord, hit: Hit, direction: vec3<f32>, throughput:
     vec4<f32>(direction, 0.0),
     vec4<f32>(throughput, 0.0)
   );
-  if (pass.readQueue == 0u) {
+  if (bounceConfig.readQueue == 0u) {
     nextQueue[slot] = nextRay;
   } else {
     activeQueue[slot] = nextRay;
   }
-  atomicAdd(&stats[pass.bounce * ${rendererWavefrontComputeStatsStride}u + 4u], 1u);
+  atomicAdd(&stats[bounceConfig.bounce * ${rendererWavefrontComputeStatsStride}u + 4u], 1u);
 }
 
 fn toneMap(color: vec3<f32>) -> vec3<f32> {
@@ -835,9 +1238,9 @@ fn toneMap(color: vec3<f32>) -> vec3<f32> {
 
 @compute @workgroup_size(${workgroupSize}, 1, 1)
 fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
-  let pixelId = globalId.x;
-  let total = config.width * config.height * config.samples;
-  if (pixelId == 0u) {
+  let tilePixelId = globalId.x;
+  let total = config.tilePixelCount;
+  if (tilePixelId == 0u) {
     atomicStore(&counters.activeCount, total);
     atomicStore(&counters.nextCount, 0u);
     atomicStore(&counters.terminalCount, 0u);
@@ -853,16 +1256,19 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
     nextIndirect[1] = 1u;
     nextIndirect[2] = 1u;
   }
-  if (pixelId >= total) {
+  if (tilePixelId >= total) {
     return;
   }
-  let x = pixelId % config.width;
-  let y = pixelId / config.width;
-  accumulation[pixelId] = vec4<f32>(0.0);
-  activeQueue[pixelId] = RayRecord(
-    pixelId,
+  let localX = tilePixelId % config.tileWidth;
+  let localY = tilePixelId / config.tileWidth;
+  let x = config.tileOriginX + localX;
+  let y = config.tileOriginY + localY;
+  let sourcePixelId = y * config.width + x;
+  accumulation[sourcePixelId] = vec4<f32>(0.0);
+  activeQueue[tilePixelId] = RayRecord(
+    sourcePixelId,
     0u,
-    pixelId,
+    sourcePixelId,
     0u,
     0u,
     0u,
@@ -882,13 +1288,15 @@ fn traceBounce(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
   var ray: RayRecord;
-  if (pass.readQueue == 0u) {
+  if (bounceConfig.readQueue == 0u) {
     ray = activeQueue[index];
   } else {
     ray = nextQueue[index];
   }
-  let statsBase = pass.bounce * ${rendererWavefrontComputeStatsStride}u;
-  atomicAdd(&stats[statsBase], 1u);
+  let statsBase = bounceConfig.bounce * ${rendererWavefrontComputeStatsStride}u;
+  if (index == 0u) {
+    atomicAdd(&stats[statsBase], activeCount);
+  }
   let hit = intersectScene(ray);
 
   if (hit.hit == 0u) {
@@ -918,7 +1326,7 @@ fn traceBounce(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  if (pass.bounce + 1u >= config.maxDepth) {
+  if (bounceConfig.bounce + 1u >= config.maxDepth) {
     addRadiance(ray.sourcePixelId, ray.throughput.rgb, ambientResidual(hit.color.rgb));
     atomicAdd(&counters.terminalCount, 1u);
     atomicAdd(&counters.ambientCount, 1u);
@@ -927,7 +1335,7 @@ fn traceBounce(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  let seed = f32(ray.sourcePixelId * 97u + ray.sampleId * 13u + pass.bounce * 31u + config.frameIndex);
+  let seed = f32(ray.sourcePixelId * 97u + ray.sampleId * 13u + bounceConfig.bounce * 31u + config.frameIndex);
   var direction = vec3<f32>(0.0);
   var throughput = ray.throughput.rgb * hit.color.rgb;
   var mediumRefId = ray.mediumRefId;
@@ -977,7 +1385,7 @@ fn compactAndSwapQueues(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let groups = max(1u, (count + ${workgroupSize - 1}u) / ${workgroupSize}u);
   atomicStore(&counters.activeCount, count);
   atomicStore(&counters.nextCount, 0u);
-  if (pass.readQueue == 0u) {
+  if (bounceConfig.readQueue == 0u) {
     nextIndirect[0] = groups;
     nextIndirect[1] = 1u;
     nextIndirect[2] = 1u;
@@ -990,15 +1398,29 @@ fn compactAndSwapQueues(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
 @compute @workgroup_size(${workgroupSize}, 1, 1)
 fn resolveOutput(@builtin(global_invocation_id) globalId: vec3<u32>) {
-  let pixelId = globalId.x;
-  let total = config.width * config.height;
-  if (pixelId >= total) {
+  let tilePixelId = globalId.x;
+  let total = config.tilePixelCount;
+  if (tilePixelId >= total) {
     return;
   }
-  let x = pixelId % config.width;
-  let y = pixelId / config.width;
-  let color = toneMap(accumulation[pixelId].rgb);
+  let localX = tilePixelId % config.tileWidth;
+  let localY = tilePixelId / config.tileWidth;
+  let x = config.tileOriginX + localX;
+  let y = config.tileOriginY + localY;
+  let sourcePixelId = y * config.width + x;
+  let color = toneMap(accumulation[sourcePixelId].rgb);
   textureStore(outputTexture, vec2<i32>(i32(x), i32(y)), vec4<f32>(color, 1.0));
 }
 `;
 }
+
+export {
+  createWavefrontPathTracingComputeConfig,
+  createWavefrontPathTracingComputeRenderer,
+  createWavefrontPathTracingComputeShaderSource,
+  renderWavefrontPathTracingComputeFrame,
+  rendererWavefrontComputeMode,
+  rendererWavefrontComputeStatsStride,
+  rendererWavefrontComputeWorkgroupSize,
+  supportsWavefrontPathTracingCompute,
+};
