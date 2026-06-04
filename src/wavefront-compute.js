@@ -69,6 +69,13 @@ function createBuffer(device, label, size, usage) {
     usage
   });
 }
+
+function resolveWavefrontPathTracingComputeStorageFormat(format = DEFAULT_FORMAT) {
+  if (format === "rgba16float") {
+    return "rgba16float";
+  }
+  return "rgba8unorm";
+}
 function writeVec4(target, offset, value) {
   target.set(value, offset);
 }
@@ -391,7 +398,7 @@ async function createPipelines(device, shaderSource, format = DEFAULT_FORMAT) {
   const resolve = await createPipeline("plasius.wavefront.resolveOutput", "resolveOutput");
   return { bindGroupLayout, generate, trace, finalize, resolve };
 }
-function createResources(device, config) {
+function createResources(device, config, outputTextureFormat) {
   const { GPUBufferUsage, GPUTextureUsage } = assertGpuConstants();
   const rayQueueBytes = config.queueCapacity * RAY_RECORD_BYTE_LENGTH;
   const accumulationBytes = config.primaryRayCount * 4 * Float32Array.BYTES_PER_ELEMENT;
@@ -480,7 +487,7 @@ function createResources(device, config) {
         height: config.height,
         depthOrArrayLayers: 1
       },
-      format: config.format,
+      format: outputTextureFormat,
       usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC
     }),
     outputReadbackBuffer: createBuffer(
@@ -577,7 +584,7 @@ function createWavefrontPathTracingComputeConfig(options = {}) {
     workgroupSize,
     primaryWorkgroups: Math.ceil(primaryRayCount / workgroupSize),
     bouncePasses: maxDepth,
-    indirectDispatch: false,
+    indirectDispatch: true,
     cpuReference: false,
     denoise: options.denoise === true,
     format: options.format ?? DEFAULT_FORMAT
@@ -604,6 +611,7 @@ async function createWavefrontPathTracingComputeRenderer(options = {}) {
     throw new Error("Unable to obtain WebGPU canvas context for wavefront path tracing.");
   }
   const format = config.format;
+  const outputTextureFormat = resolveWavefrontPathTracingComputeStorageFormat(format);
   context.configure({
     device,
     format,
@@ -611,10 +619,11 @@ async function createWavefrontPathTracingComputeRenderer(options = {}) {
     usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST
   });
   const shaderSource = createWavefrontPathTracingComputeShaderSource({
-    workgroupSize: config.workgroupSize
+    workgroupSize: config.workgroupSize,
+    outputTextureFormat
   });
-  const pipelines = await createPipelines(device, shaderSource, format);
-  const resources = createResources(device, config);
+  const pipelines = await createPipelines(device, shaderSource, outputTextureFormat);
+  const resources = createResources(device, config, outputTextureFormat);
   const bindGroupLayout = pipelines.bindGroupLayout;
   let frameIndex = 0;
   return {
@@ -667,6 +676,7 @@ async function createWavefrontPathTracingComputeRenderer(options = {}) {
         const tileEncoder = device.createCommandEncoder({
           label: `plasius.wavefront.frame.${frameIndex}.tile.${tile.x}.${tile.y}`
         });
+        let activeIndirectBuffer = resources.activeIndirectBuffer;
         const generatePass = tileEncoder.beginComputePass({
           label: "plasius.wavefront.generatePrimaryRays"
         });
@@ -680,7 +690,7 @@ async function createWavefrontPathTracingComputeRenderer(options = {}) {
           });
           tracePass.setPipeline(pipelines.trace);
           tracePass.setBindGroup(0, bindGroups[bounce]);
-          tracePass.dispatchWorkgroups(tile.workgroups);
+          tracePass.dispatchWorkgroupsIndirect(activeIndirectBuffer, 0);
           tracePass.end();
           const compactPass = tileEncoder.beginComputePass({
             label: `plasius.wavefront.compactAndSwapQueues.${bounce}`
@@ -689,6 +699,10 @@ async function createWavefrontPathTracingComputeRenderer(options = {}) {
           compactPass.setBindGroup(0, bindGroups[bounce]);
           compactPass.dispatchWorkgroups(1);
           compactPass.end();
+          activeIndirectBuffer =
+            activeIndirectBuffer === resources.activeIndirectBuffer
+              ? resources.nextIndirectBuffer
+              : resources.activeIndirectBuffer;
         }
         const resolvePass = tileEncoder.beginComputePass({
           label: "plasius.wavefront.resolveOutput"
@@ -759,7 +773,7 @@ async function createWavefrontPathTracingComputeRenderer(options = {}) {
             tileWidth: config.tileWidth,
             tileHeight: config.tileHeight,
             maxTileWorkgroups: config.maxTileWorkgroups,
-            indirectDispatch: false
+            indirectDispatch: config.indirectDispatch
           })
         }),
         settings: config,
@@ -798,6 +812,7 @@ function createWavefrontPathTracingComputeShaderSource(options = {}) {
     "workgroupSize",
     options.workgroupSize ?? rendererWavefrontComputeWorkgroupSize
   );
+  const outputTextureFormat = options.outputTextureFormat ?? DEFAULT_FORMAT;
   return `
 struct RenderConfig {
   width: u32,
@@ -890,7 +905,7 @@ struct SceneObject {
 @group(0) @binding(6) var<storage, read_write> stats: array<atomic<u32>>;
 @group(0) @binding(7) var<storage, read_write> activeIndirect: array<u32>;
 @group(0) @binding(8) var<storage, read_write> nextIndirect: array<u32>;
-@group(0) @binding(9) var outputTexture: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(9) var outputTexture: texture_storage_2d<${outputTextureFormat}, write>;
 @group(0) @binding(10) var<storage, read> sceneObjects: array<SceneObject>;
 
 fn safeNormalize(value: vec3<f32>) -> vec3<f32> {
