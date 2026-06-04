@@ -109,9 +109,27 @@ bounded estimator weight until full material PDFs/MIS are implemented. Radiance
 clamping and damped diffuse throughput reduce fireflies while continuation rays
 still evaluate mesh BVH hits.
 
+Static mesh acceleration builds are amortized: the renderer submits GPU mesh
+triangle/BVH construction once for a static scene and reuses the built buffers
+across subsequent frames. Frame tracing is also batched into a single command
+submission with dynamic config offsets per tile/sample/post-process pass. This
+keeps dependent bounce passes ordered on the WebGPU queue while reducing
+browser-side submission overhead and avoiding accidental CPU-style serialization
+at tile/sample granularity.
+
+Interior scenes can additionally upload rectangular environment-light portals
+for windows, doors, or other openings. Portal records are a GPU trace-stage
+buffer, not CPU-side ray filtering. In `guide` mode, diffuse continuation rays
+are biased toward configured openings while environment misses remain
+unrestricted. In `guide-and-gate` mode, an environment miss receives sky/HDRI
+radiance only when the ray exits through a portal; misses outside the aperture
+fall back to the ambient residual. This keeps room lighting consistent with the
+single active-ray path-tracing model while reducing wasted diffuse samples that
+cannot plausibly reach external lighting.
+
 The remaining production-hardening work is not optional: material-id lookup
 tables, texture sampling, direct-light PDF/MIS correction, dynamic TLAS instance
-records, higher-grade LBVH/SAH construction, runtime execution behind the
-`@plasius/gpu-worker` lock-free queue, runtime GPU smoke coverage, and
-larger-scene traversal benchmarks still need to land before the mesh renderer is
-treated as final production-quality output.
+records, higher-grade LBVH/SAH construction, portal solid-angle/PDF correction,
+runtime execution behind the `@plasius/gpu-worker` lock-free queue, runtime GPU
+smoke coverage, and larger-scene traversal benchmarks still need to land before
+the mesh renderer is treated as final production-quality output.

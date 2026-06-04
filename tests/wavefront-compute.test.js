@@ -267,12 +267,14 @@ class FakeWavefrontDevice {
   }
 }
 
-function createFakeWavefrontNavigator(device = new FakeWavefrontDevice()) {
+function createFakeWavefrontNavigator(device = new FakeWavefrontDevice(), adapterOptions = {}) {
   return {
     gpu: {
       async requestAdapter() {
         return {
-          async requestDevice() {
+          limits: adapterOptions.limits,
+          async requestDevice(descriptor) {
+            adapterOptions.onRequestDevice?.(descriptor);
             return device;
           },
         };
@@ -326,9 +328,10 @@ test("wavefront compute config keeps 4K queues tile-bounded", () => {
   assert.equal(wavefrontPathTracingComputeLimits.hitRecordBytes, 208);
   assert.equal(config.memory.queueBytes, 128 * 128 * wavefrontPathTracingComputeLimits.rayRecordBytes);
   assert.equal(config.memory.hitBytes, 128 * 128 * wavefrontPathTracingComputeLimits.hitRecordBytes);
-  assert.equal(config.memory.configBytes, 256);
+  assert.equal(config.memory.configBytes, 272);
   assert.equal(config.memory.bvhLeafReferenceBytes, 0);
   assert.equal(config.memory.emissiveTriangleMetadataBytes, 0);
+  assert.equal(config.memory.environmentPortalBytes, 32 * wavefrontPathTracingComputeLimits.environmentPortalRecordBytes);
   assert.ok(config.memory.queueBytes < 134_217_728);
   assert.ok(config.memory.hitBytes < 134_217_728);
 });
@@ -385,8 +388,19 @@ test("wavefront compute guides active continuation rays toward emissive triangle
   assert.match(source, /mix_seed\(ray\.sourcePixelId, ray\.sampleId, ray\.bounce, config\.frameIndex, 11u\)/);
   assert.match(source, /bvhNodes\[config\.bvhNodeCapacity \+ lightSlot\]/);
   assert.match(source, /nextIndex >= config\.tilePixelCount/);
-  assert.doesNotMatch(source, /binding: 19/);
   assert.doesNotMatch(source, /direct_key_lighting/);
+});
+
+test("wavefront compute guides and gates environment lighting through portals", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /ENVIRONMENT_PORTAL_RECORD_BYTES = 96/);
+  assert.match(source, /environmentPortalRecordBytes/);
+  assert.match(source, /@group\(0\) @binding\(19\) var<storage, read> environmentPortals/);
+  assert.match(source, /fn environment_portal_radiance_scale/);
+  assert.match(source, /fn gated_environment_radiance/);
+  assert.match(source, /fn sample_environment_portal_direction/);
+  assert.match(source, /gated_environment_radiance\(ray\.origin\.xyz, ray\.direction\.xyz\)/);
 });
 
 test("analytic wavefront renderer rejects display-quality requests", () => {
@@ -757,6 +771,80 @@ test("wavefront compute config accepts lighting-owned environment payloads", () 
   assert.equal(config.environmentLighting.exposure, 0.9);
 });
 
+test("wavefront compute config normalizes environment portal apertures", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    environmentPortalMode: "guide-and-gate",
+    environmentPortals: [
+      {
+        position: [0, 1.2, -2.4],
+        normal: [0, 0, 1],
+        tangent: [1, 0, 0],
+        width: 1.8,
+        height: 1.1,
+        intensity: 1.35,
+        color: [0.8, 0.92, 1, 0.7],
+      },
+    ],
+  });
+
+  assert.equal(config.environmentPortalMode, 2);
+  assert.equal(config.environmentPortalCount, 1);
+  assert.equal(config.environmentPortalCapacity, 32);
+  assert.deepEqual(config.environmentPortals[0].position.slice(0, 3), [0, 1.2, -2.4]);
+  assert.equal(Math.abs(config.environmentPortals[0].position[3] - 1.98) < 0.000001, true);
+  assert.deepEqual(config.environmentPortals[0].normal, [0, 0, 1, 1.35]);
+  assert.deepEqual(config.environmentPortals[0].tangent, [1, 0, 0, 0.9]);
+  assert.deepEqual(config.environmentPortals[0].bitangent, [0, 1, 0, 0.55]);
+  assert.deepEqual(config.environmentPortals[0].color, [0.8, 0.92, 1, 0.7]);
+  assert.equal(config.memory.environmentPortalBytes, 32 * wavefrontPathTracingComputeLimits.environmentPortalRecordBytes);
+});
+
+test("wavefront compute config accepts lighting-owned portal payloads", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    environmentLighting: {
+      environmentPortalMode: "guide",
+      environmentPortals: [
+        {
+          center: [1, 1.4, -3],
+          normal: [0, 0, 1],
+          halfWidth: 0.5,
+          halfHeight: 0.25,
+        },
+      ],
+    },
+  });
+
+  assert.equal(config.environmentPortalMode, 1);
+  assert.equal(config.environmentPortalCount, 1);
+  assert.equal(config.environmentPortals[0].tangent[3], 0.5);
+  assert.equal(config.environmentPortals[0].bitangent[3], 0.25);
+});
+
+test("wavefront compute config validates environment portal inputs", () => {
+  assert.throws(
+    () =>
+      createWavefrontPathTracingComputeConfig({
+        width: 640,
+        height: 360,
+        environmentPortalMode: "bad-mode",
+      }),
+    /environmentPortalMode must be disabled, guide, guide-and-gate/
+  );
+  assert.throws(
+    () =>
+      createWavefrontPathTracingComputeConfig({
+        width: 640,
+        height: 360,
+        environmentPortals: [{ shape: "circle" }],
+      }),
+    /environmentPortals\[0\]\.shape must be "rectangle"/
+  );
+});
+
 test("wavefront scene object normalization derives boxes from bounds", () => {
   const object = normalizeWavefrontSceneObject({
     id: 42,
@@ -887,16 +975,34 @@ test("wavefront compute renderer rejects unavailable WebGPU setup paths", async 
       }),
       /context does not support configure/
     );
+
+    await assert.rejects(
+      createWavefrontPathTracingComputeRenderer({
+        canvas: createFakeWavefrontCanvas(),
+        navigator: createFakeWavefrontNavigator(new FakeWavefrontDevice(), {
+          limits: { maxStorageBuffersPerShaderStage: 8 },
+        }),
+        width: 8,
+        height: 8,
+      }),
+      /requires maxStorageBuffersPerShaderStage>=9/
+    );
   });
 });
 
 test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();
+    let requestedDeviceDescriptor = null;
     const canvas = createFakeWavefrontCanvas();
     const renderer = await createWavefrontPathTracingComputeRenderer({
       canvas,
-      navigator: createFakeWavefrontNavigator(device),
+      navigator: createFakeWavefrontNavigator(device, {
+        limits: { maxStorageBuffersPerShaderStage: 10 },
+        onRequestDevice(descriptor) {
+          requestedDeviceDescriptor = descriptor;
+        },
+      }),
       width: 8,
       height: 8,
       tileSize: 8,
@@ -921,6 +1027,7 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     });
 
     const frame = renderer.renderOnce();
+    const secondFrame = renderer.renderOnce();
     const probe = await renderer.readOutputProbe({ x: 2, y: 3 });
     const nextConfig = renderer.updateSceneObjects([]);
     const snapshot = renderer.getSnapshot();
@@ -928,17 +1035,34 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     assert.equal(canvas.width, 8);
     assert.equal(canvas.height, 8);
     assert.equal(canvas.context.configured.format, "bgra8unorm");
+    assert.equal(
+      requestedDeviceDescriptor.requiredLimits.maxStorageBuffersPerShaderStage,
+      9
+    );
     assert.equal(frame.frame, 1);
     assert.equal(frame.displayQuality, true);
     assert.equal(frame.gpuAccelerationBuildRequired, true);
+    assert.equal(frame.accelerationBuildSubmitted, true);
+    assert.equal(frame.accelerationBuilt, true);
+    assert.equal(frame.accelerationBuildCount, 1);
+    assert.equal(frame.commandSubmissions, 2);
+    assert.equal(secondFrame.frame, 2);
+    assert.equal(secondFrame.accelerationBuildSubmitted, false);
+    assert.equal(secondFrame.accelerationBuilt, true);
+    assert.equal(secondFrame.accelerationBuildCount, 1);
+    assert.equal(secondFrame.commandSubmissions, 1);
     assert.equal(frame.primaryRays, 128);
     assert.equal(frame.tiles, 1);
+    assert.equal(frame.frameConfigSlots, 4);
     assert.equal(probe.x, 2);
     assert.equal(probe.y, 3);
     assert.deepEqual(probe.rgba, [32, 64, 128, 255]);
     assert.equal(nextConfig.displayQuality, true);
-    assert.equal(snapshot.frame, 1);
+    assert.equal(snapshot.frame, 2);
     assert.equal(snapshot.triangleCount, 1);
+    assert.equal(snapshot.accelerationBuilt, true);
+    assert.equal(snapshot.accelerationBuildCount, 1);
+    assert.equal(snapshot.frameConfigSlots, 4);
     assert.ok(device.pipelineLabels.includes("plasius.wavefront.prepareMeshTrianglesAndLeaves"));
     assert.ok(device.pipelineLabels.includes("plasius.wavefront.generatePrimaryRays"));
     assert.ok(device.pipelineLabels.includes("plasius.wavefront.denoiseLinearRadiance"));
@@ -946,6 +1070,9 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     assert.ok(device.renderPasses >= 1);
     assert.equal(device.drawCalls.includes(3), true);
     assert.ok(device.queue.submissions.length >= 1);
+    const submittedLabels = device.queue.submissions.flat().map((submission) => submission.encoderLabel);
+    assert.equal(submittedLabels.filter((label) => label.includes("buildAcceleration")).length, 1);
+    assert.equal(submittedLabels.filter((label) => label.includes(".batched")).length, 2);
     assert.equal(device.copyTextureToBufferCalls.length, 1);
 
     renderer.destroy();
