@@ -472,13 +472,13 @@ function createResources(device, config, outputTextureFormat) {
       device,
       "plasius.wavefront.activeIndirect",
       INDIRECT_BYTE_LENGTH,
-      GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+      GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST
     ),
     nextIndirectBuffer: createBuffer(
       device,
       "plasius.wavefront.nextIndirect",
       INDIRECT_BYTE_LENGTH,
-      GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+      GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST
     ),
     outputTexture: device.createTexture({
       label: "plasius.wavefront.outputTexture",
@@ -610,11 +610,10 @@ async function createWavefrontPathTracingComputeRenderer(options = {}) {
   if (!context) {
     throw new Error("Unable to obtain WebGPU canvas context for wavefront path tracing.");
   }
-  const format = config.format;
-  const outputTextureFormat = resolveWavefrontPathTracingComputeStorageFormat(format);
+  const outputTextureFormat = resolveWavefrontPathTracingComputeStorageFormat(config.format);
   context.configure({
     device,
-    format,
+    format: outputTextureFormat,
     alphaMode: "opaque",
     usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST
   });
