@@ -1,0 +1,968 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import {
+  createWavefrontPathTracingComputeRenderer,
+  createDefaultWavefrontSceneObjects,
+  createWavefrontBvhBuildLevels,
+  createWavefrontBvhSortStages,
+  createWavefrontEmissiveTriangleIndexSource,
+  createWavefrontGpuMeshSource,
+  createWavefrontMeshAcceleration,
+  createWavefrontPathTracingComputeConfig,
+  estimateWavefrontPathTracingMemory,
+  normalizeWavefrontMesh,
+  normalizeWavefrontSceneObject,
+  packWavefrontBvhNodes,
+  packWavefrontSceneObjects,
+  packWavefrontTriangles,
+  supportsWavefrontPathTracingCompute,
+  wavefrontMaterialKinds,
+  wavefrontPathTracingComputeLimits,
+  wavefrontSceneObjectKinds,
+} from "../src/index.js";
+
+const gpuConstants = Object.freeze({
+  buffer: Object.freeze({
+    MAP_READ: 1,
+    COPY_DST: 2,
+    COPY_SRC: 4,
+    STORAGE: 8,
+    UNIFORM: 16,
+  }),
+  texture: Object.freeze({
+    COPY_SRC: 1,
+    STORAGE_BINDING: 2,
+    TEXTURE_BINDING: 4,
+  }),
+  shader: Object.freeze({
+    COMPUTE: 1,
+    FRAGMENT: 2,
+  }),
+  map: Object.freeze({
+    READ: 1,
+  }),
+});
+
+function round(values) {
+  return Array.from(values, (value) => Number(value.toFixed(4)));
+}
+
+function readRendererSource() {
+  return readFileSync(new URL("../src/wavefront-compute.js", import.meta.url), "utf8");
+}
+
+async function withWebGpuConstants(callback) {
+  const previous = {
+    GPUBufferUsage: globalThis.GPUBufferUsage,
+    GPUTextureUsage: globalThis.GPUTextureUsage,
+    GPUShaderStage: globalThis.GPUShaderStage,
+    GPUMapMode: globalThis.GPUMapMode,
+  };
+
+  globalThis.GPUBufferUsage = gpuConstants.buffer;
+  globalThis.GPUTextureUsage = gpuConstants.texture;
+  globalThis.GPUShaderStage = gpuConstants.shader;
+  globalThis.GPUMapMode = gpuConstants.map;
+  try {
+    return await callback();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete globalThis[key];
+      } else {
+        globalThis[key] = value;
+      }
+    }
+  }
+}
+
+class FakeWavefrontBuffer {
+  constructor(descriptor) {
+    this.descriptor = descriptor;
+    this.destroyed = false;
+    this.readback = new Uint8Array(256);
+    this.readback.set([32, 64, 128, 255]);
+  }
+
+  async mapAsync() {}
+
+  getMappedRange() {
+    return this.readback.buffer;
+  }
+
+  unmap() {
+    this.unmapped = true;
+  }
+
+  destroy() {
+    this.destroyed = true;
+  }
+}
+
+class FakeWavefrontTexture {
+  constructor(descriptor) {
+    this.descriptor = descriptor;
+    this.destroyed = false;
+  }
+
+  createView() {
+    return { textureLabel: this.descriptor.label };
+  }
+
+  destroy() {
+    this.destroyed = true;
+  }
+}
+
+class FakeWavefrontComputePass {
+  constructor(device, descriptor) {
+    this.device = device;
+    this.descriptor = descriptor;
+  }
+
+  setBindGroup() {
+    this.device.bindGroupSets += 1;
+  }
+
+  setPipeline() {
+    this.device.pipelineSets += 1;
+  }
+
+  dispatchWorkgroups(...groups) {
+    this.device.dispatches.push(groups);
+  }
+
+  end() {
+    this.device.computePassesEnded += 1;
+  }
+}
+
+class FakeWavefrontRenderPass {
+  constructor(device, descriptor) {
+    this.device = device;
+    this.descriptor = descriptor;
+  }
+
+  setPipeline() {
+    this.device.pipelineSets += 1;
+  }
+
+  setBindGroup() {
+    this.device.bindGroupSets += 1;
+  }
+
+  draw(vertexCount) {
+    this.device.drawCalls.push(vertexCount);
+  }
+
+  end() {
+    this.device.renderPassesEnded += 1;
+  }
+}
+
+class FakeWavefrontCommandEncoder {
+  constructor(device, descriptor) {
+    this.device = device;
+    this.descriptor = descriptor;
+  }
+
+  beginComputePass(descriptor) {
+    this.device.computePasses += 1;
+    return new FakeWavefrontComputePass(this.device, descriptor);
+  }
+
+  beginRenderPass(descriptor) {
+    this.device.renderPasses += 1;
+    return new FakeWavefrontRenderPass(this.device, descriptor);
+  }
+
+  copyTextureToBuffer(source, destination, size) {
+    this.device.copyTextureToBufferCalls.push({ source, destination, size });
+  }
+
+  finish() {
+    return { encoderLabel: this.descriptor.label };
+  }
+}
+
+class FakeWavefrontDevice {
+  constructor() {
+    this.limits = {
+      maxStorageBufferBindingSize: 134_217_728,
+      minUniformBufferOffsetAlignment: 256,
+    };
+    this.buffers = [];
+    this.textures = [];
+    this.dispatches = [];
+    this.copyTextureToBufferCalls = [];
+    this.drawCalls = [];
+    this.pipelineLabels = [];
+    this.bindGroupSets = 0;
+    this.pipelineSets = 0;
+    this.computePasses = 0;
+    this.computePassesEnded = 0;
+    this.renderPasses = 0;
+    this.renderPassesEnded = 0;
+    this.queue = {
+      submissions: [],
+      writes: [],
+      submit: (buffers) => {
+        this.queue.submissions.push(buffers);
+      },
+      writeBuffer: (buffer, offset, data) => {
+        this.queue.writes.push({ buffer, offset, byteLength: data.byteLength ?? data.length ?? 0 });
+      },
+    };
+  }
+
+  createBuffer(descriptor) {
+    const buffer = new FakeWavefrontBuffer(descriptor);
+    this.buffers.push(buffer);
+    return buffer;
+  }
+
+  createTexture(descriptor) {
+    const texture = new FakeWavefrontTexture(descriptor);
+    this.textures.push(texture);
+    return texture;
+  }
+
+  createSampler(descriptor) {
+    return { descriptor };
+  }
+
+  createBindGroupLayout(descriptor) {
+    return { descriptor };
+  }
+
+  createPipelineLayout(descriptor) {
+    return { descriptor };
+  }
+
+  createShaderModule(descriptor) {
+    return {
+      descriptor,
+      async compilationInfo() {
+        return { messages: [] };
+      },
+    };
+  }
+
+  createBindGroup(descriptor) {
+    return { descriptor };
+  }
+
+  createComputePipeline(descriptor) {
+    this.pipelineLabels.push(descriptor.label);
+    return { descriptor };
+  }
+
+  createRenderPipeline(descriptor) {
+    return { descriptor };
+  }
+
+  createCommandEncoder(descriptor) {
+    return new FakeWavefrontCommandEncoder(this, descriptor);
+  }
+}
+
+function createFakeWavefrontNavigator(device = new FakeWavefrontDevice()) {
+  return {
+    gpu: {
+      async requestAdapter() {
+        return {
+          async requestDevice() {
+            return device;
+          },
+        };
+      },
+      getPreferredCanvasFormat() {
+        return "bgra8unorm";
+      },
+    },
+  };
+}
+
+function createFakeWavefrontCanvas() {
+  const context = {
+    configured: null,
+    configure(config) {
+      this.configured = config;
+    },
+    getCurrentTexture() {
+      return new FakeWavefrontTexture({ label: "plasius.wavefront.currentTexture" });
+    },
+    unconfigure() {
+      this.configured = null;
+    },
+  };
+
+  return {
+    width: 0,
+    height: 0,
+    getContext(type) {
+      return type === "webgpu" ? context : null;
+    },
+    context,
+  };
+}
+
+test("wavefront compute config keeps 4K queues tile-bounded", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 3840,
+    height: 2160,
+    tileSize: 128,
+    maxDepth: 8,
+  });
+
+  assert.equal(config.width, 3840);
+  assert.equal(config.height, 2160);
+  assert.equal(config.maxDepth, 8);
+  assert.equal(config.samplesPerPixel, 1);
+  assert.equal(config.displayQuality, false);
+  assert.equal(config.requiresMeshBvhForDisplayQuality, true);
+  assert.equal(config.tilePixelCapacity, 128 * 128);
+  assert.equal(wavefrontPathTracingComputeLimits.hitRecordBytes, 208);
+  assert.equal(config.memory.queueBytes, 128 * 128 * wavefrontPathTracingComputeLimits.rayRecordBytes);
+  assert.equal(config.memory.hitBytes, 128 * 128 * wavefrontPathTracingComputeLimits.hitRecordBytes);
+  assert.equal(config.memory.configBytes, 256);
+  assert.equal(config.memory.bvhLeafReferenceBytes, 0);
+  assert.equal(config.memory.emissiveTriangleMetadataBytes, 0);
+  assert.ok(config.memory.queueBytes < 134_217_728);
+  assert.ok(config.memory.hitBytes < 134_217_728);
+});
+
+test("wavefront compute config exposes bounded samples per pixel", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    samplesPerPixel: 8,
+  });
+  const clamped = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    samplesPerPixel: 128,
+  });
+
+  assert.equal(config.samplesPerPixel, 8);
+  assert.equal(clamped.samplesPerPixel, 64);
+  assert.throws(
+    () =>
+      createWavefrontPathTracingComputeConfig({
+        width: 640,
+        height: 360,
+        samplesPerPixel: 0,
+      }),
+    /samplesPerPixel must be a positive integer/
+  );
+});
+
+test("wavefront compute denoise remains a two-pass GPU post process", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /rgba16float/);
+  assert.match(source, /radianceTexture/);
+  assert.match(source, /denoiseScratchTexture/);
+  assert.match(source, /radianceToScratch/);
+  assert.match(source, /scratchToOutput/);
+  assert.match(source, /denoiseLinearRadiance/);
+  assert.match(source, /resolveDenoisedOutputImage/);
+  assert.match(source, /tone_map_radiance/);
+  assert.doesNotMatch(source, /getImageData|putImageData|Uint8ClampedArray/);
+});
+
+test("wavefront compute guides active continuation rays toward emissive triangles", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /emissiveTriangleIndices/);
+  assert.match(source, /sample_emissive_triangle_direction/);
+  assert.match(source, /config\.emissiveTriangleCount/);
+  assert.match(source, /RAY_FLAG_GUIDED_EMISSIVE/);
+  assert.match(source, /guidedLightWeight/);
+  assert.match(source, /\(pixelId \* 747796405u\) \^/);
+  assert.match(source, /mix_seed\(sourcePixelId, sampleId, 0u, config\.frameIndex, 1u\)/);
+  assert.match(source, /mix_seed\(ray\.sourcePixelId, ray\.sampleId, ray\.bounce, config\.frameIndex, 11u\)/);
+  assert.match(source, /bvhNodes\[config\.bvhNodeCapacity \+ lightSlot\]/);
+  assert.match(source, /nextIndex >= config\.tilePixelCount/);
+  assert.doesNotMatch(source, /binding: 19/);
+  assert.doesNotMatch(source, /direct_key_lighting/);
+});
+
+test("analytic wavefront renderer rejects display-quality requests", () => {
+  assert.throws(
+    () =>
+      createWavefrontPathTracingComputeConfig({
+        width: 640,
+        height: 360,
+        displayQuality: true,
+      }),
+    /Display-quality path tracing requires mesh BVH triangle intersections/
+  );
+});
+
+test("display-quality wavefront config schedules GPU mesh BVH build input", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    displayQuality: true,
+    meshes: [
+      {
+        id: 9,
+        positions: [0, 0, 0, 1, 0, 0, 0, 1, 0],
+        indices: [0, 1, 2],
+        normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+        color: [0.8, 0.7, 0.6, 1],
+      },
+    ],
+  });
+
+  assert.equal(config.displayQuality, true);
+  assert.equal(config.accelerationBuildMode, "gpu");
+  assert.equal(config.gpuAccelerationBuildRequired, true);
+  assert.equal(config.sceneObjectCount, 0);
+  assert.equal(config.triangleCount, 1);
+  assert.equal(config.bvhNodeCount, 1);
+  assert.equal(config.bvhNodeCapacity, 1);
+  assert.equal(config.bvhLeafSortCapacity, 1);
+  assert.deepEqual(config.bvhSortStages, []);
+  assert.deepEqual(config.bvhBuildLevels, []);
+  assert.equal(config.meshAcceleration.triangles.length, 0);
+  assert.equal(config.gpuMeshSource.vertices.count, 3);
+  assert.equal(config.gpuMeshSource.indices.count, 3);
+  assert.equal(config.gpuMeshSource.meshes.count, 1);
+  assert.equal(config.emissiveTriangleCount, 0);
+  assert.equal(config.memory.triangleBytes, wavefrontPathTracingComputeLimits.triangleRecordBytes);
+  assert.equal(config.memory.bvhNodeBytes, wavefrontPathTracingComputeLimits.bvhNodeRecordBytes);
+  assert.equal(config.memory.emissiveTriangleMetadataBytes, 0);
+});
+
+test("display-quality wavefront config rejects CPU-built acceleration mode", () => {
+  assert.throws(
+    () =>
+      createWavefrontPathTracingComputeConfig({
+        width: 640,
+        height: 360,
+        displayQuality: true,
+        accelerationBuildMode: "cpu-debug",
+        meshes: [
+          {
+            positions: [0, 0, 0, 1, 0, 0, 0, 1, 0],
+          },
+        ],
+      }),
+    /Display-quality path tracing requires GPU-built mesh acceleration/
+  );
+});
+
+test("wavefront BVH build levels schedule parent nodes concurrently bottom-up", () => {
+  const mesh = {
+    positions: [
+      -3, 0, 0,
+      -2.5, 0, 0,
+      -3, 0.5, 0,
+      -2, 0, 0,
+      -1.5, 0, 0,
+      -2, 0.5, 0,
+      -1, 0, 0,
+      -0.5, 0, 0,
+      -1, 0.5, 0,
+      0, 0, 0,
+      0.5, 0, 0,
+      0, 0.5, 0,
+      1, 0, 0,
+      1.5, 0, 0,
+      1, 0.5, 0,
+      2, 0, 0,
+      2.5, 0, 0,
+      2, 0.5, 0,
+      3, 0, 0,
+      3.5, 0, 0,
+      3, 0.5, 0,
+    ],
+  };
+  const expected = [
+    { start: 3, count: 3 },
+    { start: 1, count: 2 },
+    { start: 0, count: 1 },
+  ];
+  const expectedSortStages = [
+    { compareDistance: 1, sequenceSize: 2 },
+    { compareDistance: 2, sequenceSize: 4 },
+    { compareDistance: 1, sequenceSize: 4 },
+    { compareDistance: 4, sequenceSize: 8 },
+    { compareDistance: 2, sequenceSize: 8 },
+    { compareDistance: 1, sequenceSize: 8 },
+  ];
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    displayQuality: true,
+    meshes: [mesh],
+  });
+
+  assert.deepEqual(createWavefrontBvhBuildLevels(1), []);
+  assert.deepEqual(createWavefrontBvhBuildLevels(7), expected);
+  assert.deepEqual(createWavefrontBvhSortStages(1), []);
+  assert.deepEqual(createWavefrontBvhSortStages(7), expectedSortStages);
+  assert.equal(config.bvhLeafSortCapacity, 8);
+  assert.deepEqual(config.bvhSortStages, expectedSortStages);
+  assert.deepEqual(config.bvhBuildLevels, expected);
+  assert.equal(config.triangleCount, 7);
+  assert.equal(config.bvhNodeCount, 13);
+  assert.equal(
+    config.memory.bvhLeafReferenceBytes,
+    8 * wavefrontPathTracingComputeLimits.bvhLeafReferenceRecordBytes
+  );
+});
+
+test("wavefront mesh acceleration preserves triangle vertices and normals", () => {
+  const mesh = normalizeWavefrontMesh({
+    id: 12,
+    positions: [0, 0, 0, 2, 0, 0, 0, 2, 0],
+    indices: [0, 1, 2],
+    normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+    uvs: [0, 0, 1, 0, 0, 1],
+    materialKind: "metal",
+    materialRefId: 98,
+    mediumRefId: 7,
+  });
+  const acceleration = createWavefrontMeshAcceleration([mesh]);
+  const triangle = acceleration.triangles[0];
+
+  assert.equal(mesh.id, 12);
+  assert.equal(acceleration.nodes.length, 1);
+  assert.equal(triangle.meshId, 12);
+  assert.deepEqual(triangle.v1, [2, 0, 0]);
+  assert.deepEqual(triangle.n2, [0, 0, 1]);
+  assert.deepEqual(triangle.uv2, [0, 1]);
+  assert.equal(triangle.materialRefId, 98);
+  assert.equal(triangle.mediumRefId, 7);
+  assert.deepEqual(acceleration.nodes[0].bounds.min, [0, 0, 0]);
+  assert.deepEqual(acceleration.nodes[0].bounds.max, [2, 2, 0]);
+});
+
+test("wavefront GPU mesh source packs raw mesh buffers without CPU BVH output", () => {
+  const source = createWavefrontGpuMeshSource([
+    {
+      id: 31,
+      positions: [0, 0, 0, 2, 0, 0, 0, 2, 0],
+      indices: [0, 1, 2],
+      normals: [0, 0, 1, 0, 0.6, 0.8, 0.6, 0, 0.8],
+      uvs: [0, 0, 1, 0, 0, 1],
+      materialKind: "dielectric",
+      materialRefId: 22,
+      mediumRefId: 3,
+      color: [0.25, 0.5, 0.75, 0.9],
+    },
+  ]);
+  const vertexFloats = new Float32Array(source.vertices.buffer);
+  const indexUints = new Uint32Array(source.indices.buffer);
+  const meshUints = new Uint32Array(source.meshes.buffer);
+  const meshFloats = new Float32Array(source.meshes.buffer);
+
+  assert.equal(source.vertices.buffer.byteLength, 3 * wavefrontPathTracingComputeLimits.meshVertexRecordBytes);
+  assert.equal(source.indices.buffer.byteLength, 3 * 4);
+  assert.equal(source.meshes.buffer.byteLength, wavefrontPathTracingComputeLimits.meshRangeRecordBytes);
+  assert.equal(source.triangleCount, 1);
+  assert.equal(source.bvhNodeCapacity, 1);
+  assert.deepEqual(round(vertexFloats.slice(0, 12)), [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]);
+  assert.deepEqual(Array.from(indexUints.slice(0, 3)), [0, 1, 2]);
+  assert.deepEqual(
+    Array.from(meshUints.slice(0, 11)),
+    [31, wavefrontMaterialKinds.dielectric, 0, 22, 3, 0, 3, 0, 1, 0, 3]
+  );
+  assert.deepEqual(round(meshFloats.slice(12, 16)), [0.25, 0.5, 0.75, 0.9]);
+});
+
+test("wavefront emissive triangle index source tracks light mesh triangle order", () => {
+  const source = createWavefrontEmissiveTriangleIndexSource([
+    {
+      positions: [0, 0, 0, 2, 0, 0, 0, 2, 0],
+      indices: [0, 1, 2],
+      materialKind: "diffuse",
+    },
+    {
+      positions: [
+        0, 1, 0,
+        1, 1, 0,
+        1, 2, 0,
+        0, 2, 0,
+      ],
+      indices: [0, 1, 2, 0, 2, 3],
+      materialKind: "emissive",
+      emission: [4, 3, 2, 1],
+    },
+  ]);
+  const uints = new Uint32Array(source.buffer);
+
+  assert.deepEqual(source.indices, [1, 2]);
+  assert.equal(source.count, 2);
+  assert.equal(source.capacity, 2);
+  assert.equal(source.recordBytes, wavefrontPathTracingComputeLimits.emissiveTriangleIndexBytes);
+  assert.deepEqual(Array.from(uints), [1, 2]);
+});
+
+test("wavefront config stores emissive guidance metadata in the BVH buffer tail", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    displayQuality: true,
+    meshes: [
+      {
+        positions: [
+          0, 1, 0,
+          1, 1, 0,
+          1, 2, 0,
+          0, 2, 0,
+        ],
+        indices: [0, 1, 2, 0, 2, 3],
+        materialKind: "emissive",
+        emission: [4, 3, 2, 1],
+      },
+    ],
+  });
+
+  assert.equal(config.emissiveTriangleCount, 2);
+  assert.equal(config.emissiveTriangleCapacity, 2);
+  assert.equal(
+    config.memory.emissiveTriangleMetadataBytes,
+    2 * wavefrontPathTracingComputeLimits.emissiveTriangleMetadataRecordBytes
+  );
+});
+
+test("wavefront mesh acceleration derives flat normals when vertex normals are absent", () => {
+  const acceleration = createWavefrontMeshAcceleration([
+    {
+      id: 15,
+      positions: [0, 0, 0, 1, 0, 0, 0, 1, 0],
+      indices: [0, 1, 2],
+    },
+  ]);
+  const triangle = acceleration.triangles[0];
+
+  assert.deepEqual(round(triangle.n0), [0, 0, 1]);
+  assert.deepEqual(round(triangle.n1), [0, 0, 1]);
+  assert.deepEqual(round(triangle.n2), [0, 0, 1]);
+});
+
+test("wavefront mesh acceleration keeps smooth normals for shader interpolation", () => {
+  const acceleration = createWavefrontMeshAcceleration([
+    {
+      id: 16,
+      positions: [0, 0, 0, 1, 0, 0, 0, 1, 0],
+      indices: [0, 1, 2],
+      normals: [0, 0, 1, 0, 0.6, 0.8, 0.6, 0, 0.8],
+    },
+  ]);
+  const triangle = acceleration.triangles[0];
+
+  assert.deepEqual(round(triangle.n0), [0, 0, 1]);
+  assert.deepEqual(round(triangle.n1), [0, 0.6, 0.8]);
+  assert.deepEqual(round(triangle.n2), [0.6, 0, 0.8]);
+});
+
+test("wavefront mesh acceleration builds BVH leaves with stable global triangle ids", () => {
+  const acceleration = createWavefrontMeshAcceleration([
+    {
+      id: 20,
+      positions: [
+        -3, 0, 0,
+        -2.5, 0, 0,
+        -3, 0.5, 0,
+        -2, 0, 0,
+        -1.5, 0, 0,
+        -2, 0.5, 0,
+        -1, 0, 0,
+        -0.5, 0, 0,
+        -1, 0.5, 0,
+        0, 0, 0,
+        0.5, 0, 0,
+        0, 0.5, 0,
+        1, 0, 0,
+        1.5, 0, 0,
+        1, 0.5, 0,
+        2, 0, 0,
+        2.5, 0, 0,
+        2, 0.5, 0,
+      ],
+    },
+    {
+      id: 21,
+      positions: [3, 0, 0, 3.5, 0, 0, 3, 0.5, 0],
+    },
+  ]);
+  const triangleIds = acceleration.triangles.map((triangle) => triangle.triangleId).sort((a, b) => a - b);
+  const leafNodes = acceleration.nodes.filter((node) => node.triangleCount > 0);
+  const root = acceleration.nodes[0];
+
+  assert.equal(acceleration.triangles.length, 7);
+  assert.ok(acceleration.nodes.length > 1);
+  assert.equal(root.triangleCount, 0);
+  assert.deepEqual(triangleIds, [0, 1, 2, 3, 4, 5, 6]);
+  assert.equal(leafNodes.every((node) => node.triangleCount <= 4), true);
+  assert.deepEqual(root.bounds.min, [-3, 0, 0]);
+  assert.deepEqual(root.bounds.max, [3.5, 0.5, 0]);
+});
+
+test("wavefront triangle and BVH packers use stable GPU record layouts", () => {
+  const acceleration = createWavefrontMeshAcceleration([
+    {
+      id: 4,
+      positions: [0, 0, 0, 1, 0, 0, 0, 1, 0],
+      indices: [0, 1, 2],
+      normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+      emission: [2, 1, 0.5, 1],
+    },
+  ]);
+  const packedTriangles = packWavefrontTriangles(acceleration.triangles, 2);
+  const packedNodes = packWavefrontBvhNodes(acceleration.nodes, 2);
+  const triangleUints = new Uint32Array(packedTriangles.buffer);
+  const triangleFloats = new Float32Array(packedTriangles.buffer);
+  const nodeUints = new Uint32Array(packedNodes.buffer);
+
+  assert.equal(packedTriangles.buffer.byteLength, 2 * wavefrontPathTracingComputeLimits.triangleRecordBytes);
+  assert.equal(packedNodes.buffer.byteLength, 2 * wavefrontPathTracingComputeLimits.bvhNodeRecordBytes);
+  assert.equal(triangleUints[1], 4);
+  assert.equal(triangleUints[2], wavefrontMaterialKinds.emissive);
+  assert.equal(triangleUints[4], 0);
+  assert.equal(triangleUints[5], 0);
+  assert.deepEqual(round(triangleFloats.slice(8, 12)), [0, 0, 0, 0]);
+  assert.deepEqual(round(triangleFloats.slice(40, 44)), [0.72, 0.72, 0.68, 1]);
+  assert.deepEqual(round(triangleFloats.slice(44, 48)), [2, 1, 0.5, 1]);
+  assert.equal(nodeUints[9], 1);
+});
+
+test("wavefront compute config accepts lighting-owned environment payloads", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    environmentLighting: {
+      horizonColor: [0.5, 0.6, 0.7, 1],
+      zenithColor: [0.05, 0.08, 0.14, 1],
+      sunDirection: [0, 2, 0],
+      sunColor: [3, 2.8, 2.4, 1],
+      intensity: 1.25,
+      mode: 2,
+      exposure: 0.9,
+    },
+  });
+
+  assert.deepEqual(config.environmentLighting.horizonColor, [0.5, 0.6, 0.7, 1]);
+  assert.deepEqual(config.environmentLighting.zenithColor, [0.05, 0.08, 0.14, 1]);
+  assert.deepEqual(config.environmentLighting.sunDirection, [0, 1, 0]);
+  assert.deepEqual(config.environmentLighting.sunColor, [3, 2.8, 2.4, 1]);
+  assert.equal(config.environmentLighting.intensity, 1.25);
+  assert.equal(config.environmentLighting.mode, 2);
+  assert.equal(config.environmentLighting.exposure, 0.9);
+});
+
+test("wavefront scene object normalization derives boxes from bounds", () => {
+  const object = normalizeWavefrontSceneObject({
+    id: 42,
+    type: "bounds",
+    bounds: {
+      min: [-2, -1, 3],
+      max: [4, 5, 9],
+    },
+    material: {
+      kind: "metal",
+      baseColor: [0.7, 0.5, 0.25, 1],
+      roughness: 0.2,
+      metallic: 0.9,
+    },
+  });
+
+  assert.equal(object.id, 42);
+  assert.equal(object.kind, wavefrontSceneObjectKinds.box);
+  assert.equal(object.materialKind, wavefrontMaterialKinds.metal);
+  assert.deepEqual(object.center, [1, 2, 6]);
+  assert.deepEqual(object.halfExtent, [3, 3, 3]);
+  assert.equal(object.roughness, 0.2);
+  assert.equal(object.metallic, 0.9);
+});
+
+test("wavefront scene objects pack into stable GPU record layout", () => {
+  const packed = packWavefrontSceneObjects(
+    [
+      {
+        id: 7,
+        type: "sphere",
+        center: [1, 2, 3],
+        radius: 0.75,
+        color: [0.1, 0.2, 0.3, 0.4],
+        emission: [5, 4, 3, 1],
+      },
+    ],
+    2
+  );
+
+  assert.equal(packed.count, 1);
+  assert.equal(packed.capacity, 2);
+  assert.equal(packed.buffer.byteLength, 2 * wavefrontPathTracingComputeLimits.sceneObjectRecordBytes);
+
+  const uints = new Uint32Array(packed.buffer);
+  const floats = new Float32Array(packed.buffer);
+  assert.equal(uints[0], wavefrontSceneObjectKinds.sphere);
+  assert.equal(uints[1], 7);
+  assert.equal(uints[2], wavefrontMaterialKinds.emissive);
+  assert.deepEqual(round(floats.slice(4, 8)), [1, 2, 3, 0]);
+  assert.deepEqual(round(floats.slice(8, 12)), [0.75, 0.75, 0.75, 0]);
+  assert.deepEqual(round(floats.slice(16, 20)), [5, 4, 3, 1]);
+});
+
+test("wavefront scene objects pack opacity in material channel z", () => {
+  const packed = packWavefrontSceneObjects([
+    {
+      id: 8,
+      type: "sphere",
+      radius: 0.5,
+      color: [0.5, 0.6, 0.7, 0.35],
+      roughness: 0.91,
+      opacity: 0.35,
+      materialKind: "transparent",
+    },
+  ]);
+  const floats = new Float32Array(packed.buffer);
+
+  assert.deepEqual(round(floats.slice(20, 24)), [0.91, 0, 0.35, 1.45]);
+});
+
+test("wavefront compute helper reports unavailable WebGPU when navigator.gpu is missing", () => {
+  assert.equal(supportsWavefrontPathTracingCompute({ navigator: {} }), false);
+  assert.equal(
+    supportsWavefrontPathTracingCompute({
+      navigator: {
+        gpu: {
+          async requestAdapter() {
+            return null;
+          },
+        },
+      },
+    }),
+    true
+  );
+});
+
+test("wavefront compute renderer rejects unavailable WebGPU setup paths", async () => {
+  await withWebGpuConstants(async () => {
+    await assert.rejects(
+      createWavefrontPathTracingComputeRenderer({
+        canvas: createFakeWavefrontCanvas(),
+        navigator: {},
+        width: 8,
+        height: 8,
+      }),
+      /requires navigator\.gpu/
+    );
+
+    await assert.rejects(
+      createWavefrontPathTracingComputeRenderer({
+        canvas: createFakeWavefrontCanvas(),
+        navigator: {
+          gpu: {
+            async requestAdapter() {
+              return null;
+            },
+          },
+        },
+        width: 8,
+        height: 8,
+      }),
+      /Unable to acquire a WebGPU adapter/
+    );
+
+    await assert.rejects(
+      createWavefrontPathTracingComputeRenderer({
+        canvas: {
+          width: 0,
+          height: 0,
+          getContext() {
+            return null;
+          },
+        },
+        navigator: createFakeWavefrontNavigator(),
+        width: 8,
+        height: 8,
+      }),
+      /context does not support configure/
+    );
+  });
+});
+
+test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const canvas = createFakeWavefrontCanvas();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas,
+      navigator: createFakeWavefrontNavigator(device),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 2,
+      denoise: true,
+      displayQuality: true,
+      meshes: [
+        {
+          id: 77,
+          positions: [
+            -1, 0, 0,
+            1, 0, 0,
+            0, 1, 0,
+          ],
+          indices: [0, 1, 2],
+          normals: [0, 0, 1, 0, 0.4, 0.9, 0.4, 0, 0.9],
+          materialKind: "emissive",
+          emission: [4, 3, 2, 1],
+        },
+      ],
+    });
+
+    const frame = renderer.renderOnce();
+    const probe = await renderer.readOutputProbe({ x: 2, y: 3 });
+    const nextConfig = renderer.updateSceneObjects([]);
+    const snapshot = renderer.getSnapshot();
+
+    assert.equal(canvas.width, 8);
+    assert.equal(canvas.height, 8);
+    assert.equal(canvas.context.configured.format, "bgra8unorm");
+    assert.equal(frame.frame, 1);
+    assert.equal(frame.displayQuality, true);
+    assert.equal(frame.gpuAccelerationBuildRequired, true);
+    assert.equal(frame.primaryRays, 128);
+    assert.equal(frame.tiles, 1);
+    assert.equal(probe.x, 2);
+    assert.equal(probe.y, 3);
+    assert.deepEqual(probe.rgba, [32, 64, 128, 255]);
+    assert.equal(nextConfig.displayQuality, true);
+    assert.equal(snapshot.frame, 1);
+    assert.equal(snapshot.triangleCount, 1);
+    assert.ok(device.pipelineLabels.includes("plasius.wavefront.prepareMeshTrianglesAndLeaves"));
+    assert.ok(device.pipelineLabels.includes("plasius.wavefront.generatePrimaryRays"));
+    assert.ok(device.pipelineLabels.includes("plasius.wavefront.denoiseLinearRadiance"));
+    assert.ok(device.computePasses >= 5);
+    assert.ok(device.renderPasses >= 1);
+    assert.equal(device.drawCalls.includes(3), true);
+    assert.ok(device.queue.submissions.length >= 1);
+    assert.equal(device.copyTextureToBufferCalls.length, 1);
+
+    renderer.destroy();
+    assert.equal(canvas.context.configured, null);
+    assert.equal(device.buffers.every((buffer) => buffer.destroyed), true);
+    assert.equal(device.textures.every((texture) => texture.destroyed), true);
+  });
+});
+
+test("default wavefront scene includes emissive termination geometry", () => {
+  const objects = createDefaultWavefrontSceneObjects();
+  assert.equal(objects.some((object) => object.materialKind === wavefrontMaterialKinds.emissive), true);
+
+  const estimate = estimateWavefrontPathTracingMemory({
+    tilePixelCapacity: 256 * 256,
+    sceneObjectCapacity: 128,
+  });
+  assert.ok(estimate.queueBytes < 134_217_728);
+  assert.ok(estimate.totalHotBufferBytes < 32_000_000);
+});

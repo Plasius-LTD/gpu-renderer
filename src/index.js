@@ -1,5 +1,25 @@
 const DEFAULT_CLEAR_COLOR = Object.freeze([0.07, 0.11, 0.18, 1.0]);
 const DEFAULT_CANVAS_SELECTOR = "canvas[data-plasius-gpu-renderer]";
+export {
+  createDefaultWavefrontSceneObjects,
+  createWavefrontBvhBuildLevels,
+  createWavefrontBvhSortStages,
+  createWavefrontEmissiveTriangleIndexSource,
+  createWavefrontGpuMeshSource,
+  createWavefrontMeshAcceleration,
+  createWavefrontPathTracingComputeConfig,
+  createWavefrontPathTracingComputeRenderer,
+  estimateWavefrontPathTracingMemory,
+  normalizeWavefrontMesh,
+  normalizeWavefrontSceneObject,
+  packWavefrontBvhNodes,
+  packWavefrontSceneObjects,
+  packWavefrontTriangles,
+  supportsWavefrontPathTracingCompute,
+  wavefrontMaterialKinds,
+  wavefrontPathTracingComputeLimits,
+  wavefrontSceneObjectKinds,
+} from "./wavefront-compute.js";
 export const rendererDebugOwner = "renderer";
 export const rendererWorkerQueueClass = "render";
 export const defaultRendererWorkerProfile = "realtime";

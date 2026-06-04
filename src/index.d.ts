@@ -1,4 +1,490 @@
 export type RendererColor = string | [number, number, number, number?];
+export type WavefrontSceneObjectKind = "sphere" | "box" | "aabb" | "bounds" | number;
+export type WavefrontMaterialKind =
+  | "diffuse"
+  | "metal"
+  | "reflective"
+  | "dielectric"
+  | "refractive"
+  | "glass"
+  | "transparent"
+  | "transmission"
+  | "emissive"
+  | "light"
+  | number;
+
+export interface WavefrontCameraOptions {
+  readonly position?: readonly [number, number, number] | readonly number[];
+  readonly target?: readonly [number, number, number] | readonly number[];
+  readonly up?: readonly [number, number, number] | readonly number[];
+  readonly fovYDegrees?: number;
+  readonly fov?: number;
+}
+
+export interface WavefrontSceneObjectInput {
+  readonly id?: number;
+  readonly kind?: WavefrontSceneObjectKind;
+  readonly type?: WavefrontSceneObjectKind;
+  readonly materialKind?: WavefrontMaterialKind;
+  readonly flags?: number;
+  readonly center?: readonly [number, number, number] | readonly number[];
+  readonly position?: readonly [number, number, number] | readonly number[];
+  readonly radius?: number;
+  readonly halfExtent?: readonly [number, number, number] | readonly number[];
+  readonly halfExtents?: readonly [number, number, number] | readonly number[];
+  readonly extents?: readonly [number, number, number] | readonly number[];
+  readonly min?: readonly [number, number, number] | readonly number[];
+  readonly max?: readonly [number, number, number] | readonly number[];
+  readonly bounds?: {
+    readonly min?: readonly [number, number, number] | readonly number[];
+    readonly max?: readonly [number, number, number] | readonly number[];
+  };
+  readonly color?: RendererColor | readonly number[];
+  readonly baseColor?: RendererColor | readonly number[];
+  readonly albedo?: RendererColor | readonly number[];
+  readonly emission?: readonly [number, number, number, number?] | readonly number[];
+  readonly emissive?: readonly [number, number, number, number?] | readonly number[];
+  readonly roughness?: number;
+  readonly metallic?: number;
+  readonly opacity?: number;
+  readonly ior?: number;
+  readonly material?: {
+    readonly kind?: WavefrontMaterialKind;
+    readonly color?: RendererColor | readonly number[];
+    readonly baseColor?: RendererColor | readonly number[];
+    readonly emission?: readonly [number, number, number, number?] | readonly number[];
+    readonly emissive?: readonly [number, number, number, number?] | readonly number[];
+    readonly roughness?: number;
+    readonly metallic?: number;
+    readonly opacity?: number;
+    readonly ior?: number;
+  };
+}
+
+export interface WavefrontSceneObject {
+  readonly id: number;
+  readonly kind: number;
+  readonly materialKind: number;
+  readonly flags: number;
+  readonly center: readonly [number, number, number] | readonly number[];
+  readonly halfExtent: readonly [number, number, number] | readonly number[];
+  readonly color: readonly [number, number, number, number] | readonly number[];
+  readonly emission: readonly [number, number, number, number] | readonly number[];
+  readonly roughness: number;
+  readonly metallic: number;
+  readonly opacity: number;
+  readonly ior: number;
+}
+
+export interface WavefrontMeshInput {
+  readonly id?: number;
+  readonly positions: readonly number[] | Float32Array;
+  readonly indices?: readonly number[] | Uint16Array | Uint32Array;
+  readonly normals?: readonly number[] | Float32Array | null;
+  readonly uvs?: readonly number[] | Float32Array | null;
+  readonly texcoords?: readonly number[] | Float32Array | null;
+  readonly uv?: readonly number[] | Float32Array | null;
+  readonly materialKind?: WavefrontMaterialKind;
+  readonly flags?: number;
+  readonly materialRefId?: number;
+  readonly materialId?: number;
+  readonly mediumRefId?: number;
+  readonly mediumId?: number;
+  readonly color?: RendererColor | readonly number[];
+  readonly baseColor?: RendererColor | readonly number[];
+  readonly albedo?: RendererColor | readonly number[];
+  readonly emission?: readonly [number, number, number, number?] | readonly number[];
+  readonly emissive?: readonly [number, number, number, number?] | readonly number[];
+  readonly roughness?: number;
+  readonly metallic?: number;
+  readonly opacity?: number;
+  readonly ior?: number;
+  readonly material?: {
+    readonly kind?: WavefrontMaterialKind;
+    readonly color?: RendererColor | readonly number[];
+    readonly baseColor?: RendererColor | readonly number[];
+    readonly emission?: readonly [number, number, number, number?] | readonly number[];
+    readonly emissive?: readonly [number, number, number, number?] | readonly number[];
+    readonly roughness?: number;
+    readonly metallic?: number;
+    readonly opacity?: number;
+    readonly ior?: number;
+    readonly id?: number;
+  };
+  readonly medium?: {
+    readonly id?: number;
+  };
+}
+
+export interface WavefrontTriangleRecord {
+  readonly triangleId: number;
+  readonly meshId: number;
+  readonly materialKind: number;
+  readonly flags: number;
+  readonly materialRefId: number;
+  readonly mediumRefId: number;
+  readonly v0: readonly number[];
+  readonly v1: readonly number[];
+  readonly v2: readonly number[];
+  readonly n0: readonly number[];
+  readonly n1: readonly number[];
+  readonly n2: readonly number[];
+  readonly uv0: readonly number[];
+  readonly uv1: readonly number[];
+  readonly uv2: readonly number[];
+  readonly color: readonly number[];
+  readonly emission: readonly number[];
+  readonly material: readonly number[];
+  readonly bounds: Readonly<{ min: readonly number[]; max: readonly number[] }>;
+  readonly centroid: readonly number[];
+}
+
+export interface WavefrontBvhNodeRecord {
+  readonly bounds: Readonly<{ min: readonly number[]; max: readonly number[] }>;
+  readonly firstTriangle: number;
+  readonly triangleCount: number;
+  readonly leftChild: number;
+  readonly rightChild: number;
+}
+
+export interface WavefrontBvhBuildLevel {
+  readonly start: number;
+  readonly count: number;
+}
+
+export interface WavefrontBvhSortStage {
+  readonly compareDistance: number;
+  readonly sequenceSize: number;
+}
+
+export interface WavefrontMeshAcceleration {
+  readonly nodes: readonly WavefrontBvhNodeRecord[];
+  readonly triangles: readonly WavefrontTriangleRecord[];
+}
+
+export type WavefrontAccelerationBuildMode = "gpu" | "cpu-debug";
+
+export interface WavefrontGpuMeshSource {
+  readonly vertices: Readonly<{
+    readonly buffer: ArrayBuffer;
+    readonly count: number;
+    readonly recordBytes: number;
+  }>;
+  readonly indices: Readonly<{
+    readonly buffer: ArrayBuffer;
+    readonly count: number;
+    readonly recordBytes: 4;
+  }>;
+  readonly meshes: Readonly<{
+    readonly buffer: ArrayBuffer;
+    readonly records: readonly Readonly<{
+      readonly id: number;
+      readonly positions: readonly number[];
+      readonly indices: readonly number[];
+      readonly normals: readonly number[] | null;
+      readonly uvs: readonly number[] | null;
+      readonly materialKind: number;
+      readonly flags: number;
+      readonly materialRefId: number;
+      readonly mediumRefId: number;
+      readonly color: readonly number[];
+      readonly emission: readonly number[];
+      readonly roughness: number;
+      readonly metallic: number;
+      readonly opacity: number;
+      readonly ior: number;
+    }>[];
+    readonly count: number;
+    readonly recordBytes: number;
+  }>;
+  readonly triangleCount: number;
+  readonly bvhNodeCapacity: number;
+}
+
+export interface WavefrontEmissiveTriangleIndexSource {
+  readonly buffer: ArrayBuffer;
+  readonly indices: readonly number[];
+  readonly count: number;
+  readonly capacity: number;
+  readonly recordBytes: 4;
+}
+
+export interface WavefrontPathTracingComputeConfig {
+  readonly width: number;
+  readonly height: number;
+  readonly maxDepth: number;
+  readonly tileSize: number;
+  readonly samplesPerPixel: number;
+  readonly tilePixelCapacity: number;
+  readonly sceneObjects: readonly WavefrontSceneObject[];
+  readonly sceneObjectCount: number;
+  readonly sceneObjectCapacity: number;
+  readonly accelerationBuildMode: WavefrontAccelerationBuildMode;
+  readonly gpuAccelerationBuildRequired: boolean;
+  readonly gpuMeshSource: WavefrontGpuMeshSource;
+  readonly meshAcceleration: WavefrontMeshAcceleration;
+  readonly emissiveTriangleIndices: WavefrontEmissiveTriangleIndexSource;
+  readonly emissiveTriangleCount: number;
+  readonly emissiveTriangleCapacity: number;
+  readonly triangleCount: number;
+  readonly triangleCapacity: number;
+  readonly bvhNodeCount: number;
+  readonly bvhNodeCapacity: number;
+  readonly bvhLeafSortCapacity: number;
+  readonly bvhSortStages: readonly WavefrontBvhSortStage[];
+  readonly bvhBuildLevels: readonly WavefrontBvhBuildLevel[];
+  readonly camera: Readonly<{
+    readonly position: readonly number[];
+    readonly forward: readonly number[];
+    readonly right: readonly number[];
+    readonly up: readonly number[];
+    readonly fovYDegrees: number;
+    readonly aspect: number;
+    readonly tanHalfFovY: number;
+  }>;
+  readonly environmentColor: readonly [number, number, number, number] | readonly number[];
+  readonly ambientColor: readonly [number, number, number, number] | readonly number[];
+  readonly environmentLighting: WavefrontEnvironmentLightingConfig;
+  readonly displayQuality: boolean;
+  readonly requiresMeshBvhForDisplayQuality: true;
+  readonly denoise: boolean;
+  readonly frameIndex: number;
+  readonly memory: WavefrontPathTracingMemoryEstimate;
+}
+
+export interface WavefrontEnvironmentLightingInput {
+  readonly environmentColor?: readonly [number, number, number, number?] | readonly number[];
+  readonly ambientColor?: readonly [number, number, number, number?] | readonly number[];
+  readonly horizonColor?: readonly [number, number, number, number?] | readonly number[];
+  readonly zenithColor?: readonly [number, number, number, number?] | readonly number[];
+  readonly sunDirection?: readonly [number, number, number] | readonly number[];
+  readonly sunColor?: readonly [number, number, number, number?] | readonly number[];
+  readonly intensity?: number;
+  readonly mode?: number;
+  readonly exposure?: number;
+}
+
+export interface WavefrontEnvironmentLightingConfig {
+  readonly environmentColor: readonly [number, number, number, number] | readonly number[];
+  readonly ambientColor: readonly [number, number, number, number] | readonly number[];
+  readonly horizonColor: readonly [number, number, number, number] | readonly number[];
+  readonly zenithColor: readonly [number, number, number, number] | readonly number[];
+  readonly sunDirection: readonly [number, number, number] | readonly number[];
+  readonly sunColor: readonly [number, number, number, number] | readonly number[];
+  readonly intensity: number;
+  readonly mode: number;
+  readonly exposure: number;
+}
+
+export interface WavefrontPathTracingMemoryEstimate {
+  readonly queueBytes: number;
+  readonly queuePairBytes: number;
+  readonly hitBytes: number;
+  readonly accumulationBytes: number;
+  readonly sceneObjectBytes: number;
+  readonly triangleBytes: number;
+  readonly bvhNodeBytes: number;
+  readonly bvhLeafReferenceBytes: number;
+  readonly emissiveTriangleMetadataBytes: number;
+  readonly configBytes: number;
+  readonly counterBytes: number;
+  readonly totalHotBufferBytes: number;
+}
+
+export interface CreateWavefrontPathTracingComputeRendererOptions {
+  readonly canvas?: HTMLCanvasElement | string;
+  readonly navigator?: Navigator | { gpu?: GPU };
+  readonly document?: Document;
+  readonly powerPreference?: GPUPowerPreference;
+  readonly alpha?: boolean;
+  readonly format?: GPUTextureFormat;
+  readonly width?: number;
+  readonly height?: number;
+  readonly maxDepth?: number;
+  readonly tileSize?: number;
+  readonly samplesPerPixel?: number;
+  readonly tilePixelCapacity?: number;
+  readonly sceneObjectCapacity?: number;
+  readonly sceneObjects?: readonly WavefrontSceneObjectInput[];
+  readonly mesh?: WavefrontMeshInput;
+  readonly meshes?: readonly WavefrontMeshInput[];
+  readonly triangleCapacity?: number;
+  readonly bvhNodeCapacity?: number;
+  readonly bvhLeafSortCapacity?: number;
+  readonly emissiveTriangleCapacity?: number;
+  readonly accelerationBuildMode?: WavefrontAccelerationBuildMode;
+  readonly camera?: WavefrontCameraOptions;
+  readonly environmentColor?: readonly [number, number, number, number?] | readonly number[];
+  readonly ambientColor?: readonly [number, number, number, number?] | readonly number[];
+  readonly environmentLighting?: WavefrontEnvironmentLightingInput;
+  readonly displayQuality?: boolean;
+  readonly denoise?: boolean;
+  readonly frameIndex?: number;
+}
+
+export interface WavefrontPathTracingComputeRenderer {
+  readonly canvas: HTMLCanvasElement;
+  readonly context: GPUCanvasContext;
+  readonly device: GPUDevice;
+  readonly format: GPUTextureFormat | string;
+  readonly config: WavefrontPathTracingComputeConfig;
+  renderOnce(): Readonly<{
+    frame: number;
+    width: number;
+    height: number;
+    maxDepth: number;
+    tiles: number;
+    tileSize: number;
+    samplesPerPixel: number;
+    screenRays: number;
+    primaryRays: number;
+    sceneObjectCount: number;
+    triangleCount: number;
+    emissiveTriangleCount: number;
+    bvhNodeCount: number;
+    displayQuality: boolean;
+    accelerationBuildMode: WavefrontAccelerationBuildMode;
+    gpuAccelerationBuildRequired: boolean;
+    memory: WavefrontPathTracingMemoryEstimate;
+  }>;
+  readOutputProbe(options?: { x?: number; y?: number }): Promise<
+    Readonly<{
+      x: number;
+      y: number;
+      rgba: readonly number[];
+      luminance: number;
+    }>
+  >;
+  updateSceneObjects(sceneObjects: readonly WavefrontSceneObjectInput[]): WavefrontPathTracingComputeConfig;
+  getSnapshot(): Readonly<{
+    frame: number;
+    width: number;
+    height: number;
+    maxDepth: number;
+    tiles: number;
+    tileSize: number;
+    samplesPerPixel: number;
+    sceneObjectCount: number;
+    triangleCount: number;
+    emissiveTriangleCount: number;
+    bvhNodeCount: number;
+    displayQuality: boolean;
+    accelerationBuildMode: WavefrontAccelerationBuildMode;
+    gpuAccelerationBuildRequired: boolean;
+    memory: WavefrontPathTracingMemoryEstimate;
+  }>;
+  destroy(): void;
+}
+
+export function normalizeWavefrontSceneObject(
+  input?: WavefrontSceneObjectInput,
+  index?: number
+): WavefrontSceneObject;
+export function createDefaultWavefrontSceneObjects(): readonly WavefrontSceneObject[];
+export function estimateWavefrontPathTracingMemory(options?: {
+  tilePixelCapacity?: number;
+  sceneObjectCapacity?: number;
+  triangleCapacity?: number;
+  bvhNodeCapacity?: number;
+  bvhLeafSortCapacity?: number;
+  emissiveTriangleCapacity?: number;
+}): WavefrontPathTracingMemoryEstimate;
+export function normalizeWavefrontMesh(
+  input: WavefrontMeshInput,
+  meshIndex?: number
+): Readonly<{
+  id: number;
+  positions: readonly number[];
+  indices: readonly number[];
+  normals: readonly number[] | null;
+  uvs: readonly number[] | null;
+  materialKind: number;
+  flags: number;
+  materialRefId: number;
+  mediumRefId: number;
+  color: readonly number[];
+  emission: readonly number[];
+  roughness: number;
+  metallic: number;
+  opacity: number;
+  ior: number;
+}>;
+export function createWavefrontMeshAcceleration(
+  meshes?: readonly WavefrontMeshInput[] | WavefrontMeshInput
+): WavefrontMeshAcceleration;
+export function createWavefrontGpuMeshSource(
+  meshes?: readonly WavefrontMeshInput[] | WavefrontMeshInput
+): WavefrontGpuMeshSource;
+export function createWavefrontEmissiveTriangleIndexSource(
+  meshes?: readonly WavefrontMeshInput[] | WavefrontMeshInput,
+  capacity?: number
+): WavefrontEmissiveTriangleIndexSource;
+export function createWavefrontBvhBuildLevels(
+  triangleCount: number
+): readonly WavefrontBvhBuildLevel[];
+export function createWavefrontBvhSortStages(
+  itemCount: number
+): readonly WavefrontBvhSortStage[];
+export function createWavefrontPathTracingComputeConfig(
+  options?: CreateWavefrontPathTracingComputeRendererOptions
+): WavefrontPathTracingComputeConfig;
+export function packWavefrontSceneObjects(
+  sceneObjects: readonly WavefrontSceneObjectInput[],
+  capacity?: number
+): Readonly<{
+  buffer: ArrayBuffer;
+  objects: readonly WavefrontSceneObject[];
+  count: number;
+  capacity: number;
+}>;
+export function packWavefrontTriangles(
+  triangles: readonly WavefrontTriangleRecord[],
+  capacity?: number
+): Readonly<{
+  buffer: ArrayBuffer;
+  triangles: readonly WavefrontTriangleRecord[];
+  count: number;
+  capacity: number;
+}>;
+export function packWavefrontBvhNodes(
+  nodes: readonly WavefrontBvhNodeRecord[],
+  capacity?: number
+): Readonly<{
+  buffer: ArrayBuffer;
+  nodes: readonly WavefrontBvhNodeRecord[];
+  count: number;
+  capacity: number;
+}>;
+export function supportsWavefrontPathTracingCompute(options?: {
+  navigator?: Navigator | { gpu?: GPU };
+}): boolean;
+export function createWavefrontPathTracingComputeRenderer(
+  options?: CreateWavefrontPathTracingComputeRendererOptions
+): Promise<WavefrontPathTracingComputeRenderer>;
+
+export const wavefrontPathTracingComputeLimits: Readonly<{
+  workgroupSize: 64;
+  rayRecordBytes: 80;
+  hitRecordBytes: 192;
+  sceneObjectRecordBytes: 96;
+  meshVertexRecordBytes: 48;
+  meshRangeRecordBytes: 96;
+  triangleRecordBytes: 208;
+  bvhNodeRecordBytes: 48;
+  bvhLeafReferenceRecordBytes: 16;
+  accumulationRecordBytes: 16;
+}>;
+export const wavefrontSceneObjectKinds: Readonly<{
+  sphere: 1;
+  box: 2;
+}>;
+export const wavefrontMaterialKinds: Readonly<{
+  diffuse: 0;
+  metal: 1;
+  dielectric: 2;
+  transparent: 3;
+  emissive: 4;
+}>;
 
 export interface RendererFrameEvent {
   frame: number;

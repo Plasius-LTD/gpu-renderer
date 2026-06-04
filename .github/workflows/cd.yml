@@ -82,6 +82,9 @@ jobs:
           if [ "${BUMP}" = "none" ]; then
             CURRENT_VER=$(node -p "require('./package.json').version")
             NEW_VER="v${CURRENT_VER}"
+            if ! git rev-parse -q --verify "refs/tags/${NEW_VER}" >/dev/null; then
+              git tag -a "${NEW_VER}" -m "chore: release ${NEW_VER} [skip ci]"
+            fi
           else
             # shellcheck disable=SC2086
             NEW_VER=$(sh -lc "$BUMP_CMD")
