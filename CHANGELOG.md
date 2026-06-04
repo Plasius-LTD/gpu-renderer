@@ -57,10 +57,15 @@ All notable changes to this project will be documented in this file.
     tail so active diffuse rays sample finite mesh light geometry more often
     without adding a ninth trace storage buffer or separate direct-light/shadow
     accumulation path.
+  - Added WebGPU environment-light portal records so rooms and studio interiors
+    can guide and gate sky/HDRI contribution through openings such as windows.
 
 - **Changed**
   - Wavefront environment misses now evaluate a direction-aware sky/key-light
     environment payload instead of only using a flat environment colour.
+  - Wavefront environment misses now respect `environmentPortalMode`; in
+    `guide-and-gate` mode, misses outside configured portals fall back to the
+    ambient residual instead of receiving full sky radiance.
   - Display-quality wavefront configuration now uses GPU-built mesh
     acceleration; CPU-built mesh acceleration is treated as debug-only.
   - Replaced the one-thread BVH internal-node build kernel with bottom-up
@@ -78,11 +83,17 @@ All notable changes to this project will be documented in this file.
     preview output.
   - Wavefront primary-ray jitter and bounce sampling now use mixed
     pixel/sample/bounce/frame seeds to reduce row-correlated low-sample noise.
+  - Wavefront frames now reuse a static GPU-built mesh BVH after the first
+    acceleration build and batch tile/sample tracing, tile output, optional
+    denoise, and presentation into one frame command submission.
 
 - **Fixed**
   - Fixed primary-ray jitter seeding to use absolute screen pixel ids instead
     of tile-local pixel ids, preventing repeated sampling patterns across
     tiles.
+  - Fixed environment portal WGSL reserved-word usage and now request the
+    required 9-storage-buffer trace limit from capable WebGPU adapters before
+    creating the mesh-BVH trace pipeline.
   - Fixed the WebGPU hit-buffer stride to match the WGSL `HitRecord` layout
     and added a continuation-queue capacity guard, preventing tile-row
     corruption in mesh BVH wavefront renders.

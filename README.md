@@ -200,6 +200,19 @@ weight so finite light guidance does not over-expose low-sample renders before
 full material PDFs/MIS are implemented. High-energy samples are clamped in
 linear radiance space to keep low-sample preview output stable while production
 sampling, temporal accumulation, and better material PDFs are hardened.
+For static mesh scenes, the GPU acceleration build is submitted once and then
+reused by subsequent frames. Per-frame tracing writes one dynamic uniform slot
+per tile/sample or post-process pass and batches tile tracing, tile output,
+optional denoise, and presentation into a single command submission. WebGPU
+still preserves ordering between dependent bounce passes, but the renderer no
+longer forces one CPU queue submission per tile/sample.
+Environment-light portals can additionally guide and gate sky/HDRI contribution
+through rectangular openings such as windows. `environmentPortalMode: "guide"`
+biases diffuse continuation rays toward configured openings, while
+`"guide-and-gate"` requires an environment miss to pass through a portal before
+it receives sky radiance; misses outside a portal fall back to the ambient
+residual. This keeps interior rooms from treating the whole sky as visible from
+every bounce.
 Texture sampling, dynamic TLAS updates, higher-grade LBVH/SAH construction,
 runtime execution behind the `@plasius/gpu-worker` lock-free queue, and broader
 material lookup remain follow-up work.

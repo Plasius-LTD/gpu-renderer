@@ -4,6 +4,7 @@ const DEFAULT_MAX_DEPTH = 6;
 const DEFAULT_TILE_SIZE = 128;
 const DEFAULT_SAMPLES_PER_PIXEL = 1;
 const DEFAULT_SCENE_OBJECT_CAPACITY = 128;
+const DEFAULT_ENVIRONMENT_PORTAL_CAPACITY = 32;
 const WORKGROUP_SIZE = 64;
 const RAY_RECORD_BYTES = 80;
 const HIT_RECORD_BYTES = 208;
@@ -14,9 +15,11 @@ const TRIANGLE_RECORD_BYTES = 208;
 const BVH_NODE_RECORD_BYTES = 48;
 const BVH_LEAF_REF_RECORD_BYTES = 16;
 const EMISSIVE_TRIANGLE_INDEX_BYTES = 4;
+const ENVIRONMENT_PORTAL_RECORD_BYTES = 96;
 const ACCUMULATION_RECORD_BYTES = 16;
-const CONFIG_BUFFER_BYTES = 256;
+const CONFIG_BUFFER_BYTES = 272;
 const COUNTER_BUFFER_BYTES = 16;
+const TRACE_STORAGE_BUFFER_BINDINGS = 9;
 const HIT_TYPE_SURFACE = 0;
 const HIT_TYPE_EMISSIVE = 1;
 const MATERIAL_DIFFUSE = 0;
@@ -48,6 +51,7 @@ const DEFAULT_ENVIRONMENT_LIGHTING = Object.freeze({
 
 export const wavefrontPathTracingComputeLimits = Object.freeze({
   workgroupSize: WORKGROUP_SIZE,
+  traceStorageBufferBindings: TRACE_STORAGE_BUFFER_BINDINGS,
   rayRecordBytes: RAY_RECORD_BYTES,
   hitRecordBytes: HIT_RECORD_BYTES,
   sceneObjectRecordBytes: SCENE_OBJECT_RECORD_BYTES,
@@ -58,6 +62,7 @@ export const wavefrontPathTracingComputeLimits = Object.freeze({
   bvhLeafReferenceRecordBytes: BVH_LEAF_REF_RECORD_BYTES,
   emissiveTriangleIndexBytes: EMISSIVE_TRIANGLE_INDEX_BYTES,
   emissiveTriangleMetadataRecordBytes: BVH_NODE_RECORD_BYTES,
+  environmentPortalRecordBytes: ENVIRONMENT_PORTAL_RECORD_BYTES,
   accumulationRecordBytes: ACCUMULATION_RECORD_BYTES,
 });
 
@@ -877,6 +882,135 @@ function resolveEnvironmentLighting(input, environmentColor, ambientColor) {
   });
 }
 
+function resolveEnvironmentPortalMode(value, hasPortals) {
+  if (value === undefined || value === null) {
+    return hasPortals ? 2 : 0;
+  }
+  if (Number.isInteger(value) && value >= 0 && value <= 2) {
+    return value;
+  }
+  if (value === "disabled") {
+    return 0;
+  }
+  if (value === "guide") {
+    return 1;
+  }
+  if (value === "guide-and-gate" || value === "gate") {
+    return 2;
+  }
+  throw new Error(
+    "environmentPortalMode must be disabled, guide, guide-and-gate, or an integer between 0 and 2."
+  );
+}
+
+function orthogonalPortalTangent(normal) {
+  if (Math.abs(normal[1]) < 0.92) {
+    return normalize(cross([0, 1, 0], normal), [1, 0, 0]);
+  }
+  return normalize(cross([1, 0, 0], normal), [0, 0, 1]);
+}
+
+function resolvePortalTangent(value, normal) {
+  const fallback = orthogonalPortalTangent(normal);
+  const tangent = asUnitVec3(value, fallback);
+  const projected = subtract(tangent, scale(normal, dot(tangent, normal)));
+  return normalize(projected, fallback);
+}
+
+function readPositiveFiniteNumber(name, value, fallback) {
+  const numeric = readFiniteNumber(name, value, fallback);
+  if (numeric <= 0) {
+    throw new Error(`${name} must be a positive finite number.`);
+  }
+  return numeric;
+}
+
+function readPortalExtent(name, value, halfName, halfValue) {
+  if (value !== undefined && value !== null) {
+    return readPositiveFiniteNumber(name, value, 1);
+  }
+  return readPositiveFiniteNumber(halfName, halfValue, 0.5) * 2;
+}
+
+function normalizeEnvironmentPortal(portal, index) {
+  if (!portal || typeof portal !== "object") {
+    throw new Error(`environmentPortals[${index}] must be an object.`);
+  }
+  const shape = portal.shape ?? portal.kind ?? "rectangle";
+  if (shape !== "rectangle") {
+    throw new Error(`environmentPortals[${index}].shape must be "rectangle".`);
+  }
+  const position = asVec3(portal.position ?? portal.center, [0, 0, 0]);
+  const normal = asUnitVec3(portal.normal, [0, 0, 1]);
+  const tangent = resolvePortalTangent(portal.tangent, normal);
+  const bitangent = normalize(cross(normal, tangent), [0, 1, 0]);
+  const width = readPortalExtent(
+    `environmentPortals[${index}].width`,
+    portal.width,
+    `environmentPortals[${index}].halfWidth`,
+    portal.halfWidth
+  );
+  const height = readPortalExtent(
+    `environmentPortals[${index}].height`,
+    portal.height,
+    `environmentPortals[${index}].halfHeight`,
+    portal.halfHeight
+  );
+  const radianceScale = Math.max(
+    0,
+    readFiniteNumber(
+      `environmentPortals[${index}].radianceScale`,
+      portal.radianceScale ?? portal.intensity,
+      1
+    )
+  );
+  return Object.freeze({
+    kind: 1,
+    flags: portal.twoSided === false ? 0 : 1,
+    position: Object.freeze([position[0], position[1], position[2], width * height]),
+    normal: Object.freeze([normal[0], normal[1], normal[2], radianceScale]),
+    tangent: Object.freeze([tangent[0], tangent[1], tangent[2], width * 0.5]),
+    bitangent: Object.freeze([bitangent[0], bitangent[1], bitangent[2], height * 0.5]),
+    color: Object.freeze(asColor(portal.color, [1, 1, 1, 1])),
+  });
+}
+
+function normalizeEnvironmentPortals(value) {
+  if (value === undefined || value === null) {
+    return Object.freeze([]);
+  }
+  if (!Array.isArray(value)) {
+    throw new Error("environmentPortals must be an array when provided.");
+  }
+  return Object.freeze(value.map(normalizeEnvironmentPortal));
+}
+
+function packEnvironmentPortals(portals, capacity) {
+  const bytes = new ArrayBuffer(capacity * ENVIRONMENT_PORTAL_RECORD_BYTES);
+  const data = new DataView(bytes);
+  const floatView = new Float32Array(bytes);
+  portals.forEach((portal, index) => {
+    const byteOffset = index * ENVIRONMENT_PORTAL_RECORD_BYTES;
+    const floatOffset = byteOffset / Float32Array.BYTES_PER_ELEMENT;
+    data.setUint32(byteOffset, portal.kind, true);
+    data.setUint32(byteOffset + 4, portal.flags, true);
+    data.setUint32(byteOffset + 8, 0, true);
+    data.setUint32(byteOffset + 12, 0, true);
+    writeVec4(floatView, floatOffset + 4, portal.position);
+    writeVec4(floatView, floatOffset + 8, portal.normal);
+    writeVec4(floatView, floatOffset + 12, portal.tangent);
+    writeVec4(floatView, floatOffset + 16, portal.bitangent);
+    writeVec4(floatView, floatOffset + 20, portal.color);
+  });
+  return Object.freeze({
+    buffer: bytes,
+    portals,
+    count: portals.length,
+    capacity,
+    recordBytes: ENVIRONMENT_PORTAL_RECORD_BYTES,
+  });
+}
+
 function getCanvasDimension(canvas, key, fallback) {
   const value = Number(canvas?.[key]);
   if (Number.isFinite(value) && value > 0) {
@@ -935,6 +1069,11 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     options.emissiveTriangleCapacity,
     0
   );
+  const environmentPortalCapacity = readNonNegativeInteger(
+    "environmentPortalCapacity",
+    options.environmentPortalCapacity,
+    0
+  );
   const queueBytes = tilePixelCapacity * RAY_RECORD_BYTES;
   const hitBytes = tilePixelCapacity * HIT_RECORD_BYTES;
   const accumulationBytes = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
@@ -944,6 +1083,8 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   const bvhLeafReferenceBytes = bvhLeafSortCapacity * BVH_LEAF_REF_RECORD_BYTES;
   const emissiveTriangleMetadataBytes =
     emissiveTriangleCapacity * BVH_NODE_RECORD_BYTES;
+  const environmentPortalBytes =
+    environmentPortalCapacity * ENVIRONMENT_PORTAL_RECORD_BYTES;
 
   return Object.freeze({
     queueBytes,
@@ -955,6 +1096,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     bvhNodeBytes,
     bvhLeafReferenceBytes,
     emissiveTriangleMetadataBytes,
+    environmentPortalBytes,
     configBytes: CONFIG_BUFFER_BYTES,
     counterBytes: COUNTER_BUFFER_BYTES,
     totalHotBufferBytes:
@@ -966,6 +1108,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
       bvhNodeBytes +
       bvhLeafReferenceBytes +
       emissiveTriangleMetadataBytes +
+      environmentPortalBytes +
       CONFIG_BUFFER_BYTES +
       COUNTER_BUFFER_BYTES,
   });
@@ -1048,6 +1191,25 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     environmentColor,
     ambientColor
   );
+  const environmentPortals = normalizeEnvironmentPortals(
+    options.environmentPortals ??
+      options.environmentLightPortals ??
+      options.environmentLighting?.environmentPortals
+  );
+  const environmentPortalCapacity = Math.max(
+    environmentPortals.length,
+    readNonNegativeInteger(
+      "environmentPortalCapacity",
+      options.environmentPortalCapacity,
+      DEFAULT_ENVIRONMENT_PORTAL_CAPACITY
+    )
+  );
+  const environmentPortalMode = resolveEnvironmentPortalMode(
+    options.environmentPortalMode ??
+      options.portalMode ??
+      options.environmentLighting?.environmentPortalMode,
+    environmentPortals.length > 0
+  );
 
   return Object.freeze({
     width,
@@ -1077,6 +1239,10 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     environmentColor: environmentLighting.environmentColor,
     ambientColor: environmentLighting.ambientColor,
     environmentLighting,
+    environmentPortals,
+    environmentPortalCount: environmentPortals.length,
+    environmentPortalCapacity,
+    environmentPortalMode,
     displayQuality: options.displayQuality === true,
     requiresMeshBvhForDisplayQuality: true,
     denoise: options.denoise !== false,
@@ -1088,6 +1254,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
       bvhNodeCapacity,
       bvhLeafSortCapacity,
       emissiveTriangleCapacity: emissiveTriangleIndices.capacity,
+      environmentPortalCapacity,
     }),
   });
 }
@@ -1298,6 +1465,10 @@ function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
   data.setUint32(244, buildRange.count ?? 0, true);
   data.setUint32(248, buildRange.sortItemCount ?? 0, true);
   data.setUint32(252, config.emissiveTriangleCount ?? 0, true);
+  data.setUint32(256, config.environmentPortalCount ?? 0, true);
+  data.setUint32(260, config.environmentPortalMode ?? 0, true);
+  data.setUint32(264, 0, true);
+  data.setUint32(268, 0, true);
   return bytes;
 }
 
@@ -1556,6 +1727,10 @@ struct FrameConfig {
   bvhBuildNodeCount: u32,
   bvhSortItemCount: u32,
   emissiveTriangleCount: u32,
+  environmentPortalCount: u32,
+  environmentPortalMode: u32,
+  _portalPad0: u32,
+  _portalPad1: u32,
 };
 
 struct Counters {
@@ -1579,6 +1754,18 @@ struct Candidate {
   mediumRefId: u32,
 };
 
+struct EnvironmentPortal {
+  kind: u32,
+  flags: u32,
+  _pad0: u32,
+  _pad1: u32,
+  position: vec4<f32>,
+  normal: vec4<f32>,
+  tangent: vec4<f32>,
+  bitangent: vec4<f32>,
+  color: vec4<f32>,
+};
+
 @group(0) @binding(0) var<storage, read_write> activeQueue: array<RayRecord>;
 @group(0) @binding(1) var<storage, read_write> nextQueue: array<RayRecord>;
 @group(0) @binding(2) var<storage, read_write> hits: array<HitRecord>;
@@ -1598,6 +1785,7 @@ struct Candidate {
 @group(0) @binding(16) var radianceImage: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(17) var finalDenoiseInputRadiance: texture_2d<f32>;
 @group(0) @binding(18) var denoisedOutputImage: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(19) var<storage, read> environmentPortals: array<EnvironmentPortal>;
 
 fn hash_u32(value: u32) -> u32 {
   var x = value;
@@ -1638,7 +1826,48 @@ fn saturate(value: f32) -> f32 {
   return clamp(value, 0.0, 1.0);
 }
 
-fn environment_radiance(direction: vec3<f32>) -> vec3<f32> {
+fn max_component(value: vec3<f32>) -> f32 {
+  return max(max(value.x, value.y), value.z);
+}
+
+fn environment_portal_radiance_scale(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+  if (config.environmentPortalCount == 0u || config.environmentPortalMode == 0u) {
+    return vec3<f32>(1.0);
+  }
+  var scale = vec3<f32>(0.0);
+  for (var portalIndex = 0u; portalIndex < config.environmentPortalCount; portalIndex = portalIndex + 1u) {
+    let portal = environmentPortals[portalIndex];
+    if (portal.kind == 1u) {
+      let portalNormal = safe_normalize(portal.normal.xyz, vec3<f32>(0.0, 0.0, 1.0));
+      let denominator = dot(direction, portalNormal);
+      let twoSided = (portal.flags & 1u) != 0u;
+      var facing = abs(denominator) > 0.0001;
+      if (!twoSided && denominator <= 0.0001) {
+        facing = false;
+      }
+      if (facing) {
+        let distance = dot(portal.position.xyz - origin, portalNormal) / denominator;
+        if (distance > 0.001) {
+          let hitPosition = origin + direction * distance;
+          let local = hitPosition - portal.position.xyz;
+          let tangent = safe_normalize(portal.tangent.xyz, vec3<f32>(1.0, 0.0, 0.0));
+          let bitangent = safe_normalize(portal.bitangent.xyz, vec3<f32>(0.0, 1.0, 0.0));
+          let u = dot(local, tangent);
+          let v = dot(local, bitangent);
+          if (abs(u) <= portal.tangent.w && abs(v) <= portal.bitangent.w) {
+            let areaWeight = clamp(sqrt(max(portal.position.w, 0.0001)), 0.25, 4.0);
+            let angleWeight = max(abs(denominator), 0.08);
+            let portalScale = portal.color.rgb * portal.normal.w * portal.color.a * areaWeight * angleWeight;
+            scale = max(scale, portalScale);
+          }
+        }
+      }
+    }
+  }
+  return scale;
+}
+
+fn environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
   let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
   let upFactor = saturate(rayDirection.y * 0.5 + 0.5);
   let sunDirection = safe_normalize(
@@ -1649,10 +1878,26 @@ fn environment_radiance(direction: vec3<f32>) -> vec3<f32> {
   let gradient =
     config.environmentHorizonColor.xyz * (1.0 - upFactor) +
     config.environmentZenithColor.xyz * upFactor;
+  let portalScale = environment_portal_radiance_scale(origin, rayDirection);
+  let portalHit = max_component(portalScale) > 0.0001;
   return (
     gradient +
     config.environmentSunColor.xyz * sunGlow
-  ) * max(config.environmentSunDirectionIntensity.w, 0.0001);
+  ) *
+    max(config.environmentSunDirectionIntensity.w, 0.0001) *
+    select(vec3<f32>(1.0), portalScale, portalHit);
+}
+
+fn gated_environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+  let portalScale = environment_portal_radiance_scale(origin, safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0)));
+  if (
+    config.environmentPortalCount > 0u &&
+    config.environmentPortalMode == 2u &&
+    max_component(portalScale) <= 0.0001
+  ) {
+    return config.ambientColor.xyz * 0.65;
+  }
+  return environment_radiance(origin, direction);
 }
 
 fn default_mesh_range() -> MeshRange {
@@ -1923,7 +2168,7 @@ fn make_ray(pixelIndex: u32) -> RayRecord {
 }
 
 fn make_miss(ray: RayRecord) -> HitRecord {
-  let radiance = environment_radiance(ray.direction.xyz);
+  let radiance = gated_environment_radiance(ray.origin.xyz, ray.direction.xyz);
   return HitRecord(
     ray.rayId,
     ray.sourcePixelId,
@@ -2409,6 +2654,21 @@ fn sample_emissive_triangle_direction(hit: HitRecord, seed: u32, fallback: vec3<
   return safe_normalize(lightPoint - hit.position.xyz, fallback);
 }
 
+fn sample_environment_portal_direction(hit: HitRecord, seed: u32, fallback: vec3<f32>) -> vec3<f32> {
+  if (config.environmentPortalCount == 0u || config.environmentPortalMode == 0u) {
+    return fallback;
+  }
+  let portalSlot = min(
+    u32(random01(seed + 211u) * f32(config.environmentPortalCount)),
+    config.environmentPortalCount - 1u
+  );
+  let portal = environmentPortals[portalSlot];
+  let u = (random01(seed + 223u) * 2.0 - 1.0) * portal.tangent.w;
+  let v = (random01(seed + 227u) * 2.0 - 1.0) * portal.bitangent.w;
+  let portalTarget = portal.position.xyz + portal.tangent.xyz * u + portal.bitangent.xyz * v;
+  return safe_normalize(portalTarget - hit.position.xyz, fallback);
+}
+
 fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult {
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   if (hit.materialKind == 1u) {
@@ -2448,8 +2708,17 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
   let canSampleLight = dot(hit.shadingNormal.xyz, guidedLight) > -0.04;
   let guideProbability = select(0.38, 0.72, ray.bounce == 0u);
   let useGuidedLight = canSampleLight && random01(seed + 37u) < guideProbability;
+  let guidedPortal = sample_environment_portal_direction(hit, seed, randomDiffuse);
+  let canSamplePortal = dot(hit.shadingNormal.xyz, guidedPortal) > -0.04;
+  let useGuidedPortal =
+    !useGuidedLight &&
+    canSamplePortal &&
+    config.environmentPortalCount > 0u &&
+    config.environmentPortalMode > 0u &&
+    random01(seed + 89u) < 0.58;
+  let guidedDirection = select(randomDiffuse, guidedPortal, useGuidedPortal);
   return ScatterResult(
-    vec4<f32>(select(randomDiffuse, guidedLight, useGuidedLight), 0.0),
+    vec4<f32>(select(guidedDirection, guidedLight, useGuidedLight), 0.0),
     select(0u, RAY_FLAG_GUIDED_EMISSIVE, useGuidedLight),
     0u,
     0u,
@@ -2658,6 +2927,32 @@ fn fragmentMain(in: VertexOut) -> @location(0) vec4<f32> {
 }
 `;
 
+function createWavefrontDeviceDescriptor(adapter, options = {}) {
+  const requiredLimits = { ...(options.requiredLimits ?? {}) };
+  const exposedStorageBufferLimit = Number(adapter?.limits?.maxStorageBuffersPerShaderStage);
+  if (Number.isFinite(exposedStorageBufferLimit)) {
+    if (exposedStorageBufferLimit < TRACE_STORAGE_BUFFER_BINDINGS) {
+      throw new Error(
+        `Wavefront mesh tracing requires maxStorageBuffersPerShaderStage>=${TRACE_STORAGE_BUFFER_BINDINGS}, ` +
+          `but this adapter exposes ${exposedStorageBufferLimit}.`
+      );
+    }
+    requiredLimits.maxStorageBuffersPerShaderStage = Math.max(
+      Number(requiredLimits.maxStorageBuffersPerShaderStage ?? 0),
+      TRACE_STORAGE_BUFFER_BINDINGS
+    );
+  }
+
+  const descriptor = { ...(options.deviceDescriptor ?? {}) };
+  if (Object.keys(requiredLimits).length > 0) {
+    descriptor.requiredLimits = {
+      ...(descriptor.requiredLimits ?? {}),
+      ...requiredLimits,
+    };
+  }
+  return Object.keys(descriptor).length > 0 ? descriptor : undefined;
+}
+
 export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   assertAnalyticDisplayQualityPolicy(options);
   const constants = getGpuUsageConstants();
@@ -2678,7 +2973,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     throw new Error("Unable to acquire a WebGPU adapter for wavefront path tracing.");
   }
 
-  const device = await adapter.requestDevice();
+  const device = await adapter.requestDevice(createWavefrontDeviceDescriptor(adapter, options));
   const context = canvas.getContext("webgpu");
   if (!context || typeof context.configure !== "function") {
     throw new Error("Canvas WebGPU context does not support configure().");
@@ -2758,24 +3053,35 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     Math.max(1, config.gpuMeshSource.meshes.count) * MESH_RANGE_RECORD_BYTES,
     "plasius.wavefront.meshRanges"
   );
+  const environmentPortalBuffer = createBuffer(
+    device,
+    constants.buffer.STORAGE | constants.buffer.COPY_DST,
+    Math.max(1, config.environmentPortalCapacity) * ENVIRONMENT_PORTAL_RECORD_BYTES,
+    "plasius.wavefront.environmentPortals"
+  );
   const bvhLeafRefBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
     Math.max(1, config.bvhLeafSortCapacity) * BVH_LEAF_REF_RECORD_BYTES,
     "plasius.wavefront.bvhLeafRefs"
   );
-  const configBuffer = createBuffer(
-    device,
-    constants.buffer.UNIFORM | constants.buffer.COPY_DST,
-    CONFIG_BUFFER_BYTES,
-    "plasius.wavefront.frameConfig"
-  );
+  const tiles = createTiles(config.width, config.height, config.tileSize);
   const uniformOffsetAlignment = Number(device?.limits?.minUniformBufferOffsetAlignment);
   const configBufferStride = alignTo(
     CONFIG_BUFFER_BYTES,
     Number.isFinite(uniformOffsetAlignment) && uniformOffsetAlignment > 0
       ? uniformOffsetAlignment
       : CONFIG_BUFFER_BYTES
+  );
+  const frameConfigSlotCount = Math.max(
+    1,
+    tiles.length * config.samplesPerPixel + tiles.length + (config.denoise ? 1 : 0)
+  );
+  const configBuffer = createBuffer(
+    device,
+    constants.buffer.UNIFORM | constants.buffer.COPY_DST,
+    frameConfigSlotCount * configBufferStride,
+    "plasius.wavefront.frameConfig"
   );
   const bvhBuildConfigSlots =
     1 + config.bvhSortStages.length + config.bvhBuildLevels.length;
@@ -2812,6 +3118,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   device.queue.writeBuffer(meshVertexBuffer, 0, config.gpuMeshSource.vertices.buffer);
   device.queue.writeBuffer(meshIndexBuffer, 0, config.gpuMeshSource.indices.buffer);
   device.queue.writeBuffer(meshRangeBuffer, 0, config.gpuMeshSource.meshes.buffer);
+  const packedEnvironmentPortals = packEnvironmentPortals(
+    config.environmentPortals,
+    Math.max(1, config.environmentPortalCapacity)
+  );
+  device.queue.writeBuffer(environmentPortalBuffer, 0, packedEnvironmentPortals.buffer);
 
   const radianceTexture = device.createTexture({
     label: "plasius.wavefront.radiance",
@@ -2873,6 +3184,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         visibility: constants.shader.COMPUTE,
         storageTexture: { access: "write-only", format: "rgba16float" },
       },
+      { binding: 19, visibility: constants.shader.COMPUTE, buffer: { type: "read-only-storage" } },
     ],
   });
   const accelerationBindGroupLayout = device.createBindGroupLayout({
@@ -3048,6 +3360,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         { binding: 8, resource: { buffer: triangleBuffer } },
         { binding: 9, resource: { buffer: bvhNodeBuffer } },
         { binding: 16, resource: radianceView },
+        { binding: 19, resource: { buffer: environmentPortalBuffer } },
       ],
     });
   }
@@ -3139,11 +3452,29 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   });
 
   let frame = 0;
-  const tiles = createTiles(config.width, config.height, config.tileSize);
+  let accelerationBuilt = !config.gpuAccelerationBuildRequired;
+  let accelerationBuildCount = 0;
+
+  function createFrameConfigWriter(frameIndex) {
+    let slot = 0;
+    return (tile, buildRange = {}) => {
+      if (slot >= frameConfigSlotCount) {
+        throw new Error("Wavefront frame config slot capacity exceeded.");
+      }
+      const offset = slot * configBufferStride;
+      slot += 1;
+      device.queue.writeBuffer(
+        configBuffer,
+        offset,
+        createConfigPayload(config, tile, frameIndex, buildRange)
+      );
+      return offset;
+    };
+  }
 
   function dispatchGpuAccelerationBuild(frameIndex) {
-    if (!config.gpuAccelerationBuildRequired) {
-      return;
+    if (!config.gpuAccelerationBuildRequired || accelerationBuilt) {
+      return false;
     }
     const buildTile = tiles[0] ?? { x: 0, y: 0, width: 1, height: 1 };
     const encoder = device.createCommandEncoder({
@@ -3201,30 +3532,24 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     }
     passEncoder.end();
     device.queue.submit([encoder.finish()]);
+    accelerationBuilt = true;
+    accelerationBuildCount += 1;
+    return true;
   }
 
-  function dispatchTileSample(tile, frameIndex, sampleIndex) {
-    const sampleWeight = 1 / config.samplesPerPixel;
-    const configPayload = createConfigPayload(config, tile, frameIndex, {
-      sampleIndex,
-      sampleWeight,
-    });
-    device.queue.writeBuffer(configBuffer, 0, configPayload);
-    const encoder = device.createCommandEncoder({
-      label: `plasius.wavefront.frame.${frameIndex}.tile.${tile.x}.${tile.y}.sample.${sampleIndex}`,
-    });
+  function encodeTileSample(encoder, tile, configOffset) {
     const passEncoder = encoder.beginComputePass({
       label: "plasius.wavefront.computePass",
     });
     const tileWorkgroups = Math.ceil((tile.width * tile.height) / WORKGROUP_SIZE);
     const capacityWorkgroups = Math.ceil(config.tilePixelCapacity / WORKGROUP_SIZE);
 
-    passEncoder.setBindGroup(0, bindGroups[0], [0]);
+    passEncoder.setBindGroup(0, bindGroups[0], [configOffset]);
     passEncoder.setPipeline(pipelines.generatePrimaryRays);
     passEncoder.dispatchWorkgroups(tileWorkgroups);
 
     for (let bounceIndex = 0; bounceIndex < config.maxDepth; bounceIndex += 1) {
-      passEncoder.setBindGroup(0, bindGroups[bounceIndex % 2], [0]);
+      passEncoder.setBindGroup(0, bindGroups[bounceIndex % 2], [configOffset]);
       passEncoder.setPipeline(pipelines.intersectActiveQueue);
       passEncoder.dispatchWorkgroups(capacityWorkgroups);
       passEncoder.setPipeline(pipelines.resolveSurfaceRecords);
@@ -3234,58 +3559,28 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     }
 
     passEncoder.end();
-    device.queue.submit([encoder.finish()]);
   }
 
-  function dispatchTileOutput(tile, frameIndex) {
-    const configPayload = createConfigPayload(config, tile, frameIndex, {
-      sampleIndex: 0,
-      sampleWeight: 1 / config.samplesPerPixel,
-    });
-    device.queue.writeBuffer(configBuffer, 0, configPayload);
-    const encoder = device.createCommandEncoder({
-      label: `plasius.wavefront.frame.${frameIndex}.tile.${tile.x}.${tile.y}.output`,
-    });
+  function encodeTileOutput(encoder, tile, configOffset) {
     const passEncoder = encoder.beginComputePass({
       label: "plasius.wavefront.outputPass",
     });
     const tileWorkgroups = Math.ceil((tile.width * tile.height) / WORKGROUP_SIZE);
 
-    passEncoder.setBindGroup(0, bindGroups[0], [0]);
+    passEncoder.setBindGroup(0, bindGroups[0], [configOffset]);
     passEncoder.setPipeline(pipelines.accumulateTerminalRadiance);
     passEncoder.dispatchWorkgroups(tileWorkgroups);
     passEncoder.end();
-    device.queue.submit([encoder.finish()]);
   }
 
-  function dispatchTile(tile, frameIndex) {
-    for (let sampleIndex = 0; sampleIndex < config.samplesPerPixel; sampleIndex += 1) {
-      dispatchTileSample(tile, frameIndex, sampleIndex);
-    }
-    dispatchTileOutput(tile, frameIndex);
-  }
-
-  function dispatchDenoise(frameIndex) {
+  function encodeDenoise(encoder, configOffset) {
     if (!config.denoise) {
       return;
     }
-    device.queue.writeBuffer(
-      configBuffer,
-      0,
-      createConfigPayload(
-        config,
-        { x: 0, y: 0, width: config.width, height: config.height },
-        frameIndex,
-        { sampleIndex: 0, sampleWeight: 1 / config.samplesPerPixel }
-      )
-    );
-    const encoder = device.createCommandEncoder({
-      label: `plasius.wavefront.frame.${frameIndex}.denoise`,
-    });
     const radiancePass = encoder.beginComputePass({
       label: "plasius.wavefront.denoiseRadiancePass",
     });
-    radiancePass.setBindGroup(0, denoiseRadianceBindGroup, [0]);
+    radiancePass.setBindGroup(0, denoiseRadianceBindGroup, [configOffset]);
     radiancePass.setPipeline(pipelines.denoiseLinearRadiance);
     radiancePass.dispatchWorkgroups(Math.ceil(config.width / 8), Math.ceil(config.height / 8));
     radiancePass.end();
@@ -3293,18 +3588,14 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     const resolvePass = encoder.beginComputePass({
       label: "plasius.wavefront.denoiseResolvePass",
     });
-    resolvePass.setBindGroup(0, denoiseResolveBindGroup, [0]);
+    resolvePass.setBindGroup(0, denoiseResolveBindGroup, [configOffset]);
     resolvePass.setPipeline(pipelines.resolveDenoisedOutputImage);
     resolvePass.dispatchWorkgroups(Math.ceil(config.width / 8), Math.ceil(config.height / 8));
     resolvePass.end();
-    device.queue.submit([encoder.finish()]);
   }
 
-  function present() {
+  function encodePresent(encoder) {
     const texture = context.getCurrentTexture();
-    const encoder = device.createCommandEncoder({
-      label: `plasius.wavefront.present.${frame}`,
-    });
     const passEncoder = encoder.beginRenderPass({
       label: "plasius.wavefront.presentPass",
       colorAttachments: [
@@ -3320,17 +3611,44 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     passEncoder.setBindGroup(0, presentBindGroup);
     passEncoder.draw(3);
     passEncoder.end();
+  }
+
+  function dispatchFrame(frameIndex) {
+    const writeFrameConfig = createFrameConfigWriter(frameIndex);
+    const encoder = device.createCommandEncoder({
+      label: `plasius.wavefront.frame.${frameIndex}.batched`,
+    });
+    for (const tile of tiles) {
+      for (let sampleIndex = 0; sampleIndex < config.samplesPerPixel; sampleIndex += 1) {
+        const configOffset = writeFrameConfig(tile, {
+          sampleIndex,
+          sampleWeight: 1 / config.samplesPerPixel,
+        });
+        encodeTileSample(encoder, tile, configOffset);
+      }
+      const outputConfigOffset = writeFrameConfig(tile, {
+        sampleIndex: 0,
+        sampleWeight: 1 / config.samplesPerPixel,
+      });
+      encodeTileOutput(encoder, tile, outputConfigOffset);
+    }
+    if (config.denoise) {
+      const denoiseConfigOffset = writeFrameConfig(
+        { x: 0, y: 0, width: config.width, height: config.height },
+        { sampleIndex: 0, sampleWeight: 1 / config.samplesPerPixel }
+      );
+      encodeDenoise(encoder, denoiseConfigOffset);
+    }
+    encodePresent(encoder);
     device.queue.submit([encoder.finish()]);
+    return 1;
   }
 
   function renderOnce() {
     frame += 1;
-    dispatchGpuAccelerationBuild(frame + config.frameIndex);
-    for (const tile of tiles) {
-      dispatchTile(tile, frame + config.frameIndex);
-    }
-    dispatchDenoise(frame + config.frameIndex);
-    present();
+    const frameIndex = frame + config.frameIndex;
+    const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex);
+    const frameSubmissionCount = dispatchFrame(frameIndex);
     return Object.freeze({
       frame,
       width: config.width,
@@ -3344,10 +3662,17 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       sceneObjectCount: config.sceneObjectCount,
       triangleCount: config.triangleCount,
       emissiveTriangleCount: config.emissiveTriangleCount,
+      environmentPortalCount: config.environmentPortalCount,
+      environmentPortalMode: config.environmentPortalMode,
       bvhNodeCount: config.bvhNodeCount,
       displayQuality: config.displayQuality,
       accelerationBuildMode: config.accelerationBuildMode,
       gpuAccelerationBuildRequired: config.gpuAccelerationBuildRequired,
+      accelerationBuildSubmitted,
+      accelerationBuilt,
+      accelerationBuildCount,
+      commandSubmissions: frameSubmissionCount + (accelerationBuildSubmitted ? 1 : 0),
+      frameConfigSlots: frameConfigSlotCount,
       memory: config.memory,
     });
   }
@@ -3416,10 +3741,15 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       sceneObjectCount: config.sceneObjectCount,
       triangleCount: config.triangleCount,
       emissiveTriangleCount: config.emissiveTriangleCount,
+      environmentPortalCount: config.environmentPortalCount,
+      environmentPortalMode: config.environmentPortalMode,
       bvhNodeCount: config.bvhNodeCount,
       displayQuality: config.displayQuality,
       accelerationBuildMode: config.accelerationBuildMode,
       gpuAccelerationBuildRequired: config.gpuAccelerationBuildRequired,
+      accelerationBuilt,
+      accelerationBuildCount,
+      frameConfigSlots: frameConfigSlotCount,
       memory: config.memory,
     });
   }
@@ -3435,6 +3765,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     meshVertexBuffer.destroy?.();
     meshIndexBuffer.destroy?.();
     meshRangeBuffer.destroy?.();
+    environmentPortalBuffer.destroy?.();
     bvhLeafRefBuffer.destroy?.();
     configBuffer.destroy?.();
     bvhBuildConfigBuffer.destroy?.();

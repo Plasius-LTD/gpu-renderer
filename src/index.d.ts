@@ -209,6 +209,42 @@ export interface WavefrontEmissiveTriangleIndexSource {
   readonly recordBytes: 4;
 }
 
+export type WavefrontEnvironmentPortalMode =
+  | 0
+  | 1
+  | 2
+  | "disabled"
+  | "guide"
+  | "guide-and-gate"
+  | "gate";
+
+export interface WavefrontEnvironmentPortalInput {
+  readonly kind?: "rectangle";
+  readonly shape?: "rectangle";
+  readonly position?: readonly [number, number, number] | readonly number[];
+  readonly center?: readonly [number, number, number] | readonly number[];
+  readonly normal?: readonly [number, number, number] | readonly number[];
+  readonly tangent?: readonly [number, number, number] | readonly number[];
+  readonly width?: number;
+  readonly height?: number;
+  readonly halfWidth?: number;
+  readonly halfHeight?: number;
+  readonly radianceScale?: number;
+  readonly intensity?: number;
+  readonly color?: readonly [number, number, number, number?] | readonly number[];
+  readonly twoSided?: boolean;
+}
+
+export interface WavefrontEnvironmentPortalRecord {
+  readonly kind: 1;
+  readonly flags: number;
+  readonly position: readonly [number, number, number, number] | readonly number[];
+  readonly normal: readonly [number, number, number, number] | readonly number[];
+  readonly tangent: readonly [number, number, number, number] | readonly number[];
+  readonly bitangent: readonly [number, number, number, number] | readonly number[];
+  readonly color: readonly [number, number, number, number] | readonly number[];
+}
+
 export interface WavefrontPathTracingComputeConfig {
   readonly width: number;
   readonly height: number;
@@ -226,6 +262,10 @@ export interface WavefrontPathTracingComputeConfig {
   readonly emissiveTriangleIndices: WavefrontEmissiveTriangleIndexSource;
   readonly emissiveTriangleCount: number;
   readonly emissiveTriangleCapacity: number;
+  readonly environmentPortals: readonly WavefrontEnvironmentPortalRecord[];
+  readonly environmentPortalCount: number;
+  readonly environmentPortalCapacity: number;
+  readonly environmentPortalMode: 0 | 1 | 2;
   readonly triangleCount: number;
   readonly triangleCapacity: number;
   readonly bvhNodeCount: number;
@@ -262,6 +302,8 @@ export interface WavefrontEnvironmentLightingInput {
   readonly intensity?: number;
   readonly mode?: number;
   readonly exposure?: number;
+  readonly environmentPortals?: readonly WavefrontEnvironmentPortalInput[];
+  readonly environmentPortalMode?: WavefrontEnvironmentPortalMode;
 }
 
 export interface WavefrontEnvironmentLightingConfig {
@@ -286,6 +328,7 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly bvhNodeBytes: number;
   readonly bvhLeafReferenceBytes: number;
   readonly emissiveTriangleMetadataBytes: number;
+  readonly environmentPortalBytes: number;
   readonly configBytes: number;
   readonly counterBytes: number;
   readonly totalHotBufferBytes: number;
@@ -295,6 +338,8 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly canvas?: HTMLCanvasElement | string;
   readonly navigator?: Navigator | { gpu?: GPU };
   readonly document?: Document;
+  readonly deviceDescriptor?: GPUDeviceDescriptor;
+  readonly requiredLimits?: Partial<Record<string, number>>;
   readonly powerPreference?: GPUPowerPreference;
   readonly alpha?: boolean;
   readonly format?: GPUTextureFormat;
@@ -312,6 +357,11 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly bvhNodeCapacity?: number;
   readonly bvhLeafSortCapacity?: number;
   readonly emissiveTriangleCapacity?: number;
+  readonly environmentPortalCapacity?: number;
+  readonly environmentPortals?: readonly WavefrontEnvironmentPortalInput[];
+  readonly environmentLightPortals?: readonly WavefrontEnvironmentPortalInput[];
+  readonly environmentPortalMode?: WavefrontEnvironmentPortalMode;
+  readonly portalMode?: WavefrontEnvironmentPortalMode;
   readonly accelerationBuildMode?: WavefrontAccelerationBuildMode;
   readonly camera?: WavefrontCameraOptions;
   readonly environmentColor?: readonly [number, number, number, number?] | readonly number[];
@@ -341,10 +391,17 @@ export interface WavefrontPathTracingComputeRenderer {
     sceneObjectCount: number;
     triangleCount: number;
     emissiveTriangleCount: number;
+    environmentPortalCount: number;
+    environmentPortalMode: 0 | 1 | 2;
     bvhNodeCount: number;
     displayQuality: boolean;
     accelerationBuildMode: WavefrontAccelerationBuildMode;
     gpuAccelerationBuildRequired: boolean;
+    accelerationBuildSubmitted: boolean;
+    accelerationBuilt: boolean;
+    accelerationBuildCount: number;
+    commandSubmissions: number;
+    frameConfigSlots: number;
     memory: WavefrontPathTracingMemoryEstimate;
   }>;
   readOutputProbe(options?: { x?: number; y?: number }): Promise<
@@ -367,10 +424,15 @@ export interface WavefrontPathTracingComputeRenderer {
     sceneObjectCount: number;
     triangleCount: number;
     emissiveTriangleCount: number;
+    environmentPortalCount: number;
+    environmentPortalMode: 0 | 1 | 2;
     bvhNodeCount: number;
     displayQuality: boolean;
     accelerationBuildMode: WavefrontAccelerationBuildMode;
     gpuAccelerationBuildRequired: boolean;
+    accelerationBuilt: boolean;
+    accelerationBuildCount: number;
+    frameConfigSlots: number;
     memory: WavefrontPathTracingMemoryEstimate;
   }>;
   destroy(): void;
@@ -465,13 +527,16 @@ export function createWavefrontPathTracingComputeRenderer(
 export const wavefrontPathTracingComputeLimits: Readonly<{
   workgroupSize: 64;
   rayRecordBytes: 80;
-  hitRecordBytes: 192;
+  hitRecordBytes: 208;
   sceneObjectRecordBytes: 96;
   meshVertexRecordBytes: 48;
   meshRangeRecordBytes: 96;
   triangleRecordBytes: 208;
   bvhNodeRecordBytes: 48;
   bvhLeafReferenceRecordBytes: 16;
+  emissiveTriangleIndexBytes: 4;
+  emissiveTriangleMetadataRecordBytes: 48;
+  environmentPortalRecordBytes: 96;
   accumulationRecordBytes: 16;
 }>;
 export const wavefrontSceneObjectKinds: Readonly<{
