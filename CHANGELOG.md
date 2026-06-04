@@ -14,12 +14,64 @@ All notable changes to this project will be documented in this file.
 - **Added**
   - Added wavefront path-tracing queue/buffer contracts and bounce-schedule
     metadata beneath `createRayTracingRenderPlan(...)`.
+  - Added a tiled WebGPU wavefront compute renderer with scene-object buffers,
+    GPU ray queues, hit records, material continuation, emissive/environment
+    termination, ambient residual expiry, denoise resolve, and presentation.
+  - Added triangle mesh normalization, GPU-source mesh packing, triangle/BVH
+    buffer contracts, and display-quality guards requiring mesh BVH input.
+  - Added GPU mesh-source buffer packing and GPU build-pass entry points for
+    triangle assembly, GPU Morton leaf sorting, sorted leaf materialization,
+    and deterministic, level-concurrent BVH node construction.
+  - Added public BVH sort-stage and build-level scheduling metadata for worker/queue
+    integration.
+  - Expanded GPU hit records with primitive id, material reference, medium
+    reference, barycentric coordinates, and UV coordinates.
+  - Added mesh BVH tests for flat normals, smooth normals, stable triangle
+    identity, leaf splitting, and GPU record layout stability.
+  - Added public scene-object packing/config helpers for Product Studio and
+    other package consumers.
+  - Updated the browser demo to mount the wavefront compute renderer directly
+    and consume a `@plasius/gpu-lighting` environment preset.
+  - Added `samplesPerPixel` support for GPU wavefront renders so quality
+    presets can accumulate multiple primary-ray samples without increasing
+    tile-queue buffer size.
+  - Added a two-stage full-frame GPU denoise pass that filters linear
+    `rgba16float` radiance through a scratch texture after all tiles complete,
+    then tone-maps into the final `rgba8unorm` output while avoiding tile-local
+    denoise artifacts.
+  - Added GPU emissive-triangle continuation guidance stored in the BVH buffer
+    tail so active diffuse rays sample finite mesh light geometry more often
+    without adding a ninth trace storage buffer or separate direct-light/shadow
+    accumulation path.
 
 - **Changed**
-  - (placeholder)
+  - Wavefront environment misses now evaluate a direction-aware sky/key-light
+    environment payload instead of only using a flat environment colour.
+  - Display-quality wavefront configuration now uses GPU-built mesh
+    acceleration; CPU-built mesh acceleration is treated as debug-only.
+  - Replaced the one-thread BVH internal-node build kernel with bottom-up
+    level dispatches so parent nodes at the same depth build concurrently on
+    the GPU.
+  - Reordered mesh BVH leaves on the GPU by Morton-style centroid keys before
+    internal node construction, avoiding author/index-order BVH layout as the
+    display-quality baseline.
+  - Removed the direct `@plasius/gpu-shared` dependency from the renderer to
+    keep shared demo adapters dependent on the renderer rather than the reverse.
+  - Wavefront surface resolution now removes the separate direct key-light
+    accumulation term, clamps high-energy path samples in linear radiance, and
+    applies a bounded estimator weight to guided emissive hits while relying on
+    active emissive/environment path hits plus ambient residual expiry for
+    preview output.
+  - Wavefront primary-ray jitter and bounce sampling now use mixed
+    pixel/sample/bounce/frame seeds to reduce row-correlated low-sample noise.
 
 - **Fixed**
-  - (placeholder)
+  - Fixed primary-ray jitter seeding to use absolute screen pixel ids instead
+    of tile-local pixel ids, preventing repeated sampling patterns across
+    tiles.
+  - Fixed the WebGPU hit-buffer stride to match the WGSL `HitRecord` layout
+    and added a continuation-queue capacity guard, preventing tile-row
+    corruption in mesh BVH wavefront renders.
 
 - **Security**
   - (placeholder)
