@@ -76,6 +76,9 @@ function resolveWavefrontPathTracingComputeStorageFormat(format = DEFAULT_FORMAT
   }
   return "rgba8unorm";
 }
+function getOutputProbeBytesPerPixel(config) {
+  return config.format === "rgba16float" ? 8 : 4;
+}
 function writeVec4(target, offset, value) {
   target.set(value, offset);
 }
@@ -95,6 +98,8 @@ function buildConfigBufferData(config, frameIndex, tile) {
   dataView.setUint32(40, tile.height, true);
   dataView.setUint32(44, tile.pixelCount, true);
   dataView.setUint32(48, config.sceneObjectCount, true);
+  dataView.setUint32(52, tile.width, true);
+  dataView.setUint32(56, tile.height, true);
   const floatView = new Float32Array(buffer);
   writeVec4(floatView, 16, CAMERA.origin);
   writeVec4(floatView, 20, CAMERA.forward);
@@ -271,10 +276,10 @@ function buildSceneObjectBufferData(config) {
   return buffer;
 }
 function getOutputProbeByteLength(config) {
-  return alignTo256(config.width * 4) * config.height;
+  return alignTo256(config.width * getOutputProbeBytesPerPixel(config)) * config.height;
 }
 function getOutputProbeBytesPerRow(config) {
-  return alignTo256(config.width * 4);
+  return alignTo256(config.width * getOutputProbeBytesPerPixel(config));
 }
 async function readOutputProbeBuffer(device, resources, config) {
   const { GPUMapMode } = assertGpuConstants();
@@ -292,7 +297,8 @@ async function readOutputProbeBuffer(device, resources, config) {
   let luminanceTotal = 0;
   for (let y = 0; y < config.height; y += stepY) {
     for (let x = 0; x < config.width; x += stepX) {
-      const offset = y * bytesPerRow + x * 4;
+      const bytesPerPixel = getOutputProbeBytesPerPixel(config);
+      const offset = y * bytesPerRow + x * bytesPerPixel;
       const r = bytes[offset] ?? 0;
       const g = bytes[offset + 1] ?? 0;
       const b = bytes[offset + 2] ?? 0;
@@ -827,8 +833,8 @@ struct RenderConfig {
   tileHeight: u32,
   tilePixelCount: u32,
   sceneObjectCount: u32,
-  _configPad0: u32,
-  _configPad1: u32,
+  tileActualWidth: u32,
+  tileActualHeight: u32,
   _configPad2: u32,
   cameraOrigin: vec4<f32>,
   cameraForward: vec4<f32>,
@@ -1273,8 +1279,8 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
   if (tilePixelId >= total) {
     return;
   }
-  let localX = tilePixelId % config.tileWidth;
-  let localY = tilePixelId / config.tileWidth;
+  let localX = tilePixelId % config.tileActualWidth;
+  let localY = tilePixelId / config.tileActualWidth;
   let x = config.tileOriginX + localX;
   let y = config.tileOriginY + localY;
   let sourcePixelId = y * config.width + x;
@@ -1417,8 +1423,8 @@ fn resolveOutput(@builtin(global_invocation_id) globalId: vec3<u32>) {
   if (tilePixelId >= total) {
     return;
   }
-  let localX = tilePixelId % config.tileWidth;
-  let localY = tilePixelId / config.tileWidth;
+  let localX = tilePixelId % config.tileActualWidth;
+  let localY = tilePixelId / config.tileActualWidth;
   let x = config.tileOriginX + localX;
   let y = config.tileOriginY + localY;
   let sourcePixelId = y * config.width + x;

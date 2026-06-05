@@ -482,7 +482,7 @@ export interface WavefrontPathTracingComputeStats {
     dispatch: Readonly<{
       workgroupSize: number;
       primaryWorkgroups: number;
-      indirectDispatch: false;
+      indirectDispatch: true;
       tileWidth: number;
       tileHeight: number;
       tileCount: number;
