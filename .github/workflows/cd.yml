@@ -83,6 +83,39 @@ jobs:
             CURRENT_VER=$(node -p "require('./package.json').version")
             NEW_VER="v${CURRENT_VER}"
           else
+            CURRENT_VER=$(node -p "require('./package.json').version")
+            NAME=$(node -p "require('./package.json').name")
+            REGISTRY_VER=$(npm view "$NAME" version 2>/dev/null || true)
+
+            if [ -n "$REGISTRY_VER" ]; then
+              BASE_VER=$(node - "$CURRENT_VER" "$REGISTRY_VER" <<'NODE'
+const [localVersion, registryVersion] = process.argv.slice(2);
+
+const parse = (value) => value.replace(/^v/, '').split('-')[0].split('.').map((part) => Number(part) || 0);
+const compare = (left, right) => {
+  for (let i = 0; i < 3; i++) {
+    const diff = (left[i] || 0) - (right[i] || 0);
+    if (diff !== 0) {
+      return diff;
+    }
+  }
+  return 0;
+};
+
+const local = parse(localVersion);
+const registry = parse(registryVersion);
+if (compare(registry, local) > 0) {
+  process.stdout.write(registryVersion);
+} else {
+  process.stdout.write(localVersion);
+}
+NODE
+)
+              if [ "$BASE_VER" != "$CURRENT_VER" ]; then
+                npm version "$BASE_VER" --no-git-tag-version --allow-same-version --message "chore: align package version for release"
+              fi
+            fi
+
             # shellcheck disable=SC2086
             NEW_VER=$(sh -lc "$BUMP_CMD")
           fi
@@ -221,7 +254,9 @@ jobs:
 
           git add "$FILE"
           git commit -m "docs(changelog): release v${VERSION}"
-          git push
+          CHANGELOG_BRANCH="changelog/v${VERSION}-${GITHUB_RUN_ID}"
+          git checkout -B "$CHANGELOG_BRANCH"
+          git push --set-upstream origin "$CHANGELOG_BRANCH"
 
       - name: Create GitHub Release draft (immutable-safe)
         env:
