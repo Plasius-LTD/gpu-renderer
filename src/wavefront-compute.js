@@ -194,6 +194,33 @@ function normalize(value, fallback = [0, 0, 1]) {
   return [value[0] / length, value[1] / length, value[2] / length];
 }
 
+function hashUint32(value) {
+  let x = value >>> 0;
+  x = ((((x >>> 16) ^ x) >>> 0) * 0x45d9f3b) >>> 0;
+  x = ((((x >>> 16) ^ x) >>> 0) * 0x45d9f3b) >>> 0;
+  return ((x >>> 16) ^ x) >>> 0;
+}
+
+function mixSeed(pixelId, sampleId, bounce, frameIndex, dimension) {
+  let x =
+    ((pixelId >>> 0) * 747796405) ^
+    ((sampleId >>> 0) * 2891336453) ^
+    ((bounce >>> 0) * 277803737) ^
+    ((frameIndex >>> 0) * 1442695041) ^
+    ((dimension >>> 0) * 1597334677);
+  x >>>= 0;
+  x ^= x >>> 16;
+  x = (x * 0x7feb352d) >>> 0;
+  x ^= x >>> 15;
+  x = (x * 0x846ca68b) >>> 0;
+  x ^= x >>> 16;
+  return x >>> 0;
+}
+
+function random01FromSeed(seed) {
+  return (hashUint32(seed) & 0x00ffffff) / 16777215;
+}
+
 function getArrayLikeLength(value) {
   return Array.isArray(value) || ArrayBuffer.isView(value) ? value.length : 0;
 }
@@ -882,6 +909,36 @@ function resolveEnvironmentLighting(input, environmentColor, ambientColor) {
   });
 }
 
+function evaluateReferenceEnvironmentRadiance(config, origin, direction) {
+  void origin;
+  const rayDirection = normalize(direction, [0, 1, 0]);
+  const upFactor = clamp(rayDirection[1] * 0.5 + 0.5, 0, 1);
+  const sunDirection = normalize(
+    config.environmentLighting?.sunDirection ?? DEFAULT_ENVIRONMENT_LIGHTING.sunDirection,
+    DEFAULT_ENVIRONMENT_LIGHTING.sunDirection
+  );
+  const sunGlow = Math.pow(clamp(dot(rayDirection, sunDirection), 0, 1), 192);
+  const horizonColor =
+    config.environmentLighting?.horizonColor ?? DEFAULT_ENVIRONMENT_LIGHTING.horizonColor;
+  const zenithColor =
+    config.environmentLighting?.zenithColor ?? DEFAULT_ENVIRONMENT_LIGHTING.zenithColor;
+  const sunColor = config.environmentLighting?.sunColor ?? DEFAULT_ENVIRONMENT_LIGHTING.sunColor;
+  const intensity = Math.max(
+    0.0001,
+    Number(config.environmentLighting?.intensity ?? DEFAULT_ENVIRONMENT_LIGHTING.intensity)
+  );
+
+  return Object.freeze([
+    (horizonColor[0] * (1 - upFactor) + zenithColor[0] * upFactor + sunColor[0] * sunGlow) *
+      intensity,
+    (horizonColor[1] * (1 - upFactor) + zenithColor[1] * upFactor + sunColor[1] * sunGlow) *
+      intensity,
+    (horizonColor[2] * (1 - upFactor) + zenithColor[2] * upFactor + sunColor[2] * sunGlow) *
+      intensity,
+    1,
+  ]);
+}
+
 function resolveEnvironmentPortalMode(value, hasPortals) {
   if (value === undefined || value === null) {
     return hasPortals ? 2 : 0;
@@ -1487,6 +1544,229 @@ function createTiles(width, height, tileSize) {
     }
   }
   return Object.freeze(tiles);
+}
+
+function normalizeReferenceTile(config, tileInput = {}) {
+  const tileX = clamp(
+    readNonNegativeInteger("tile.x", tileInput.x, 0),
+    0,
+    Math.max(0, config.width - 1)
+  );
+  const tileY = clamp(
+    readNonNegativeInteger("tile.y", tileInput.y, 0),
+    0,
+    Math.max(0, config.height - 1)
+  );
+  const tileWidth = clamp(
+    readPositiveInteger("tile.width", tileInput.width, config.width - tileX),
+    1,
+    config.width - tileX
+  );
+  const tileHeight = clamp(
+    readPositiveInteger("tile.height", tileInput.height, config.height - tileY),
+    1,
+    config.height - tileY
+  );
+
+  return Object.freeze({
+    x: tileX,
+    y: tileY,
+    width: tileWidth,
+    height: tileHeight,
+  });
+}
+
+function repairReferenceShadingNormal(geometricNormal, shadingNormal) {
+  const normal = normalize(shadingNormal, geometricNormal);
+  return dot(normal, geometricNormal) < 0 ? scale(normal, -1) : normal;
+}
+
+function readOptionalMaxDistance(value) {
+  if (value === undefined || value === null) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw new Error("maxDistance must be a positive finite number when provided.");
+  }
+  return numeric;
+}
+
+export function createWavefrontReferenceRay(config, options = {}) {
+  if (!config || typeof config !== "object") {
+    throw new Error("config must be a wavefront path tracing config.");
+  }
+
+  const tile = normalizeReferenceTile(config, options.tile);
+  const tilePixelCount = tile.width * tile.height;
+  const pixelIndex = readNonNegativeInteger("pixelIndex", options.pixelIndex, 0);
+  if (pixelIndex >= tilePixelCount) {
+    throw new Error(`pixelIndex ${pixelIndex} exceeds tile capacity ${tilePixelCount}.`);
+  }
+
+  const sampleIndex = readNonNegativeInteger("sampleIndex", options.sampleIndex, 0);
+  const frameIndex = readNonNegativeInteger("frameIndex", options.frameIndex, config.frameIndex ?? 0);
+  const jitterScale = clamp(readFiniteNumber("jitterScale", options.jitterScale, 0.35), 0, 1);
+  const localX = pixelIndex % tile.width;
+  const localY = Math.floor(pixelIndex / tile.width);
+  const pixelX = tile.x + localX;
+  const pixelY = tile.y + localY;
+  const sourcePixelId = pixelY * config.width + pixelX;
+  const jitterX = random01FromSeed(mixSeed(sourcePixelId, sampleIndex, 0, frameIndex, 1)) - 0.5;
+  const jitterY = random01FromSeed(mixSeed(sourcePixelId, sampleIndex, 0, frameIndex, 2)) - 0.5;
+  const ndcX = ((pixelX + 0.5 + jitterX * jitterScale) / config.width) * 2 - 1;
+  const ndcY = 1 - ((pixelY + 0.5 + jitterY * jitterScale) / config.height) * 2;
+  const viewX = ndcX * config.camera.tanHalfFovY * config.camera.aspect;
+  const viewY = ndcY * config.camera.tanHalfFovY;
+  const direction = normalize(
+    add(
+      add(config.camera.forward, scale(config.camera.right, viewX)),
+      scale(config.camera.up, viewY)
+    ),
+    config.camera.forward
+  );
+
+  return Object.freeze({
+    rayId: pixelIndex,
+    parentRayId: 0xffffffff,
+    sourcePixelId,
+    sampleId: sampleIndex,
+    bounce: 0,
+    mediumRefId: 0,
+    flags: 0,
+    origin: Object.freeze([...config.camera.position]),
+    direction: Object.freeze(direction),
+    throughput: Object.freeze([1, 1, 1, 1]),
+    pixelX,
+    pixelY,
+  });
+}
+
+export function intersectWavefrontReferenceTriangle(ray, triangle, options = {}) {
+  if (!ray || typeof ray !== "object") {
+    throw new Error("ray must be a wavefront reference ray.");
+  }
+  if (!triangle || typeof triangle !== "object") {
+    throw new Error("triangle must be a wavefront triangle record.");
+  }
+
+  const maxDistance = readOptionalMaxDistance(options.maxDistance);
+  const triangleIndex = readNonNegativeInteger("triangleIndex", options.triangleIndex, 0);
+  const edge1 = subtract(triangle.v1, triangle.v0);
+  const edge2 = subtract(triangle.v2, triangle.v0);
+  const pvec = cross(ray.direction, edge2);
+  const determinant = dot(edge1, pvec);
+  if (Math.abs(determinant) < 0.0000001) {
+    return null;
+  }
+
+  const invDet = 1 / determinant;
+  const tvec = subtract(ray.origin, triangle.v0);
+  const u = dot(tvec, pvec) * invDet;
+  if (u < 0 || u > 1) {
+    return null;
+  }
+
+  const qvec = cross(tvec, edge1);
+  const v = dot(ray.direction, qvec) * invDet;
+  if (v < 0 || u + v > 1) {
+    return null;
+  }
+
+  const distance = dot(edge2, qvec) * invDet;
+  if (distance <= 0.001 || distance > maxDistance) {
+    return null;
+  }
+
+  const geometric = normalize(cross(edge1, edge2), [0, 1, 0]);
+  const frontFace = dot(ray.direction, geometric) < 0;
+  const orientedGeometric = frontFace ? geometric : scale(geometric, -1);
+  const w = 1 - u - v;
+  const interpolated = [
+    triangle.n0[0] * w + triangle.n1[0] * u + triangle.n2[0] * v,
+    triangle.n0[1] * w + triangle.n1[1] * u + triangle.n2[1] * v,
+    triangle.n0[2] * w + triangle.n1[2] * u + triangle.n2[2] * v,
+  ];
+  const shadingNormal = repairReferenceShadingNormal(orientedGeometric, interpolated);
+  const uv = [
+    triangle.uv0[0] * w + triangle.uv1[0] * u + triangle.uv2[0] * v,
+    triangle.uv0[1] * w + triangle.uv1[1] * u + triangle.uv2[1] * v,
+  ];
+  const position = add(ray.origin, scale(ray.direction, distance));
+
+  return Object.freeze({
+    hitType: "surface",
+    rayId: ray.rayId,
+    sourcePixelId: ray.sourcePixelId,
+    distance,
+    entityId: triangle.meshId,
+    instanceId: 0,
+    primitiveId: triangle.triangleId,
+    materialId: triangle.materialKind,
+    materialRefId: triangle.materialRefId,
+    mediumRefId: triangle.mediumRefId,
+    barycentrics: Object.freeze([w, u, v]),
+    uv: Object.freeze(uv),
+    geometricNormal: Object.freeze(orientedGeometric),
+    shadingNormal: Object.freeze(shadingNormal),
+    frontFace,
+    triangleIndex,
+    triangleId: triangle.triangleId,
+    position: Object.freeze(position),
+    color: triangle.color,
+    emission: triangle.emission,
+    material: triangle.material,
+  });
+}
+
+function createWavefrontReferenceEnvironmentHit(config, ray) {
+  const radiance = evaluateReferenceEnvironmentRadiance(config, ray.origin, ray.direction);
+  return Object.freeze({
+    hitType: "environment",
+    rayId: ray.rayId,
+    sourcePixelId: ray.sourcePixelId,
+    distance: -1,
+    entityId: 0,
+    instanceId: 0,
+    primitiveId: 0,
+    materialId: 0,
+    materialRefId: 0,
+    mediumRefId: 0,
+    barycentrics: Object.freeze([0, 0, 0]),
+    uv: Object.freeze([0, 0]),
+    geometricNormal: Object.freeze(scale(ray.direction, -1)),
+    shadingNormal: Object.freeze(scale(ray.direction, -1)),
+    frontFace: true,
+    triangleIndex: -1,
+    triangleId: -1,
+    position: Object.freeze(add(ray.origin, scale(ray.direction, 1000))),
+    color: Object.freeze([0, 0, 0, 0]),
+    emission: radiance,
+    material: Object.freeze([1, 0, 1, 1]),
+  });
+}
+
+export function traceWavefrontReferenceTriangles(config, ray, triangles, options = {}) {
+  if (!config || typeof config !== "object") {
+    throw new Error("config must be a wavefront path tracing config.");
+  }
+
+  const source = Array.isArray(triangles) ? triangles : [];
+  let nearestHit = null;
+  let nearestDistance = readOptionalMaxDistance(options.maxDistance);
+
+  source.forEach((triangle, index) => {
+    const hit = intersectWavefrontReferenceTriangle(ray, triangle, {
+      maxDistance: Number.isFinite(nearestDistance) ? nearestDistance : undefined,
+      triangleIndex: index,
+    });
+    if (hit && hit.distance < nearestDistance) {
+      nearestDistance = hit.distance;
+      nearestHit = hit;
+    }
+  });
+
+  return nearestHit ?? createWavefrontReferenceEnvironmentHit(config, ray);
 }
 
 function clampTileSizeForDevice(config, device) {

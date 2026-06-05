@@ -162,6 +162,69 @@ export interface WavefrontMeshAcceleration {
   readonly triangles: readonly WavefrontTriangleRecord[];
 }
 
+export interface WavefrontReferenceRay {
+  readonly rayId: number;
+  readonly parentRayId: number;
+  readonly sourcePixelId: number;
+  readonly sampleId: number;
+  readonly bounce: number;
+  readonly mediumRefId: number;
+  readonly flags: number;
+  readonly origin: readonly [number, number, number] | readonly number[];
+  readonly direction: readonly [number, number, number] | readonly number[];
+  readonly throughput: readonly [number, number, number, number] | readonly number[];
+  readonly pixelX: number;
+  readonly pixelY: number;
+}
+
+export interface WavefrontReferenceTile {
+  readonly x?: number;
+  readonly y?: number;
+  readonly width?: number;
+  readonly height?: number;
+}
+
+export interface CreateWavefrontReferenceRayOptions {
+  readonly tile?: WavefrontReferenceTile;
+  readonly pixelIndex?: number;
+  readonly sampleIndex?: number;
+  readonly frameIndex?: number;
+  readonly jitterScale?: number;
+}
+
+export interface WavefrontReferenceHit {
+  readonly hitType: "surface" | "environment";
+  readonly rayId: number;
+  readonly sourcePixelId: number;
+  readonly distance: number;
+  readonly entityId: number;
+  readonly instanceId: number;
+  readonly primitiveId: number;
+  readonly materialId: number;
+  readonly materialRefId: number;
+  readonly mediumRefId: number;
+  readonly barycentrics: readonly [number, number, number] | readonly number[];
+  readonly uv: readonly [number, number] | readonly number[];
+  readonly geometricNormal: readonly [number, number, number] | readonly number[];
+  readonly shadingNormal: readonly [number, number, number] | readonly number[];
+  readonly frontFace: boolean;
+  readonly triangleIndex: number;
+  readonly triangleId: number;
+  readonly position: readonly [number, number, number] | readonly number[];
+  readonly color: readonly number[];
+  readonly emission: readonly number[];
+  readonly material: readonly number[];
+}
+
+export interface IntersectWavefrontReferenceTriangleOptions {
+  readonly maxDistance?: number;
+  readonly triangleIndex?: number;
+}
+
+export interface TraceWavefrontReferenceTrianglesOptions {
+  readonly maxDistance?: number;
+}
+
 export type WavefrontAccelerationBuildMode = "gpu" | "cpu-debug";
 
 export interface WavefrontGpuMeshSource {
@@ -490,6 +553,21 @@ export function createWavefrontBvhSortStages(
 export function createWavefrontPathTracingComputeConfig(
   options?: CreateWavefrontPathTracingComputeRendererOptions
 ): WavefrontPathTracingComputeConfig;
+export function createWavefrontReferenceRay(
+  config: WavefrontPathTracingComputeConfig,
+  options?: CreateWavefrontReferenceRayOptions
+): WavefrontReferenceRay;
+export function intersectWavefrontReferenceTriangle(
+  ray: WavefrontReferenceRay,
+  triangle: WavefrontTriangleRecord,
+  options?: IntersectWavefrontReferenceTriangleOptions
+): WavefrontReferenceHit | null;
+export function traceWavefrontReferenceTriangles(
+  config: WavefrontPathTracingComputeConfig,
+  ray: WavefrontReferenceRay,
+  triangles: readonly WavefrontTriangleRecord[],
+  options?: TraceWavefrontReferenceTrianglesOptions
+): WavefrontReferenceHit;
 export function packWavefrontSceneObjects(
   sceneObjects: readonly WavefrontSceneObjectInput[],
   capacity?: number

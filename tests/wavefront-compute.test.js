@@ -10,13 +10,16 @@ import {
   createWavefrontGpuMeshSource,
   createWavefrontMeshAcceleration,
   createWavefrontPathTracingComputeConfig,
+  createWavefrontReferenceRay,
   estimateWavefrontPathTracingMemory,
+  intersectWavefrontReferenceTriangle,
   normalizeWavefrontMesh,
   normalizeWavefrontSceneObject,
   packWavefrontBvhNodes,
   packWavefrontSceneObjects,
   packWavefrontTriangles,
   supportsWavefrontPathTracingCompute,
+  traceWavefrontReferenceTriangles,
   wavefrontMaterialKinds,
   wavefrontPathTracingComputeLimits,
   wavefrontSceneObjectKinds,
@@ -359,6 +362,160 @@ test("wavefront compute config exposes bounded samples per pixel", () => {
       }),
     /samplesPerPixel must be a positive integer/
   );
+});
+
+test("wavefront reference helper generates deterministic primary rays from the camera contract", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 1,
+    height: 1,
+    camera: {
+      position: [0, 0, 1],
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      fovYDegrees: 60,
+    },
+  });
+
+  const ray = createWavefrontReferenceRay(config, {
+    pixelIndex: 0,
+    sampleIndex: 3,
+    frameIndex: 7,
+    jitterScale: 0,
+  });
+
+  assert.equal(ray.rayId, 0);
+  assert.equal(ray.sourcePixelId, 0);
+  assert.equal(ray.sampleId, 3);
+  assert.equal(ray.pixelX, 0);
+  assert.equal(ray.pixelY, 0);
+  assert.deepEqual(round(ray.origin), [0, 0, 1]);
+  assert.deepEqual(round(ray.direction), [0, 0, -1]);
+});
+
+test("wavefront reference triangle intersection resolves a one-triangle hit", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 1,
+    height: 1,
+    camera: {
+      position: [0, 0, 1],
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      fovYDegrees: 60,
+    },
+  });
+  const ray = createWavefrontReferenceRay(config, { jitterScale: 0 });
+  const acceleration = createWavefrontMeshAcceleration([
+    {
+      id: 7,
+      positions: [-1, -1, 0, 1, -1, 0, 0, 1, 0],
+      indices: [0, 1, 2],
+      normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+      uvs: [0, 0, 1, 0, 0.5, 1],
+      materialRefId: 33,
+      mediumRefId: 4,
+    },
+  ]);
+
+  const hit = traceWavefrontReferenceTriangles(config, ray, acceleration.triangles);
+
+  assert.equal(hit.hitType, "surface");
+  assert.equal(hit.entityId, 7);
+  assert.equal(hit.primitiveId, 0);
+  assert.equal(hit.materialRefId, 33);
+  assert.equal(hit.mediumRefId, 4);
+  assert.equal(hit.frontFace, true);
+  assert.equal(Number(hit.distance.toFixed(4)), 1);
+  assert.deepEqual(round(hit.barycentrics), [0.25, 0.25, 0.5]);
+  assert.deepEqual(round(hit.uv), [0.5, 0.5]);
+  assert.deepEqual(round(hit.geometricNormal), [0, 0, 1]);
+});
+
+test("wavefront reference tracing returns an environment hit on miss", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 1,
+    height: 1,
+    camera: {
+      position: [0, 0, 1],
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      fovYDegrees: 60,
+    },
+  });
+  const ray = createWavefrontReferenceRay(config, { jitterScale: 0 });
+  const acceleration = createWavefrontMeshAcceleration([
+    {
+      id: 9,
+      positions: [2, -1, 0, 4, -1, 0, 3, 1, 0],
+    },
+  ]);
+
+  const hit = traceWavefrontReferenceTriangles(config, ray, acceleration.triangles);
+
+  assert.equal(hit.hitType, "environment");
+  assert.equal(hit.distance, -1);
+  assert.equal(hit.triangleIndex, -1);
+  assert.deepEqual(round(hit.geometricNormal), [0, 0, 1]);
+});
+
+test("wavefront reference tracing selects the nearest triangle hit", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 1,
+    height: 1,
+    camera: {
+      position: [0, 0, 1],
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      fovYDegrees: 60,
+    },
+  });
+  const ray = createWavefrontReferenceRay(config, { jitterScale: 0 });
+  const nearTriangle = normalizeWavefrontMesh({
+    id: 11,
+    positions: [-1, -1, 0.5, 1, -1, 0.5, 0, 1, 0.5],
+  });
+  const farTriangle = normalizeWavefrontMesh({
+    id: 12,
+    positions: [-1, -1, 0.1, 1, -1, 0.1, 0, 1, 0.1],
+  });
+  const acceleration = createWavefrontMeshAcceleration([nearTriangle, farTriangle]);
+
+  const hit = traceWavefrontReferenceTriangles(config, ray, acceleration.triangles);
+
+  assert.equal(hit.hitType, "surface");
+  assert.equal(hit.entityId, 11);
+  assert.equal(hit.triangleIndex, 0);
+  assert.equal(Number(hit.distance.toFixed(4)), 0.5);
+});
+
+test("wavefront reference triangle intersection rejects hits past max distance", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 1,
+    height: 1,
+    camera: {
+      position: [0, 0, 1],
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      fovYDegrees: 60,
+    },
+  });
+  const ray = createWavefrontReferenceRay(config, { jitterScale: 0 });
+  const acceleration = createWavefrontMeshAcceleration([
+    {
+      id: 13,
+      positions: [-1, -1, 0.5, 1, -1, 0.5, 0, 1, 0.5],
+    },
+  ]);
+
+  const directHit = intersectWavefrontReferenceTriangle(ray, acceleration.triangles[0], {
+    maxDistance: 0.25,
+  });
+  const tracedHit = traceWavefrontReferenceTriangles(config, ray, acceleration.triangles, {
+    maxDistance: 0.25,
+  });
+
+  assert.equal(directHit, null);
+  assert.equal(tracedHit.hitType, "environment");
+  assert.equal(tracedHit.distance, -1);
 });
 
 test("wavefront compute denoise remains a two-pass GPU post process", () => {
