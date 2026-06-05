@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.0] - 2026-06-05
+
+- **Added**
   - Added deterministic wavefront reference helpers for primary-ray creation,
     triangle-hit evaluation, nearest-hit selection, and environment-miss
     fallback alongside regression tests for task-level acceptance coverage.
@@ -275,3 +289,4 @@ All notable changes to this project will be documented in this file.
 [0.1.11]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.11
 [0.1.12]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.12
 [0.1.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.14
+[0.2.0]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.0
