@@ -451,10 +451,11 @@ export interface WavefrontPathTracingComputeConfig {
   readonly workgroupSize: number;
   readonly primaryWorkgroups: number;
   readonly bouncePasses: number;
-  readonly indirectDispatch: false;
+  readonly indirectDispatch: true;
   readonly cpuReference: false;
   readonly denoise: boolean;
   readonly format: GPUTextureFormat | "rgba8unorm";
+  readonly outputTextureFormat: GPUTextureFormat | "rgba8unorm";
   readonly tileWidth: number;
   readonly tileHeight: number;
   readonly tilePixelCapacity: number;
@@ -545,6 +546,7 @@ export function createWavefrontPathTracingComputeConfig(options?: {
 
 export function createWavefrontPathTracingComputeShaderSource(options?: {
   workgroupSize?: number;
+  outputTextureFormat?: GPUTextureFormat | "rgba8unorm";
 }): string;
 
 export function createWavefrontPathTracingComputeRenderer(options: {
