@@ -242,6 +242,9 @@ renderer.bindXrManager(xr, {
 - `createRayTracingRenderPlan(options)`
 - `createWavefrontPathTracingComputeRenderer(options)`
 - `createWavefrontPathTracingComputeConfig(options)`
+- `createWavefrontReferenceRay(config, options?)`
+- `intersectWavefrontReferenceTriangle(ray, triangle, options?)`
+- `traceWavefrontReferenceTriangles(config, ray, triangles, options?)`
 - `normalizeWavefrontMesh(input)`
 - `createWavefrontGpuMeshSource(meshes)`
 - `createWavefrontBvhSortStages(itemCount)`
@@ -259,6 +262,11 @@ renderer.bindXrManager(xr, {
 - `rendererWorkerProfiles`
 - `rendererWorkerProfileNames`
 - `rendererWorkerManifests`
+
+The reference helpers mirror the renderer WGSL camera and triangle-hit math in
+deterministic JavaScript so tests and downstream tooling can validate primary
+ray generation, barycentrics, nearest-hit selection, and environment misses
+without standing up a WebGPU device.
 
 ## Demo
 

@@ -12,7 +12,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added deterministic wavefront reference helpers for primary-ray creation,
+    triangle-hit evaluation, nearest-hit selection, and environment-miss
+    fallback alongside regression tests for task-level acceptance coverage.
 
 - **Changed**
   - (placeholder)
