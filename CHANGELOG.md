@@ -26,8 +26,9 @@ All notable changes to this project will be documented in this file.
     surface-resolution work from GPU-authored active-ray counts instead of the
     fixed tile capacity after queue compaction.
   - Changed the npm CD workflow to prepare package version and changelog
-    metadata locally, then commit and tag the validated release metadata
-    together instead of pushing an early version tag and orphan changelog branch.
+    metadata locally, then publish the validated tag while persisting release
+    metadata through an automation PR branch instead of direct protected-main
+    pushes.
 
 - **Fixed**
   - Fixed wavefront source ownership so display-quality mesh BVH code is not
