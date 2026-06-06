@@ -2209,6 +2209,80 @@ fn terminal_surface_environment_contribution(ray: RayRecord, hit: HitRecord) -> 
   return clamp_sample_radiance(ray.throughput.xyz * surfaceColor * environmentFloor * materialFloor);
 }
 
+fn direct_environment_portal_irradiance(origin: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+  if (config.environmentPortalCount == 0u || config.environmentPortalMode == 0u) {
+    return vec3<f32>(0.0);
+  }
+
+  var irradiance = vec3<f32>(0.0);
+  for (var portalIndex = 0u; portalIndex < config.environmentPortalCount; portalIndex = portalIndex + 1u) {
+    let portal = environmentPortals[portalIndex];
+    if (portal.kind != 1u) {
+      continue;
+    }
+
+    let toPortal = portal.position.xyz - origin;
+    let distanceSquared = max(dot(toPortal, toPortal), 0.01);
+    let direction = safe_normalize(toPortal, normal);
+    let surfaceFacing = saturate(dot(normal, direction));
+    if (surfaceFacing <= 0.0001) {
+      continue;
+    }
+
+    let portalNormal = safe_normalize(portal.normal.xyz, vec3<f32>(0.0, 0.0, 1.0));
+    let twoSided = (portal.flags & 1u) != 0u;
+    let portalFacing = select(
+      saturate(dot(-direction, portalNormal)),
+      max(abs(dot(direction, portalNormal)), 0.15),
+      twoSided
+    );
+    let area = max(portal.position.w, 0.0001);
+    let distanceFalloff = clamp(area / max(distanceSquared, area * 0.25), 0.0, 2.5);
+    irradiance = irradiance +
+      portal.color.rgb *
+      portal.normal.w *
+      portal.color.a *
+      surfaceFacing *
+      portalFacing *
+      distanceFalloff;
+  }
+  return irradiance;
+}
+
+fn surface_direct_environment_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let origin = hit.position.xyz + normal * 0.003;
+  let viewDirection = safe_normalize(-ray.direction.xyz, normal);
+  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz), vec3<f32>(0.0), vec3<f32>(1.0));
+  let roughness = clamp(hit.material.x, 0.0, 1.0);
+  let metallic = clamp(hit.material.y, 0.0, 1.0);
+
+  let normalEnvironment = gated_environment_radiance(origin, normal);
+  let skyVisibility = 0.35 + saturate(normal.y * 0.5 + 0.5) * 0.45;
+  let skyIrradiance = max(config.ambientColor.xyz, normalEnvironment * skyVisibility * 0.22);
+
+  let sunDirection = safe_normalize(
+    config.environmentSunDirectionIntensity.xyz,
+    vec3<f32>(0.0, 1.0, 0.0)
+  );
+  let sunFacing = saturate(dot(normal, sunDirection));
+  let sunRadiance = gated_environment_radiance(origin, sunDirection);
+  let sunIrradiance = sunRadiance * sunFacing * 0.24;
+  let portalIrradiance = direct_environment_portal_irradiance(origin, normal);
+
+  let diffuseWeight = select(1.0 - metallic * 0.65, 0.22, hit.materialKind == 1u);
+  let diffuse = surfaceColor * (skyIrradiance + sunIrradiance + portalIrradiance) * diffuseWeight;
+
+  let halfVector = safe_normalize(sunDirection + viewDirection, normal);
+  let specularPower = 8.0 + (1.0 - roughness) * 96.0;
+  let specularFacing = pow(saturate(dot(normal, halfVector)), specularPower) * sunFacing;
+  let specularTint = mix(vec3<f32>(0.04), surfaceColor, metallic);
+  let specular = specularTint * sunRadiance * specularFacing * select(0.16, 0.48, hit.materialKind == 1u || hit.materialKind == 2u);
+
+  let bounceWeight = select(1.0, 0.38, ray.bounce > 0u);
+  return clamp_sample_radiance(ray.throughput.xyz * (diffuse + specular) * bounceWeight);
+}
+
 fn default_mesh_range() -> MeshRange {
   return MeshRange(
     0u,
@@ -3077,6 +3151,10 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
+
+  let directEnvironment = surface_direct_environment_contribution(ray, hit);
+  accumulation[ray.rayId] =
+    accumulation[ray.rayId] + vec4<f32>(directEnvironment * sample_weight(), 0.0);
 
   if (ray.bounce + 1u >= config.maxDepth) {
     let terminalEnvironment = terminal_surface_environment_contribution(ray, hit);

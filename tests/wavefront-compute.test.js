@@ -624,6 +624,28 @@ test("wavefront compute applies environment ambient on terminal surface collisio
   );
 });
 
+test("wavefront compute estimates direct environment light before random continuation", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /fn surface_direct_environment_contribution/);
+  assert.match(source, /fn direct_environment_portal_irradiance/);
+  assert.match(source, /let skyIrradiance = max\(config\.ambientColor\.xyz, normalEnvironment \* skyVisibility \* 0\.22\);/);
+  assert.match(source, /let sunIrradiance = sunRadiance \* sunFacing \* 0\.24;/);
+  assert.match(source, /let portalIrradiance = direct_environment_portal_irradiance\(origin, normal\);/);
+  assert.match(
+    source,
+    /let directEnvironment = surface_direct_environment_contribution\(ray, hit\);/
+  );
+  assert.match(
+    source,
+    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directEnvironment \* sample_weight\(\), 0\.0\);/
+  );
+  assert.ok(
+    source.indexOf("let directEnvironment = surface_direct_environment_contribution(ray, hit);") <
+      source.indexOf("if (ray.bounce + 1u >= config.maxDepth)")
+  );
+});
+
 test("analytic wavefront renderer rejects display-quality requests", () => {
   assert.throws(
     () =>

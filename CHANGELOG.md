@@ -18,7 +18,8 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Fixed low-sample wavefront renders so non-emissive surface hits receive a
+    deterministic sky, sun, and portal-light estimate before random continuation.
 
 - **Security**
   - (placeholder)
