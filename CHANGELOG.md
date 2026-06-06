@@ -17,13 +17,25 @@ All notable changes to this project will be documented in this file.
   - Added a WebGPU compute wavefront path-tracing runner with storage-buffer
     ray queues, indirect continuation dispatch, GPU accumulation, and storage
     texture output.
+  - Added deterministic wavefront reference helpers for primary-ray creation,
+    triangle-hit evaluation, nearest-hit selection, and environment-miss
+    fallback.
+  - Added ADR coverage for mesh BVH wavefront path tracing as the display-quality
+    baseline.
 
 - **Changed**
   - Clarified that CPU path tracing is not the renderer implementation path for
     `gpu-*`; CPU tracing may only be used as fallback or reference validation.
+  - Promoted the mesh BVH wavefront renderer source into the canonical
+    `src/wavefront-compute.js` module so source, typings, tests, and package
+    builds no longer drift behind generated artifacts.
 
 - **Fixed**
-  - (placeholder)
+  - Fixed wavefront source ownership so display-quality mesh BVH code is not
+    hidden behind a legacy module split.
+  - Preserved the wavefront mode/workgroup constants, shader-source helper,
+    one-shot frame helper, and `renderFrame(...)` compatibility wrapper while
+    promoting the mesh BVH renderer source.
 
 - **Security**
   - (placeholder)

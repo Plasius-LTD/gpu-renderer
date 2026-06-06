@@ -106,41 +106,120 @@ performance packages. It now also exposes the renderer-owned wavefront queue
 model, versioned ray/hit/surface/material/medium/accumulation contracts, and
 the termination policy for emissive/environment path completion.
 
-## WebGPU Wavefront Path Tracing
+## WebGPU Wavefront Compute Renderer
 
-The executable wavefront path-tracing path is WebGPU compute based. CPU
-reference tracing is not the renderer path for `gpu-*`; it may only be used by
-tests or browser fallback messaging where WebGPU is unavailable.
+The package also exposes an executable WebGPU wavefront renderer for active-ray
+debug validation scenes. It is compute-driven, tiled, and breadth-first by
+bounce depth, so queue buffers are bounded by tile size instead of presentation
+resolution. Renderer-owned GPU record sizes are part of the public compute
+limits so ray, hit, triangle, BVH, and accumulation buffers stay aligned with
+their WGSL layouts.
 
 ```js
-import { renderWavefrontPathTracingComputeFrame } from "@plasius/gpu-renderer";
+import {
+  createWavefrontPathTracingComputeRenderer,
+} from "@plasius/gpu-renderer";
 
-const stats = await renderWavefrontPathTracingComputeFrame({
-  canvas: document.querySelector("#scene"),
+const renderer = await createWavefrontPathTracingComputeRenderer({
+  canvas: document.querySelector("#product-render"),
   width: 1280,
   height: 720,
-  maxDepth: 5,
+  maxDepth: 6,
+  samplesPerPixel: 8,
+  displayQuality: true,
+  meshes: [
+    {
+      id: 1,
+      positions: [-1, -1, 0, 1, -1, 0, 0, 1, 0],
+      indices: [0, 1, 2],
+      normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+      emission: [8, 7, 5, 1],
+    },
+  ],
 });
 
-console.log(stats.plan.mode); // "webgpu-compute"
-console.log(stats.plan.dispatch.primaryWorkgroups);
+renderer.renderOnce();
 ```
 
-The compute runner:
+Existing consumers that still call `renderFrame(...)` or
+`renderWavefrontPathTracingComputeFrame(...)` remain supported as compatibility
+wrappers around the canonical mesh renderer.
 
-- dispatches one primary ray per screen pixel into GPU storage-buffer queues
-- stores active and next continuation rays in ping-pong buffers
-- runs each bounce as a breadth-first compute pass
-- uses GPU-written indirect dispatch arguments for compacted continuation
-  queues, avoiding CPU readback between bounces
-- writes accumulated colour into a WebGPU storage texture for presentation
-- reads back only compact end-of-frame stats when requested
+Analytic scene objects remain available for debug fixtures:
 
-At the default workgroup size of 64, 720p dispatches 14,400 primary workgroups
-for 921,600 rays, and 1080p dispatches 32,400 primary workgroups for 2,073,600
-rays. Later bounces are dispatched from compacted active queues, so paths that
-hit emissive geometry, the skybox/environment, ambient fallback, or max depth
-stop contributing to continuation work.
+```js
+const debugRenderer = await createWavefrontPathTracingComputeRenderer({
+  canvas: document.querySelector("#debug-render"),
+  width: 1280,
+  height: 720,
+  maxDepth: 6,
+  sceneObjects: [
+    {
+      type: "sphere",
+      center: [0, 1.8, -0.5],
+      radius: 0.35,
+      emission: [8, 7, 5, 1],
+      materialKind: "emissive",
+    },
+  ],
+});
+
+debugRenderer.renderOnce();
+```
+
+Scene objects currently support analytic `sphere` and axis-aligned `box`
+records with colour, emission, roughness, metallic, opacity, and IOR fields.
+These records are debug fixtures only. Product Studio visual rendering requires
+the mesh BVH path described in
+`docs/adrs/adr-0007-triangle-mesh-wavefront-path-tracing.md`. This is a
+project-wide display-quality baseline for path-traced rendering, not a
+Product-Studio-only requirement.
+
+Mesh inputs are normalized into triangle records, packed into GPU buffers, and
+uploaded as source buffers for GPU triangle assembly and GPU BVH construction.
+Vertex normals are preserved for smooth shading; when normals are absent the
+triangle geometric normal is used. The display-quality path uses
+`accelerationBuildMode: "gpu"` and rejects CPU-built acceleration. The
+`createWavefrontMeshAcceleration(...)` helper remains available only for debug
+fixtures and deterministic layout tests. GPU BVH construction now uses
+Morton-style centroid keys to sort leaf references before sorted leaves and
+level-concurrent internal nodes are materialized. The current mesh path is the
+GPU runtime baseline under active hardening.
+
+`samplesPerPixel` controls how many GPU primary-ray samples are accumulated per
+screen pixel within a single render. This multiplies dispatch work but does not
+increase the tile queue memory footprint, so 720p/1080p/4K targets remain
+bounded by `tileSize`. When `denoise` is enabled the renderer writes raw
+linear radiance to an `rgba16float` texture first, then runs a two-stage
+full-frame GPU denoise through an `rgba16float` scratch texture before final
+tone mapping into the presented `rgba8unorm` output. Filtering in linear
+radiance space lets the denoise pass cross tile boundaries without compressing
+energy/detail before the final resolve. The renderer also stores compact
+emissive-triangle metadata in the existing BVH buffer tail and uses it to guide
+diffuse continuation rays toward finite mesh light geometry without adding a
+ninth trace storage buffer. This is not a separate shadow/direct-light pass: the
+active ray still has to hit emissive geometry or miss into the environment
+before radiance is accumulated. Guided emissive hits carry a bounded estimator
+weight so finite light guidance does not over-expose low-sample renders before
+full material PDFs/MIS are implemented. High-energy samples are clamped in
+linear radiance space to keep low-sample preview output stable while production
+sampling, temporal accumulation, and better material PDFs are hardened.
+For static mesh scenes, the GPU acceleration build is submitted once and then
+reused by subsequent frames. Per-frame tracing writes one dynamic uniform slot
+per tile/sample or post-process pass and batches tile tracing, tile output,
+optional denoise, and presentation into a single command submission. WebGPU
+still preserves ordering between dependent bounce passes, but the renderer no
+longer forces one CPU queue submission per tile/sample.
+Environment-light portals can additionally guide and gate sky/HDRI contribution
+through rectangular openings such as windows. `environmentPortalMode: "guide"`
+biases diffuse continuation rays toward configured openings, while
+`"guide-and-gate"` requires an environment miss to pass through a portal before
+it receives sky radiance; misses outside a portal fall back to the ambient
+residual. This keeps interior rooms from treating the whole sky as visible from
+every bounce.
+Texture sampling, dynamic TLAS updates, higher-grade LBVH/SAH construction,
+runtime execution behind the `@plasius/gpu-worker` lock-free queue, and broader
+material lookup remain follow-up work.
 
 ## XR integration
 
@@ -165,10 +244,25 @@ renderer.bindXrManager(xr, {
 - `getRendererWorkerProfile(name?)`
 - `getRendererWorkerManifest(name?)`
 - `createRayTracingRenderPlan(options)`
-- `createWavefrontPathTracingComputeConfig(options)`
 - `createWavefrontPathTracingComputeRenderer(options)`
+- `createWavefrontPathTracingComputeConfig(options)`
+- `createWavefrontPathTracingComputeShaderSource(options?)`
 - `renderWavefrontPathTracingComputeFrame(options)`
-- `supportsWavefrontPathTracingCompute(options)`
+- `createWavefrontReferenceRay(config, options?)`
+- `intersectWavefrontReferenceTriangle(ray, triangle, options?)`
+- `traceWavefrontReferenceTriangles(config, ray, triangles, options?)`
+- `normalizeWavefrontMesh(input)`
+- `createWavefrontGpuMeshSource(meshes)`
+- `createWavefrontBvhSortStages(itemCount)`
+- `createWavefrontBvhBuildLevels(triangleCount)`
+- `createWavefrontMeshAcceleration(meshes)`
+- `normalizeWavefrontSceneObject(input)`
+- `packWavefrontSceneObjects(sceneObjects, capacity?)`
+- `packWavefrontTriangles(triangles, capacity?)`
+- `packWavefrontBvhNodes(nodes, capacity?)`
+- `rendererWavefrontComputeMode`
+- `rendererWavefrontComputeWorkgroupSize`
+- `rendererWavefrontComputeStatsStride`
 - `bindRendererToXrManager(renderer, xrManager, options)`
 - `defaultRendererClearColor`
 - `rendererDebugOwner`
@@ -177,8 +271,11 @@ renderer.bindXrManager(xr, {
 - `rendererWorkerProfiles`
 - `rendererWorkerProfileNames`
 - `rendererWorkerManifests`
-- `rendererWavefrontComputeMode`
-- `rendererWavefrontComputeWorkgroupSize`
+
+The reference helpers mirror the renderer WGSL camera and triangle-hit math in
+deterministic JavaScript so tests and downstream tooling can validate primary
+ray generation, barycentrics, nearest-hit selection, and environment misses
+without standing up a WebGPU device.
 
 ## Demo
 
@@ -191,8 +288,11 @@ npm run demo
 
 Then open `http://localhost:8000/gpu-renderer/demo/`.
 
-The demo now reports explicit canvas state so it is clear whether the renderer
-is mounted, idle, running, or blocked by secure-context / WebGPU support.
+The demo now mounts the mesh BVH WebGPU wavefront renderer directly and passes a
+`@plasius/gpu-lighting` environment preset into the render. It reports the
+active wavefront depth, tile count, triangle/BVH counts, lighting preset, probe
+luminance, and hot buffer memory so it is clear whether the renderer is tracing
+mesh paths rather than only showing planning metadata.
 
 ## Development Checks
 
@@ -207,7 +307,8 @@ npm run pack:check
 ## Files
 
 - `src/index.js`: WebGPU renderer runtime and XR binding helper.
-- `src/wavefront-compute.js`: WebGPU compute wavefront path-tracing runner.
+- `src/wavefront-compute.js`: Canonical WebGPU mesh BVH wavefront renderer,
+  debug scene-object fixtures, and deterministic reference helpers.
 - `src/index.d.ts`: public API typings.
 - `tests/package.test.js`: unit tests for renderer lifecycle behavior.
 - `docs/design/worker-manifest-integration.md`: renderer frame-stage DAG model.
