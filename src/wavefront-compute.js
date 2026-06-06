@@ -2197,6 +2197,18 @@ fn gated_environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f
   return environment_radiance(origin, direction);
 }
 
+fn terminal_surface_environment_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);
+  let normalEnvironment = gated_environment_radiance(
+    hit.position.xyz + normal * 0.003,
+    normal
+  );
+  let environmentFloor = max(config.ambientColor.xyz, normalEnvironment * 0.12);
+  let materialFloor = select(0.7, 1.0, hit.materialKind == 0u || hit.materialKind == 3u);
+  return clamp_sample_radiance(ray.throughput.xyz * surfaceColor * environmentFloor * materialFloor);
+}
+
 fn default_mesh_range() -> MeshRange {
   return MeshRange(
     0u,
@@ -3067,9 +3079,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   }
 
   if (ray.bounce + 1u >= config.maxDepth) {
+    let terminalEnvironment = terminal_surface_environment_contribution(ray, hit);
     accumulation[ray.rayId] =
-      accumulation[ray.rayId] +
-      vec4<f32>(ray.throughput.xyz * config.ambientColor.xyz * sample_weight(), 1.0);
+      accumulation[ray.rayId] + vec4<f32>(terminalEnvironment * sample_weight(), 1.0);
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
@@ -3078,6 +3090,10 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let scatter = scatter_direction(ray, hit, seed);
   let nextIndex = atomicAdd(&counters.nextCount, 1u);
   if (nextIndex >= config.tilePixelCount) {
+    let overflowEnvironment = terminal_surface_environment_contribution(ray, hit);
+    accumulation[ray.rayId] =
+      accumulation[ray.rayId] + vec4<f32>(overflowEnvironment * sample_weight(), 1.0);
+    atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
   let color = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));

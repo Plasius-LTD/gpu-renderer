@@ -604,6 +604,26 @@ test("wavefront compute guides and gates environment lighting through portals", 
   assert.match(source, /gated_environment_radiance\(ray\.origin\.xyz, ray\.direction\.xyz\)/);
 });
 
+test("wavefront compute applies environment ambient on terminal surface collisions", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /fn terminal_surface_environment_contribution/);
+  assert.match(source, /let surfaceColor = max\(hit\.color\.xyz, config\.ambientColor\.xyz\);/);
+  assert.match(source, /let environmentFloor = max\(config\.ambientColor\.xyz, normalEnvironment \* 0\.12\);/);
+  assert.match(
+    source,
+    /let terminalEnvironment = terminal_surface_environment_contribution\(ray, hit\);/
+  );
+  assert.match(
+    source,
+    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(terminalEnvironment \* sample_weight\(\), 1\.0\);/
+  );
+  assert.match(
+    source,
+    /let overflowEnvironment = terminal_surface_environment_contribution\(ray, hit\);/
+  );
+});
+
 test("analytic wavefront renderer rejects display-quality requests", () => {
   assert.throws(
     () =>

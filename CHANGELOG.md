@@ -37,6 +37,9 @@ All notable changes to this project will be documented in this file.
     promoting the mesh BVH renderer source.
   - Fixed a production performance regression where compacted continuation
     queues still scheduled full-capacity per-bounce workgroups.
+  - Fixed low-sample wavefront surface traces so terminal non-emissive surface
+    collisions use an environment-derived ambient floor instead of a flat or
+    missing fallback.
 
 - **Security**
   - (placeholder)
