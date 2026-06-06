@@ -25,6 +25,9 @@ All notable changes to this project will be documented in this file.
   - Changed wavefront mesh tracing to dispatch bounce intersection and
     surface-resolution work from GPU-authored active-ray counts instead of the
     fixed tile capacity after queue compaction.
+  - Changed the npm CD workflow to prepare package version and changelog
+    metadata locally, then commit and tag the validated release metadata
+    together instead of pushing an early version tag and orphan changelog branch.
 
 - **Fixed**
   - Fixed wavefront source ownership so display-quality mesh BVH code is not
