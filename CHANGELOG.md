@@ -40,6 +40,8 @@ All notable changes to this project will be documented in this file.
   - Fixed low-sample wavefront surface traces so terminal non-emissive surface
     collisions use an environment-derived ambient floor instead of a flat or
     missing fallback.
+  - Fixed release metadata versioning, demo dependencies, and one-shot
+    wavefront cleanup blockers found during PR validation.
 
 - **Security**
   - (placeholder)

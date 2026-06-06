@@ -631,7 +631,6 @@ export function renderWavefrontPathTracingComputeFrame(
   options?: CreateWavefrontPathTracingComputeRendererOptions & {
     readStats?: boolean;
     readOutputProbe?: boolean;
-    destroy?: boolean;
   }
 ): Promise<WavefrontPathTracingComputeFrameStats>;
 export function createWavefrontPathTracingComputeShaderSource(options?: {

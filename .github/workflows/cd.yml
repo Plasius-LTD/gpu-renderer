@@ -54,9 +54,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          CURRENT_VER=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').name")
+
           if [ "${BUMP}" = "none" ]; then
-            CURRENT_VER=$(node -p "require('./package.json').version")
             NEW_VER="v${CURRENT_VER}"
+            # The later metadata step creates and pushes this tag before gh release create --verify-tag.
           else
             case "${BUMP:-patch}" in
               major|minor|patch) ;;
@@ -66,27 +69,51 @@ jobs:
                 ;;
             esac
 
-            CURRENT_VER=$(node -p "require('./package.json').version")
-            NAME=$(node -p "require('./package.json').name")
             REGISTRY_VER=$(npm view "$NAME" version 2>/dev/null || true)
+            TARGET_VER=$(node -e '
+          const [localVersion, registryVersion, bump, preid] = process.argv.slice(1);
+          const clean = (value) => String(value || "").replace(/^v/, "").trim();
+          const parse = (value) => {
+            const [core] = clean(value).split("-");
+            const parts = core.split(".").map((part) => Number(part));
+            if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) {
+              throw new Error(`Invalid semver value: ${value}`);
+            }
+            return parts;
+          };
+          const compare = (left, right) => {
+            for (let index = 0; index < 3; index += 1) {
+              const diff = left[index] - right[index];
+              if (diff !== 0) return diff;
+            }
+            return 0;
+          };
 
-            if [ -n "$REGISTRY_VER" ]; then
-              BASE_VER=$(node -e 'const [localVersion, registryVersion] = process.argv.slice(1); const parse = (value) => value.replace(/^v/, "").split("-")[0].split(".").map((part) => Number(part) || 0); const compare = (left, right) => { for (let i = 0; i < 3; i += 1) { const diff = (left[i] || 0) - (right[i] || 0); if (diff !== 0) { return diff; } } return 0; }; process.stdout.write(compare(parse(registryVersion), parse(localVersion)) > 0 ? registryVersion : localVersion);' "$CURRENT_VER" "$REGISTRY_VER")
-              if [ "$BASE_VER" != "$CURRENT_VER" ]; then
-                npm version "$BASE_VER" --no-git-tag-version --allow-same-version --message "chore: align package version for release"
-              fi
-            fi
+          const local = parse(localVersion);
+          const registry = registryVersion ? parse(registryVersion) : local;
+          const base = compare(registry, local) > 0 ? registry : local;
+          let next;
+          switch (bump) {
+            case "major":
+              next = [base[0] + 1, 0, 0];
+              break;
+            case "minor":
+              next = [base[0], base[1] + 1, 0];
+              break;
+            case "patch":
+              next = [base[0], base[1], base[2] + 1];
+              break;
+            default:
+              throw new Error(`Unknown bump type: ${bump}`);
+          }
 
-            if [ -n "${PREID:-}" ]; then
-              case "${BUMP}" in
-                major) NPM_BUMP="premajor" ;;
-                minor) NPM_BUMP="preminor" ;;
-                patch) NPM_BUMP="prepatch" ;;
-              esac
-              NEW_VER=$(npm version "$NPM_BUMP" --preid "$PREID" --no-git-tag-version)
-            else
-              NEW_VER=$(npm version "$BUMP" --no-git-tag-version)
-            fi
+          let version = next.join(".");
+          if (preid) {
+            version = `${version}-${preid}.0`;
+          }
+          process.stdout.write(version);
+          ' "$CURRENT_VER" "$REGISTRY_VER" "$BUMP" "${PREID:-}")
+            NEW_VER=$(npm version "$TARGET_VER" --no-git-tag-version --allow-same-version)
           fi
 
           echo "New version: $NEW_VER"

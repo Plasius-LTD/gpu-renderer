@@ -4165,9 +4165,7 @@ export async function renderWavefrontPathTracingComputeFrame(options = {}) {
   try {
     return await renderer.renderFrame(options);
   } finally {
-    if (options.destroy !== false) {
-      renderer.destroy();
-    }
+    renderer.destroy();
   }
 }
 

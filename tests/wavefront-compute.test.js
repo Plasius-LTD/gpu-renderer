@@ -1326,7 +1326,7 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
   });
 });
 
-test("wavefront compute one-shot compatibility helper renders and destroys by default", async () => {
+test("wavefront compute one-shot compatibility helper renders and always destroys", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();
     const frame = await renderWavefrontPathTracingComputeFrame({
@@ -1339,6 +1339,7 @@ test("wavefront compute one-shot compatibility helper renders and destroys by de
       tileSize: 8,
       maxDepth: 1,
       readOutputProbe: true,
+      destroy: false,
     });
 
     assert.equal(frame.frame, 1);
