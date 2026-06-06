@@ -15,12 +15,33 @@ All notable changes to this project will be documented in this file.
   - Added deterministic wavefront reference helpers for primary-ray creation,
     triangle-hit evaluation, nearest-hit selection, and environment-miss
     fallback alongside regression tests for task-level acceptance coverage.
+  - Added ADR coverage for mesh BVH wavefront path tracing as the display-quality
+    baseline.
 
 - **Changed**
-  - (placeholder)
+  - Promoted the mesh BVH wavefront renderer source into the canonical
+    `src/wavefront-compute.js` module so source, typings, tests, and package
+    builds no longer drift behind generated artifacts.
+  - Changed wavefront mesh tracing to dispatch bounce intersection and
+    surface-resolution work from GPU-authored active-ray counts instead of the
+    fixed tile capacity after queue compaction.
+  - Changed the npm CD workflow to prepare package version and changelog
+    metadata locally, then commit and tag the validated release metadata
+    together instead of pushing an early version tag and orphan changelog branch.
 
 - **Fixed**
-  - (placeholder)
+  - Fixed wavefront source ownership so display-quality mesh BVH code is not
+    hidden behind a legacy module split.
+  - Preserved the wavefront mode/workgroup constants, shader-source helper,
+    one-shot frame helper, and `renderFrame(...)` compatibility wrapper while
+    promoting the mesh BVH renderer source.
+  - Fixed a production performance regression where compacted continuation
+    queues still scheduled full-capacity per-bounce workgroups.
+  - Fixed low-sample wavefront surface traces so terminal non-emissive surface
+    collisions use an environment-derived ambient floor instead of a flat or
+    missing fallback.
+  - Fixed release metadata versioning, demo dependencies, and one-shot
+    wavefront cleanup blockers found during PR validation.
 
 - **Security**
   - (placeholder)

@@ -309,6 +309,7 @@ export interface WavefrontEnvironmentPortalRecord {
 }
 
 export interface WavefrontPathTracingComputeConfig {
+  readonly mode: typeof rendererWavefrontComputeMode;
   readonly width: number;
   readonly height: number;
   readonly maxDepth: number;
@@ -394,6 +395,7 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly environmentPortalBytes: number;
   readonly configBytes: number;
   readonly counterBytes: number;
+  readonly indirectDispatchBytes: number;
   readonly totalHotBufferBytes: number;
 }
 
@@ -441,32 +443,12 @@ export interface WavefrontPathTracingComputeRenderer {
   readonly device: GPUDevice;
   readonly format: GPUTextureFormat | string;
   readonly config: WavefrontPathTracingComputeConfig;
-  renderOnce(): Readonly<{
-    frame: number;
-    width: number;
-    height: number;
-    maxDepth: number;
-    tiles: number;
-    tileSize: number;
-    samplesPerPixel: number;
-    screenRays: number;
-    primaryRays: number;
-    sceneObjectCount: number;
-    triangleCount: number;
-    emissiveTriangleCount: number;
-    environmentPortalCount: number;
-    environmentPortalMode: 0 | 1 | 2;
-    bvhNodeCount: number;
-    displayQuality: boolean;
-    accelerationBuildMode: WavefrontAccelerationBuildMode;
-    gpuAccelerationBuildRequired: boolean;
-    accelerationBuildSubmitted: boolean;
-    accelerationBuilt: boolean;
-    accelerationBuildCount: number;
-    commandSubmissions: number;
-    frameConfigSlots: number;
-    memory: WavefrontPathTracingMemoryEstimate;
-  }>;
+  renderOnce(): WavefrontPathTracingComputeFrameStats;
+  renderFrame(options?: {
+    readStats?: boolean;
+    readOutputProbe?: boolean;
+    probe?: { x?: number; y?: number };
+  }): Promise<WavefrontPathTracingComputeFrameStats>;
   readOutputProbe(options?: { x?: number; y?: number }): Promise<
     Readonly<{
       x: number;
@@ -499,6 +481,50 @@ export interface WavefrontPathTracingComputeRenderer {
     memory: WavefrontPathTracingMemoryEstimate;
   }>;
   destroy(): void;
+}
+
+export interface WavefrontPathTracingComputeFrameStats {
+  readonly frame: number;
+  readonly width: number;
+  readonly height: number;
+  readonly maxDepth: number;
+  readonly tiles: number;
+  readonly tileSize: number;
+  readonly samplesPerPixel: number;
+  readonly screenRays: number;
+  readonly primaryRays: number;
+  readonly sceneObjectCount: number;
+  readonly triangleCount: number;
+  readonly emissiveTriangleCount: number;
+  readonly environmentPortalCount: number;
+  readonly environmentPortalMode: 0 | 1 | 2;
+  readonly bvhNodeCount: number;
+  readonly displayQuality: boolean;
+  readonly accelerationBuildMode: WavefrontAccelerationBuildMode;
+  readonly gpuAccelerationBuildRequired: boolean;
+  readonly accelerationBuildSubmitted: boolean;
+  readonly accelerationBuilt: boolean;
+  readonly accelerationBuildCount: number;
+  readonly commandSubmissions: number;
+  readonly frameConfigSlots: number;
+  readonly memory: WavefrontPathTracingMemoryEstimate;
+  readonly outputProbe?: Readonly<{
+    x: number;
+    y: number;
+    rgba: readonly number[];
+    luminance: number;
+    sampledPixels: number;
+    nonZeroSamples: number;
+    maxChannel: number;
+  }> | null;
+  readonly bounces?: readonly unknown[];
+  readonly termination?: Readonly<{
+    emissive: number;
+    environment: number;
+    ambientFallback: number;
+    maxDepth: number;
+  }>;
+  readonly queueOverflow?: number;
 }
 
 export function normalizeWavefrontSceneObject(
@@ -601,6 +627,20 @@ export function supportsWavefrontPathTracingCompute(options?: {
 export function createWavefrontPathTracingComputeRenderer(
   options?: CreateWavefrontPathTracingComputeRendererOptions
 ): Promise<WavefrontPathTracingComputeRenderer>;
+export function renderWavefrontPathTracingComputeFrame(
+  options?: CreateWavefrontPathTracingComputeRendererOptions & {
+    readStats?: boolean;
+    readOutputProbe?: boolean;
+  }
+): Promise<WavefrontPathTracingComputeFrameStats>;
+export function createWavefrontPathTracingComputeShaderSource(options?: {
+  workgroupSize?: number;
+  outputTextureFormat?: GPUTextureFormat | "rgba8unorm";
+}): string;
+
+export const rendererWavefrontComputeMode: "webgpu-compute";
+export const rendererWavefrontComputeWorkgroupSize: 64;
+export const rendererWavefrontComputeStatsStride: 8;
 
 export const wavefrontPathTracingComputeLimits: Readonly<{
   workgroupSize: 64;
@@ -616,6 +656,8 @@ export const wavefrontPathTracingComputeLimits: Readonly<{
   emissiveTriangleMetadataRecordBytes: 48;
   environmentPortalRecordBytes: 96;
   accumulationRecordBytes: 16;
+  counterRecordBytes: 32;
+  indirectDispatchRecordBytes: 12;
 }>;
 export const wavefrontSceneObjectKinds: Readonly<{
   sphere: 1;

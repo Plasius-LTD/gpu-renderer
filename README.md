@@ -141,6 +141,10 @@ const renderer = await createWavefrontPathTracingComputeRenderer({
 renderer.renderOnce();
 ```
 
+Existing consumers that still call `renderFrame(...)` or
+`renderWavefrontPathTracingComputeFrame(...)` remain supported as compatibility
+wrappers around the canonical mesh renderer.
+
 Analytic scene objects remain available for debug fixtures:
 
 ```js
@@ -203,7 +207,12 @@ sampling, temporal accumulation, and better material PDFs are hardened.
 For static mesh scenes, the GPU acceleration build is submitted once and then
 reused by subsequent frames. Per-frame tracing writes one dynamic uniform slot
 per tile/sample or post-process pass and batches tile tracing, tile output,
-optional denoise, and presentation into a single command submission. WebGPU
+optional denoise, and presentation into a single command submission. After each
+primary-ray or compaction pass, the GPU writes the active-ray workgroup count
+into the counter buffer and the encoder copies it into an indirect-dispatch
+argument buffer. Intersection and surface-resolution passes therefore scale
+with active continuation rays instead of the maximum tile capacity, while still
+avoiding CPU readback between bounces. WebGPU
 still preserves ordering between dependent bounce passes, but the renderer no
 longer forces one CPU queue submission per tile/sample.
 Environment-light portals can additionally guide and gate sky/HDRI contribution
@@ -242,6 +251,8 @@ renderer.bindXrManager(xr, {
 - `createRayTracingRenderPlan(options)`
 - `createWavefrontPathTracingComputeRenderer(options)`
 - `createWavefrontPathTracingComputeConfig(options)`
+- `createWavefrontPathTracingComputeShaderSource(options?)`
+- `renderWavefrontPathTracingComputeFrame(options)`
 - `createWavefrontReferenceRay(config, options?)`
 - `intersectWavefrontReferenceTriangle(ray, triangle, options?)`
 - `traceWavefrontReferenceTriangles(config, ray, triangles, options?)`
@@ -254,6 +265,9 @@ renderer.bindXrManager(xr, {
 - `packWavefrontSceneObjects(sceneObjects, capacity?)`
 - `packWavefrontTriangles(triangles, capacity?)`
 - `packWavefrontBvhNodes(nodes, capacity?)`
+- `rendererWavefrontComputeMode`
+- `rendererWavefrontComputeWorkgroupSize`
+- `rendererWavefrontComputeStatsStride`
 - `bindRendererToXrManager(renderer, xrManager, options)`
 - `defaultRendererClearColor`
 - `rendererDebugOwner`
@@ -298,6 +312,8 @@ npm run pack:check
 ## Files
 
 - `src/index.js`: WebGPU renderer runtime and XR binding helper.
+- `src/wavefront-compute.js`: Canonical WebGPU mesh BVH wavefront renderer,
+  debug scene-object fixtures, and deterministic reference helpers.
 - `src/index.d.ts`: public API typings.
 - `tests/package.test.js`: unit tests for renderer lifecycle behavior.
 - `docs/design/worker-manifest-integration.md`: renderer frame-stage DAG model.

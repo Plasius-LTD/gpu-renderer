@@ -10,6 +10,7 @@ import {
   createWavefrontGpuMeshSource,
   createWavefrontMeshAcceleration,
   createWavefrontPathTracingComputeConfig,
+  createWavefrontPathTracingComputeShaderSource,
   createWavefrontReferenceRay,
   estimateWavefrontPathTracingMemory,
   intersectWavefrontReferenceTriangle,
@@ -18,6 +19,10 @@ import {
   packWavefrontBvhNodes,
   packWavefrontSceneObjects,
   packWavefrontTriangles,
+  renderWavefrontPathTracingComputeFrame,
+  rendererWavefrontComputeMode,
+  rendererWavefrontComputeStatsStride,
+  rendererWavefrontComputeWorkgroupSize,
   supportsWavefrontPathTracingCompute,
   traceWavefrontReferenceTriangles,
   wavefrontMaterialKinds,
@@ -32,6 +37,7 @@ const gpuConstants = Object.freeze({
     COPY_SRC: 4,
     STORAGE: 8,
     UNIFORM: 16,
+    INDIRECT: 32,
   }),
   texture: Object.freeze({
     COPY_SRC: 1,
@@ -136,6 +142,10 @@ class FakeWavefrontComputePass {
     this.device.dispatches.push(groups);
   }
 
+  dispatchWorkgroupsIndirect(buffer, offset) {
+    this.device.indirectDispatches.push({ buffer, offset });
+  }
+
   end() {
     this.device.computePassesEnded += 1;
   }
@@ -184,6 +194,16 @@ class FakeWavefrontCommandEncoder {
     this.device.copyTextureToBufferCalls.push({ source, destination, size });
   }
 
+  copyBufferToBuffer(source, sourceOffset, destination, destinationOffset, size) {
+    this.device.copyBufferToBufferCalls.push({
+      source,
+      sourceOffset,
+      destination,
+      destinationOffset,
+      size,
+    });
+  }
+
   finish() {
     return { encoderLabel: this.descriptor.label };
   }
@@ -198,6 +218,8 @@ class FakeWavefrontDevice {
     this.buffers = [];
     this.textures = [];
     this.dispatches = [];
+    this.indirectDispatches = [];
+    this.copyBufferToBufferCalls = [];
     this.copyTextureToBufferCalls = [];
     this.drawCalls = [];
     this.pipelineLabels = [];
@@ -322,6 +344,7 @@ test("wavefront compute config keeps 4K queues tile-bounded", () => {
   });
 
   assert.equal(config.width, 3840);
+  assert.equal(config.mode, rendererWavefrontComputeMode);
   assert.equal(config.height, 2160);
   assert.equal(config.maxDepth, 8);
   assert.equal(config.samplesPerPixel, 1);
@@ -329,14 +352,35 @@ test("wavefront compute config keeps 4K queues tile-bounded", () => {
   assert.equal(config.requiresMeshBvhForDisplayQuality, true);
   assert.equal(config.tilePixelCapacity, 128 * 128);
   assert.equal(wavefrontPathTracingComputeLimits.hitRecordBytes, 208);
+  assert.equal(wavefrontPathTracingComputeLimits.workgroupSize, rendererWavefrontComputeWorkgroupSize);
+  assert.equal(rendererWavefrontComputeStatsStride, 8);
   assert.equal(config.memory.queueBytes, 128 * 128 * wavefrontPathTracingComputeLimits.rayRecordBytes);
   assert.equal(config.memory.hitBytes, 128 * 128 * wavefrontPathTracingComputeLimits.hitRecordBytes);
   assert.equal(config.memory.configBytes, 272);
+  assert.equal(config.memory.counterBytes, wavefrontPathTracingComputeLimits.counterRecordBytes);
+  assert.equal(
+    config.memory.indirectDispatchBytes,
+    wavefrontPathTracingComputeLimits.indirectDispatchRecordBytes
+  );
   assert.equal(config.memory.bvhLeafReferenceBytes, 0);
   assert.equal(config.memory.emissiveTriangleMetadataBytes, 0);
   assert.equal(config.memory.environmentPortalBytes, 32 * wavefrontPathTracingComputeLimits.environmentPortalRecordBytes);
   assert.ok(config.memory.queueBytes < 134_217_728);
   assert.ok(config.memory.hitBytes < 134_217_728);
+});
+
+test("wavefront compute compatibility exports expose the canonical mesh shader", () => {
+  const shaderSource = createWavefrontPathTracingComputeShaderSource();
+
+  assert.match(shaderSource, /fn prepareMeshTrianglesAndLeaves/);
+  assert.match(shaderSource, /fn intersect_bvh/);
+  assert.match(shaderSource, /fn intersect_triangle/);
+  assert.match(shaderSource, /fn write_active_dispatch_args/);
+  assert.doesNotMatch(shaderSource, /intersectSphere/);
+  assert.throws(
+    () => createWavefrontPathTracingComputeShaderSource({ workgroupSize: 32 }),
+    /requires workgroupSize=64/
+  );
 });
 
 test("wavefront compute config exposes bounded samples per pixel", () => {
@@ -558,6 +602,26 @@ test("wavefront compute guides and gates environment lighting through portals", 
   assert.match(source, /fn gated_environment_radiance/);
   assert.match(source, /fn sample_environment_portal_direction/);
   assert.match(source, /gated_environment_radiance\(ray\.origin\.xyz, ray\.direction\.xyz\)/);
+});
+
+test("wavefront compute applies environment ambient on terminal surface collisions", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /fn terminal_surface_environment_contribution/);
+  assert.match(source, /let surfaceColor = max\(hit\.color\.xyz, config\.ambientColor\.xyz\);/);
+  assert.match(source, /let environmentFloor = max\(config\.ambientColor\.xyz, normalEnvironment \* 0\.12\);/);
+  assert.match(
+    source,
+    /let terminalEnvironment = terminal_surface_environment_contribution\(ray, hit\);/
+  );
+  assert.match(
+    source,
+    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(terminalEnvironment \* sample_weight\(\), 1\.0\);/
+  );
+  assert.match(
+    source,
+    /let overflowEnvironment = terminal_surface_environment_contribution\(ray, hit\);/
+  );
 });
 
 test("analytic wavefront renderer rejects display-quality requests", () => {
@@ -1162,7 +1226,7 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
       }),
       width: 8,
       height: 8,
-      tileSize: 8,
+      tileSize: 128,
       maxDepth: 2,
       samplesPerPixel: 2,
       denoise: true,
@@ -1186,6 +1250,7 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     const frame = renderer.renderOnce();
     const secondFrame = renderer.renderOnce();
     const probe = await renderer.readOutputProbe({ x: 2, y: 3 });
+    const compatibilityFrame = await renderer.renderFrame({ probe: { x: 2, y: 3 } });
     const nextConfig = renderer.updateSceneObjects([]);
     const snapshot = renderer.getSnapshot();
 
@@ -1208,6 +1273,16 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     assert.equal(secondFrame.accelerationBuilt, true);
     assert.equal(secondFrame.accelerationBuildCount, 1);
     assert.equal(secondFrame.commandSubmissions, 1);
+    assert.equal(compatibilityFrame.frame, 3);
+    assert.equal(compatibilityFrame.outputProbe.sampledPixels, 1);
+    assert.equal(compatibilityFrame.outputProbe.nonZeroSamples, 1);
+    assert.equal(compatibilityFrame.outputProbe.maxChannel, 128);
+    assert.deepEqual(compatibilityFrame.termination, {
+      emissive: 0,
+      environment: 0,
+      ambientFallback: 0,
+      maxDepth: 0,
+    });
     assert.equal(frame.primaryRays, 128);
     assert.equal(frame.tiles, 1);
     assert.equal(frame.frameConfigSlots, 4);
@@ -1215,7 +1290,7 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     assert.equal(probe.y, 3);
     assert.deepEqual(probe.rgba, [32, 64, 128, 255]);
     assert.equal(nextConfig.displayQuality, true);
-    assert.equal(snapshot.frame, 2);
+    assert.equal(snapshot.frame, 3);
     assert.equal(snapshot.triangleCount, 1);
     assert.equal(snapshot.accelerationBuilt, true);
     assert.equal(snapshot.accelerationBuildCount, 1);
@@ -1223,17 +1298,53 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     assert.ok(device.pipelineLabels.includes("plasius.wavefront.prepareMeshTrianglesAndLeaves"));
     assert.ok(device.pipelineLabels.includes("plasius.wavefront.generatePrimaryRays"));
     assert.ok(device.pipelineLabels.includes("plasius.wavefront.denoiseLinearRadiance"));
+    assert.equal(
+      device.dispatches.some(([workgroupX]) => workgroupX === 256),
+      false
+    );
+    assert.ok(device.indirectDispatches.length >= 24);
+    assert.ok(device.copyBufferToBufferCalls.length >= 12);
+    assert.equal(
+      device.copyBufferToBufferCalls.every(
+        (call) => call.sourceOffset === 16 && call.destinationOffset === 0 && call.size === 12
+      ),
+      true
+    );
     assert.ok(device.computePasses >= 5);
     assert.ok(device.renderPasses >= 1);
     assert.equal(device.drawCalls.includes(3), true);
     assert.ok(device.queue.submissions.length >= 1);
     const submittedLabels = device.queue.submissions.flat().map((submission) => submission.encoderLabel);
     assert.equal(submittedLabels.filter((label) => label.includes("buildAcceleration")).length, 1);
-    assert.equal(submittedLabels.filter((label) => label.includes(".batched")).length, 2);
-    assert.equal(device.copyTextureToBufferCalls.length, 1);
+    assert.equal(submittedLabels.filter((label) => label.includes(".batched")).length, 3);
+    assert.equal(device.copyTextureToBufferCalls.length, 2);
 
     renderer.destroy();
     assert.equal(canvas.context.configured, null);
+    assert.equal(device.buffers.every((buffer) => buffer.destroyed), true);
+    assert.equal(device.textures.every((texture) => texture.destroyed), true);
+  });
+});
+
+test("wavefront compute one-shot compatibility helper renders and always destroys", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const frame = await renderWavefrontPathTracingComputeFrame({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device, {
+        limits: { maxStorageBuffersPerShaderStage: 10 },
+      }),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 1,
+      readOutputProbe: true,
+      destroy: false,
+    });
+
+    assert.equal(frame.frame, 1);
+    assert.equal(frame.outputProbe.sampledPixels, 1);
+    assert.equal(frame.outputProbe.maxChannel, 128);
     assert.equal(device.buffers.every((buffer) => buffer.destroyed), true);
     assert.equal(device.textures.every((texture) => texture.destroyed), true);
   });
