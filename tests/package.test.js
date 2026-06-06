@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   bindRendererToXrManager,
   createGpuRenderer,
@@ -15,6 +16,18 @@ import {
   rendererWorkerQueueClass,
   supportsWebGpu,
 } from "../src/index.js";
+
+const packageJson = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8")
+);
+const packageLockJson = JSON.parse(
+  readFileSync(new URL("../package-lock.json", import.meta.url), "utf8")
+);
+const demoMainSource = readFileSync(new URL("../demo/main.js", import.meta.url), "utf8");
+const cdWorkflowSource = readFileSync(
+  new URL("../.github/workflows/cd.yml", import.meta.url),
+  "utf8"
+);
 
 class FakeRenderPass {
   constructor() {
@@ -122,6 +135,65 @@ function createFakeDocument(canvasMap = {}) {
     },
   };
 }
+
+test("browser demo declares direct gpu-shared dependency before importing showcase adapters", () => {
+  assert.match(
+    demoMainSource,
+    /@plasius\/gpu-shared\/dist\/index\.js/,
+    "demo/main.js directly imports the gpu-shared browser showcase adapter"
+  );
+  assert.match(
+    packageJson.dependencies?.["@plasius/gpu-shared"] ?? "",
+    /^\^0\.1\./,
+    "package.json must declare @plasius/gpu-shared when the demo imports it directly"
+  );
+  assert.equal(
+    packageLockJson.packages?.[""]?.dependencies?.["@plasius/gpu-shared"],
+    packageJson.dependencies["@plasius/gpu-shared"],
+    "package-lock.json root metadata must keep the direct gpu-shared dependency in sync"
+  );
+});
+
+test("CD workflow creates release tags for no-bump releases before verified release creation", () => {
+  assert.match(
+    cdWorkflowSource,
+    /if \[ "\$\{BUMP\}" = "none" \]; then\s+NEW_VER="v\$\{CURRENT_VER\}"/,
+    "no-bump releases should still emit a tag name from the checked-in package version"
+  );
+  assert.match(
+    cdWorkflowSource,
+    /git tag "\$\{TAG\}"/,
+    "release metadata must create the tag before the draft release step verifies it"
+  );
+  assert.match(
+    cdWorkflowSource,
+    /git push --follow-tags origin "HEAD:\$\{GITHUB_REF_NAME\}"/,
+    "release metadata must push the newly created tag with the release commit"
+  );
+  assert.match(
+    cdWorkflowSource,
+    /gh release create "\$TAG"[\s\S]*--verify-tag[\s\S]*--draft/,
+    "draft GitHub releases should keep verifying that the tag already exists"
+  );
+});
+
+test("CD workflow computes bumped release versions without a dirty alignment pass", () => {
+  assert.match(
+    cdWorkflowSource,
+    /TARGET_VER=\$\(node -e/,
+    "bumped releases should compute the target version before invoking npm version"
+  );
+  assert.match(
+    cdWorkflowSource,
+    /NEW_VER=\$\(npm version "\$TARGET_VER" --no-git-tag-version --allow-same-version\)/,
+    "bumped releases should call npm version once so the worktree is not dirtied by a prior alignment step"
+  );
+  assert.doesNotMatch(
+    cdWorkflowSource,
+    /npm version "\$BASE_VER"/,
+    "release preparation must not run a separate package alignment npm version before the bump"
+  );
+});
 
 test("supportsWebGpu returns false when navigator.gpu is missing", () => {
   assert.equal(supportsWebGpu({ navigator: {} }), false);
