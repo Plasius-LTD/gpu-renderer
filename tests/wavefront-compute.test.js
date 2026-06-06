@@ -37,6 +37,7 @@ const gpuConstants = Object.freeze({
     COPY_SRC: 4,
     STORAGE: 8,
     UNIFORM: 16,
+    INDIRECT: 32,
   }),
   texture: Object.freeze({
     COPY_SRC: 1,
@@ -141,6 +142,10 @@ class FakeWavefrontComputePass {
     this.device.dispatches.push(groups);
   }
 
+  dispatchWorkgroupsIndirect(buffer, offset) {
+    this.device.indirectDispatches.push({ buffer, offset });
+  }
+
   end() {
     this.device.computePassesEnded += 1;
   }
@@ -189,6 +194,16 @@ class FakeWavefrontCommandEncoder {
     this.device.copyTextureToBufferCalls.push({ source, destination, size });
   }
 
+  copyBufferToBuffer(source, sourceOffset, destination, destinationOffset, size) {
+    this.device.copyBufferToBufferCalls.push({
+      source,
+      sourceOffset,
+      destination,
+      destinationOffset,
+      size,
+    });
+  }
+
   finish() {
     return { encoderLabel: this.descriptor.label };
   }
@@ -203,6 +218,8 @@ class FakeWavefrontDevice {
     this.buffers = [];
     this.textures = [];
     this.dispatches = [];
+    this.indirectDispatches = [];
+    this.copyBufferToBufferCalls = [];
     this.copyTextureToBufferCalls = [];
     this.drawCalls = [];
     this.pipelineLabels = [];
@@ -340,6 +357,11 @@ test("wavefront compute config keeps 4K queues tile-bounded", () => {
   assert.equal(config.memory.queueBytes, 128 * 128 * wavefrontPathTracingComputeLimits.rayRecordBytes);
   assert.equal(config.memory.hitBytes, 128 * 128 * wavefrontPathTracingComputeLimits.hitRecordBytes);
   assert.equal(config.memory.configBytes, 272);
+  assert.equal(config.memory.counterBytes, wavefrontPathTracingComputeLimits.counterRecordBytes);
+  assert.equal(
+    config.memory.indirectDispatchBytes,
+    wavefrontPathTracingComputeLimits.indirectDispatchRecordBytes
+  );
   assert.equal(config.memory.bvhLeafReferenceBytes, 0);
   assert.equal(config.memory.emissiveTriangleMetadataBytes, 0);
   assert.equal(config.memory.environmentPortalBytes, 32 * wavefrontPathTracingComputeLimits.environmentPortalRecordBytes);
@@ -353,6 +375,7 @@ test("wavefront compute compatibility exports expose the canonical mesh shader",
   assert.match(shaderSource, /fn prepareMeshTrianglesAndLeaves/);
   assert.match(shaderSource, /fn intersect_bvh/);
   assert.match(shaderSource, /fn intersect_triangle/);
+  assert.match(shaderSource, /fn write_active_dispatch_args/);
   assert.doesNotMatch(shaderSource, /intersectSphere/);
   assert.throws(
     () => createWavefrontPathTracingComputeShaderSource({ workgroupSize: 32 }),
@@ -1183,7 +1206,7 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
       }),
       width: 8,
       height: 8,
-      tileSize: 8,
+      tileSize: 128,
       maxDepth: 2,
       samplesPerPixel: 2,
       denoise: true,
@@ -1255,6 +1278,18 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     assert.ok(device.pipelineLabels.includes("plasius.wavefront.prepareMeshTrianglesAndLeaves"));
     assert.ok(device.pipelineLabels.includes("plasius.wavefront.generatePrimaryRays"));
     assert.ok(device.pipelineLabels.includes("plasius.wavefront.denoiseLinearRadiance"));
+    assert.equal(
+      device.dispatches.some(([workgroupX]) => workgroupX === 256),
+      false
+    );
+    assert.ok(device.indirectDispatches.length >= 24);
+    assert.ok(device.copyBufferToBufferCalls.length >= 12);
+    assert.equal(
+      device.copyBufferToBufferCalls.every(
+        (call) => call.sourceOffset === 16 && call.destinationOffset === 0 && call.size === 12
+      ),
+      true
+    );
     assert.ok(device.computePasses >= 5);
     assert.ok(device.renderPasses >= 1);
     assert.equal(device.drawCalls.includes(3), true);

@@ -97,7 +97,10 @@ mismatches are treated as release-blocking visual corruption bugs. Resolved tile
 output is written to a linear `rgba16float` radiance texture, then an optional
 two-stage full-frame GPU denoise reads across tile boundaries, writes through an
 `rgba16float` scratch texture, and tone-maps into the presented `rgba8unorm`
-texture. Low-sample
+texture. Bounce intersection and surface-resolution passes must dispatch from
+GPU-authored active-ray counts via indirect dispatch, not from fixed tile
+capacity. This keeps compaction meaningful while avoiding CPU readback between
+bounces. Low-sample
 Product Studio preview output stores compact emissive-triangle guidance metadata
 in the existing BVH buffer tail and uses it to guide diffuse continuation rays
 toward finite mesh light geometry without adding a ninth trace storage buffer.

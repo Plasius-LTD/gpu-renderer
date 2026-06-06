@@ -395,6 +395,7 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly environmentPortalBytes: number;
   readonly configBytes: number;
   readonly counterBytes: number;
+  readonly indirectDispatchBytes: number;
   readonly totalHotBufferBytes: number;
 }
 
@@ -656,6 +657,8 @@ export const wavefrontPathTracingComputeLimits: Readonly<{
   emissiveTriangleMetadataRecordBytes: 48;
   environmentPortalRecordBytes: 96;
   accumulationRecordBytes: 16;
+  counterRecordBytes: 32;
+  indirectDispatchRecordBytes: 12;
 }>;
 export const wavefrontSceneObjectKinds: Readonly<{
   sphere: 1;

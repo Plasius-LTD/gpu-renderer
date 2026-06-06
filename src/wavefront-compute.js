@@ -21,7 +21,9 @@ const EMISSIVE_TRIANGLE_INDEX_BYTES = 4;
 const ENVIRONMENT_PORTAL_RECORD_BYTES = 96;
 const ACCUMULATION_RECORD_BYTES = 16;
 const CONFIG_BUFFER_BYTES = 272;
-const COUNTER_BUFFER_BYTES = 16;
+const COUNTER_DISPATCH_ARGS_OFFSET = 16;
+const INDIRECT_DISPATCH_ARGS_BYTES = 12;
+const COUNTER_BUFFER_BYTES = 32;
 const TRACE_STORAGE_BUFFER_BINDINGS = 9;
 const HIT_TYPE_SURFACE = 0;
 const HIT_TYPE_EMISSIVE = 1;
@@ -67,6 +69,8 @@ export const wavefrontPathTracingComputeLimits = Object.freeze({
   emissiveTriangleMetadataRecordBytes: BVH_NODE_RECORD_BYTES,
   environmentPortalRecordBytes: ENVIRONMENT_PORTAL_RECORD_BYTES,
   accumulationRecordBytes: ACCUMULATION_RECORD_BYTES,
+  counterRecordBytes: COUNTER_BUFFER_BYTES,
+  indirectDispatchRecordBytes: INDIRECT_DISPATCH_ARGS_BYTES,
 });
 
 export const wavefrontSceneObjectKinds = Object.freeze({
@@ -1159,6 +1163,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     environmentPortalBytes,
     configBytes: CONFIG_BUFFER_BYTES,
     counterBytes: COUNTER_BUFFER_BYTES,
+    indirectDispatchBytes: INDIRECT_DISPATCH_ARGS_BYTES,
     totalHotBufferBytes:
       queueBytes * 2 +
       hitBytes +
@@ -1170,7 +1175,8 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
       emissiveTriangleMetadataBytes +
       environmentPortalBytes +
       CONFIG_BUFFER_BYTES +
-      COUNTER_BUFFER_BYTES,
+      COUNTER_BUFFER_BYTES +
+      INDIRECT_DISPATCH_ARGS_BYTES,
   });
 }
 
@@ -1332,6 +1338,9 @@ function getGpuUsageConstants() {
     typeof GPUShaderStage === "undefined"
   ) {
     throw new Error("WebGPU runtime unavailable. Required GPU constants are missing.");
+  }
+  if (typeof GPUBufferUsage.INDIRECT !== "number") {
+    throw new Error("WebGPU runtime unavailable. GPUBufferUsage.INDIRECT is missing.");
   }
 
   return {
@@ -2022,6 +2031,10 @@ struct Counters {
   nextCount: atomic<u32>,
   terminatedCount: atomic<u32>,
   hitCount: atomic<u32>,
+  dispatchX: u32,
+  dispatchY: u32,
+  dispatchZ: u32,
+  dispatchPad: u32,
 };
 
 struct Candidate {
@@ -2755,6 +2768,17 @@ fn tone_map_radiance(value: vec3<f32>) -> vec3<f32> {
   return pow(clamp(mapped, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
 }
 
+fn ray_workgroups_for_count(rayCount: u32) -> u32 {
+  return max(1u, (rayCount + 63u) / 64u);
+}
+
+fn write_active_dispatch_args(activeCount: u32) {
+  counters.dispatchX = ray_workgroups_for_count(activeCount);
+  counters.dispatchY = 1u;
+  counters.dispatchZ = 1u;
+  counters.dispatchPad = 0u;
+}
+
 fn denoise_range_space(value: vec3<f32>) -> vec3<f32> {
   return value / (vec3<f32>(1.0) + value);
 }
@@ -2767,6 +2791,7 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicStore(&counters.nextCount, 0u);
     atomicStore(&counters.terminatedCount, 0u);
     atomicStore(&counters.hitCount, 0u);
+    write_active_dispatch_args(config.tilePixelCount);
   }
   if (index >= config.tilePixelCount) {
     return;
@@ -3081,8 +3106,10 @@ fn compactAndSwapQueues(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
   let nextCount = atomicLoad(&counters.nextCount);
-  atomicStore(&counters.activeCount, min(nextCount, config.tilePixelCount));
+  let activeCount = min(nextCount, config.tilePixelCount);
+  atomicStore(&counters.activeCount, activeCount);
   atomicStore(&counters.nextCount, 0u);
+  write_active_dispatch_args(activeCount);
 }
 
 @compute @workgroup_size(64)
@@ -3377,9 +3404,15 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   );
   const counterBuffer = createBuffer(
     device,
-    constants.buffer.STORAGE | constants.buffer.COPY_DST,
+    constants.buffer.STORAGE | constants.buffer.COPY_DST | constants.buffer.COPY_SRC,
     COUNTER_BUFFER_BYTES,
     "plasius.wavefront.counters"
+  );
+  const activeDispatchBuffer = createBuffer(
+    device,
+    constants.buffer.INDIRECT | constants.buffer.COPY_DST,
+    INDIRECT_DISPATCH_ARGS_BYTES,
+    "plasius.wavefront.activeDispatchArgs"
   );
 
   let packedScene = packWavefrontSceneObjects(config.sceneObjects, config.sceneObjectCapacity);
@@ -3822,27 +3855,36 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function encodeTileSample(encoder, tile, configOffset) {
-    const passEncoder = encoder.beginComputePass({
-      label: "plasius.wavefront.computePass",
+    const generatePass = encoder.beginComputePass({
+      label: "plasius.wavefront.generatePrimaryRaysPass",
     });
     const tileWorkgroups = Math.ceil((tile.width * tile.height) / WORKGROUP_SIZE);
-    const capacityWorkgroups = Math.ceil(config.tilePixelCapacity / WORKGROUP_SIZE);
 
-    passEncoder.setBindGroup(0, bindGroups[0], [configOffset]);
-    passEncoder.setPipeline(pipelines.generatePrimaryRays);
-    passEncoder.dispatchWorkgroups(tileWorkgroups);
+    generatePass.setBindGroup(0, bindGroups[0], [configOffset]);
+    generatePass.setPipeline(pipelines.generatePrimaryRays);
+    generatePass.dispatchWorkgroups(tileWorkgroups);
+    generatePass.end();
 
     for (let bounceIndex = 0; bounceIndex < config.maxDepth; bounceIndex += 1) {
+      encoder.copyBufferToBuffer(
+        counterBuffer,
+        COUNTER_DISPATCH_ARGS_OFFSET,
+        activeDispatchBuffer,
+        0,
+        INDIRECT_DISPATCH_ARGS_BYTES
+      );
+      const passEncoder = encoder.beginComputePass({
+        label: `plasius.wavefront.bounce.${bounceIndex}`,
+      });
       passEncoder.setBindGroup(0, bindGroups[bounceIndex % 2], [configOffset]);
       passEncoder.setPipeline(pipelines.intersectActiveQueue);
-      passEncoder.dispatchWorkgroups(capacityWorkgroups);
+      passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
       passEncoder.setPipeline(pipelines.resolveSurfaceRecords);
-      passEncoder.dispatchWorkgroups(capacityWorkgroups);
+      passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
       passEncoder.setPipeline(pipelines.compactAndSwapQueues);
       passEncoder.dispatchWorkgroups(1);
+      passEncoder.end();
     }
-
-    passEncoder.end();
   }
 
   function encodeTileOutput(encoder, tile, configOffset) {
@@ -4080,6 +4122,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     configBuffer.destroy?.();
     bvhBuildConfigBuffer.destroy?.();
     counterBuffer.destroy?.();
+    activeDispatchBuffer.destroy?.();
     radianceTexture.destroy?.();
     denoiseScratchTexture.destroy?.();
     outputTexture.destroy?.();

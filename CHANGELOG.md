@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
   - Promoted the mesh BVH wavefront renderer source into the canonical
     `src/wavefront-compute.js` module so source, typings, tests, and package
     builds no longer drift behind generated artifacts.
+  - Changed wavefront mesh tracing to dispatch bounce intersection and
+    surface-resolution work from GPU-authored active-ray counts instead of the
+    fixed tile capacity after queue compaction.
 
 - **Fixed**
   - Fixed wavefront source ownership so display-quality mesh BVH code is not
@@ -29,6 +32,8 @@ All notable changes to this project will be documented in this file.
   - Preserved the wavefront mode/workgroup constants, shader-source helper,
     one-shot frame helper, and `renderFrame(...)` compatibility wrapper while
     promoting the mesh BVH renderer source.
+  - Fixed a production performance regression where compacted continuation
+    queues still scheduled full-capacity per-bounce workgroups.
 
 - **Security**
   - (placeholder)
