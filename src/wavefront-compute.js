@@ -1922,12 +1922,22 @@ function float32ToFloat16Bits(value) {
   return sign | (exponent << 10) | ((mantissa + 0x1000) >> 13);
 }
 
-function readEnvironmentMapComponent(data, index, fallback) {
+function environmentMapIntegerScale(data) {
+  if (data instanceof Uint8Array) {
+    return 1 / 255;
+  }
+  if (data instanceof Uint16Array) {
+    return 1 / 65535;
+  }
+  return 1;
+}
+
+function readEnvironmentMapComponent(data, index, fallback, integerScale = 1) {
   if (!data || index >= data.length) {
     return fallback;
   }
   const value = Number(data[index]);
-  return Number.isFinite(value) ? Math.max(0, value) : fallback;
+  return Number.isFinite(value) ? Math.max(0, value) * integerScale : fallback;
 }
 
 function createEnvironmentMapUploadBytes(environmentMap, fallbackColor) {
@@ -1937,16 +1947,26 @@ function createEnvironmentMapUploadBytes(environmentMap, fallbackColor) {
   const bytesPerRow = alignTo(rowBytes, 256);
   const bytes = new Uint8Array(bytesPerRow * height);
   const data = environmentMap.data;
+  const integerScale = environmentMapIntegerScale(data);
   const view = new DataView(bytes.buffer);
+  const writeComponent = (targetOffset, sourceOffset, fallback) => {
+    view.setUint16(
+      targetOffset,
+      float32ToFloat16Bits(
+        readEnvironmentMapComponent(data, sourceOffset, fallback, integerScale)
+      ),
+      true
+    );
+  };
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const sourceOffset = (y * width + x) * 4;
       const targetOffset = y * bytesPerRow + x * 8;
-      view.setUint16(targetOffset, float32ToFloat16Bits(readEnvironmentMapComponent(data, sourceOffset, fallbackColor[0])), true);
-      view.setUint16(targetOffset + 2, float32ToFloat16Bits(readEnvironmentMapComponent(data, sourceOffset + 1, fallbackColor[1])), true);
-      view.setUint16(targetOffset + 4, float32ToFloat16Bits(readEnvironmentMapComponent(data, sourceOffset + 2, fallbackColor[2])), true);
-      view.setUint16(targetOffset + 6, float32ToFloat16Bits(readEnvironmentMapComponent(data, sourceOffset + 3, fallbackColor[3] ?? 1)), true);
+      writeComponent(targetOffset, sourceOffset, fallbackColor[0]);
+      writeComponent(targetOffset + 2, sourceOffset + 1, fallbackColor[1]);
+      writeComponent(targetOffset + 4, sourceOffset + 2, fallbackColor[2]);
+      writeComponent(targetOffset + 6, sourceOffset + 3, fallbackColor[3] ?? 1);
     }
   }
 

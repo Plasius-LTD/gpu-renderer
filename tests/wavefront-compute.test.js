@@ -241,9 +241,13 @@ class FakeWavefrontDevice {
         this.queue.writes.push({ buffer, offset, byteLength: data.byteLength ?? data.length ?? 0 });
       },
       writeTexture: (destination, data, layout, size) => {
+        const byteLength = data.byteLength ?? data.length ?? 0;
+        const byteOffset = data.byteOffset ?? 0;
+        const sourceBuffer = data.buffer ?? data;
         this.queue.textureWrites.push({
           destination,
-          byteLength: data.byteLength ?? data.length ?? 0,
+          byteLength,
+          data: new Uint8Array(sourceBuffer.slice(byteOffset, byteOffset + byteLength)),
           layout,
           size,
         });
@@ -1344,9 +1348,9 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
       environmentMap: {
         width: 2,
         height: 1,
-        data: new Float32Array([
-          1.2, 0.8, 0.4, 1,
-          0.2, 0.5, 1.6, 1,
+        data: new Uint8Array([
+          255, 128, 0, 255,
+          64, 32, 16, 255,
         ]),
         intensity: 1.7,
         rotationRadians: 0.25,
@@ -1474,6 +1478,12 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     assert.equal(device.queue.textureWrites[0].size.width, 2);
     assert.equal(device.queue.textureWrites[0].size.height, 1);
     assert.equal(device.queue.textureWrites[0].layout.bytesPerRow, 256);
+    const environmentMapUpload = new DataView(device.queue.textureWrites[0].data.buffer);
+    assert.equal(environmentMapUpload.getUint16(0, true), 0x3c00);
+    assert.equal(environmentMapUpload.getUint16(4, true), 0);
+    assert.equal(environmentMapUpload.getUint16(6, true), 0x3c00);
+    assert.ok(environmentMapUpload.getUint16(8, true) > 0);
+    assert.ok(environmentMapUpload.getUint16(8, true) < 0x3c00);
     const submittedLabels = device.queue.submissions.flat().map((submission) => submission.encoderLabel);
     assert.equal(submittedLabels.filter((label) => label.includes("buildAcceleration")).length, 1);
     assert.equal(submittedLabels.filter((label) => label.includes(".batched")).length, 3);
