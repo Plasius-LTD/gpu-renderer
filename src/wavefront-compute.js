@@ -21,11 +21,12 @@ const BVH_LEAF_REF_RECORD_BYTES = 16;
 const EMISSIVE_TRIANGLE_INDEX_BYTES = 4;
 const ENVIRONMENT_PORTAL_RECORD_BYTES = 96;
 const ACCUMULATION_RECORD_BYTES = 16;
-const CONFIG_BUFFER_BYTES = 272;
+const PATH_VERTEX_RECORD_BYTES = 16;
+const CONFIG_BUFFER_BYTES = 304;
 const COUNTER_DISPATCH_ARGS_OFFSET = 16;
 const INDIRECT_DISPATCH_ARGS_BYTES = 12;
 const COUNTER_BUFFER_BYTES = 32;
-const TRACE_STORAGE_BUFFER_BINDINGS = 9;
+const TRACE_STORAGE_BUFFER_BINDINGS = 10;
 const HIT_TYPE_SURFACE = 0;
 const HIT_TYPE_EMISSIVE = 1;
 const MATERIAL_DIFFUSE = 0;
@@ -53,6 +54,7 @@ const DEFAULT_ENVIRONMENT_LIGHTING = Object.freeze({
   intensity: 1,
   mode: 0,
   exposure: 1,
+  sunlitBaseline: 0.16,
 });
 
 export const wavefrontPathTracingComputeLimits = Object.freeze({
@@ -70,6 +72,7 @@ export const wavefrontPathTracingComputeLimits = Object.freeze({
   emissiveTriangleMetadataRecordBytes: BVH_NODE_RECORD_BYTES,
   environmentPortalRecordBytes: ENVIRONMENT_PORTAL_RECORD_BYTES,
   accumulationRecordBytes: ACCUMULATION_RECORD_BYTES,
+  pathVertexRecordBytes: PATH_VERTEX_RECORD_BYTES,
   counterRecordBytes: COUNTER_BUFFER_BYTES,
   indirectDispatchRecordBytes: INDIRECT_DISPATCH_ARGS_BYTES,
 });
@@ -159,6 +162,39 @@ function asColor(value, fallback = [1, 1, 1, 1]) {
     clamp(readFiniteNumber("color[2]", value[2], fallback[2]), 0, 64),
     clamp(readFiniteNumber("color[3]", value[3], fallback[3] ?? 1), 0, 1),
   ];
+}
+
+function resolveEnvironmentMap(input = null) {
+  const source = input && typeof input === "object" ? input : null;
+  const hasTexture = Boolean(source?.view || source?.texture || source?.data);
+  const width = readPositiveInteger("environmentMap.width", source?.width, 1);
+  const height = readPositiveInteger("environmentMap.height", source?.height, 1);
+  return Object.freeze({
+    enabled: hasTexture && source?.enabled !== false,
+    width,
+    height,
+    format: typeof source?.format === "string" ? source.format : "rgba16float",
+    projection: typeof source?.projection === "string" ? source.projection : "equirectangular",
+    texture: source?.texture ?? null,
+    view: source?.view ?? null,
+    sampler: source?.sampler ?? null,
+    data: source?.data ?? null,
+    intensity: Math.max(0, readFiniteNumber("environmentMap.intensity", source?.intensity ?? source?.radianceScale, 1)),
+    rotationRadians: readFiniteNumber("environmentMap.rotationRadians", source?.rotationRadians ?? source?.rotation, 0),
+    ambientStrength: Math.max(
+      0,
+      readFiniteNumber("environmentMap.ambientStrength", source?.ambientStrength, 0.32)
+    ),
+  });
+}
+
+function resolveDeferredPathResolve(options = {}) {
+  const value =
+    options.deferredPathResolve ??
+    options.deferredResolve ??
+    options.pathResolve?.deferred ??
+    true;
+  return value !== false;
 }
 
 function emissionPower(emission) {
@@ -914,6 +950,14 @@ function resolveEnvironmentLighting(input, environmentColor, ambientColor) {
     intensity: Math.max(0.0001, readFiniteNumber("environmentLighting.intensity", source.intensity, DEFAULT_ENVIRONMENT_LIGHTING.intensity)),
     mode: readNonNegativeInteger("environmentLighting.mode", source.mode, DEFAULT_ENVIRONMENT_LIGHTING.mode),
     exposure: Math.max(0.0001, readFiniteNumber("environmentLighting.exposure", source.exposure, DEFAULT_ENVIRONMENT_LIGHTING.exposure)),
+    sunlitBaseline: Math.max(
+      0,
+      readFiniteNumber(
+        "environmentLighting.sunlitBaseline",
+        source.sunlitBaseline ?? source.daylightBaseline,
+        DEFAULT_ENVIRONMENT_LIGHTING.sunlitBaseline
+      )
+    ),
   });
 }
 
@@ -1117,6 +1161,11 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     options.tilePixelCapacity,
     DEFAULT_TILE_SIZE * DEFAULT_TILE_SIZE
   );
+  const maxDepth = clamp(
+    readPositiveInteger("maxDepth", options.maxDepth, DEFAULT_MAX_DEPTH),
+    1,
+    16
+  );
   const sceneObjectCapacity = readPositiveInteger(
     "sceneObjectCapacity",
     options.sceneObjectCapacity,
@@ -1142,6 +1191,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   const queueBytes = tilePixelCapacity * RAY_RECORD_BYTES;
   const hitBytes = tilePixelCapacity * HIT_RECORD_BYTES;
   const accumulationBytes = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
+  const pathVertexBytes = tilePixelCapacity * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
   const sceneObjectBytes = sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES;
   const triangleBytes = triangleCapacity * TRIANGLE_RECORD_BYTES;
   const bvhNodeBytes = bvhNodeCapacity * BVH_NODE_RECORD_BYTES;
@@ -1156,6 +1206,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     queuePairBytes: queueBytes * 2,
     hitBytes,
     accumulationBytes,
+    pathVertexBytes,
     sceneObjectBytes,
     triangleBytes,
     bvhNodeBytes,
@@ -1169,6 +1220,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
       queueBytes * 2 +
       hitBytes +
       accumulationBytes +
+      pathVertexBytes +
       sceneObjectBytes +
       triangleBytes +
       bvhNodeBytes +
@@ -1286,6 +1338,12 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
       options.environmentLighting?.environmentPortalMode,
     environmentPortals.length > 0
   );
+  const environmentMap = resolveEnvironmentMap(
+    options.environmentMap ??
+      options.environmentTexture ??
+      options.environmentLighting?.environmentMap
+  );
+  const deferredPathResolve = resolveDeferredPathResolve(options);
 
   return Object.freeze({
     mode: rendererWavefrontComputeMode,
@@ -1321,12 +1379,15 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     environmentPortalCount: environmentPortals.length,
     environmentPortalCapacity,
     environmentPortalMode,
+    environmentMap,
+    deferredPathResolve,
     displayQuality: options.displayQuality === true,
     requiresMeshBvhForDisplayQuality: true,
     denoise: options.denoise !== false,
     frameIndex: readNonNegativeInteger("frameIndex", options.frameIndex, 0),
     memory: estimateWavefrontPathTracingMemory({
       tilePixelCapacity,
+      maxDepth,
       sceneObjectCapacity,
       triangleCapacity,
       bvhNodeCapacity,
@@ -1550,6 +1611,18 @@ function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
   data.setUint32(260, config.environmentPortalMode ?? 0, true);
   data.setUint32(264, 0, true);
   data.setUint32(268, 0, true);
+  writeVec4(floatView, 272, [
+    config.environmentMap.enabled ? 1 : 0,
+    config.environmentMap.intensity,
+    config.environmentMap.rotationRadians,
+    config.environmentMap.ambientStrength,
+  ]);
+  writeVec4(floatView, 288, [
+    config.deferredPathResolve ? 1 : 0,
+    config.environmentLighting.sunlitBaseline,
+    0,
+    0,
+  ]);
   return bytes;
 }
 
@@ -1822,6 +1895,149 @@ function alignTo(value, alignment) {
   return Math.ceil(value / resolvedAlignment) * resolvedAlignment;
 }
 
+function float32ToFloat16Bits(value) {
+  const floatView = new Float32Array(1);
+  const intView = new Uint32Array(floatView.buffer);
+  floatView[0] = Number.isFinite(value) ? value : 0;
+  const x = intView[0];
+  const sign = (x >> 16) & 0x8000;
+  let mantissa = x & 0x7fffff;
+  let exponent = (x >> 23) & 0xff;
+
+  if (exponent === 0xff) {
+    return sign | (mantissa ? 0x7e00 : 0x7c00);
+  }
+
+  exponent = exponent - 127 + 15;
+  if (exponent >= 0x1f) {
+    return sign | 0x7c00;
+  }
+  if (exponent <= 0) {
+    if (exponent < -10) {
+      return sign;
+    }
+    mantissa = (mantissa | 0x800000) >> (1 - exponent);
+    return sign | ((mantissa + 0x1000) >> 13);
+  }
+  return sign | (exponent << 10) | ((mantissa + 0x1000) >> 13);
+}
+
+function environmentMapIntegerScale(data) {
+  if (data instanceof Uint8Array) {
+    return 1 / 255;
+  }
+  if (data instanceof Uint16Array) {
+    return 1 / 65535;
+  }
+  return 1;
+}
+
+function readEnvironmentMapComponent(data, index, fallback, integerScale = 1) {
+  if (!data || index >= data.length) {
+    return fallback;
+  }
+  const value = Number(data[index]);
+  return Number.isFinite(value) ? Math.max(0, value) * integerScale : fallback;
+}
+
+function createEnvironmentMapUploadBytes(environmentMap, fallbackColor) {
+  const width = Math.max(1, environmentMap.width);
+  const height = Math.max(1, environmentMap.height);
+  const rowBytes = width * 8;
+  const bytesPerRow = alignTo(rowBytes, 256);
+  const bytes = new Uint8Array(bytesPerRow * height);
+  const data = environmentMap.data;
+  const integerScale = environmentMapIntegerScale(data);
+  const view = new DataView(bytes.buffer);
+  const writeComponent = (targetOffset, sourceOffset, fallback) => {
+    view.setUint16(
+      targetOffset,
+      float32ToFloat16Bits(
+        readEnvironmentMapComponent(data, sourceOffset, fallback, integerScale)
+      ),
+      true
+    );
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const sourceOffset = (y * width + x) * 4;
+      const targetOffset = y * bytesPerRow + x * 8;
+      writeComponent(targetOffset, sourceOffset, fallbackColor[0]);
+      writeComponent(targetOffset + 2, sourceOffset + 1, fallbackColor[1]);
+      writeComponent(targetOffset + 4, sourceOffset + 2, fallbackColor[2]);
+      writeComponent(targetOffset + 6, sourceOffset + 3, fallbackColor[3] ?? 1);
+    }
+  }
+
+  return Object.freeze({
+    bytes,
+    bytesPerRow,
+    width,
+    height,
+  });
+}
+
+function createEnvironmentMapResource(device, constants, environmentMap, fallbackColor) {
+  if (environmentMap.view) {
+    return Object.freeze({
+      view: environmentMap.view,
+      sampler: environmentMap.sampler ?? device.createSampler({
+        label: "plasius.wavefront.environmentMapSampler",
+        addressModeU: "repeat",
+        addressModeV: "clamp-to-edge",
+        magFilter: "linear",
+        minFilter: "linear",
+      }),
+      texture: null,
+      ownsTexture: false,
+    });
+  }
+
+  if (environmentMap.texture && typeof environmentMap.texture.createView === "function") {
+    return Object.freeze({
+      view: environmentMap.texture.createView(),
+      sampler: environmentMap.sampler ?? device.createSampler({
+        label: "plasius.wavefront.environmentMapSampler",
+        addressModeU: "repeat",
+        addressModeV: "clamp-to-edge",
+        magFilter: "linear",
+        minFilter: "linear",
+      }),
+      texture: environmentMap.texture,
+      ownsTexture: false,
+    });
+  }
+
+  const upload = createEnvironmentMapUploadBytes(environmentMap, fallbackColor);
+  const texture = device.createTexture({
+    label: environmentMap.enabled
+      ? "plasius.wavefront.environmentMap"
+      : "plasius.wavefront.environmentMapFallback",
+    size: { width: upload.width, height: upload.height },
+    format: "rgba16float",
+    usage: constants.texture.TEXTURE_BINDING | constants.texture.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture },
+    upload.bytes,
+    { bytesPerRow: upload.bytesPerRow, rowsPerImage: upload.height },
+    { width: upload.width, height: upload.height, depthOrArrayLayers: 1 }
+  );
+  return Object.freeze({
+    view: texture.createView(),
+    sampler: environmentMap.sampler ?? device.createSampler({
+      label: "plasius.wavefront.environmentMapSampler",
+      addressModeU: "repeat",
+      addressModeV: "clamp-to-edge",
+      magFilter: "linear",
+      minFilter: "linear",
+    }),
+    texture,
+    ownsTexture: true,
+  });
+}
+
 async function getPipelineDiagnostics(shaderModule) {
   if (typeof shaderModule?.compilationInfo !== "function") {
     return "";
@@ -2035,6 +2251,8 @@ struct FrameConfig {
   environmentPortalMode: u32,
   _portalPad0: u32,
   _portalPad1: u32,
+  environmentMapSettings: vec4<f32>,
+  pathResolveSettings: vec4<f32>,
 };
 
 struct Counters {
@@ -2094,6 +2312,9 @@ struct EnvironmentPortal {
 @group(0) @binding(17) var finalDenoiseInputRadiance: texture_2d<f32>;
 @group(0) @binding(18) var denoisedOutputImage: texture_storage_2d<rgba8unorm, write>;
 @group(0) @binding(19) var<storage, read> environmentPortals: array<EnvironmentPortal>;
+@group(0) @binding(20) var environmentMapTexture: texture_2d<f32>;
+@group(0) @binding(21) var environmentMapSampler: sampler;
+@group(0) @binding(22) var<storage, read_write> pathVertices: array<vec4<f32>>;
 
 fn hash_u32(value: u32) -> u32 {
   var x = value;
@@ -2138,6 +2359,89 @@ fn max_component(value: vec3<f32>) -> f32 {
   return max(max(value.x, value.y), value.z);
 }
 
+fn environment_map_enabled() -> bool {
+  return config.environmentMapSettings.x > 0.5;
+}
+
+fn deferred_path_resolve_enabled() -> bool {
+  return config.pathResolveSettings.x > 0.5;
+}
+
+fn path_vertex_count_per_ray() -> u32 {
+  return config.maxDepth + 1u;
+}
+
+fn path_vertex_index(rayId: u32, depth: u32) -> u32 {
+  return rayId * path_vertex_count_per_ray() + min(depth, config.maxDepth);
+}
+
+fn clear_deferred_path(rayId: u32) {
+  if (!deferred_path_resolve_enabled()) {
+    return;
+  }
+
+  for (var depth = 0u; depth <= config.maxDepth; depth = depth + 1u) {
+    pathVertices[path_vertex_index(rayId, depth)] = vec4<f32>(0.0);
+    if (depth == config.maxDepth) {
+      break;
+    }
+  }
+}
+
+fn record_deferred_path_response(ray: RayRecord, response: vec3<f32>) {
+  if (!deferred_path_resolve_enabled() || ray.rayId >= config.tilePixelCount || ray.bounce >= config.maxDepth) {
+    return;
+  }
+  pathVertices[path_vertex_index(ray.rayId, ray.bounce)] =
+    vec4<f32>(max(response, vec3<f32>(0.0)), 1.0);
+}
+
+fn record_deferred_terminal_source(ray: RayRecord, sourceRadiance: vec3<f32>) {
+  if (!deferred_path_resolve_enabled() || ray.rayId >= config.tilePixelCount) {
+    return;
+  }
+  pathVertices[path_vertex_index(ray.rayId, config.maxDepth)] =
+    vec4<f32>(clamp_sample_radiance(sourceRadiance), 1.0);
+}
+
+fn environment_map_uv(direction: vec3<f32>) -> vec2<f32> {
+  let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
+  let rotationTurns = config.environmentMapSettings.z / 6.28318530718;
+  let u = fract(atan2(rayDirection.z, rayDirection.x) / 6.28318530718 + 0.5 + rotationTurns);
+  let v = acos(clamp(rayDirection.y, -1.0, 1.0)) / 3.14159265359;
+  return vec2<f32>(u, clamp(v, 0.0, 1.0));
+}
+
+fn environment_map_radiance(direction: vec3<f32>) -> vec3<f32> {
+  let uv = environment_map_uv(direction);
+  let texel = max(textureSampleLevel(environmentMapTexture, environmentMapSampler, uv, 0.0).rgb, vec3<f32>(0.0));
+  return texel * max(config.environmentMapSettings.y, 0.0);
+}
+
+fn procedural_environment_radiance(direction: vec3<f32>) -> vec3<f32> {
+  let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
+  let upFactor = saturate(rayDirection.y * 0.5 + 0.5);
+  let sunDirection = safe_normalize(
+    config.environmentSunDirectionIntensity.xyz,
+    vec3<f32>(0.0, 1.0, 0.0)
+  );
+  let sunGlow = pow(saturate(dot(rayDirection, sunDirection)), 192.0);
+  let gradient =
+    config.environmentHorizonColor.xyz * (1.0 - upFactor) +
+    config.environmentZenithColor.xyz * upFactor;
+  return (
+    gradient +
+    config.environmentSunColor.xyz * sunGlow
+  ) * max(config.environmentSunDirectionIntensity.w, 0.0001);
+}
+
+fn base_environment_radiance(direction: vec3<f32>) -> vec3<f32> {
+  if (environment_map_enabled()) {
+    return environment_map_radiance(direction);
+  }
+  return procedural_environment_radiance(direction);
+}
+
 fn environment_portal_radiance_scale(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
   if (config.environmentPortalCount == 0u || config.environmentPortalMode == 0u) {
     return vec3<f32>(1.0);
@@ -2177,22 +2481,9 @@ fn environment_portal_radiance_scale(origin: vec3<f32>, direction: vec3<f32>) ->
 
 fn environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
   let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
-  let upFactor = saturate(rayDirection.y * 0.5 + 0.5);
-  let sunDirection = safe_normalize(
-    config.environmentSunDirectionIntensity.xyz,
-    vec3<f32>(0.0, 1.0, 0.0)
-  );
-  let sunGlow = pow(saturate(dot(rayDirection, sunDirection)), 192.0);
-  let gradient =
-    config.environmentHorizonColor.xyz * (1.0 - upFactor) +
-    config.environmentZenithColor.xyz * upFactor;
   let portalScale = environment_portal_radiance_scale(origin, rayDirection);
   let portalHit = max_component(portalScale) > 0.0001;
-  return (
-    gradient +
-    config.environmentSunColor.xyz * sunGlow
-  ) *
-    max(config.environmentSunDirectionIntensity.w, 0.0001) *
+  return base_environment_radiance(rayDirection) *
     select(vec3<f32>(1.0), portalScale, portalHit);
 }
 
@@ -2208,16 +2499,59 @@ fn gated_environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f
   return environment_radiance(origin, direction);
 }
 
-fn terminal_surface_environment_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+fn surface_path_response(hit: HitRecord) -> vec3<f32> {
+  let color = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
+  let opacity = clamp(hit.material.z, 0.0, 1.0);
+  let materialEnergy = select(0.68, 0.92, hit.materialKind == 1u || hit.materialKind == 2u);
+  let transparentEnergy = select(materialEnergy, 0.9, hit.hitType == 3u);
+  return mix(vec3<f32>(1.0), color, max(opacity, 0.18)) * transparentEnergy;
+}
+
+fn sunlit_baseline_radiance(normal: vec3<f32>) -> vec3<f32> {
+  let baseline = max(config.pathResolveSettings.y, 0.0);
+  if (baseline <= 0.000001) {
+    return vec3<f32>(0.0);
+  }
+  let sunDirection = safe_normalize(
+    config.environmentSunDirectionIntensity.xyz,
+    vec3<f32>(0.0, 1.0, 0.0)
+  );
+  let sunFacing = saturate(dot(normal, sunDirection));
+  let skyFacing = 0.35 + saturate(normal.y * 0.5 + 0.5) * 0.65;
+  let directionalWeight = 0.38 + sunFacing * 0.62;
+  let sunTint = max(config.environmentSunColor.xyz, vec3<f32>(0.0));
+  return clamp_sample_radiance(sunTint * baseline * skyFacing * directionalWeight * 0.04);
+}
+
+fn terminal_surface_environment_source(hit: HitRecord) -> vec3<f32> {
   let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
-  let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);
   let normalEnvironment = gated_environment_radiance(
     hit.position.xyz + normal * 0.003,
     normal
   );
-  let environmentFloor = max(config.ambientColor.xyz, normalEnvironment * 0.12);
+  let sunlitFloor = sunlit_baseline_radiance(normal);
+  let ambientFloor = select(
+    max(config.ambientColor.xyz, sunlitFloor * 0.82),
+    max(config.ambientColor.xyz * 0.35, sunlitFloor * 0.58),
+    environment_map_enabled()
+  );
+  let environmentInfluence = select(
+    max(0.12, config.pathResolveSettings.y * 0.42),
+    max(config.environmentMapSettings.w, max(0.12, config.pathResolveSettings.y * 0.42)),
+    environment_map_enabled()
+  );
+  let environmentFloor = max(ambientFloor, max(sunlitFloor, normalEnvironment * environmentInfluence));
   let materialFloor = select(0.7, 1.0, hit.materialKind == 0u || hit.materialKind == 3u);
-  return clamp_sample_radiance(ray.throughput.xyz * surfaceColor * environmentFloor * materialFloor);
+  return clamp_sample_radiance(environmentFloor * materialFloor);
+}
+
+fn terminal_surface_environment_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+  let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);
+  return clamp_sample_radiance(
+    ray.throughput.xyz *
+    surfaceColor *
+    terminal_surface_environment_source(hit)
+  );
 }
 
 fn direct_environment_portal_irradiance(origin: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
@@ -2270,7 +2604,17 @@ fn surface_direct_environment_contribution(ray: RayRecord, hit: HitRecord) -> ve
 
   let normalEnvironment = gated_environment_radiance(origin, normal);
   let skyVisibility = 0.35 + saturate(normal.y * 0.5 + 0.5) * 0.45;
-  let skyIrradiance = max(config.ambientColor.xyz * 0.72, normalEnvironment * skyVisibility * 0.16);
+  let sunlitFloor = sunlit_baseline_radiance(normal);
+  let ambientIrradiance = max(
+    select(config.ambientColor.xyz * 0.72, config.ambientColor.xyz * 0.28, environment_map_enabled()),
+    sunlitFloor * select(0.72, 0.45, environment_map_enabled())
+  );
+  let environmentIrradianceScale = select(
+    max(0.16, config.pathResolveSettings.y * 0.45),
+    max(config.environmentMapSettings.w, max(0.16, config.pathResolveSettings.y * 0.45)),
+    environment_map_enabled()
+  );
+  let skyIrradiance = max(ambientIrradiance, normalEnvironment * skyVisibility * environmentIrradianceScale);
 
   let sunDirection = safe_normalize(
     config.environmentSunDirectionIntensity.xyz,
@@ -2894,6 +3238,7 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
   activeQueue[index] = make_ray(index);
+  clear_deferred_path(index);
   if (u32(config.projectionAndSampling.w) == 0u) {
     accumulation[index] = vec4<f32>(0.0);
   }
@@ -3146,25 +3491,37 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   if (hit.hitType == 1u) {
     let guidedLightWeight = select(1.0, 0.24, (ray.flags & RAY_FLAG_GUIDED_EMISSIVE) != 0u);
-    contribution = clamp_sample_radiance(
-      ray.throughput.xyz * max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight
-    );
-    accumulation[ray.rayId] =
-      accumulation[ray.rayId] + vec4<f32>(contribution * sample_weight(), 1.0);
+    let sourceRadiance = max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight;
+    if (deferred_path_resolve_enabled()) {
+      record_deferred_terminal_source(ray, sourceRadiance);
+    } else {
+      contribution = clamp_sample_radiance(ray.throughput.xyz * sourceRadiance);
+      accumulation[ray.rayId] =
+        accumulation[ray.rayId] + vec4<f32>(contribution * sample_weight(), 1.0);
+    }
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
 
   if (hit.hitType == 2u) {
-    contribution = clamp_sample_radiance(ray.throughput.xyz * max(hit.color.xyz, config.ambientColor.xyz));
-    accumulation[ray.rayId] =
-      accumulation[ray.rayId] + vec4<f32>(contribution * sample_weight(), 1.0);
+    if (deferred_path_resolve_enabled()) {
+      record_deferred_terminal_source(ray, hit.color.xyz);
+    } else {
+      contribution = clamp_sample_radiance(ray.throughput.xyz * max(hit.color.xyz, config.ambientColor.xyz));
+      accumulation[ray.rayId] =
+        accumulation[ray.rayId] + vec4<f32>(contribution * sample_weight(), 1.0);
+    }
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
 
+  let response = surface_path_response(hit);
+  record_deferred_path_response(ray, response);
+
   let shouldEstimateDirectEnvironment =
-    (hit.materialKind == 0u || hit.materialKind == 1u) && hit.material.z >= 0.95;
+    !deferred_path_resolve_enabled() &&
+    (hit.materialKind == 0u || hit.materialKind == 1u) &&
+    hit.material.z >= 0.95;
   if (shouldEstimateDirectEnvironment) {
     let directEnvironment = surface_direct_environment_contribution(ray, hit);
     accumulation[ray.rayId] =
@@ -3172,9 +3529,13 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   }
 
   if (ray.bounce + 1u >= config.maxDepth) {
-    let terminalEnvironment = terminal_surface_environment_contribution(ray, hit);
-    accumulation[ray.rayId] =
-      accumulation[ray.rayId] + vec4<f32>(terminalEnvironment * sample_weight(), 1.0);
+    if (deferred_path_resolve_enabled()) {
+      record_deferred_terminal_source(ray, terminal_surface_environment_source(hit));
+    } else {
+      let terminalEnvironment = terminal_surface_environment_contribution(ray, hit);
+      accumulation[ray.rayId] =
+        accumulation[ray.rayId] + vec4<f32>(terminalEnvironment * sample_weight(), 1.0);
+    }
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
@@ -3183,17 +3544,17 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let scatter = scatter_direction(ray, hit, seed);
   let nextIndex = atomicAdd(&counters.nextCount, 1u);
   if (nextIndex >= config.tilePixelCount) {
-    let overflowEnvironment = terminal_surface_environment_contribution(ray, hit);
-    accumulation[ray.rayId] =
-      accumulation[ray.rayId] + vec4<f32>(overflowEnvironment * sample_weight(), 1.0);
+    if (deferred_path_resolve_enabled()) {
+      record_deferred_terminal_source(ray, terminal_surface_environment_source(hit));
+    } else {
+      let overflowEnvironment = terminal_surface_environment_contribution(ray, hit);
+      accumulation[ray.rayId] =
+        accumulation[ray.rayId] + vec4<f32>(overflowEnvironment * sample_weight(), 1.0);
+    }
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
-  let color = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
-  let opacity = clamp(hit.material.z, 0.0, 1.0);
-  let materialEnergy = select(0.68, 0.92, hit.materialKind == 1u || hit.materialKind == 2u);
-  let transparentEnergy = select(materialEnergy, 0.9, hit.hitType == 3u);
-  let throughput = ray.throughput.xyz * mix(vec3<f32>(1.0), color, max(opacity, 0.18)) * transparentEnergy;
+  let throughput = ray.throughput.xyz * response;
   nextQueue[nextIndex] = RayRecord(
     ray.rayId,
     ray.rayId,
@@ -3221,6 +3582,27 @@ fn compactAndSwapQueues(@builtin(global_invocation_id) globalId: vec3<u32>) {
   write_active_dispatch_args(activeCount);
 }
 
+fn resolve_deferred_path_radiance(rayId: u32) -> vec3<f32> {
+  let terminal = pathVertices[path_vertex_index(rayId, config.maxDepth)];
+  if (terminal.w <= 0.0) {
+    return vec3<f32>(0.0);
+  }
+
+  var radiance = terminal.xyz;
+  var depth = config.maxDepth;
+  loop {
+    if (depth == 0u) {
+      break;
+    }
+    depth = depth - 1u;
+    let response = pathVertices[path_vertex_index(rayId, depth)];
+    if (response.w > 0.0) {
+      radiance = radiance * response.xyz;
+    }
+  }
+  return clamp_sample_radiance(radiance);
+}
+
 @compute @workgroup_size(64)
 fn accumulateTerminalRadiance(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let index = globalId.x;
@@ -3230,7 +3612,12 @@ fn accumulateTerminalRadiance(@builtin(global_invocation_id) globalId: vec3<u32>
   let localX = index % config.tileWidth;
   let localY = index / config.tileWidth;
   let pixel = vec2<i32>(i32(config.tileX + localX), i32(config.tileY + localY));
-  let radiance = max(accumulation[index].xyz, vec3<f32>(0.0));
+  var radiance = max(accumulation[index].xyz, vec3<f32>(0.0));
+  if (deferred_path_resolve_enabled()) {
+    let resolved = resolve_deferred_path_radiance(index) * sample_weight();
+    radiance = clamp_sample_radiance(radiance + resolved);
+    accumulation[index] = vec4<f32>(radiance, 1.0);
+  }
 
   textureStore(radianceImage, pixel, vec4<f32>(radiance, 1.0));
   if (config.denoise == 0u) {
@@ -3373,6 +3760,137 @@ function createWavefrontDeviceDescriptor(adapter, options = {}) {
   return Object.keys(descriptor).length > 0 ? descriptor : undefined;
 }
 
+function readGpuLimit(adapter, device, name) {
+  const adapterValue = Number(adapter?.limits?.[name]);
+  if (Number.isFinite(adapterValue)) {
+    return adapterValue;
+  }
+  const deviceValue = Number(device?.limits?.[name]);
+  return Number.isFinite(deviceValue) ? deviceValue : null;
+}
+
+function createAdapterInfoSnapshot(adapter) {
+  const info = adapter?.info;
+  if (!info || typeof info !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    vendor: typeof info.vendor === "string" ? info.vendor : "",
+    architecture: typeof info.architecture === "string" ? info.architecture : "",
+    device: typeof info.device === "string" ? info.device : "",
+    description: typeof info.description === "string" ? info.description : "",
+  });
+}
+
+function createGpuAdapterParallelismDiagnostics(adapter, device) {
+  return Object.freeze({
+    physicalCoreCount: null,
+    physicalCoreCountAvailable: false,
+    physicalCoreCountUnavailableReason: "WebGPU does not expose physical GPU core counts.",
+    adapterInfo: createAdapterInfoSnapshot(adapter),
+    adapterLimits: Object.freeze({
+      maxComputeInvocationsPerWorkgroup: readGpuLimit(adapter, device, "maxComputeInvocationsPerWorkgroup"),
+      maxComputeWorkgroupSizeX: readGpuLimit(adapter, device, "maxComputeWorkgroupSizeX"),
+      maxComputeWorkgroupSizeY: readGpuLimit(adapter, device, "maxComputeWorkgroupSizeY"),
+      maxComputeWorkgroupSizeZ: readGpuLimit(adapter, device, "maxComputeWorkgroupSizeZ"),
+      maxComputeWorkgroupsPerDimension: readGpuLimit(adapter, device, "maxComputeWorkgroupsPerDimension"),
+      maxStorageBuffersPerShaderStage: readGpuLimit(adapter, device, "maxStorageBuffersPerShaderStage"),
+      maxStorageBufferBindingSize: readGpuLimit(adapter, device, "maxStorageBufferBindingSize"),
+    }),
+    configuredWorkgroupSize: WORKGROUP_SIZE,
+  });
+}
+
+function createGpuParallelismCounters() {
+  return {
+    directDispatches: 0,
+    directWorkgroups: 0,
+    directShaderInvocations: 0,
+    multiWorkgroupDispatches: 0,
+    largestDirectWorkgroupsPerDispatch: 0,
+    indirectDispatches: 0,
+    estimatedIndirectWorkgroupsUpperBound: 0,
+    estimatedIndirectShaderInvocationsUpperBound: 0,
+    indirectDispatchesWithMultiWorkgroupCapacity: 0,
+    largestEstimatedIndirectWorkgroupsPerDispatch: 0,
+  };
+}
+
+function countDispatchWorkgroups(groups) {
+  return groups.reduce((product, value) => {
+    const numeric = Number(value ?? 1);
+    const count = Number.isFinite(numeric) ? Math.max(1, Math.trunc(numeric)) : 1;
+    return product * count;
+  }, 1);
+}
+
+function recordDirectDispatch(parallelism, groups, invocationsPerWorkgroup = WORKGROUP_SIZE) {
+  const workgroups = countDispatchWorkgroups(groups);
+  parallelism.directDispatches += 1;
+  parallelism.directWorkgroups += workgroups;
+  parallelism.directShaderInvocations += workgroups * invocationsPerWorkgroup;
+  parallelism.largestDirectWorkgroupsPerDispatch = Math.max(
+    parallelism.largestDirectWorkgroupsPerDispatch,
+    workgroups
+  );
+  if (workgroups > 1) {
+    parallelism.multiWorkgroupDispatches += 1;
+  }
+}
+
+function recordIndirectDispatch(parallelism, estimatedWorkgroupsUpperBound, invocationsPerWorkgroup = WORKGROUP_SIZE) {
+  const workgroups = Math.max(1, Math.trunc(Number(estimatedWorkgroupsUpperBound) || 1));
+  parallelism.indirectDispatches += 1;
+  parallelism.estimatedIndirectWorkgroupsUpperBound += workgroups;
+  parallelism.estimatedIndirectShaderInvocationsUpperBound += workgroups * invocationsPerWorkgroup;
+  parallelism.largestEstimatedIndirectWorkgroupsPerDispatch = Math.max(
+    parallelism.largestEstimatedIndirectWorkgroupsPerDispatch,
+    workgroups
+  );
+  if (workgroups > 1) {
+    parallelism.indirectDispatchesWithMultiWorkgroupCapacity += 1;
+  }
+}
+
+function createGpuParallelismDiagnostics(adapterDiagnostics, counters) {
+  const totalEstimatedWorkgroupsUpperBound =
+    counters.directWorkgroups + counters.estimatedIndirectWorkgroupsUpperBound;
+  const totalEstimatedShaderInvocationsUpperBound =
+    counters.directShaderInvocations + counters.estimatedIndirectShaderInvocationsUpperBound;
+  const exposesMultiWorkgroupParallelism =
+    counters.multiWorkgroupDispatches > 0 || counters.indirectDispatchesWithMultiWorkgroupCapacity > 0;
+  return Object.freeze({
+    ...adapterDiagnostics,
+    directDispatches: counters.directDispatches,
+    directWorkgroups: counters.directWorkgroups,
+    directShaderInvocations: counters.directShaderInvocations,
+    multiWorkgroupDispatches: counters.multiWorkgroupDispatches,
+    largestDirectWorkgroupsPerDispatch: counters.largestDirectWorkgroupsPerDispatch,
+    indirectDispatches: counters.indirectDispatches,
+    estimatedIndirectWorkgroupsUpperBound: counters.estimatedIndirectWorkgroupsUpperBound,
+    estimatedIndirectShaderInvocationsUpperBound: counters.estimatedIndirectShaderInvocationsUpperBound,
+    indirectDispatchesWithMultiWorkgroupCapacity: counters.indirectDispatchesWithMultiWorkgroupCapacity,
+    largestEstimatedIndirectWorkgroupsPerDispatch: counters.largestEstimatedIndirectWorkgroupsPerDispatch,
+    totalEstimatedWorkgroupsUpperBound,
+    totalEstimatedShaderInvocationsUpperBound,
+    exposesMultiWorkgroupParallelism,
+    likelyUsesMoreThanOnePhysicalGpuCore: null,
+    coreUtilizationStatus: "not-exposed-by-webgpu",
+  });
+}
+
+function createEnvironmentMapSnapshot(environmentMap) {
+  return Object.freeze({
+    enabled: environmentMap.enabled,
+    width: environmentMap.width,
+    height: environmentMap.height,
+    projection: environmentMap.projection,
+    intensity: environmentMap.intensity,
+    rotationRadians: environmentMap.rotationRadians,
+    ambientStrength: environmentMap.ambientStrength,
+  });
+}
+
 export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   assertAnalyticDisplayQualityPolicy(options);
   const constants = getGpuUsageConstants();
@@ -3394,6 +3912,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   const device = await adapter.requestDevice(createWavefrontDeviceDescriptor(adapter, options));
+  const gpuAdapterParallelism = createGpuAdapterParallelismDiagnostics(adapter, device);
   const context = canvas.getContext("webgpu");
   if (!context || typeof context.configure !== "function") {
     throw new Error("Canvas WebGPU context does not support configure().");
@@ -3427,6 +3946,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   const rayQueueBytes = config.tilePixelCapacity * RAY_RECORD_BYTES;
   const hitBytes = config.tilePixelCapacity * HIT_RECORD_BYTES;
   const accumulationBytes = config.tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
+  const pathVertexBytes = config.tilePixelCapacity * (config.maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
   const activeQueue = createBuffer(device, bufferUsage, rayQueueBytes, "plasius.wavefront.activeQueue");
   const nextQueue = createBuffer(device, bufferUsage, rayQueueBytes, "plasius.wavefront.nextQueue");
   const hitBuffer = createBuffer(device, bufferUsage, hitBytes, "plasius.wavefront.hitBuffer");
@@ -3435,6 +3955,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     bufferUsage,
     accumulationBytes,
     "plasius.wavefront.accumulation"
+  );
+  const pathVertexBuffer = createBuffer(
+    device,
+    bufferUsage,
+    pathVertexBytes,
+    "plasius.wavefront.pathVertices"
   );
   const sceneObjectBuffer = createBuffer(
     device,
@@ -3493,9 +4019,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       ? uniformOffsetAlignment
       : CONFIG_BUFFER_BYTES
   );
+  const outputConfigSlotCount = config.deferredPathResolve ? 0 : tiles.length;
   const frameConfigSlotCount = Math.max(
     1,
-    tiles.length * config.samplesPerPixel + tiles.length + (config.denoise ? 1 : 0)
+    tiles.length * config.samplesPerPixel + outputConfigSlotCount + (config.denoise ? 1 : 0)
   );
   const configBuffer = createBuffer(
     device,
@@ -3583,6 +4110,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     magFilter: "nearest",
     minFilter: "nearest",
   });
+  const environmentMapResource = createEnvironmentMapResource(
+    device,
+    constants,
+    config.environmentMap,
+    config.environmentColor
+  );
 
   const traceBindGroupLayout = device.createBindGroupLayout({
     label: "plasius.wavefront.traceBindGroupLayout",
@@ -3611,6 +4144,9 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         storageTexture: { access: "write-only", format: "rgba16float" },
       },
       { binding: 19, visibility: constants.shader.COMPUTE, buffer: { type: "read-only-storage" } },
+      { binding: 20, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 21, visibility: constants.shader.COMPUTE, sampler: { type: "filtering" } },
+      { binding: 22, visibility: constants.shader.COMPUTE, buffer: { type: "storage" } },
     ],
   });
   const accelerationBindGroupLayout = device.createBindGroupLayout({
@@ -3787,6 +4323,9 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         { binding: 9, resource: { buffer: bvhNodeBuffer } },
         { binding: 16, resource: radianceView },
         { binding: 19, resource: { buffer: environmentPortalBuffer } },
+        { binding: 20, resource: environmentMapResource.view },
+        { binding: 21, resource: environmentMapResource.sampler },
+        { binding: 22, resource: { buffer: pathVertexBuffer } },
       ],
     });
   }
@@ -3881,6 +4420,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   let accelerationBuilt = !config.gpuAccelerationBuildRequired;
   let accelerationBuildCount = 0;
   let activeCameraOptions = options.camera ?? DEFAULT_CAMERA;
+  let lastGpuParallelism = createGpuParallelismDiagnostics(
+    gpuAdapterParallelism,
+    createGpuParallelismCounters()
+  );
 
   function createFrameConfigWriter(frameIndex) {
     let slot = 0;
@@ -3899,7 +4442,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     };
   }
 
-  function dispatchGpuAccelerationBuild(frameIndex) {
+  function dispatchGpuAccelerationBuild(frameIndex, parallelism) {
     if (!config.gpuAccelerationBuildRequired || accelerationBuilt) {
       return false;
     }
@@ -3938,24 +4481,32 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
     passEncoder.setBindGroup(0, bvhBuildBindGroup, [0]);
     passEncoder.setPipeline(pipelines.prepareMeshTrianglesAndLeaves);
-    passEncoder.dispatchWorkgroups(Math.ceil(config.bvhLeafSortCapacity / WORKGROUP_SIZE));
+    const prepareWorkgroups = Math.ceil(config.bvhLeafSortCapacity / WORKGROUP_SIZE);
+    passEncoder.dispatchWorkgroups(prepareWorkgroups);
+    recordDirectDispatch(parallelism, [prepareWorkgroups]);
     passEncoder.setPipeline(pipelines.sortBvhLeafRefs);
     for (let stageIndex = 0; stageIndex < config.bvhSortStages.length; stageIndex += 1) {
       passEncoder.setBindGroup(0, bvhBuildBindGroup, [
         (stageIndex + 1) * configBufferStride,
       ]);
-      passEncoder.dispatchWorkgroups(Math.ceil(config.bvhLeafSortCapacity / WORKGROUP_SIZE));
+      const sortWorkgroups = Math.ceil(config.bvhLeafSortCapacity / WORKGROUP_SIZE);
+      passEncoder.dispatchWorkgroups(sortWorkgroups);
+      recordDirectDispatch(parallelism, [sortWorkgroups]);
     }
     passEncoder.setBindGroup(0, bvhBuildBindGroup, [0]);
     passEncoder.setPipeline(pipelines.writeSortedBvhLeaves);
-    passEncoder.dispatchWorkgroups(Math.ceil(config.triangleCount / WORKGROUP_SIZE));
+    const leafWriteWorkgroups = Math.ceil(config.triangleCount / WORKGROUP_SIZE);
+    passEncoder.dispatchWorkgroups(leafWriteWorkgroups);
+    recordDirectDispatch(parallelism, [leafWriteWorkgroups]);
     passEncoder.setPipeline(pipelines.buildBvhInternalLevel);
     for (let levelIndex = 0; levelIndex < config.bvhBuildLevels.length; levelIndex += 1) {
       const buildLevel = config.bvhBuildLevels[levelIndex];
       passEncoder.setBindGroup(0, bvhBuildBindGroup, [
         (buildLevelConfigStart + levelIndex) * configBufferStride,
       ]);
-      passEncoder.dispatchWorkgroups(Math.ceil(buildLevel.count / WORKGROUP_SIZE));
+      const levelWorkgroups = Math.ceil(buildLevel.count / WORKGROUP_SIZE);
+      passEncoder.dispatchWorkgroups(levelWorkgroups);
+      recordDirectDispatch(parallelism, [levelWorkgroups]);
     }
     passEncoder.end();
     device.queue.submit([encoder.finish()]);
@@ -3964,7 +4515,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     return true;
   }
 
-  function encodeTileSample(encoder, tile, configOffset) {
+  function encodeTileSample(encoder, tile, configOffset, parallelism) {
     const generatePass = encoder.beginComputePass({
       label: "plasius.wavefront.generatePrimaryRaysPass",
     });
@@ -3973,6 +4524,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     generatePass.setBindGroup(0, bindGroups[0], [configOffset]);
     generatePass.setPipeline(pipelines.generatePrimaryRays);
     generatePass.dispatchWorkgroups(tileWorkgroups);
+    recordDirectDispatch(parallelism, [tileWorkgroups]);
     generatePass.end();
 
     for (let bounceIndex = 0; bounceIndex < config.maxDepth; bounceIndex += 1) {
@@ -3989,15 +4541,18 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       passEncoder.setBindGroup(0, bindGroups[bounceIndex % 2], [configOffset]);
       passEncoder.setPipeline(pipelines.intersectActiveQueue);
       passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
+      recordIndirectDispatch(parallelism, tileWorkgroups);
       passEncoder.setPipeline(pipelines.resolveSurfaceRecords);
       passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
+      recordIndirectDispatch(parallelism, tileWorkgroups);
       passEncoder.setPipeline(pipelines.compactAndSwapQueues);
       passEncoder.dispatchWorkgroups(1);
+      recordDirectDispatch(parallelism, [1], 1);
       passEncoder.end();
     }
   }
 
-  function encodeTileOutput(encoder, tile, configOffset) {
+  function encodeTileOutput(encoder, tile, configOffset, parallelism) {
     const passEncoder = encoder.beginComputePass({
       label: "plasius.wavefront.outputPass",
     });
@@ -4006,19 +4561,23 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     passEncoder.setBindGroup(0, bindGroups[0], [configOffset]);
     passEncoder.setPipeline(pipelines.accumulateTerminalRadiance);
     passEncoder.dispatchWorkgroups(tileWorkgroups);
+    recordDirectDispatch(parallelism, [tileWorkgroups]);
     passEncoder.end();
   }
 
-  function encodeDenoise(encoder, configOffset) {
+  function encodeDenoise(encoder, configOffset, parallelism) {
     if (!config.denoise) {
       return;
     }
+    const denoiseWorkgroupsX = Math.ceil(config.width / 8);
+    const denoiseWorkgroupsY = Math.ceil(config.height / 8);
     const radiancePass = encoder.beginComputePass({
       label: "plasius.wavefront.denoiseRadiancePass",
     });
     radiancePass.setBindGroup(0, denoiseRadianceBindGroup, [configOffset]);
     radiancePass.setPipeline(pipelines.denoiseLinearRadiance);
-    radiancePass.dispatchWorkgroups(Math.ceil(config.width / 8), Math.ceil(config.height / 8));
+    radiancePass.dispatchWorkgroups(denoiseWorkgroupsX, denoiseWorkgroupsY);
+    recordDirectDispatch(parallelism, [denoiseWorkgroupsX, denoiseWorkgroupsY]);
     radiancePass.end();
 
     const resolvePass = encoder.beginComputePass({
@@ -4026,7 +4585,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
     resolvePass.setBindGroup(0, denoiseResolveBindGroup, [configOffset]);
     resolvePass.setPipeline(pipelines.resolveDenoisedOutputImage);
-    resolvePass.dispatchWorkgroups(Math.ceil(config.width / 8), Math.ceil(config.height / 8));
+    resolvePass.dispatchWorkgroups(denoiseWorkgroupsX, denoiseWorkgroupsY);
+    recordDirectDispatch(parallelism, [denoiseWorkgroupsX, denoiseWorkgroupsY]);
     resolvePass.end();
   }
 
@@ -4049,7 +4609,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     passEncoder.end();
   }
 
-  function dispatchFrame(frameIndex) {
+  function dispatchFrame(frameIndex, parallelism) {
     const writeFrameConfig = createFrameConfigWriter(frameIndex);
     let submissionCount = 0;
     let encodedFramePasses = 0;
@@ -4086,20 +4646,25 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           sampleIndex,
           sampleWeight: 1 / config.samplesPerPixel,
         });
-        encodeTileSample(reserveEncoder(), tile, configOffset);
+        encodeTileSample(reserveEncoder(), tile, configOffset, parallelism);
+        if (config.deferredPathResolve) {
+          encodeTileOutput(reserveEncoder(), tile, configOffset, parallelism);
+        }
       }
-      const outputConfigOffset = writeFrameConfig(tile, {
-        sampleIndex: 0,
-        sampleWeight: 1 / config.samplesPerPixel,
-      });
-      encodeTileOutput(reserveEncoder(), tile, outputConfigOffset);
+      if (!config.deferredPathResolve) {
+        const outputConfigOffset = writeFrameConfig(tile, {
+          sampleIndex: 0,
+          sampleWeight: 1 / config.samplesPerPixel,
+        });
+        encodeTileOutput(reserveEncoder(), tile, outputConfigOffset, parallelism);
+      }
     }
     if (config.denoise) {
       const denoiseConfigOffset = writeFrameConfig(
         { x: 0, y: 0, width: config.width, height: config.height },
         { sampleIndex: 0, sampleWeight: 1 / config.samplesPerPixel }
       );
-      encodeDenoise(reserveEncoder(), denoiseConfigOffset);
+      encodeDenoise(reserveEncoder(), denoiseConfigOffset, parallelism);
     }
     encodePresent(reserveEncoder());
     submitCurrentEncoder();
@@ -4109,8 +4674,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   function renderOnce() {
     frame += 1;
     const frameIndex = frame + config.frameIndex;
-    const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex);
-    const frameSubmissionCount = dispatchFrame(frameIndex);
+    const parallelismCounters = createGpuParallelismCounters();
+    const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
+    const frameSubmissionCount = dispatchFrame(frameIndex, parallelismCounters);
+    lastGpuParallelism = createGpuParallelismDiagnostics(gpuAdapterParallelism, parallelismCounters);
     return Object.freeze({
       frame,
       width: config.width,
@@ -4127,6 +4694,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       emissiveTriangleCount: config.emissiveTriangleCount,
       environmentPortalCount: config.environmentPortalCount,
       environmentPortalMode: config.environmentPortalMode,
+      environmentMap: createEnvironmentMapSnapshot(config.environmentMap),
+      deferredPathResolve: config.deferredPathResolve,
       bvhNodeCount: config.bvhNodeCount,
       displayQuality: config.displayQuality,
       accelerationBuildMode: config.accelerationBuildMode,
@@ -4136,6 +4705,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       accelerationBuildCount,
       commandSubmissions: frameSubmissionCount + (accelerationBuildSubmitted ? 1 : 0),
       frameConfigSlots: frameConfigSlotCount,
+      gpuParallelism: lastGpuParallelism,
       memory: config.memory,
     });
   }
@@ -4252,6 +4822,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       emissiveTriangleCount: config.emissiveTriangleCount,
       environmentPortalCount: config.environmentPortalCount,
       environmentPortalMode: config.environmentPortalMode,
+      environmentMap: createEnvironmentMapSnapshot(config.environmentMap),
+      deferredPathResolve: config.deferredPathResolve,
       bvhNodeCount: config.bvhNodeCount,
       displayQuality: config.displayQuality,
       accelerationBuildMode: config.accelerationBuildMode,
@@ -4259,6 +4831,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       accelerationBuilt,
       accelerationBuildCount,
       frameConfigSlots: frameConfigSlotCount,
+      gpuParallelism: lastGpuParallelism,
       memory: config.memory,
     });
   }
@@ -4268,6 +4841,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     nextQueue.destroy?.();
     hitBuffer.destroy?.();
     accumulationBuffer.destroy?.();
+    pathVertexBuffer.destroy?.();
     sceneObjectBuffer.destroy?.();
     triangleBuffer.destroy?.();
     bvhNodeBuffer.destroy?.();
@@ -4283,6 +4857,9 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     radianceTexture.destroy?.();
     denoiseScratchTexture.destroy?.();
     outputTexture.destroy?.();
+    if (environmentMapResource.ownsTexture) {
+      environmentMapResource.texture?.destroy?.();
+    }
     context.unconfigure?.();
   }
 

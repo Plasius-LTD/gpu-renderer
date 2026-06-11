@@ -7,3 +7,4 @@
 - [ADR 0005: Ray-Tracing-First Hybrid Render Graph](./adr-0005-ray-tracing-first-hybrid-render-graph.md)
 - [ADR 0006: WebGPU Wavefront Compute Path Tracing](./adr-0006-webgpu-wavefront-compute-path-tracing.md)
 - [ADR 0007: Mesh BVH Wavefront Path Tracing As Display Quality Baseline](./adr-0007-triangle-mesh-wavefront-path-tracing.md)
+- [ADR 0008: Deferred Terminal Path Resolve For Wavefront Path Tracing](./adr-0008-deferred-terminal-path-resolve.md)

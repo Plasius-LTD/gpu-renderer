@@ -308,6 +308,33 @@ export interface WavefrontEnvironmentPortalRecord {
   readonly color: readonly [number, number, number, number] | readonly number[];
 }
 
+export interface WavefrontEnvironmentMapInput {
+  readonly enabled?: boolean;
+  readonly width?: number;
+  readonly height?: number;
+  readonly projection?: "equirectangular" | string;
+  readonly format?: GPUTextureFormat | "rgba16float";
+  readonly texture?: GPUTexture;
+  readonly view?: GPUTextureView;
+  readonly sampler?: GPUSampler;
+  readonly data?: readonly number[] | Float32Array | Uint16Array | Uint8Array;
+  readonly intensity?: number;
+  readonly radianceScale?: number;
+  readonly rotationRadians?: number;
+  readonly rotation?: number;
+  readonly ambientStrength?: number;
+}
+
+export interface WavefrontEnvironmentMapSnapshot {
+  readonly enabled: boolean;
+  readonly width: number;
+  readonly height: number;
+  readonly projection: string;
+  readonly intensity: number;
+  readonly rotationRadians: number;
+  readonly ambientStrength: number;
+}
+
 export interface WavefrontPathTracingComputeConfig {
   readonly mode: typeof rendererWavefrontComputeMode;
   readonly width: number;
@@ -331,6 +358,8 @@ export interface WavefrontPathTracingComputeConfig {
   readonly environmentPortalCount: number;
   readonly environmentPortalCapacity: number;
   readonly environmentPortalMode: 0 | 1 | 2;
+  readonly environmentMap: WavefrontEnvironmentMapInput;
+  readonly deferredPathResolve: boolean;
   readonly triangleCount: number;
   readonly triangleCapacity: number;
   readonly bvhNodeCount: number;
@@ -367,8 +396,11 @@ export interface WavefrontEnvironmentLightingInput {
   readonly intensity?: number;
   readonly mode?: number;
   readonly exposure?: number;
+  readonly sunlitBaseline?: number;
+  readonly daylightBaseline?: number;
   readonly environmentPortals?: readonly WavefrontEnvironmentPortalInput[];
   readonly environmentPortalMode?: WavefrontEnvironmentPortalMode;
+  readonly environmentMap?: WavefrontEnvironmentMapInput;
 }
 
 export interface WavefrontEnvironmentLightingConfig {
@@ -381,6 +413,7 @@ export interface WavefrontEnvironmentLightingConfig {
   readonly intensity: number;
   readonly mode: number;
   readonly exposure: number;
+  readonly sunlitBaseline: number;
 }
 
 export interface WavefrontPathTracingMemoryEstimate {
@@ -388,6 +421,7 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly queuePairBytes: number;
   readonly hitBytes: number;
   readonly accumulationBytes: number;
+  readonly pathVertexBytes: number;
   readonly sceneObjectBytes: number;
   readonly triangleBytes: number;
   readonly bvhNodeBytes: number;
@@ -398,6 +432,43 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly counterBytes: number;
   readonly indirectDispatchBytes: number;
   readonly totalHotBufferBytes: number;
+}
+
+export interface WavefrontGpuParallelismDiagnostics {
+  readonly physicalCoreCount: number | null;
+  readonly physicalCoreCountAvailable: boolean;
+  readonly physicalCoreCountUnavailableReason: string;
+  readonly adapterInfo: Readonly<{
+    readonly vendor: string;
+    readonly architecture: string;
+    readonly device: string;
+    readonly description: string;
+  }> | null;
+  readonly adapterLimits: Readonly<{
+    readonly maxComputeInvocationsPerWorkgroup: number | null;
+    readonly maxComputeWorkgroupSizeX: number | null;
+    readonly maxComputeWorkgroupSizeY: number | null;
+    readonly maxComputeWorkgroupSizeZ: number | null;
+    readonly maxComputeWorkgroupsPerDimension: number | null;
+    readonly maxStorageBuffersPerShaderStage: number | null;
+    readonly maxStorageBufferBindingSize: number | null;
+  }>;
+  readonly configuredWorkgroupSize: number;
+  readonly directDispatches: number;
+  readonly directWorkgroups: number;
+  readonly directShaderInvocations: number;
+  readonly multiWorkgroupDispatches: number;
+  readonly largestDirectWorkgroupsPerDispatch: number;
+  readonly indirectDispatches: number;
+  readonly estimatedIndirectWorkgroupsUpperBound: number;
+  readonly estimatedIndirectShaderInvocationsUpperBound: number;
+  readonly indirectDispatchesWithMultiWorkgroupCapacity: number;
+  readonly largestEstimatedIndirectWorkgroupsPerDispatch: number;
+  readonly totalEstimatedWorkgroupsUpperBound: number;
+  readonly totalEstimatedShaderInvocationsUpperBound: number;
+  readonly exposesMultiWorkgroupParallelism: boolean;
+  readonly likelyUsesMoreThanOnePhysicalGpuCore: boolean | null;
+  readonly coreUtilizationStatus: "not-exposed-by-webgpu";
 }
 
 export interface CreateWavefrontPathTracingComputeRendererOptions {
@@ -429,6 +500,11 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly environmentLightPortals?: readonly WavefrontEnvironmentPortalInput[];
   readonly environmentPortalMode?: WavefrontEnvironmentPortalMode;
   readonly portalMode?: WavefrontEnvironmentPortalMode;
+  readonly environmentMap?: WavefrontEnvironmentMapInput;
+  readonly environmentTexture?: WavefrontEnvironmentMapInput;
+  readonly deferredPathResolve?: boolean;
+  readonly deferredResolve?: boolean;
+  readonly pathResolve?: { readonly deferred?: boolean };
   readonly accelerationBuildMode?: WavefrontAccelerationBuildMode;
   readonly camera?: WavefrontCameraOptions;
   readonly environmentColor?: readonly [number, number, number, number?] | readonly number[];
@@ -475,6 +551,8 @@ export interface WavefrontPathTracingComputeRenderer {
     emissiveTriangleCount: number;
     environmentPortalCount: number;
     environmentPortalMode: 0 | 1 | 2;
+    environmentMap: WavefrontEnvironmentMapSnapshot;
+    deferredPathResolve: boolean;
     bvhNodeCount: number;
     displayQuality: boolean;
     accelerationBuildMode: WavefrontAccelerationBuildMode;
@@ -482,6 +560,7 @@ export interface WavefrontPathTracingComputeRenderer {
     accelerationBuilt: boolean;
     accelerationBuildCount: number;
     frameConfigSlots: number;
+    gpuParallelism: WavefrontGpuParallelismDiagnostics;
     memory: WavefrontPathTracingMemoryEstimate;
   }>;
   destroy(): void;
@@ -503,6 +582,8 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly emissiveTriangleCount: number;
   readonly environmentPortalCount: number;
   readonly environmentPortalMode: 0 | 1 | 2;
+  readonly environmentMap: WavefrontEnvironmentMapSnapshot;
+  readonly deferredPathResolve: boolean;
   readonly bvhNodeCount: number;
   readonly displayQuality: boolean;
   readonly accelerationBuildMode: WavefrontAccelerationBuildMode;
@@ -512,6 +593,7 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly accelerationBuildCount: number;
   readonly commandSubmissions: number;
   readonly frameConfigSlots: number;
+  readonly gpuParallelism: WavefrontGpuParallelismDiagnostics;
   readonly memory: WavefrontPathTracingMemoryEstimate;
   readonly outputProbe?: Readonly<{
     x: number;
@@ -661,6 +743,7 @@ export const wavefrontPathTracingComputeLimits: Readonly<{
   emissiveTriangleMetadataRecordBytes: 48;
   environmentPortalRecordBytes: 96;
   accumulationRecordBytes: 16;
+  pathVertexRecordBytes: 16;
   counterRecordBytes: 32;
   indirectDispatchRecordBytes: 12;
 }>;
