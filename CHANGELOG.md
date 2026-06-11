@@ -14,11 +14,27 @@ All notable changes to this project will be documented in this file.
 - **Added**
   - Added `updateCamera(...)` support for wavefront renderers so validation
     views can animate camera movement without rebuilding mesh buffers.
+  - Added `gpuParallelism` diagnostics to wavefront frame stats and snapshots so
+    consumers can inspect adapter compute limits, direct workgroups,
+    indirect-dispatch estimates, and whether a frame exposes multi-workgroup GPU
+    parallelism.
+  - Added optional equirectangular `environmentMap` sampling for wavefront
+    tracing so environment misses and surface environment estimates can use a
+    bound radiance texture before falling back to procedural sky/ambient values.
+  - Added default-on `deferredPathResolve` support for wavefront tracing so
+    surface traversal records material responses and terminal source radiance
+    before the output pass resolves the path backward into pixel accumulation.
 
 - **Changed**
   - Changed wavefront frame dispatch to split large tile/sample workloads into
     bounded command submissions instead of encoding an entire high-resolution
     frame into one command buffer.
+  - Changed display-quality wavefront tracing to require one additional
+    path-vertex storage buffer, raising the trace-stage storage-buffer request
+    from 9 to 10.
+  - Changed wavefront terminal/direct environment estimates to consume
+    `environmentLighting.sunlitBaseline` as a time-of-day daylight floor instead
+    of relying only on restrained ambient colour.
 
 - **Fixed**
   - Fixed low-sample wavefront renders so non-emissive surface hits receive a

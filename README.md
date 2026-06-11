@@ -196,21 +196,42 @@ tone mapping into the presented `rgba8unorm` output. Filtering in linear
 radiance space lets the denoise pass cross tile boundaries without compressing
 energy/detail before the final resolve. The renderer also stores compact
 emissive-triangle metadata in the existing BVH buffer tail and uses it to guide
-diffuse continuation rays toward finite mesh light geometry without adding a
-ninth trace storage buffer. This is not a separate shadow/direct-light pass: the
-active ray still has to hit emissive geometry or miss into the environment
-before radiance is accumulated. Guided emissive hits carry a bounded estimator
-weight so finite light guidance does not over-expose low-sample renders before
-full material PDFs/MIS are implemented. High-energy samples are clamped in
-linear radiance space to keep low-sample preview output stable while production
-sampling, temporal accumulation, and better material PDFs are hardened.
+diffuse continuation rays toward finite mesh light geometry. This is not a
+separate shadow/direct-light pass: the active ray still has to hit emissive
+geometry or miss into the environment before radiance is committed. Guided
+emissive hits carry a bounded estimator weight so finite light guidance does not
+over-expose low-sample renders before full material PDFs/MIS are implemented.
+High-energy samples are clamped in linear radiance space to keep low-sample
+preview output stable while production sampling, temporal accumulation, and
+better material PDFs are hardened. By default, `deferredPathResolve` records
+per-bounce material responses in a tile-bounded path buffer and records the
+terminal emissive/HDRI/environment source in the final path slot. The output
+pass then resolves that recorded path backward and adds the weighted sample to
+the pixel accumulation, so surface traversal no longer injects broad visible
+ambient/direct environment light before a terminal source is known. Set
+`deferredPathResolve: false` only for legacy forward-accumulation comparison.
+When an `environmentMap` is provided, the wavefront trace shader samples it as
+an equirectangular radiance source for environment misses and uses the same
+mapped radiance for terminal residuals before falling back to static ambient.
+The procedural horizon/zenith/sun model remains the fallback for callers that
+have not supplied an HDRI/radiance texture. `environmentLighting.sunlitBaseline`
+adds a time-of-day daylight floor to terminal and direct environment estimates,
+so bright presets retain colour at the last collision without returning to a
+whitewashed global ambient term.
 For static mesh scenes, the GPU acceleration build is submitted once and then
 reused by subsequent frames. Per-frame tracing writes one dynamic uniform slot
 per tile/sample or post-process pass and batches tile tracing, tile output,
 optional denoise, and presentation into bounded command submissions controlled
 by `maxFramePassesPerSubmission` to keep 4K/high-spp command buffers from
 becoming oversized. `updateCamera(...)` can update the per-frame camera uniforms
-between renders without rebuilding mesh buffers. After each
+between renders without rebuilding mesh buffers. Frame stats and snapshots expose
+`gpuParallelism` diagnostics with adapter compute limits, configured workgroup
+size, direct compute dispatches, known workgroups/invocations, indirect dispatch
+counts, and upper-bound indirect work estimates. WebGPU does not expose physical
+GPU core counts, so `physicalCoreCount` remains `null`; use
+`exposesMultiWorkgroupParallelism`, `largestDirectWorkgroupsPerDispatch`, and
+`largestEstimatedIndirectWorkgroupsPerDispatch` to confirm the renderer is
+submitting work that can occupy more than one GPU execution unit. After each
 primary-ray or compaction pass, the GPU writes the active-ray workgroup count
 into the counter buffer and the encoder copies it into an indirect-dispatch
 argument buffer. Intersection and surface-resolution passes therefore scale
