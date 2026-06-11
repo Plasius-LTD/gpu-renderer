@@ -647,11 +647,19 @@ test("wavefront compute estimates direct environment light before random continu
   assert.match(source, /let portalIrradiance = direct_environment_portal_irradiance\(origin, normal\);/);
   assert.match(
     source,
+    /let shouldEstimateDirectEnvironment =\s+\(hit\.materialKind == 0u \|\| hit\.materialKind == 1u\) && hit\.material\.z >= 0\.95;/
+  );
+  assert.match(
+    source,
     /let directEnvironment = surface_direct_environment_contribution\(ray, hit\);/
   );
   assert.match(
     source,
     /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directEnvironment \* sample_weight\(\), 0\.0\);/
+  );
+  assert.ok(
+    source.indexOf("let shouldEstimateDirectEnvironment =") <
+      source.indexOf("let directEnvironment = surface_direct_environment_contribution(ray, hit);")
   );
   assert.ok(
     source.indexOf("let directEnvironment = surface_direct_environment_contribution(ray, hit);") <

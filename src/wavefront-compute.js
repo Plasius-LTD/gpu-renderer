@@ -3163,9 +3163,13 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  let directEnvironment = surface_direct_environment_contribution(ray, hit);
-  accumulation[ray.rayId] =
-    accumulation[ray.rayId] + vec4<f32>(directEnvironment * sample_weight(), 0.0);
+  let shouldEstimateDirectEnvironment =
+    (hit.materialKind == 0u || hit.materialKind == 1u) && hit.material.z >= 0.95;
+  if (shouldEstimateDirectEnvironment) {
+    let directEnvironment = surface_direct_environment_contribution(ray, hit);
+    accumulation[ray.rayId] =
+      accumulation[ray.rayId] + vec4<f32>(directEnvironment * sample_weight(), 0.0);
+  }
 
   if (ray.bounce + 1u >= config.maxDepth) {
     let terminalEnvironment = terminal_surface_environment_contribution(ray, hit);
