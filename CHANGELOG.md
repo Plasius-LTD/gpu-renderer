@@ -12,13 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added `updateCamera(...)` support for wavefront renderers so validation
+    views can animate camera movement without rebuilding mesh buffers.
 
 - **Changed**
-  - (placeholder)
+  - Changed wavefront frame dispatch to split large tile/sample workloads into
+    bounded command submissions instead of encoding an entire high-resolution
+    frame into one command buffer.
 
 - **Fixed**
-  - (placeholder)
+  - Fixed low-sample wavefront renders so non-emissive surface hits receive a
+    deterministic sky, sun, and portal-light estimate before random continuation.
+  - Reduced deterministic environment fill on direct surface hits so ambient
+    rescue lighting no longer washes dark materials toward the full scene
+    ambient colour.
 
 - **Security**
   - (placeholder)

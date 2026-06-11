@@ -348,6 +348,7 @@ test("wavefront compute config keeps 4K queues tile-bounded", () => {
   assert.equal(config.height, 2160);
   assert.equal(config.maxDepth, 8);
   assert.equal(config.samplesPerPixel, 1);
+  assert.equal(config.maxFramePassesPerSubmission, 256);
   assert.equal(config.displayQuality, false);
   assert.equal(config.requiresMeshBvhForDisplayQuality, true);
   assert.equal(config.tilePixelCapacity, 128 * 128);
@@ -388,6 +389,7 @@ test("wavefront compute config exposes bounded samples per pixel", () => {
     width: 640,
     height: 360,
     samplesPerPixel: 8,
+    maxFramePassesPerSubmission: 32,
   });
   const clamped = createWavefrontPathTracingComputeConfig({
     width: 640,
@@ -396,6 +398,7 @@ test("wavefront compute config exposes bounded samples per pixel", () => {
   });
 
   assert.equal(config.samplesPerPixel, 8);
+  assert.equal(config.maxFramePassesPerSubmission, 32);
   assert.equal(clamped.samplesPerPixel, 64);
   assert.throws(
     () =>
@@ -405,6 +408,15 @@ test("wavefront compute config exposes bounded samples per pixel", () => {
         samplesPerPixel: 0,
       }),
     /samplesPerPixel must be a positive integer/
+  );
+  assert.throws(
+    () =>
+      createWavefrontPathTracingComputeConfig({
+        width: 640,
+        height: 360,
+        maxFramePassesPerSubmission: 0,
+      }),
+    /maxFramePassesPerSubmission must be a positive integer/
   );
 });
 
@@ -621,6 +633,37 @@ test("wavefront compute applies environment ambient on terminal surface collisio
   assert.match(
     source,
     /let overflowEnvironment = terminal_surface_environment_contribution\(ray, hit\);/
+  );
+});
+
+test("wavefront compute estimates direct environment light before random continuation", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /fn surface_direct_environment_contribution/);
+  assert.match(source, /fn direct_environment_portal_irradiance/);
+  assert.match(source, /let surfaceColor = clamp\(max\(hit\.color\.xyz, config\.ambientColor\.xyz \* 0\.35\)/);
+  assert.match(source, /let skyIrradiance = max\(config\.ambientColor\.xyz \* 0\.72, normalEnvironment \* skyVisibility \* 0\.16\);/);
+  assert.match(source, /let sunIrradiance = sunRadiance \* sunFacing \* 0\.2;/);
+  assert.match(source, /let portalIrradiance = direct_environment_portal_irradiance\(origin, normal\);/);
+  assert.match(
+    source,
+    /let shouldEstimateDirectEnvironment =\s+\(hit\.materialKind == 0u \|\| hit\.materialKind == 1u\) && hit\.material\.z >= 0\.95;/
+  );
+  assert.match(
+    source,
+    /let directEnvironment = surface_direct_environment_contribution\(ray, hit\);/
+  );
+  assert.match(
+    source,
+    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directEnvironment \* sample_weight\(\), 0\.0\);/
+  );
+  assert.ok(
+    source.indexOf("let shouldEstimateDirectEnvironment =") <
+      source.indexOf("let directEnvironment = surface_direct_environment_contribution(ray, hit);")
+  );
+  assert.ok(
+    source.indexOf("let directEnvironment = surface_direct_environment_contribution(ray, hit);") <
+      source.indexOf("if (ray.bounce + 1u >= config.maxDepth)")
   );
 });
 
@@ -1251,6 +1294,11 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     const secondFrame = renderer.renderOnce();
     const probe = await renderer.readOutputProbe({ x: 2, y: 3 });
     const compatibilityFrame = await renderer.renderFrame({ probe: { x: 2, y: 3 } });
+    const movedConfig = renderer.updateCamera({
+      position: [0.8, 1.3, 5.2],
+      target: [0, 0.55, 0],
+      fovYDegrees: 42,
+    });
     const nextConfig = renderer.updateSceneObjects([]);
     const snapshot = renderer.getSnapshot();
 
@@ -1289,6 +1337,9 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     assert.equal(probe.x, 2);
     assert.equal(probe.y, 3);
     assert.deepEqual(probe.rgba, [32, 64, 128, 255]);
+    assert.deepEqual(round(movedConfig.camera.position), [0.8, 1.3, 5.2]);
+    assert.deepEqual(round(nextConfig.camera.position), [0.8, 1.3, 5.2]);
+    assert.equal(nextConfig.camera.fovYDegrees, 42);
     assert.equal(nextConfig.displayQuality, true);
     assert.equal(snapshot.frame, 3);
     assert.equal(snapshot.triangleCount, 1);
@@ -1323,6 +1374,37 @@ test("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
     assert.equal(canvas.context.configured, null);
     assert.equal(device.buffers.every((buffer) => buffer.destroyed), true);
     assert.equal(device.textures.every((texture) => texture.destroyed), true);
+  });
+});
+
+test("wavefront compute renderer splits large frames into bounded command submissions", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device),
+      width: 512,
+      height: 512,
+      tileSize: 128,
+      maxDepth: 1,
+      samplesPerPixel: 2,
+      maxFramePassesPerSubmission: 5,
+      denoise: true,
+    });
+
+    const frame = renderer.renderOnce();
+    const submittedLabels = device.queue.submissions
+      .flat()
+      .map((submission) => submission.encoderLabel);
+
+    assert.equal(frame.tiles, 16);
+    assert.equal(frame.maxFramePassesPerSubmission, 5);
+    assert.equal(frame.commandSubmissions, 10);
+    assert.equal(frame.frameConfigSlots, 49);
+    assert.equal(device.queue.submissions.length, 10);
+    assert.equal(submittedLabels.every((label) => label.includes(".batched.")), true);
+
+    renderer.destroy();
   });
 });
 
