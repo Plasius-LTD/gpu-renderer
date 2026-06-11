@@ -315,6 +315,7 @@ export interface WavefrontPathTracingComputeConfig {
   readonly maxDepth: number;
   readonly tileSize: number;
   readonly samplesPerPixel: number;
+  readonly maxFramePassesPerSubmission: number;
   readonly tilePixelCapacity: number;
   readonly sceneObjects: readonly WavefrontSceneObject[];
   readonly sceneObjectCount: number;
@@ -413,6 +414,7 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly maxDepth?: number;
   readonly tileSize?: number;
   readonly samplesPerPixel?: number;
+  readonly maxFramePassesPerSubmission?: number;
   readonly tilePixelCapacity?: number;
   readonly sceneObjectCapacity?: number;
   readonly sceneObjects?: readonly WavefrontSceneObjectInput[];
@@ -458,6 +460,7 @@ export interface WavefrontPathTracingComputeRenderer {
     }>
   >;
   updateSceneObjects(sceneObjects: readonly WavefrontSceneObjectInput[]): WavefrontPathTracingComputeConfig;
+  updateCamera(camera: WavefrontCameraOptions): WavefrontPathTracingComputeConfig;
   getSnapshot(): Readonly<{
     frame: number;
     width: number;
@@ -466,6 +469,7 @@ export interface WavefrontPathTracingComputeRenderer {
     tiles: number;
     tileSize: number;
     samplesPerPixel: number;
+    maxFramePassesPerSubmission: number;
     sceneObjectCount: number;
     triangleCount: number;
     emissiveTriangleCount: number;
@@ -491,6 +495,7 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly tiles: number;
   readonly tileSize: number;
   readonly samplesPerPixel: number;
+  readonly maxFramePassesPerSubmission: number;
   readonly screenRays: number;
   readonly primaryRays: number;
   readonly sceneObjectCount: number;

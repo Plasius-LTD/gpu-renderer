@@ -3,6 +3,7 @@ const DEFAULT_HEIGHT = 720;
 const DEFAULT_MAX_DEPTH = 6;
 const DEFAULT_TILE_SIZE = 128;
 const DEFAULT_SAMPLES_PER_PIXEL = 1;
+const DEFAULT_MAX_FRAME_PASSES_PER_SUBMISSION = 256;
 const DEFAULT_SCENE_OBJECT_CAPACITY = 128;
 const DEFAULT_ENVIRONMENT_PORTAL_CAPACITY = 32;
 const WORKGROUP_SIZE = 64;
@@ -1193,6 +1194,15 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     1,
     64
   );
+  const maxFramePassesPerSubmission = clamp(
+    readPositiveInteger(
+      "maxFramePassesPerSubmission",
+      options.maxFramePassesPerSubmission,
+      DEFAULT_MAX_FRAME_PASSES_PER_SUBMISSION
+    ),
+    1,
+    4096
+  );
   const tilePixelCapacity = readPositiveInteger(
     "tilePixelCapacity",
     options.tilePixelCapacity,
@@ -1284,6 +1294,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     maxDepth,
     tileSize,
     samplesPerPixel,
+    maxFramePassesPerSubmission,
     tilePixelCapacity,
     sceneObjects,
     sceneObjectCount: sceneObjects.length,
@@ -2253,13 +2264,13 @@ fn surface_direct_environment_contribution(ray: RayRecord, hit: HitRecord) -> ve
   let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
   let origin = hit.position.xyz + normal * 0.003;
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
-  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz), vec3<f32>(0.0), vec3<f32>(1.0));
+  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let metallic = clamp(hit.material.y, 0.0, 1.0);
 
   let normalEnvironment = gated_environment_radiance(origin, normal);
   let skyVisibility = 0.35 + saturate(normal.y * 0.5 + 0.5) * 0.45;
-  let skyIrradiance = max(config.ambientColor.xyz, normalEnvironment * skyVisibility * 0.22);
+  let skyIrradiance = max(config.ambientColor.xyz * 0.72, normalEnvironment * skyVisibility * 0.16);
 
   let sunDirection = safe_normalize(
     config.environmentSunDirectionIntensity.xyz,
@@ -2267,7 +2278,7 @@ fn surface_direct_environment_contribution(ray: RayRecord, hit: HitRecord) -> ve
   );
   let sunFacing = saturate(dot(normal, sunDirection));
   let sunRadiance = gated_environment_radiance(origin, sunDirection);
-  let sunIrradiance = sunRadiance * sunFacing * 0.24;
+  let sunIrradiance = sunRadiance * sunFacing * 0.2;
   let portalIrradiance = direct_environment_portal_irradiance(origin, normal);
 
   let diffuseWeight = select(1.0 - metallic * 0.65, 0.22, hit.materialKind == 1u);
@@ -3865,6 +3876,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   let frame = 0;
   let accelerationBuilt = !config.gpuAccelerationBuildRequired;
   let accelerationBuildCount = 0;
+  let activeCameraOptions = options.camera ?? DEFAULT_CAMERA;
 
   function createFrameConfigWriter(frameIndex) {
     let slot = 0;
@@ -4035,33 +4047,59 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
 
   function dispatchFrame(frameIndex) {
     const writeFrameConfig = createFrameConfigWriter(frameIndex);
-    const encoder = device.createCommandEncoder({
-      label: `plasius.wavefront.frame.${frameIndex}.batched`,
+    let submissionCount = 0;
+    let encodedFramePasses = 0;
+    let encoder = device.createCommandEncoder({
+      label: `plasius.wavefront.frame.${frameIndex}.batched.${submissionCount + 1}`,
     });
+
+    function submitCurrentEncoder() {
+      if (encodedFramePasses <= 0) {
+        return;
+      }
+      device.queue.submit([encoder.finish()]);
+      submissionCount += 1;
+      encodedFramePasses = 0;
+      encoder = device.createCommandEncoder({
+        label: `plasius.wavefront.frame.${frameIndex}.batched.${submissionCount + 1}`,
+      });
+    }
+
+    function reserveEncoder(passCount = 1) {
+      if (
+        encodedFramePasses > 0 &&
+        encodedFramePasses + passCount > config.maxFramePassesPerSubmission
+      ) {
+        submitCurrentEncoder();
+      }
+      encodedFramePasses += passCount;
+      return encoder;
+    }
+
     for (const tile of tiles) {
       for (let sampleIndex = 0; sampleIndex < config.samplesPerPixel; sampleIndex += 1) {
         const configOffset = writeFrameConfig(tile, {
           sampleIndex,
           sampleWeight: 1 / config.samplesPerPixel,
         });
-        encodeTileSample(encoder, tile, configOffset);
+        encodeTileSample(reserveEncoder(), tile, configOffset);
       }
       const outputConfigOffset = writeFrameConfig(tile, {
         sampleIndex: 0,
         sampleWeight: 1 / config.samplesPerPixel,
       });
-      encodeTileOutput(encoder, tile, outputConfigOffset);
+      encodeTileOutput(reserveEncoder(), tile, outputConfigOffset);
     }
     if (config.denoise) {
       const denoiseConfigOffset = writeFrameConfig(
         { x: 0, y: 0, width: config.width, height: config.height },
         { sampleIndex: 0, sampleWeight: 1 / config.samplesPerPixel }
       );
-      encodeDenoise(encoder, denoiseConfigOffset);
+      encodeDenoise(reserveEncoder(), denoiseConfigOffset);
     }
-    encodePresent(encoder);
-    device.queue.submit([encoder.finish()]);
-    return 1;
+    encodePresent(reserveEncoder());
+    submitCurrentEncoder();
+    return submissionCount;
   }
 
   function renderOnce() {
@@ -4077,6 +4115,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       tiles: tiles.length,
       tileSize: config.tileSize,
       samplesPerPixel: config.samplesPerPixel,
+      maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
       screenRays: config.width * config.height,
       primaryRays: config.width * config.height * config.samplesPerPixel,
       sceneObjectCount: config.sceneObjectCount,
@@ -4169,9 +4208,28 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       samplesPerPixel: config.samplesPerPixel,
       sceneObjectCapacity: config.sceneObjectCapacity,
       sceneObjects: packedScene.objects,
+      camera: activeCameraOptions,
       frameIndex: config.frameIndex,
     });
     device.queue.writeBuffer(sceneObjectBuffer, 0, packedScene.buffer);
+    return config;
+  }
+
+  function updateCamera(cameraOptions = {}) {
+    activeCameraOptions = cameraOptions;
+    config = createWavefrontPathTracingComputeConfig({
+      ...options,
+      canvas,
+      width: config.width,
+      height: config.height,
+      maxDepth: config.maxDepth,
+      tileSize: config.tileSize,
+      samplesPerPixel: config.samplesPerPixel,
+      sceneObjectCapacity: config.sceneObjectCapacity,
+      sceneObjects: packedScene.objects,
+      camera: activeCameraOptions,
+      frameIndex: config.frameIndex,
+    });
     return config;
   }
 
@@ -4184,6 +4242,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       tiles: tiles.length,
       tileSize: config.tileSize,
       samplesPerPixel: config.samplesPerPixel,
+      maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
       sceneObjectCount: config.sceneObjectCount,
       triangleCount: config.triangleCount,
       emissiveTriangleCount: config.emissiveTriangleCount,
@@ -4233,6 +4292,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     renderFrame,
     readOutputProbe,
     updateSceneObjects,
+    updateCamera,
     getSnapshot,
     destroy,
   });
