@@ -168,7 +168,8 @@ debugRenderer.renderOnce();
 ```
 
 Scene objects currently support analytic `sphere` and axis-aligned `box`
-records with colour, emission, roughness, metallic, opacity, and IOR fields.
+records with colour, emission, roughness, metallic, opacity, IOR, clearcoat,
+sheen colour, specular colour, and transmission fields.
 These records are debug fixtures only. Product Studio visual rendering requires
 the mesh BVH path described in
 `docs/adrs/adr-0007-triangle-mesh-wavefront-path-tracing.md`. This is a
@@ -185,6 +186,18 @@ fixtures and deterministic layout tests. GPU BVH construction now uses
 Morton-style centroid keys to sort leaf references before sorted leaves and
 level-concurrent internal nodes are materialized. The current mesh path is the
 GPU runtime baseline under active hardening.
+When mesh inputs also carry UVs plus decoded base-colour,
+metallic-roughness, normal, occlusion, or emissive maps, the display-quality
+path now packs them into GPU texture atlases and samples them at the resolved
+hit UV inside the wavefront trace pass. Generic glTF-style material factors
+such as clearcoat, sheen colour, specular colour, transmission, and IOR are
+also preserved through the GPU records so demo validation does not need
+model-name overrides. CPU-side texture work is limited to load-time decode and
+atlas packing; per-hit shading stays on the GPU. Direct and terminal glossy
+response now also samples reflection-aligned environment radiance so leather,
+chrome, and other polished authored materials can read from the active
+environment map or procedural sky instead of relying mostly on a sun-direction
+proxy.
 
 `samplesPerPixel` controls how many GPU primary-ray samples are accumulated per
 screen pixel within a single render. This multiplies dispatch work but does not
@@ -207,9 +220,12 @@ better material PDFs are hardened. By default, `deferredPathResolve` records
 per-bounce material responses in a tile-bounded path buffer and records the
 terminal emissive/HDRI/environment source in the final path slot. The output
 pass then resolves that recorded path backward and adds the weighted sample to
-the pixel accumulation, so surface traversal no longer injects broad visible
-ambient/direct environment light before a terminal source is known. Set
-`deferredPathResolve: false` only for legacy forward-accumulation comparison.
+the pixel accumulation, so unresolved continuation light is still deferred until
+a terminal source is known. Surface resolution may still add a small
+shadow-tested direct-light term immediately when it has an explicit source and
+visibility result, which keeps true occlusion shadows possible without falling
+back to broad per-bounce ambient fill. Set `deferredPathResolve: false` only
+for legacy forward-accumulation comparison.
 When an `environmentMap` is provided, the wavefront trace shader samples it as
 an equirectangular radiance source for environment misses and uses the same
 mapped radiance for terminal residuals before falling back to static ambient.
@@ -217,14 +233,28 @@ The procedural horizon/zenith/sun model remains the fallback for callers that
 have not supplied an HDRI/radiance texture. `environmentLighting.sunlitBaseline`
 adds a time-of-day daylight floor to terminal and direct environment estimates,
 so bright presets retain colour at the last collision without returning to a
-whitewashed global ambient term.
+whitewashed global ambient term. Extremely dark recorded bounce responses are
+also remapped to a small scene-brightness-driven luminance floor so bright
+low-sample scenes do not produce isolated black speckles when a valid terminal
+source was already found.
 For static mesh scenes, the GPU acceleration build is submitted once and then
 reused by subsequent frames. Per-frame tracing writes one dynamic uniform slot
 per tile/sample or post-process pass and batches tile tracing, tile output,
 optional denoise, and presentation into bounded command submissions controlled
 by `maxFramePassesPerSubmission` to keep 4K/high-spp command buffers from
 becoming oversized. `updateCamera(...)` can update the per-frame camera uniforms
-between renders without rebuilding mesh buffers. Frame stats and snapshots expose
+without rebuilding scene buffers. `renderFrame(...)` also accepts an optional
+`frameTimeBudgetMs` plus `minimumSamplesPerPixel`: when present, configured
+`samplesPerPixel` becomes a ceiling instead of a hard requirement, the renderer
+guarantees at least the minimum full-screen pass, and frame stats report both
+configured `samplesPerPixel` and actual `renderedSamplesPerPixel` so realtime
+callers can budget motion frames without overstating delivered quality.
+For consumers that want to hand wavefront SPP adaptation to
+`@plasius/gpu-performance`, `createWavefrontAdaptiveSamplingLevels(...)` exposes
+a bounded low-to-high ladder of per-frame `samplesPerPixel`,
+`frameTimeBudgetMs`, and `minimumSamplesPerPixel` configs that stay aligned
+with the renderer's supported adaptive-sampling surface. Frame stats and
+snapshots expose
 `gpuParallelism` diagnostics with adapter compute limits, configured workgroup
 size, direct compute dispatches, known workgroups/invocations, indirect dispatch
 counts, and upper-bound indirect work estimates. WebGPU does not expose physical

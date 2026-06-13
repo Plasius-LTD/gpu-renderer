@@ -74,4 +74,6 @@ result.
 The implementation does not yet include texture-material sampling, material
 lookup tables, medium entry/exit distance tracking, Beer-Lambert absorption,
 Russian roulette, PDF-correct throughput, MIS, or spectral prism dispersion.
-Those are follow-up renderer material-system features.
+Those are follow-up renderer material-system features. Shadow-tested direct
+lighting and bounded attenuation were added later under ADR 0009 without
+changing the core terminal-source model.

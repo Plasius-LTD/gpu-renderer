@@ -13,6 +13,35 @@ export type WavefrontMaterialKind =
   | "light"
   | number;
 
+export interface WavefrontAdaptiveSamplingLevelConfig {
+  readonly samplesPerPixel: number;
+  readonly frameTimeBudgetMs: number;
+  readonly minimumSamplesPerPixel: number;
+}
+
+export interface WavefrontAdaptiveSamplingLevel {
+  readonly id: string;
+  readonly label: string;
+  readonly estimatedCostMs: number;
+  readonly config: WavefrontAdaptiveSamplingLevelConfig;
+}
+
+export interface CreateWavefrontAdaptiveSamplingLevelsResult {
+  readonly requestedSamplesPerPixel: number;
+  readonly minimumSamplesPerPixel: number;
+  readonly frameTimeBudgetMs: number;
+  readonly levels: readonly WavefrontAdaptiveSamplingLevel[];
+}
+
+export interface WavefrontTextureSampleInput {
+  readonly texCoord?: number;
+  readonly scale?: number;
+  readonly strength?: number;
+  readonly width: number;
+  readonly height: number;
+  readonly data: Uint8ClampedArray | Uint8Array | readonly number[];
+}
+
 export interface WavefrontCameraOptions {
   readonly position?: readonly [number, number, number] | readonly number[];
   readonly target?: readonly [number, number, number] | readonly number[];
@@ -20,6 +49,12 @@ export interface WavefrontCameraOptions {
   readonly fovYDegrees?: number;
   readonly fov?: number;
 }
+
+export function createWavefrontAdaptiveSamplingLevels(options?: {
+  readonly samplesPerPixel?: number;
+  readonly frameTimeBudgetMs?: number;
+  readonly minimumSamplesPerPixel?: number;
+}): CreateWavefrontAdaptiveSamplingLevelsResult;
 
 export interface WavefrontSceneObjectInput {
   readonly id?: number;
@@ -48,6 +83,14 @@ export interface WavefrontSceneObjectInput {
   readonly metallic?: number;
   readonly opacity?: number;
   readonly ior?: number;
+  readonly sheen?: number;
+  readonly sheenTint?: number;
+  readonly sheenColor?: RendererColor | readonly number[];
+  readonly clearcoat?: number;
+  readonly clearcoatRoughness?: number;
+  readonly specular?: number;
+  readonly specularColor?: RendererColor | readonly number[];
+  readonly transmission?: number;
   readonly material?: {
     readonly kind?: WavefrontMaterialKind;
     readonly color?: RendererColor | readonly number[];
@@ -58,6 +101,14 @@ export interface WavefrontSceneObjectInput {
     readonly metallic?: number;
     readonly opacity?: number;
     readonly ior?: number;
+    readonly sheen?: number;
+    readonly sheenTint?: number;
+    readonly sheenColor?: RendererColor | readonly number[];
+    readonly clearcoat?: number;
+    readonly clearcoatRoughness?: number;
+    readonly specular?: number;
+    readonly specularColor?: RendererColor | readonly number[];
+    readonly transmission?: number;
   };
 }
 
@@ -74,6 +125,14 @@ export interface WavefrontSceneObject {
   readonly metallic: number;
   readonly opacity: number;
   readonly ior: number;
+  readonly sheen: number;
+  readonly sheenTint: number;
+  readonly sheenColor: readonly [number, number, number, number] | readonly number[];
+  readonly clearcoat: number;
+  readonly clearcoatRoughness: number;
+  readonly specular: number;
+  readonly specularColor: readonly [number, number, number, number] | readonly number[];
+  readonly transmission: number;
 }
 
 export interface WavefrontMeshInput {
@@ -99,6 +158,14 @@ export interface WavefrontMeshInput {
   readonly metallic?: number;
   readonly opacity?: number;
   readonly ior?: number;
+  readonly sheen?: number;
+  readonly sheenTint?: number;
+  readonly sheenColor?: RendererColor | readonly number[];
+  readonly clearcoat?: number;
+  readonly clearcoatRoughness?: number;
+  readonly specular?: number;
+  readonly specularColor?: RendererColor | readonly number[];
+  readonly transmission?: number;
   readonly material?: {
     readonly kind?: WavefrontMaterialKind;
     readonly color?: RendererColor | readonly number[];
@@ -109,8 +176,26 @@ export interface WavefrontMeshInput {
     readonly metallic?: number;
     readonly opacity?: number;
     readonly ior?: number;
+    readonly sheen?: number;
+    readonly sheenTint?: number;
+    readonly sheenColor?: RendererColor | readonly number[];
+    readonly clearcoat?: number;
+    readonly clearcoatRoughness?: number;
+    readonly specular?: number;
+    readonly specularColor?: RendererColor | readonly number[];
+    readonly transmission?: number;
     readonly id?: number;
+    readonly baseColorTexture?: WavefrontTextureSampleInput | null;
+    readonly metallicRoughnessTexture?: WavefrontTextureSampleInput | null;
+    readonly normalTexture?: WavefrontTextureSampleInput | null;
+    readonly occlusionTexture?: WavefrontTextureSampleInput | null;
+    readonly emissiveTexture?: WavefrontTextureSampleInput | null;
   };
+  readonly baseColorTexture?: WavefrontTextureSampleInput | null;
+  readonly metallicRoughnessTexture?: WavefrontTextureSampleInput | null;
+  readonly normalTexture?: WavefrontTextureSampleInput | null;
+  readonly occlusionTexture?: WavefrontTextureSampleInput | null;
+  readonly emissiveTexture?: WavefrontTextureSampleInput | null;
   readonly medium?: {
     readonly id?: number;
   };
@@ -123,6 +208,7 @@ export interface WavefrontTriangleRecord {
   readonly flags: number;
   readonly materialRefId: number;
   readonly mediumRefId: number;
+  readonly materialSlot?: number;
   readonly v0: readonly number[];
   readonly v1: readonly number[];
   readonly v2: readonly number[];
@@ -135,6 +221,15 @@ export interface WavefrontTriangleRecord {
   readonly color: readonly number[];
   readonly emission: readonly number[];
   readonly material: readonly number[];
+  readonly materialResponse: readonly number[];
+  readonly materialExtension?: readonly number[];
+  readonly specularColor?: readonly number[];
+  readonly baseColorAtlas?: readonly number[];
+  readonly metallicRoughnessAtlas?: readonly number[];
+  readonly normalAtlas?: readonly number[];
+  readonly occlusionAtlas?: readonly number[];
+  readonly emissiveAtlas?: readonly number[];
+  readonly textureSettings?: readonly number[];
   readonly bounds: Readonly<{ min: readonly number[]; max: readonly number[] }>;
   readonly centroid: readonly number[];
 }
@@ -214,6 +309,7 @@ export interface WavefrontReferenceHit {
   readonly color: readonly number[];
   readonly emission: readonly number[];
   readonly material: readonly number[];
+  readonly materialResponse: readonly number[];
 }
 
 export interface IntersectWavefrontReferenceTriangleOptions {
@@ -256,12 +352,43 @@ export interface WavefrontGpuMeshSource {
       readonly metallic: number;
       readonly opacity: number;
       readonly ior: number;
+      readonly sheen: number;
+      readonly sheenTint: number;
+      readonly sheenColor: readonly [number, number, number, number] | readonly number[];
+      readonly clearcoat: number;
+      readonly clearcoatRoughness: number;
+      readonly specular: number;
+      readonly specularColor: readonly [number, number, number, number] | readonly number[];
+      readonly transmission: number;
+      readonly baseColorTexture: WavefrontTextureSampleInput | null;
+      readonly metallicRoughnessTexture: WavefrontTextureSampleInput | null;
+      readonly normalTexture: WavefrontTextureSampleInput | null;
+      readonly occlusionTexture: WavefrontTextureSampleInput | null;
+      readonly emissiveTexture: WavefrontTextureSampleInput | null;
     }>[];
     readonly count: number;
     readonly recordBytes: number;
   }>;
   readonly triangleCount: number;
   readonly bvhNodeCapacity: number;
+}
+
+export interface WavefrontGpuTextureAtlasSource {
+  readonly width: number;
+  readonly height: number;
+  readonly data: Uint8Array;
+  readonly defaultRect: readonly [number, number, number, number] | readonly number[];
+}
+
+export interface WavefrontGpuMaterialSource {
+  readonly buffer: ArrayBuffer;
+  readonly count: number;
+  readonly recordBytes: number;
+  readonly baseColorAtlas: WavefrontGpuTextureAtlasSource;
+  readonly metallicRoughnessAtlas: WavefrontGpuTextureAtlasSource;
+  readonly normalAtlas: WavefrontGpuTextureAtlasSource;
+  readonly occlusionAtlas: WavefrontGpuTextureAtlasSource;
+  readonly emissiveAtlas: WavefrontGpuTextureAtlasSource;
 }
 
 export interface WavefrontEmissiveTriangleIndexSource {
@@ -350,6 +477,7 @@ export interface WavefrontPathTracingComputeConfig {
   readonly accelerationBuildMode: WavefrontAccelerationBuildMode;
   readonly gpuAccelerationBuildRequired: boolean;
   readonly gpuMeshSource: WavefrontGpuMeshSource;
+  readonly gpuMaterialSource: WavefrontGpuMaterialSource;
   readonly meshAcceleration: WavefrontMeshAcceleration;
   readonly emissiveTriangleIndices: WavefrontEmissiveTriangleIndexSource;
   readonly emissiveTriangleCount: number;
@@ -424,6 +552,7 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly pathVertexBytes: number;
   readonly sceneObjectBytes: number;
   readonly triangleBytes: number;
+  readonly materialTableBytes: number;
   readonly bvhNodeBytes: number;
   readonly bvhLeafReferenceBytes: number;
   readonly emissiveTriangleMetadataBytes: number;
@@ -525,6 +654,11 @@ export interface WavefrontPathTracingComputeRenderer {
   renderFrame(options?: {
     readStats?: boolean;
     readOutputProbe?: boolean;
+    awaitGPUCompletion?: boolean;
+    submittedWorkTimeoutMs?: number;
+    samplesPerPixel?: number;
+    minimumSamplesPerPixel?: number;
+    frameTimeBudgetMs?: number;
     probe?: { x?: number; y?: number };
   }): Promise<WavefrontPathTracingComputeFrameStats>;
   readOutputProbe(options?: { x?: number; y?: number }): Promise<
@@ -574,6 +708,9 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly tiles: number;
   readonly tileSize: number;
   readonly samplesPerPixel: number;
+  readonly renderedSamplesPerPixel: number;
+  readonly frameTimeBudgetMs: number | null;
+  readonly budgetConstrained: boolean;
   readonly maxFramePassesPerSubmission: number;
   readonly screenRays: number;
   readonly primaryRays: number;
@@ -592,6 +729,15 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly accelerationBuilt: boolean;
   readonly accelerationBuildCount: number;
   readonly commandSubmissions: number;
+  readonly gpuWorkerJobs: Readonly<{
+    completedPerFrame: number;
+    completedPerSecond: number | null;
+    completedPerSubmission: number;
+    directDispatchesCompleted: number;
+    indirectDispatchesCompleted: number;
+    frameTimeMs: number;
+    awaitedGpuCompletion: boolean;
+  }>;
   readonly frameConfigSlots: number;
   readonly gpuParallelism: WavefrontGpuParallelismDiagnostics;
   readonly memory: WavefrontPathTracingMemoryEstimate;
@@ -618,6 +764,9 @@ export function normalizeWavefrontSceneObject(
   input?: WavefrontSceneObjectInput,
   index?: number
 ): WavefrontSceneObject;
+export function createWavefrontGpuMaterialSource(
+  meshes?: readonly WavefrontMeshInput[] | WavefrontMeshInput
+): WavefrontGpuMaterialSource;
 export function createDefaultWavefrontSceneObjects(): readonly WavefrontSceneObject[];
 export function estimateWavefrontPathTracingMemory(options?: {
   tilePixelCapacity?: number;
@@ -646,12 +795,25 @@ export function normalizeWavefrontMesh(
   metallic: number;
   opacity: number;
   ior: number;
+  sheen: number;
+  sheenTint: number;
+  sheenColor: readonly [number, number, number, number] | readonly number[];
+  clearcoat: number;
+  clearcoatRoughness: number;
+  specular: number;
+  specularColor: readonly [number, number, number, number] | readonly number[];
+  transmission: number;
+  baseColorTexture: WavefrontTextureSampleInput | null;
+  metallicRoughnessTexture: WavefrontTextureSampleInput | null;
+  normalTexture: WavefrontTextureSampleInput | null;
+  occlusionTexture: WavefrontTextureSampleInput | null;
 }>;
 export function createWavefrontMeshAcceleration(
   meshes?: readonly WavefrontMeshInput[] | WavefrontMeshInput
 ): WavefrontMeshAcceleration;
 export function createWavefrontGpuMeshSource(
-  meshes?: readonly WavefrontMeshInput[] | WavefrontMeshInput
+  meshes?: readonly WavefrontMeshInput[] | WavefrontMeshInput,
+  gpuMaterialSource?: WavefrontGpuMaterialSource | null
 ): WavefrontGpuMeshSource;
 export function createWavefrontEmissiveTriangleIndexSource(
   meshes?: readonly WavefrontMeshInput[] | WavefrontMeshInput,
@@ -731,12 +893,14 @@ export const rendererWavefrontComputeStatsStride: 8;
 
 export const wavefrontPathTracingComputeLimits: Readonly<{
   workgroupSize: 64;
+  traceStorageBufferBindings: number;
   rayRecordBytes: 80;
-  hitRecordBytes: 208;
-  sceneObjectRecordBytes: 96;
+  hitRecordBytes: 224;
+  sceneObjectRecordBytes: 112;
   meshVertexRecordBytes: 48;
-  meshRangeRecordBytes: 96;
-  triangleRecordBytes: 208;
+  meshRangeRecordBytes: 208;
+  triangleRecordBytes: 320;
+  materialRecordBytes: 160;
   bvhNodeRecordBytes: 48;
   bvhLeafReferenceRecordBytes: 16;
   emissiveTriangleIndexBytes: 4;

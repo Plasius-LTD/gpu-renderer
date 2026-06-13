@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   bindRendererToXrManager,
   createGpuRenderer,
+  createWavefrontAdaptiveSamplingLevels,
   createRendererDebugHooks,
   defaultRendererWorkerProfile,
   defaultRendererClearColor,
@@ -330,6 +331,22 @@ test("renderer worker profiles expose realtime and xr frame-stage DAGs", () => {
       "Frame-stage DAG for XR rendering with late-latch coordination before main encode and submit.",
     jobs: ["acquire", "visibility", "lateLatch", "mainEncode", "submit"],
   });
+});
+
+test("wavefront adaptive sampling levels expose bounded power-of-two ladders", () => {
+  const plan = createWavefrontAdaptiveSamplingLevels({
+    samplesPerPixel: 32,
+    frameTimeBudgetMs: 16,
+    minimumSamplesPerPixel: 1,
+  });
+
+  assert.equal(plan.requestedSamplesPerPixel, 32);
+  assert.equal(plan.minimumSamplesPerPixel, 1);
+  assert.equal(plan.frameTimeBudgetMs, 16);
+  assert.deepEqual(
+    plan.levels.map((level) => level.config.samplesPerPixel),
+    [1, 2, 4, 8, 16, 32]
+  );
 });
 
 test("renderer worker manifests publish queue, priority, and dependency metadata", () => {
