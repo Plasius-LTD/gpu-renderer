@@ -113,7 +113,10 @@ debug validation scenes. It is compute-driven, tiled, and breadth-first by
 bounce depth, so queue buffers are bounded by tile size instead of presentation
 resolution. Renderer-owned GPU record sizes are part of the public compute
 limits so ray, hit, triangle, BVH, and accumulation buffers stay aligned with
-their WGSL layouts.
+their WGSL layouts. Frame submission batching and dispatch diagnostics are kept
+in dedicated runtime helpers so performance-facing integrations can consume
+stable frame stats without inheriting the renderer's shader and pipeline
+assembly internals.
 
 ```js
 import {

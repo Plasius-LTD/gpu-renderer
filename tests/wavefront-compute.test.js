@@ -790,7 +790,8 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
     /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directEnvironment \* sample_weight\(\), 0\.0\);/
   );
   assert.match(source, /if \(config\.deferredPathResolve\) \{/);
-  assert.match(source, /encodeTileOutput\(reserveEncoder\(1\), tile, configOffset, parallelism\);/);
+  assert.match(source, /createGpuSubmissionBatcher\(\{/);
+  assert.match(source, /encodeTileOutput\(batch\.reserve\(1\), tile, configOffset, parallelism\);/);
 });
 
 test("analytic wavefront renderer rejects display-quality requests", () => {

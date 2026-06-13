@@ -1,3 +1,12 @@
+import {
+  createGpuParallelismCounters,
+  createGpuParallelismDiagnostics,
+  createGpuSubmissionBatcher,
+  createGpuWorkerJobDiagnostics,
+  recordDirectDispatch,
+  recordIndirectDispatch,
+} from "./wavefront-frame-runtime.js"
+
 const DEFAULT_WIDTH = 1280;
 const DEFAULT_HEIGHT = 720;
 const DEFAULT_MAX_DEPTH = 6;
@@ -5567,84 +5576,6 @@ function createGpuAdapterParallelismDiagnostics(adapter, device) {
   });
 }
 
-function createGpuParallelismCounters() {
-  return {
-    directDispatches: 0,
-    directWorkgroups: 0,
-    directShaderInvocations: 0,
-    multiWorkgroupDispatches: 0,
-    largestDirectWorkgroupsPerDispatch: 0,
-    indirectDispatches: 0,
-    estimatedIndirectWorkgroupsUpperBound: 0,
-    estimatedIndirectShaderInvocationsUpperBound: 0,
-    indirectDispatchesWithMultiWorkgroupCapacity: 0,
-    largestEstimatedIndirectWorkgroupsPerDispatch: 0,
-  };
-}
-
-function countDispatchWorkgroups(groups) {
-  return groups.reduce((product, value) => {
-    const numeric = Number(value ?? 1);
-    const count = Number.isFinite(numeric) ? Math.max(1, Math.trunc(numeric)) : 1;
-    return product * count;
-  }, 1);
-}
-
-function recordDirectDispatch(parallelism, groups, invocationsPerWorkgroup = WORKGROUP_SIZE) {
-  const workgroups = countDispatchWorkgroups(groups);
-  parallelism.directDispatches += 1;
-  parallelism.directWorkgroups += workgroups;
-  parallelism.directShaderInvocations += workgroups * invocationsPerWorkgroup;
-  parallelism.largestDirectWorkgroupsPerDispatch = Math.max(
-    parallelism.largestDirectWorkgroupsPerDispatch,
-    workgroups
-  );
-  if (workgroups > 1) {
-    parallelism.multiWorkgroupDispatches += 1;
-  }
-}
-
-function recordIndirectDispatch(parallelism, estimatedWorkgroupsUpperBound, invocationsPerWorkgroup = WORKGROUP_SIZE) {
-  const workgroups = Math.max(1, Math.trunc(Number(estimatedWorkgroupsUpperBound) || 1));
-  parallelism.indirectDispatches += 1;
-  parallelism.estimatedIndirectWorkgroupsUpperBound += workgroups;
-  parallelism.estimatedIndirectShaderInvocationsUpperBound += workgroups * invocationsPerWorkgroup;
-  parallelism.largestEstimatedIndirectWorkgroupsPerDispatch = Math.max(
-    parallelism.largestEstimatedIndirectWorkgroupsPerDispatch,
-    workgroups
-  );
-  if (workgroups > 1) {
-    parallelism.indirectDispatchesWithMultiWorkgroupCapacity += 1;
-  }
-}
-
-function createGpuParallelismDiagnostics(adapterDiagnostics, counters) {
-  const totalEstimatedWorkgroupsUpperBound =
-    counters.directWorkgroups + counters.estimatedIndirectWorkgroupsUpperBound;
-  const totalEstimatedShaderInvocationsUpperBound =
-    counters.directShaderInvocations + counters.estimatedIndirectShaderInvocationsUpperBound;
-  const exposesMultiWorkgroupParallelism =
-    counters.multiWorkgroupDispatches > 0 || counters.indirectDispatchesWithMultiWorkgroupCapacity > 0;
-  return Object.freeze({
-    ...adapterDiagnostics,
-    directDispatches: counters.directDispatches,
-    directWorkgroups: counters.directWorkgroups,
-    directShaderInvocations: counters.directShaderInvocations,
-    multiWorkgroupDispatches: counters.multiWorkgroupDispatches,
-    largestDirectWorkgroupsPerDispatch: counters.largestDirectWorkgroupsPerDispatch,
-    indirectDispatches: counters.indirectDispatches,
-    estimatedIndirectWorkgroupsUpperBound: counters.estimatedIndirectWorkgroupsUpperBound,
-    estimatedIndirectShaderInvocationsUpperBound: counters.estimatedIndirectShaderInvocationsUpperBound,
-    indirectDispatchesWithMultiWorkgroupCapacity: counters.indirectDispatchesWithMultiWorkgroupCapacity,
-    largestEstimatedIndirectWorkgroupsPerDispatch: counters.largestEstimatedIndirectWorkgroupsPerDispatch,
-    totalEstimatedWorkgroupsUpperBound,
-    totalEstimatedShaderInvocationsUpperBound,
-    exposesMultiWorkgroupParallelism,
-    likelyUsesMoreThanOnePhysicalGpuCore: null,
-    coreUtilizationStatus: "not-exposed-by-webgpu",
-  });
-}
-
 function createEnvironmentMapSnapshot(environmentMap) {
   return Object.freeze({
     enabled: environmentMap.enabled,
@@ -5663,30 +5594,6 @@ function nowMs() {
     return performance.now();
   }
   return Date.now();
-}
-
-function createGpuWorkerJobDiagnostics(
-  parallelism,
-  commandSubmissions,
-  frameTimeMs,
-  awaitedGpuCompletion
-) {
-  const directDispatchesCompleted = Math.max(0, Number(parallelism?.directDispatches ?? 0));
-  const indirectDispatchesCompleted = Math.max(0, Number(parallelism?.indirectDispatches ?? 0));
-  const completedPerFrame = directDispatchesCompleted + indirectDispatchesCompleted;
-  const completedPerSubmission =
-    commandSubmissions > 0 ? completedPerFrame / commandSubmissions : completedPerFrame;
-  const completedPerSecond =
-    awaitedGpuCompletion && frameTimeMs > 0 ? (completedPerFrame * 1000) / frameTimeMs : null;
-  return Object.freeze({
-    completedPerFrame,
-    completedPerSecond,
-    completedPerSubmission,
-    directDispatchesCompleted,
-    indirectDispatchesCompleted,
-    frameTimeMs,
-    awaitedGpuCompletion,
-  });
 }
 
 function estimateSubmittedGpuWorkTimeoutMs(config, tileCount, overrideTimeoutMs = null) {
@@ -6491,7 +6398,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     passEncoder.setPipeline(pipelines.prepareMeshTrianglesAndLeaves);
     const prepareWorkgroups = Math.ceil(config.bvhLeafSortCapacity / WORKGROUP_SIZE);
     passEncoder.dispatchWorkgroups(prepareWorkgroups);
-    recordDirectDispatch(parallelism, [prepareWorkgroups]);
+    recordDirectDispatch(parallelism, [prepareWorkgroups], WORKGROUP_SIZE);
     passEncoder.setPipeline(pipelines.sortBvhLeafRefs);
     for (let stageIndex = 0; stageIndex < config.bvhSortStages.length; stageIndex += 1) {
       passEncoder.setBindGroup(0, bvhBuildBindGroup, [
@@ -6499,13 +6406,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       ]);
       const sortWorkgroups = Math.ceil(config.bvhLeafSortCapacity / WORKGROUP_SIZE);
       passEncoder.dispatchWorkgroups(sortWorkgroups);
-      recordDirectDispatch(parallelism, [sortWorkgroups]);
+      recordDirectDispatch(parallelism, [sortWorkgroups], WORKGROUP_SIZE);
     }
     passEncoder.setBindGroup(0, bvhBuildBindGroup, [0]);
     passEncoder.setPipeline(pipelines.writeSortedBvhLeaves);
     const leafWriteWorkgroups = Math.ceil(config.triangleCount / WORKGROUP_SIZE);
     passEncoder.dispatchWorkgroups(leafWriteWorkgroups);
-    recordDirectDispatch(parallelism, [leafWriteWorkgroups]);
+    recordDirectDispatch(parallelism, [leafWriteWorkgroups], WORKGROUP_SIZE);
     passEncoder.setPipeline(pipelines.buildBvhInternalLevel);
     for (let levelIndex = 0; levelIndex < config.bvhBuildLevels.length; levelIndex += 1) {
       const buildLevel = config.bvhBuildLevels[levelIndex];
@@ -6514,7 +6421,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       ]);
       const levelWorkgroups = Math.ceil(buildLevel.count / WORKGROUP_SIZE);
       passEncoder.dispatchWorkgroups(levelWorkgroups);
-      recordDirectDispatch(parallelism, [levelWorkgroups]);
+      recordDirectDispatch(parallelism, [levelWorkgroups], WORKGROUP_SIZE);
     }
     passEncoder.end();
     device.queue.submit([encoder.finish()]);
@@ -6532,7 +6439,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     generatePass.setBindGroup(0, bindGroups[0], [configOffset]);
     generatePass.setPipeline(pipelines.generatePrimaryRays);
     generatePass.dispatchWorkgroups(tileWorkgroups);
-    recordDirectDispatch(parallelism, [tileWorkgroups]);
+    recordDirectDispatch(parallelism, [tileWorkgroups], WORKGROUP_SIZE);
     generatePass.end();
 
     for (let bounceIndex = 0; bounceIndex < config.maxDepth; bounceIndex += 1) {
@@ -6549,10 +6456,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       passEncoder.setBindGroup(0, bindGroups[bounceIndex % 2], [configOffset]);
       passEncoder.setPipeline(pipelines.intersectActiveQueue);
       passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
-      recordIndirectDispatch(parallelism, tileWorkgroups);
+      recordIndirectDispatch(parallelism, tileWorkgroups, WORKGROUP_SIZE);
       passEncoder.setPipeline(pipelines.resolveSurfaceRecords);
       passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
-      recordIndirectDispatch(parallelism, tileWorkgroups);
+      recordIndirectDispatch(parallelism, tileWorkgroups, WORKGROUP_SIZE);
       passEncoder.setPipeline(pipelines.compactAndSwapQueues);
       passEncoder.dispatchWorkgroups(1);
       recordDirectDispatch(parallelism, [1], 1);
@@ -6569,7 +6476,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     passEncoder.setBindGroup(0, bindGroups[0], [configOffset]);
     passEncoder.setPipeline(pipelines.accumulateTerminalRadiance);
     passEncoder.dispatchWorkgroups(tileWorkgroups);
-    recordDirectDispatch(parallelism, [tileWorkgroups]);
+    recordDirectDispatch(parallelism, [tileWorkgroups], WORKGROUP_SIZE);
     passEncoder.end();
   }
 
@@ -6587,7 +6494,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       radiancePass.setBindGroup(0, denoiseRadianceBindGroup, [configOffset]);
       radiancePass.setPipeline(pipelines.denoiseLinearRadiance);
       radiancePass.dispatchWorkgroups(denoiseWorkgroupsX, denoiseWorkgroupsY);
-      recordDirectDispatch(parallelism, [denoiseWorkgroupsX, denoiseWorkgroupsY]);
+      recordDirectDispatch(
+        parallelism,
+        [denoiseWorkgroupsX, denoiseWorkgroupsY],
+        WORKGROUP_SIZE
+      );
       radiancePass.end();
     }
 
@@ -6601,7 +6512,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     );
     resolvePass.setPipeline(pipelines.resolveDenoisedOutputImage);
     resolvePass.dispatchWorkgroups(denoiseWorkgroupsX, denoiseWorkgroupsY);
-    recordDirectDispatch(parallelism, [denoiseWorkgroupsX, denoiseWorkgroupsY]);
+    recordDirectDispatch(
+      parallelism,
+      [denoiseWorkgroupsX, denoiseWorkgroupsY],
+      WORKGROUP_SIZE
+    );
     resolvePass.end();
   }
 
@@ -6626,34 +6541,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
 
   function dispatchFrame(frameIndex, parallelism, renderedSamplesPerPixel = config.samplesPerPixel) {
     const writeFrameConfig = createFrameConfigWriter(frameIndex);
-    let submissionCount = 0;
-    let encodedFramePasses = 0;
-    let encoder = device.createCommandEncoder({
-      label: `plasius.wavefront.frame.${frameIndex}.batched.${submissionCount + 1}`,
+    const batch = createGpuSubmissionBatcher({
+      device,
+      frameIndex,
+      maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
     });
-
-    function submitCurrentEncoder() {
-      if (encodedFramePasses <= 0) {
-        return;
-      }
-      device.queue.submit([encoder.finish()]);
-      submissionCount += 1;
-      encodedFramePasses = 0;
-      encoder = device.createCommandEncoder({
-        label: `plasius.wavefront.frame.${frameIndex}.batched.${submissionCount + 1}`,
-      });
-    }
-
-    function reserveEncoder(passCount = 1) {
-      if (
-        encodedFramePasses > 0 &&
-        encodedFramePasses + passCount > config.maxFramePassesPerSubmission
-      ) {
-        submitCurrentEncoder();
-      }
-      encodedFramePasses += passCount;
-      return encoder;
-    }
 
     for (const tile of tiles) {
       for (let sampleIndex = 0; sampleIndex < renderedSamplesPerPixel; sampleIndex += 1) {
@@ -6662,13 +6554,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           sampleWeight: 1 / renderedSamplesPerPixel,
         });
         encodeTileSample(
-          reserveEncoder(config.maxDepth + 1),
+          batch.reserve(config.maxDepth + 1),
           tile,
           configOffset,
           parallelism
         );
         if (config.deferredPathResolve) {
-          encodeTileOutput(reserveEncoder(1), tile, configOffset, parallelism);
+          encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
         }
       }
       if (!config.deferredPathResolve) {
@@ -6676,7 +6568,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           sampleIndex: 0,
           sampleWeight: 1 / renderedSamplesPerPixel,
         });
-        encodeTileOutput(reserveEncoder(1), tile, outputConfigOffset, parallelism);
+        encodeTileOutput(batch.reserve(1), tile, outputConfigOffset, parallelism);
       }
     }
     if (config.denoise) {
@@ -6686,15 +6578,14 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       );
       const denoisePassCount = renderedSamplesPerPixel < 4 ? 2 : 1;
       encodeDenoise(
-        reserveEncoder(denoisePassCount),
+        batch.reserve(denoisePassCount),
         denoiseConfigOffset,
         parallelism,
         renderedSamplesPerPixel
       );
     }
-    encodePresent(reserveEncoder(1));
-    submitCurrentEncoder();
-    return submissionCount;
+    encodePresent(batch.reserve(1));
+    return batch.flush();
   }
 
   function renderOnce(renderOptions = {}, resolvedSamplingPlan = null) {
@@ -6809,42 +6700,6 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     );
     let submissionCount = 0;
 
-    function createSubmissionController() {
-      let encodedFramePasses = 0;
-      let localSubmissions = 0;
-      let encoder = device.createCommandEncoder({
-        label: `plasius.wavefront.frame.${frameIndex}.batched.${submissionCount + localSubmissions + 1}`,
-      });
-
-      return {
-        reserve(passCount = 1) {
-          if (
-            encodedFramePasses > 0 &&
-            encodedFramePasses + passCount > config.maxFramePassesPerSubmission
-          ) {
-            const finished = encoder.finish();
-            device.queue.submit([finished]);
-            localSubmissions += 1;
-            encodedFramePasses = 0;
-            encoder = device.createCommandEncoder({
-              label: `plasius.wavefront.frame.${frameIndex}.batched.${submissionCount + localSubmissions + 1}`,
-            });
-          }
-          encodedFramePasses += passCount;
-          return encoder;
-        },
-        flush() {
-          if (encodedFramePasses <= 0) {
-            return 0;
-          }
-          device.queue.submit([encoder.finish()]);
-          localSubmissions += 1;
-          encodedFramePasses = 0;
-          return localSubmissions;
-        },
-      };
-    }
-
     for (const tile of tiles) {
       for (
         let sampleStart = 0;
@@ -6852,7 +6707,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         sampleStart += sampleBatchSize
       ) {
         const sampleEnd = Math.min(renderedSamplesPerPixel, sampleStart + sampleBatchSize);
-        const batch = createSubmissionController();
+        const batch = createGpuSubmissionBatcher({
+          device,
+          frameIndex,
+          maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
+          startingSubmissionCount: submissionCount,
+        });
         let slot = 0;
         for (let sampleIndex = sampleStart; sampleIndex < sampleEnd; sampleIndex += 1) {
           const configOffset = writeFrameConfigSlot(slot, tile, frameIndex, {
@@ -6877,11 +6737,17 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           });
           encodeTileOutput(batch.reserve(1), tile, outputConfigOffset, parallelism);
         }
-        submissionCount += batch.flush();
+        batch.flush();
+        submissionCount += batch.getSubmissionCount();
       }
     }
 
-    const tail = createSubmissionController();
+    const tail = createGpuSubmissionBatcher({
+      device,
+      frameIndex,
+      maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
+      startingSubmissionCount: submissionCount,
+    });
     if (config.denoise) {
       const denoiseConfigOffset = writeFrameConfigSlot(
         0,
@@ -6897,7 +6763,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       );
     }
     encodePresent(tail.reserve(1));
-    submissionCount += tail.flush();
+    tail.flush();
+    submissionCount += tail.getSubmissionCount();
     return submissionCount;
   }
 

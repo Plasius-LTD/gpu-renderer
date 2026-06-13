@@ -55,6 +55,9 @@ All notable changes to this project will be documented in this file.
     renderer-specific ladder construction in app or demo code.
 
 - **Changed**
+  - Changed internal wavefront frame batching and dispatch-diagnostics plumbing
+    to live in a dedicated runtime helper module so scheduling concerns stay
+    separated from shader and pipeline assembly.
   - Changed wavefront frame dispatch to split large tile/sample workloads into
     bounded command submissions instead of encoding an entire high-resolution
     frame into one command buffer.
