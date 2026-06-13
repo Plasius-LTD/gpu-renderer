@@ -2936,7 +2936,6 @@ function createEnvironmentMapUploadBytes(environmentMap, fallbackColor) {
     width,
     height,
   });
-  BRDF_LUT_UPLOAD_CACHE.set(cacheKey, upload);
   return upload;
 }
 
@@ -6778,7 +6777,6 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     } finally {
       if (timeoutHandle !== null) {
         clearTimeout(timeoutHandle);
-        timeoutHandle = null;
         settleTimeoutPromise({ status: "cancelled" });
       }
     }
