@@ -222,6 +222,11 @@ function resolveEnvironmentMap(input = null) {
     enabled: hasTexture && source?.enabled !== false,
     width,
     height,
+    mipLevelCount: readPositiveInteger(
+      "environmentMap.mipLevelCount",
+      source?.mipLevelCount,
+      1
+    ),
     format: typeof source?.format === "string" ? source.format : "rgba16float",
     projection: typeof source?.projection === "string" ? source.projection : "equirectangular",
     texture: source?.texture ?? null,
@@ -234,6 +239,7 @@ function resolveEnvironmentMap(input = null) {
       0,
       readFiniteNumber("environmentMap.ambientStrength", source?.ambientStrength, 0.32)
     ),
+    hasImportanceData: source?.hasImportanceData === true,
   });
 }
 
@@ -701,16 +707,31 @@ function sampleTextureRgba(texture, uv = [0, 0], colorSpace = "linear") {
   const y = Math.min(texture.height - 1, Math.max(0, Math.round((1 - v) * (texture.height - 1))));
   const offset = (y * texture.width + x) * 4;
   const data = texture.data;
+  const scale = resolveTextureSampleScale(data);
+  const defaultChannel = scale === 1 ? 1 : Math.round(1 / scale);
   const color = [
-    (data[offset] ?? 255) / 255,
-    (data[offset + 1] ?? 255) / 255,
-    (data[offset + 2] ?? 255) / 255,
-    (data[offset + 3] ?? 255) / 255,
+    (data[offset] ?? defaultChannel) * scale,
+    (data[offset + 1] ?? defaultChannel) * scale,
+    (data[offset + 2] ?? defaultChannel) * scale,
+    (data[offset + 3] ?? defaultChannel) * scale,
   ];
   if (colorSpace === "srgb") {
     return [srgbToLinear(color[0]), srgbToLinear(color[1]), srgbToLinear(color[2]), color[3]];
   }
   return color;
+}
+
+function resolveTextureSampleScale(data) {
+  if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
+    return 1 / 255;
+  }
+  if (data instanceof Uint16Array) {
+    return 1 / 65535;
+  }
+  if (Array.isArray(data) && data.some((value) => Number(value) > 1)) {
+    return 1 / 255;
+  }
+  return 1;
 }
 
 function normalizeVectorOrFallback(vector, fallback) {
@@ -757,8 +778,8 @@ function applyNormalMap(normal, tangent, bitangent, normalTexture, uv) {
   const strength = clampUnit(normalTexture.scale ?? 1);
   const tangentNormal = normalize(
     [
-      sample[0] * 2 - 1,
-      sample[1] * 2 - 1,
+      (sample[0] * 2 - 1) * strength,
+      (sample[1] * 2 - 1) * strength,
       1 + (sample[2] * 2 - 1 - 1) * strength,
     ],
     [0, 0, 1]
@@ -2249,7 +2270,7 @@ function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
     config.environmentMap.width ?? 1,
     config.environmentMap.height ?? 1,
     config.environmentMap.mipLevelCount ?? 1,
-    0,
+    config.environmentMap.hasImportanceData ? 1 : 0,
   ]);
   return bytes;
 }
@@ -2441,6 +2462,7 @@ export function intersectWavefrontReferenceTriangle(ray, triangle, options = {})
     color: triangle.color,
     emission: triangle.emission,
     material: triangle.material,
+    materialResponse: triangle.materialResponse,
   });
 }
 
@@ -2468,6 +2490,7 @@ function createWavefrontReferenceEnvironmentHit(config, ray) {
     color: Object.freeze([0, 0, 0, 0]),
     emission: radiance,
     material: Object.freeze([1, 0, 1, 1]),
+    materialResponse: Object.freeze([0, 0, 0, 0]),
   });
 }
 
@@ -2558,6 +2581,15 @@ function environmentMapIntegerScale(data) {
     return 1 / 65535;
   }
   return 1;
+}
+
+function environmentMapHasSamplingData(environmentMap) {
+  if (!environmentMap || !environmentMap.data) {
+    return false;
+  }
+  const width = Math.max(1, environmentMap.width ?? 1);
+  const height = Math.max(1, environmentMap.height ?? 1);
+  return environmentMap.data.length >= width * height * 4;
 }
 
 function createRgba8TextureUpload(source) {
@@ -2702,7 +2734,9 @@ function createBrdfLutUploadBytes(size = DEFAULT_BRDF_LUT_SIZE, sampleCount = 10
       view.setUint16(offset + 6, float32ToFloat16Bits(1), true);
     }
   }
-  return Object.freeze({ bytes, bytesPerRow, width, height });
+  const upload = Object.freeze({ bytes, bytesPerRow, width, height });
+  BRDF_LUT_UPLOAD_CACHE.set(cacheKey, upload);
+  return upload;
 }
 
 function createLinearEnvironmentPixels(environmentMap, fallbackColor) {
@@ -2861,6 +2895,16 @@ function createPrefilteredEnvironmentLevels(environmentMap, fallbackColor) {
 }
 
 function createEnvironmentSamplingTables(environmentMap, fallbackColor) {
+  if (!environmentMapHasSamplingData(environmentMap)) {
+    return Object.freeze({
+      width: 1,
+      height: 1,
+      pdf: new Float32Array([1]),
+      marginalCdf: new Float32Array([1]),
+      conditionalCdf: new Float32Array([1]),
+      hasImportanceData: false,
+    });
+  }
   const pixels = createLinearEnvironmentPixels(environmentMap, fallbackColor);
   const width = Math.max(1, environmentMap.width);
   const height = Math.max(1, environmentMap.height);
@@ -2906,6 +2950,7 @@ function createEnvironmentSamplingTables(environmentMap, fallbackColor) {
     pdf,
     marginalCdf,
     conditionalCdf,
+    hasImportanceData: true,
   });
 }
 
@@ -2964,7 +3009,7 @@ function createEnvironmentMapResource(device, constants, environmentMap, fallbac
       ownsTexture: false,
       width: Math.max(1, environmentMap.width),
       height: Math.max(1, environmentMap.height),
-      mipLevelCount: 1,
+      mipLevelCount: Math.max(1, environmentMap.mipLevelCount ?? 1),
     });
   }
 
@@ -2983,7 +3028,7 @@ function createEnvironmentMapResource(device, constants, environmentMap, fallbac
       ownsTexture: false,
       width: Math.max(1, environmentMap.width),
       height: Math.max(1, environmentMap.height),
-      mipLevelCount: 1,
+      mipLevelCount: Math.max(1, environmentMap.mipLevelCount ?? 1),
     });
   }
 
@@ -3058,6 +3103,7 @@ function createEnvironmentSamplingTextureResource(device, constants, environment
     view: texture.createView(),
     texture,
     ownsTexture: true,
+    hasImportanceData: tables.hasImportanceData,
   });
 }
 
@@ -3579,8 +3625,8 @@ fn sample_surface_material(
   let tangentBasis = build_triangle_tangent_basis(triangle, geometricNormal);
   let tangentNormal = safe_normalize(
     vec3<f32>(
-      normalTexel.x * 2.0 - 1.0,
-      normalTexel.y * 2.0 - 1.0,
+      (normalTexel.x * 2.0 - 1.0) * normalScale,
+      (normalTexel.y * 2.0 - 1.0) * normalScale,
       1.0 + ((normalTexel.z * 2.0 - 1.0) - 1.0) * normalScale
     ),
     vec3<f32>(0.0, 0.0, 1.0)
@@ -3613,7 +3659,11 @@ fn sample_surface_material(
     triangle.materialExtension,
     triangle.specularColor,
     repair_shading_normal(geometricNormal, mappedNormal),
-    clamp(occlusionTexel.x * max(triangle.textureSettings.y, 0.0), 0.0, 1.0)
+    clamp(
+      mix(1.0, occlusionTexel.x, clamp(triangle.textureSettings.y, 0.0, 1.0)),
+      0.0,
+      1.0
+    )
   );
 }
 
@@ -3858,6 +3908,21 @@ fn environment_pdf_dimensions() -> vec2<u32> {
   );
 }
 
+fn environment_importance_sampling_enabled() -> bool {
+  return config.environmentMapMeta.w > 0.5;
+}
+
+fn uniform_sphere_pdf() -> f32 {
+  return 1.0 / (4.0 * 3.14159265359);
+}
+
+fn sample_uniform_sphere_direction(sample: vec2<f32>) -> vec3<f32> {
+  let z = 1.0 - 2.0 * sample.y;
+  let radial = sqrt(max(1.0 - z * z, 0.0));
+  let phi = sample.x * 6.28318530718;
+  return vec3<f32>(cos(phi) * radial, z, sin(phi) * radial);
+}
+
 fn environment_sampling_texel(x: u32, y: u32) -> vec4<f32> {
   return textureLoad(environmentSamplingTexture, vec2<i32>(i32(x), i32(y)), 0);
 }
@@ -3875,6 +3940,9 @@ fn environment_column_cdf_texel(x: u32, y: u32) -> f32 {
 }
 
 fn environment_direction_pdf(direction: vec3<f32>) -> f32 {
+  if (!environment_importance_sampling_enabled()) {
+    return uniform_sphere_pdf();
+  }
   let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
   let uv = environment_map_uv(rayDirection);
   let dimensions = environment_pdf_dimensions();
@@ -3937,6 +4005,10 @@ struct EnvironmentSample {
 };
 
 fn sample_environment_importance(sample: vec2<f32>) -> EnvironmentSample {
+  if (!environment_importance_sampling_enabled()) {
+    let direction = sample_uniform_sphere_direction(sample);
+    return EnvironmentSample(direction, base_environment_radiance(direction), uniform_sphere_pdf());
+  }
   let dimensions = environment_pdf_dimensions();
   let row = sample_row_cdf(dimensions.y, sample.y);
   let column = sample_column_cdf(row, dimensions.x, sample.x);
@@ -5202,6 +5274,31 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
     );
   }
 
+  let guidedEmissiveAvailable = config.emissiveTriangleCount > 0u;
+  let guidedPortalAvailable =
+    config.environmentPortalCount > 0u && config.environmentPortalMode != 0u;
+  let guidedSelector = random01(seed + 17u);
+  if (guidedEmissiveAvailable && guidedSelector < 0.18) {
+    let guidedDirection = sample_emissive_triangle_direction(hit, seed + 101u, normal);
+    if (dot(normal, guidedDirection) > 0.000001) {
+      let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
+      return ScatterResult(
+        vec4<f32>(guidedDirection, 0.0),
+        guidedPdf,
+        RAY_FLAG_GUIDED_EMISSIVE,
+        0u,
+        0u
+      );
+    }
+  }
+  if (guidedPortalAvailable && guidedSelector < 0.32) {
+    let guidedDirection = sample_environment_portal_direction(hit, seed + 131u, normal);
+    if (dot(normal, guidedDirection) > 0.000001) {
+      let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
+      return ScatterResult(vec4<f32>(guidedDirection, 0.0), guidedPdf, 0u, 0u, 0u);
+    }
+  }
+
   let weights = surface_bsdf_sampling_weights(hit);
   let selector = random01(seed + 31u);
   var lightDirection = normal;
@@ -5586,6 +5683,7 @@ function createEnvironmentMapSnapshot(environmentMap) {
     intensity: environmentMap.intensity,
     rotationRadians: environmentMap.rotationRadians,
     ambientStrength: environmentMap.ambientStrength,
+    hasImportanceData: environmentMap.hasImportanceData === true,
   });
 }
 
@@ -5841,6 +5939,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     config.environmentMap,
     config.environmentColor
   );
+  const environmentSamplingResource = createEnvironmentSamplingTextureResource(
+    device,
+    constants,
+    config.environmentMap,
+    config.environmentColor
+  );
   config = Object.freeze({
     ...config,
     environmentMap: Object.freeze({
@@ -5848,14 +5952,9 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       width: environmentMapResource.width,
       height: environmentMapResource.height,
       mipLevelCount: environmentMapResource.mipLevelCount,
+      hasImportanceData: environmentSamplingResource.hasImportanceData,
     }),
   });
-  const environmentSamplingResource = createEnvironmentSamplingTextureResource(
-    device,
-    constants,
-    config.environmentMap,
-    config.environmentColor
-  );
   const brdfLutResource = createBrdfLutResource(device, constants);
   const baseColorAtlasResource = createAtlasTextureResource(
     device,
@@ -6888,10 +6987,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
   }
 
-  function updateSceneObjects(sceneObjects) {
-    const nextPackedScene = packWavefrontSceneObjects(sceneObjects, config.sceneObjectCapacity);
-    packedScene = nextPackedScene;
-    config = createWavefrontPathTracingComputeConfig({
+  function rebuildLiveConfig(overrides = {}) {
+    return createWavefrontPathTracingComputeConfig({
       ...options,
       canvas,
       width: config.width,
@@ -6902,27 +6999,25 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       sceneObjectCapacity: config.sceneObjectCapacity,
       sceneObjects: packedScene.objects,
       camera: activeCameraOptions,
+      environmentMap: {
+        ...config.environmentMap,
+      },
       frameIndex: config.frameIndex,
+      ...overrides,
     });
+  }
+
+  function updateSceneObjects(sceneObjects) {
+    const nextPackedScene = packWavefrontSceneObjects(sceneObjects, config.sceneObjectCapacity);
+    packedScene = nextPackedScene;
+    config = rebuildLiveConfig();
     device.queue.writeBuffer(sceneObjectBuffer, 0, packedScene.buffer);
     return config;
   }
 
   function updateCamera(cameraOptions = {}) {
     activeCameraOptions = cameraOptions;
-    config = createWavefrontPathTracingComputeConfig({
-      ...options,
-      canvas,
-      width: config.width,
-      height: config.height,
-      maxDepth: config.maxDepth,
-      tileSize: config.tileSize,
-      samplesPerPixel: config.samplesPerPixel,
-      sceneObjectCapacity: config.sceneObjectCapacity,
-      sceneObjects: packedScene.objects,
-      camera: activeCameraOptions,
-      frameIndex: config.frameIndex,
-    });
+    config = rebuildLiveConfig();
     return config;
   }
 

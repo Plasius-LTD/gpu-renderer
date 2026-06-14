@@ -439,6 +439,7 @@ export interface WavefrontEnvironmentMapInput {
   readonly enabled?: boolean;
   readonly width?: number;
   readonly height?: number;
+  readonly mipLevelCount?: number;
   readonly projection?: "equirectangular" | string;
   readonly format?: GPUTextureFormat | "rgba16float";
   readonly texture?: GPUTexture;
@@ -450,16 +451,19 @@ export interface WavefrontEnvironmentMapInput {
   readonly rotationRadians?: number;
   readonly rotation?: number;
   readonly ambientStrength?: number;
+  readonly hasImportanceData?: boolean;
 }
 
 export interface WavefrontEnvironmentMapSnapshot {
   readonly enabled: boolean;
   readonly width: number;
   readonly height: number;
+  readonly mipLevelCount: number;
   readonly projection: string;
   readonly intensity: number;
   readonly rotationRadians: number;
   readonly ambientStrength: number;
+  readonly hasImportanceData: boolean;
 }
 
 export interface WavefrontPathTracingComputeConfig {
@@ -895,12 +899,12 @@ export const wavefrontPathTracingComputeLimits: Readonly<{
   workgroupSize: 64;
   traceStorageBufferBindings: number;
   rayRecordBytes: 80;
-  hitRecordBytes: 224;
-  sceneObjectRecordBytes: 112;
+  hitRecordBytes: 256;
+  sceneObjectRecordBytes: 144;
   meshVertexRecordBytes: 48;
-  meshRangeRecordBytes: 208;
-  triangleRecordBytes: 320;
-  materialRecordBytes: 160;
+  meshRangeRecordBytes: 240;
+  triangleRecordBytes: 352;
+  materialRecordBytes: 192;
   bvhNodeRecordBytes: 48;
   bvhLeafReferenceRecordBytes: 16;
   emissiveTriangleIndexBytes: 4;
