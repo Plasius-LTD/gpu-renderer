@@ -201,6 +201,15 @@ response now also samples reflection-aligned environment radiance so leather,
 chrome, and other polished authored materials can read from the active
 environment map or procedural sky instead of relying mostly on a sun-direction
 proxy.
+Authored participating-media inputs can also enter through the same mesh path.
+A mesh may provide an explicit `medium` block or a glTF-style `material.volume`
+block with `thickness`, `attenuationColor`, and `attenuationDistance`; the
+renderer derives the medium-table entry, carries the active medium id on the
+GPU ray, and applies Beer-Lambert transmittance to travelled segments on the
+GPU. Thickness is now preserved in material packing for later shell-volume
+work, but the current renderer still tracks only one active medium id per ray
+and does not yet implement nested media, spectral dispersion, or a branching
+reflection/refraction tree.
 
 `samplesPerPixel` controls how many GPU primary-ray samples are accumulated per
 screen pixel within a single render. This multiplies dispatch work but does not
