@@ -17,13 +17,14 @@ const DEFAULT_BRDF_LUT_SIZE = 256;
 const DEFAULT_MAX_FRAME_PASSES_PER_SUBMISSION = 256;
 const DEFAULT_SCENE_OBJECT_CAPACITY = 128;
 const DEFAULT_ENVIRONMENT_PORTAL_CAPACITY = 32;
+const DEFAULT_MEDIUM_PHASE_MODEL = 0;
 const WORKGROUP_SIZE = 64;
 export const rendererWavefrontComputeMode = "webgpu-compute";
 export const rendererWavefrontComputeWorkgroupSize = WORKGROUP_SIZE;
 export const rendererWavefrontComputeStatsStride = 8;
 const RAY_RECORD_BYTES = 80;
 const HIT_RECORD_BYTES = 256;
-const SCENE_OBJECT_RECORD_BYTES = 144;
+const SCENE_OBJECT_RECORD_BYTES = 160;
 const MESH_VERTEX_RECORD_BYTES = 48;
 const MESH_RANGE_RECORD_BYTES = 240;
 const TRIANGLE_RECORD_BYTES = 352;
@@ -32,6 +33,7 @@ const BVH_NODE_RECORD_BYTES = 48;
 const BVH_LEAF_REF_RECORD_BYTES = 16;
 const EMISSIVE_TRIANGLE_INDEX_BYTES = 4;
 const ENVIRONMENT_PORTAL_RECORD_BYTES = 96;
+const MEDIUM_TABLE_ROWS = 2;
 const ACCUMULATION_RECORD_BYTES = 16;
 const PATH_VERTEX_RECORD_BYTES = 16;
 const GPU_SUBMITTED_WORK_TIMEOUT_MS = 5_000;
@@ -437,6 +439,170 @@ function deriveBounds(input) {
   return null;
 }
 
+function deriveBeerLambertAbsorptionFromAttenuationColor(
+  attenuationColor,
+  attenuationDistance,
+  density = 1
+) {
+  const distance = Number(attenuationDistance);
+  const densityScale = Math.max(0, Number(density) || 0);
+  if (!Number.isFinite(distance) || distance <= 0 || densityScale <= 0) {
+    return [0, 0, 0];
+  }
+  return attenuationColor.slice(0, 3).map((channel) => {
+    const clamped = clamp(Number(channel) || 0, 0.0001, 1);
+    return Math.max(0, (-Math.log(clamped) / distance) * densityScale);
+  });
+}
+
+function readMediumPhaseModel(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.trunc(value));
+  }
+  switch (String(value ?? "").trim().toLowerCase()) {
+    case "isotropic":
+    default:
+      return DEFAULT_MEDIUM_PHASE_MODEL;
+  }
+}
+
+function resolveWavefrontVolumeInput(input) {
+  return input?.volume ?? input?.material?.volume ?? null;
+}
+
+function normalizeWavefrontThickness(input, label) {
+  const volume = resolveWavefrontVolumeInput(input);
+  return Math.max(
+    0,
+    readFiniteNumber(
+      label,
+      input?.thickness ?? volume?.thickness ?? input?.material?.thickness,
+      0
+    )
+  );
+}
+
+function deriveWavefrontMeshMedium(input, fallbackId = 1) {
+  if (input?.medium) {
+    return normalizeWavefrontMedium(input.medium, fallbackId);
+  }
+  const volume = resolveWavefrontVolumeInput(input);
+  if (!volume) {
+    return null;
+  }
+  return normalizeWavefrontMedium(
+    {
+      id:
+        input.mediumRefId ??
+        input.mediumId ??
+        input.material?.mediumId ??
+        input.materialRefId ??
+        input.materialId ??
+        input.id ??
+        fallbackId,
+      phaseModel: volume.phaseModel,
+      density: volume.density,
+      attenuationColor: volume.attenuationColor,
+      attenuationDistance: volume.attenuationDistance,
+      absorption: volume.absorption,
+      scattering: volume.scattering,
+    },
+    fallbackId
+  );
+}
+
+function normalizeWavefrontMedium(input = {}, index = 0) {
+  const id = readNonNegativeInteger("medium id", input.id ?? input.mediumId, index);
+  const density = Math.max(0, readFiniteNumber("medium density", input.density, 1));
+  const attenuationColor = asColor(
+    input.attenuationColor ?? input.color ?? input.medium?.attenuationColor,
+    [1, 1, 1, 1]
+  );
+  const attenuationDistance = readFiniteNumber(
+    "medium attenuationDistance",
+    input.attenuationDistance ?? input.distance ?? input.medium?.attenuationDistance,
+    0
+  );
+  const absorption =
+    Array.isArray(input.absorption) || Array.isArray(input.medium?.absorption)
+      ? asVec3(input.absorption ?? input.medium?.absorption, [0, 0, 0]).map((value) =>
+          Math.max(0, Number(value) || 0)
+        )
+      : deriveBeerLambertAbsorptionFromAttenuationColor(
+          attenuationColor,
+          attenuationDistance,
+          density
+        );
+  const scattering = asVec3(
+    input.scattering ?? input.medium?.scattering,
+    [0, 0, 0]
+  ).map((value) => Math.max(0, Number(value) || 0));
+  return Object.freeze({
+    id,
+    phaseModel: readMediumPhaseModel(input.phaseModel ?? input.medium?.phaseModel),
+    density,
+    attenuationColor: Object.freeze(attenuationColor),
+    attenuationDistance,
+    absorption: Object.freeze(absorption),
+    scattering: Object.freeze(scattering),
+  });
+}
+
+function collectWavefrontMediums(options, meshes, sceneObjects = []) {
+  const mediumsById = new Map();
+  mediumsById.set(
+    0,
+    Object.freeze({
+      id: 0,
+      phaseModel: DEFAULT_MEDIUM_PHASE_MODEL,
+      density: 0,
+      attenuationColor: Object.freeze([1, 1, 1, 1]),
+      attenuationDistance: 0,
+      absorption: Object.freeze([0, 0, 0]),
+      scattering: Object.freeze([0, 0, 0]),
+    })
+  );
+
+  const register = (input, fallbackId = mediumsById.size) => {
+    if (!input) {
+      return;
+    }
+    const normalized = normalizeWavefrontMedium(
+      typeof input === "object" ? { id: fallbackId, ...input } : { id: fallbackId },
+      fallbackId
+    );
+    const existing = mediumsById.get(normalized.id);
+    if (existing && JSON.stringify(existing) !== JSON.stringify(normalized)) {
+      throw new Error(`Medium id ${normalized.id} is defined more than once with different values.`);
+    }
+    mediumsById.set(normalized.id, normalized);
+  };
+
+  for (const medium of options.mediums ?? []) {
+    register(medium);
+  }
+  for (const mesh of meshes) {
+    register(mesh.medium, mesh.mediumRefId ?? mesh.medium?.id ?? 0);
+  }
+  for (const mesh of meshes) {
+    if ((mesh.mediumRefId ?? 0) > 0 && !mediumsById.has(mesh.mediumRefId)) {
+      register({ id: mesh.mediumRefId });
+    }
+  }
+  for (const object of sceneObjects) {
+    register(object.medium, object.mediumRefId ?? object.medium?.id ?? 0);
+  }
+  for (const object of sceneObjects) {
+    if ((object.mediumRefId ?? 0) > 0 && !mediumsById.has(object.mediumRefId)) {
+      register({ id: object.mediumRefId });
+    }
+  }
+
+  return Object.freeze(
+    Array.from(mediumsById.values()).sort((left, right) => left.id - right.id)
+  );
+}
+
 export function normalizeWavefrontSceneObject(input = {}, index = 0) {
   const bounds = deriveBounds(input);
   const kind = readObjectKind(input.kind ?? input.type ?? (bounds ? "box" : "sphere"));
@@ -474,6 +640,8 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
     input.specularColor ?? input.material?.specularColor,
     [1, 1, 1, 1]
   ).map((value, componentIndex) => (componentIndex < 3 ? clamp(value, 0, 1) : 1));
+  const medium =
+    input.medium ? normalizeWavefrontMedium(input.medium, index + 1) : null;
   const resolvedMaterialKind =
     emission[0] > 0 || emission[1] > 0 || emission[2] > 0
       ? MATERIAL_EMISSIVE
@@ -488,6 +656,12 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
     kind,
     materialKind: resolvedMaterialKind,
     flags: readNonNegativeInteger("flags", input.flags, 0),
+    mediumRefId: readNonNegativeInteger(
+      "mediumRefId",
+      input.mediumRefId ?? input.medium?.id ?? input.mediumId,
+      0
+    ),
+    medium,
     center: Object.freeze(center),
     halfExtent: Object.freeze(halfExtent),
     color: Object.freeze(color),
@@ -511,6 +685,7 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
     ),
     specular: clamp(readFiniteNumber("specular", input.specular ?? input.material?.specular, 1), 0, 1),
     specularColor: Object.freeze(specularColor),
+    thickness: normalizeWavefrontThickness(input, "thickness"),
     transmission,
   });
 }
@@ -620,6 +795,7 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     input.specularColor ?? input.material?.specularColor,
     [1, 1, 1, 1]
   ).map((value, componentIndex) => (componentIndex < 3 ? clamp(value, 0, 1) : 1));
+  const medium = deriveWavefrontMeshMedium(input, meshIndex + 1);
   const resolvedMaterialKind =
     emission[0] > 0 || emission[1] > 0 || emission[2] > 0
       ? MATERIAL_EMISSIVE
@@ -644,9 +820,14 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     ),
     mediumRefId: readNonNegativeInteger(
       "mesh mediumRefId",
-      input.mediumRefId ?? input.medium?.id ?? input.mediumId,
+      input.mediumRefId ??
+        medium?.id ??
+        input.medium?.id ??
+        input.mediumId ??
+        input.material?.mediumId,
       0
     ),
+    medium,
     color: Object.freeze(color),
     emission: Object.freeze(emission),
     roughness: clamp(readFiniteNumber("roughness", input.roughness ?? input.material?.roughness, 0.72), 0, 1),
@@ -668,6 +849,7 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     ),
     specular: clamp(readFiniteNumber("specular", input.specular ?? input.material?.specular, 1), 0, 1),
     specularColor: Object.freeze(specularColor),
+    thickness: normalizeWavefrontThickness(input, "mesh thickness"),
     transmission,
     baseColorTexture: input.baseColorTexture ?? input.material?.baseColorTexture ?? null,
     metallicRoughnessTexture:
@@ -902,7 +1084,7 @@ function createMeshTriangleRecords(meshes) {
             mesh.clearcoatRoughness,
             mesh.specular,
             mesh.transmission,
-            0,
+            mesh.thickness,
           ]),
           specularColor: Object.freeze([
             mesh.specularColor[0] ?? 1,
@@ -1231,7 +1413,7 @@ export function createWavefrontGpuMaterialSource(meshes = []) {
       mesh.clearcoatRoughness,
       mesh.specular,
       mesh.transmission,
-      0,
+      mesh.thickness,
     ]);
     writeVec4(floatView, byteOffset + 80, [
       mesh.specularColor[0] ?? 1,
@@ -1419,7 +1601,7 @@ export function createWavefrontGpuMeshSource(meshes = [], gpuMaterialSourceInput
       mesh.clearcoatRoughness,
       mesh.specular,
       mesh.transmission,
-      0,
+      mesh.thickness,
     ]);
     writeVec4(meshFloats, floatOffset * 4 + 128, [
       mesh.specularColor[0] ?? 1,
@@ -1534,12 +1716,17 @@ function normalizeSceneObjects(sceneObjects, useDefaultScene = true) {
   return source.map((object, index) => normalizeWavefrontSceneObject(object, index));
 }
 
+function normalizeWavefrontMeshes(meshes) {
+  const source = Array.isArray(meshes) ? meshes : [];
+  return source.map((mesh, index) => normalizeWavefrontMesh(mesh, index));
+}
+
 function normalizeMeshes(options = {}) {
   if (Array.isArray(options.meshes)) {
-    return options.meshes;
+    return normalizeWavefrontMeshes(options.meshes);
   }
   if (options.mesh) {
-    return [options.mesh];
+    return normalizeWavefrontMeshes([options.mesh]);
   }
   return [];
 }
@@ -1899,6 +2086,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   const sceneObjects = Object.freeze(
     normalizeSceneObjects(options.sceneObjects, meshes.length === 0)
   );
+  const mediums = collectWavefrontMediums(options, meshes, sceneObjects);
   const sceneObjectCapacity = Math.max(
     sceneObjects.length,
     readPositiveInteger("sceneObjectCapacity", options.sceneObjectCapacity, DEFAULT_SCENE_OBJECT_CAPACITY)
@@ -1971,6 +2159,8 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     sceneObjects,
     sceneObjectCount: sceneObjects.length,
     sceneObjectCapacity,
+    mediums,
+    mediumCount: mediums.length,
     accelerationBuildMode,
     gpuAccelerationBuildRequired: accelerationBuildMode === "gpu" && triangleCount > 0,
     gpuMeshSource,
@@ -2089,29 +2279,30 @@ export function packWavefrontSceneObjects(sceneObjects, capacity = sceneObjects.
     uintView[u32 + 1] = object.id;
     uintView[u32 + 2] = object.materialKind;
     uintView[u32 + 3] = object.flags;
-    writeVec4(floatView, byteOffset + 16, [...object.center, 0]);
-    writeVec4(floatView, byteOffset + 32, [...object.halfExtent, 0]);
-    writeVec4(floatView, byteOffset + 48, object.color);
-    writeVec4(floatView, byteOffset + 64, object.emission);
-    writeVec4(floatView, byteOffset + 80, [
+    uintView[u32 + 4] = object.mediumRefId;
+    writeVec4(floatView, byteOffset + 32, [...object.center, 0]);
+    writeVec4(floatView, byteOffset + 48, [...object.halfExtent, 0]);
+    writeVec4(floatView, byteOffset + 64, object.color);
+    writeVec4(floatView, byteOffset + 80, object.emission);
+    writeVec4(floatView, byteOffset + 96, [
       object.roughness,
       object.metallic,
       object.opacity,
       object.ior,
     ]);
-    writeVec4(floatView, byteOffset + 96, [
+    writeVec4(floatView, byteOffset + 112, [
       object.sheenColor[0] ?? 0,
       object.sheenColor[1] ?? 0,
       object.sheenColor[2] ?? 0,
       object.clearcoat,
     ]);
-    writeVec4(floatView, byteOffset + 112, [
+    writeVec4(floatView, byteOffset + 128, [
       object.clearcoatRoughness,
       object.specular,
       object.transmission,
-      0,
+      object.thickness,
     ]);
-    writeVec4(floatView, byteOffset + 128, [
+    writeVec4(floatView, byteOffset + 144, [
       object.specularColor[0] ?? 1,
       object.specularColor[1] ?? 1,
       object.specularColor[2] ?? 1,
@@ -3137,6 +3328,55 @@ function createBrdfLutResource(device, constants, size = DEFAULT_BRDF_LUT_SIZE) 
   });
 }
 
+function createMediumTextureResource(device, constants, mediums) {
+  const normalized = Array.isArray(mediums) && mediums.length > 0 ? mediums : [{ id: 0 }];
+  const width = Math.max(
+    1,
+    normalized.reduce((maximum, medium) => Math.max(maximum, medium.id ?? 0), 0) + 1
+  );
+  const level = {
+    width,
+    height: MEDIUM_TABLE_ROWS,
+    data: new Float32Array(width * MEDIUM_TABLE_ROWS * 4),
+  };
+
+  for (const medium of normalized) {
+    const mediumId = Math.max(0, Math.trunc(Number(medium.id) || 0));
+    const absorptionOffset = mediumId * 4;
+    level.data[absorptionOffset] = Math.max(0, medium.absorption?.[0] ?? 0);
+    level.data[absorptionOffset + 1] = Math.max(0, medium.absorption?.[1] ?? 0);
+    level.data[absorptionOffset + 2] = Math.max(0, medium.absorption?.[2] ?? 0);
+    level.data[absorptionOffset + 3] = Math.max(0, medium.phaseModel ?? 0);
+
+    const scatteringOffset = (width + mediumId) * 4;
+    level.data[scatteringOffset] = Math.max(0, medium.scattering?.[0] ?? 0);
+    level.data[scatteringOffset + 1] = Math.max(0, medium.scattering?.[1] ?? 0);
+    level.data[scatteringOffset + 2] = Math.max(0, medium.scattering?.[2] ?? 0);
+    level.data[scatteringOffset + 3] = Math.max(0, medium.density ?? 0);
+  }
+
+  const upload = createFloat16RgbaUploadFromLevels([level])[0];
+  const texture = device.createTexture({
+    label: "plasius.wavefront.mediumTable",
+    size: { width, height: MEDIUM_TABLE_ROWS },
+    format: "rgba16float",
+    usage: constants.texture.TEXTURE_BINDING | constants.texture.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture },
+    upload.bytes,
+    { bytesPerRow: upload.bytesPerRow, rowsPerImage: upload.height },
+    { width, height: MEDIUM_TABLE_ROWS, depthOrArrayLayers: 1 }
+  );
+  return Object.freeze({
+    texture,
+    view: texture.createView(),
+    ownsTexture: true,
+    count: normalized.length,
+    width,
+  });
+}
+
 function createAtlasTextureResource(device, constants, atlas, label) {
   const upload = createRgba8TextureUpload(atlas);
   const texture = device.createTexture({
@@ -3283,6 +3523,10 @@ struct SceneObject {
   objectId: u32,
   materialKind: u32,
   flags: u32,
+  mediumRefId: u32,
+  pad0: u32,
+  pad1: u32,
+  pad2: u32,
   center: vec4<f32>,
   halfExtent: vec4<f32>,
   color: vec4<f32>,
@@ -3343,9 +3587,9 @@ struct BvhLeafRef {
 struct ScatterResult {
   direction: vec4<f32>,
   pdf: f32,
+  mediumRefId: u32,
   flags: u32,
   pad0: u32,
-  pad1: u32,
 };
 
 struct MeshVertex {
@@ -3491,6 +3735,7 @@ struct EnvironmentPortal {
 @group(0) @binding(29) var brdfLutTexture: texture_2d<f32>;
 @group(0) @binding(30) var brdfLutSampler: sampler;
 @group(0) @binding(31) var environmentSamplingTexture: texture_2d<f32>;
+@group(0) @binding(32) var mediumTableTexture: texture_2d<f32>;
 
 fn hash_u32(value: u32) -> u32 {
   var x = value;
@@ -4156,6 +4401,60 @@ fn gated_environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f
   return environment_radiance(origin, direction);
 }
 
+fn medium_dimensions() -> vec2<u32> {
+  return textureDimensions(mediumTableTexture);
+}
+
+fn medium_valid(mediumRefId: u32) -> bool {
+  let dimensions = medium_dimensions();
+  return mediumRefId > 0u && mediumRefId < dimensions.x;
+}
+
+fn medium_absorption(mediumRefId: u32) -> vec3<f32> {
+  if (!medium_valid(mediumRefId)) {
+    return vec3<f32>(0.0);
+  }
+  return max(
+    textureLoad(mediumTableTexture, vec2<i32>(i32(mediumRefId), 0), 0).xyz,
+    vec3<f32>(0.0)
+  );
+}
+
+fn medium_scattering(mediumRefId: u32) -> vec3<f32> {
+  if (!medium_valid(mediumRefId)) {
+    return vec3<f32>(0.0);
+  }
+  return max(
+    textureLoad(mediumTableTexture, vec2<i32>(i32(mediumRefId), 1), 0).xyz,
+    vec3<f32>(0.0)
+  );
+}
+
+fn medium_transmittance(mediumRefId: u32, distance: f32) -> vec3<f32> {
+  if (!medium_valid(mediumRefId) || distance <= 0.000001) {
+    return vec3<f32>(1.0);
+  }
+  let extinction = medium_absorption(mediumRefId) + medium_scattering(mediumRefId);
+  return vec3<f32>(
+    exp(-extinction.x * distance),
+    exp(-extinction.y * distance),
+    exp(-extinction.z * distance)
+  );
+}
+
+fn transmitted_medium_ref_id(ray: RayRecord, hit: HitRecord) -> u32 {
+  if (hit.mediumRefId == 0u) {
+    return ray.mediumRefId;
+  }
+  if (hit.frontFace == 1u) {
+    return hit.mediumRefId;
+  }
+  if (ray.mediumRefId == hit.mediumRefId) {
+    return 0u;
+  }
+  return ray.mediumRefId;
+}
+
 fn surface_path_response(hit: HitRecord) -> vec3<f32> {
   let color = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let opacity = clamp(hit.material.z, 0.0, 1.0);
@@ -4254,11 +4553,15 @@ fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f
   return clamp_sample_radiance(environmentFloor * materialFloor);
 }
 
-fn terminal_surface_environment_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+fn terminal_surface_environment_contribution(
+  ray: RayRecord,
+  throughput: vec3<f32>,
+  hit: HitRecord
+) -> vec3<f32> {
   let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);
   let occlusion = mix(0.75, 1.0, clamp(hit.occlusion, 0.0, 1.0));
   return clamp_sample_radiance(
-    ray.throughput.xyz *
+    throughput *
     surfaceColor *
     terminal_surface_environment_source(ray, hit) *
     occlusion
@@ -4732,7 +5035,7 @@ fn intersect_sphere(ray: RayRecord, object: SceneObject) -> Candidate {
     0xffffffffu,
     object.objectId,
     object.objectId,
-    0u
+    object.mediumRefId
   );
 }
 
@@ -4784,7 +5087,7 @@ fn intersect_box(ray: RayRecord, object: SceneObject) -> Candidate {
     0xffffffffu,
     object.objectId,
     object.objectId,
-    0u
+    object.mediumRefId
   );
 }
 
@@ -5039,6 +5342,10 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
     0u,
     0u,
     0u,
+    0u,
+    0u,
+    0u,
+    0u,
     vec4<f32>(0.0),
     vec4<f32>(0.0),
     vec4<f32>(0.0),
@@ -5238,9 +5545,9 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
     return ScatterResult(
       vec4<f32>(reflect(ray.direction.xyz, normal), 0.0),
       1.0,
+      ray.mediumRefId,
       RAY_FLAG_DELTA_SAMPLE,
       0u,
-      0u
     );
   }
 
@@ -5260,17 +5567,17 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
       return ScatterResult(
         vec4<f32>(reflect(ray.direction.xyz, normal), 0.0),
         1.0,
+        ray.mediumRefId,
         RAY_FLAG_DELTA_SAMPLE,
         0u,
-        0u
       );
     }
     return ScatterResult(
       vec4<f32>(refract_direction(ray.direction.xyz, normal, etaRatio), 0.0),
       1.0,
+      transmitted_medium_ref_id(ray, hit),
       RAY_FLAG_DELTA_SAMPLE,
       0u,
-      0u
     );
   }
 
@@ -5285,9 +5592,9 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
       return ScatterResult(
         vec4<f32>(guidedDirection, 0.0),
         guidedPdf,
+        ray.mediumRefId,
         RAY_FLAG_GUIDED_EMISSIVE,
         0u,
-        0u
       );
     }
   }
@@ -5295,7 +5602,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
     let guidedDirection = sample_environment_portal_direction(hit, seed + 131u, normal);
     if (dot(normal, guidedDirection) > 0.000001) {
       let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
-      return ScatterResult(vec4<f32>(guidedDirection, 0.0), guidedPdf, 0u, 0u, 0u);
+      return ScatterResult(vec4<f32>(guidedDirection, 0.0), guidedPdf, ray.mediumRefId, 0u, 0u);
     }
   }
 
@@ -5329,7 +5636,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
     );
   }
   let pdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, lightDirection), 0.000001);
-  return ScatterResult(vec4<f32>(lightDirection, 0.0), pdf, 0u, 0u, 0u);
+  return ScatterResult(vec4<f32>(lightDirection, 0.0), pdf, ray.mediumRefId, 0u, 0u);
 }
 
 @compute @workgroup_size(64)
@@ -5342,15 +5649,17 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   let ray = activeQueue[index];
   let hit = hits[index];
+  let segmentTransmittance = medium_transmittance(ray.mediumRefId, hit.distance);
+  let arrivingThroughput = ray.throughput.xyz * segmentTransmittance;
   var contribution = vec3<f32>(0.0);
 
   if (hit.hitType == 1u) {
     let guidedLightWeight = select(1.0, 0.24, (ray.flags & RAY_FLAG_GUIDED_EMISSIVE) != 0u);
     let sourceRadiance = max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight;
     if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(ray, sourceRadiance);
+      record_deferred_terminal_source(ray, sourceRadiance * segmentTransmittance);
     } else {
-      contribution = clamp_sample_radiance(ray.throughput.xyz * sourceRadiance);
+      contribution = clamp_sample_radiance(arrivingThroughput * sourceRadiance);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(contribution * sample_weight(), 1.0);
     }
@@ -5367,9 +5676,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       sourceRadiance = sourceRadiance * misWeight;
     }
     if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(ray, sourceRadiance);
+      record_deferred_terminal_source(ray, sourceRadiance * segmentTransmittance);
     } else {
-      contribution = clamp_sample_radiance(ray.throughput.xyz * sourceRadiance);
+      contribution = clamp_sample_radiance(arrivingThroughput * sourceRadiance);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(contribution * sample_weight(), 1.0);
     }
@@ -5377,7 +5686,11 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  let response = stabilize_surface_path_response(ray, hit, surface_path_response(hit));
+  let response = stabilize_surface_path_response(
+    ray,
+    hit,
+    surface_path_response(hit) * segmentTransmittance
+  );
   record_deferred_path_response(ray, response);
 
   let shouldEstimateDirectEnvironment =
@@ -5385,7 +5698,22 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     hit.material.z >= 0.95 &&
     ray.bounce < 2u;
   if (shouldEstimateDirectEnvironment) {
-    let directEnvironment = surface_direct_environment_contribution(ray, hit);
+    let directEnvironment = surface_direct_environment_contribution(
+      RayRecord(
+        ray.rayId,
+        ray.parentRayId,
+        ray.sourcePixelId,
+        ray.sampleId,
+        ray.bounce,
+        ray.mediumRefId,
+        ray.flags,
+        0u,
+        ray.origin,
+        ray.direction,
+        vec4<f32>(arrivingThroughput, ray.throughput.w)
+      ),
+      hit
+    );
     accumulation[ray.rayId] =
       accumulation[ray.rayId] + vec4<f32>(directEnvironment * sample_weight(), 0.0);
   }
@@ -5394,7 +5722,11 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     if (deferred_path_resolve_enabled()) {
       record_deferred_terminal_source(ray, terminal_surface_environment_source(ray, hit));
     } else {
-      let terminalEnvironment = terminal_surface_environment_contribution(ray, hit);
+      let terminalEnvironment = terminal_surface_environment_contribution(
+        ray,
+        arrivingThroughput,
+        hit
+      );
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(terminalEnvironment * sample_weight(), 1.0);
     }
@@ -5409,7 +5741,11 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     if (deferred_path_resolve_enabled()) {
       record_deferred_terminal_source(ray, terminal_surface_environment_source(ray, hit));
     } else {
-      let overflowEnvironment = terminal_surface_environment_contribution(ray, hit);
+      let overflowEnvironment = terminal_surface_environment_contribution(
+        ray,
+        arrivingThroughput,
+        hit
+      );
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(overflowEnvironment * sample_weight(), 1.0);
     }
@@ -5423,7 +5759,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     ray.sourcePixelId,
     ray.sampleId,
     ray.bounce + 1u,
-    ray.mediumRefId,
+    scatter.mediumRefId,
     scatter.flags,
     0u,
     vec4<f32>(offset_origin(hit.position.xyz, hit.shadingNormal.xyz), 1.0),
@@ -5945,6 +6281,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     config.environmentMap,
     config.environmentColor
   );
+  const mediumTextureResource = createMediumTextureResource(
+    device,
+    constants,
+    config.mediums
+  );
   config = Object.freeze({
     ...config,
     environmentMap: Object.freeze({
@@ -6033,6 +6374,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       { binding: 29, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
       { binding: 30, visibility: constants.shader.COMPUTE, sampler: { type: "filtering" } },
       { binding: 31, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 32, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
     ],
   });
   const accelerationBindGroupLayout = device.createBindGroupLayout({
@@ -6222,6 +6564,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         { binding: 29, resource: brdfLutResource.view },
         { binding: 30, resource: brdfLutResource.sampler },
         { binding: 31, resource: environmentSamplingResource.view },
+        { binding: 32, resource: mediumTextureResource.view },
       ],
     });
   }
@@ -6418,6 +6761,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       emissiveTriangleCount: config.emissiveTriangleCount,
       environmentPortalCount: config.environmentPortalCount,
       environmentPortalMode: config.environmentPortalMode,
+      mediumCount: config.mediumCount,
       environmentMap: createEnvironmentMapSnapshot(config.environmentMap),
       deferredPathResolve: config.deferredPathResolve,
       bvhNodeCount: config.bvhNodeCount,
@@ -7036,6 +7380,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       emissiveTriangleCount: config.emissiveTriangleCount,
       environmentPortalCount: config.environmentPortalCount,
       environmentPortalMode: config.environmentPortalMode,
+      mediumCount: config.mediumCount,
       environmentMap: createEnvironmentMapSnapshot(config.environmentMap),
       deferredPathResolve: config.deferredPathResolve,
       bvhNodeCount: config.bvhNodeCount,
@@ -7070,17 +7415,20 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     activeDispatchBuffer.destroy?.();
     radianceTexture.destroy?.();
     denoiseScratchTexture.destroy?.();
-        outputTexture.destroy?.();
-        if (environmentMapResource.ownsTexture) {
-          environmentMapResource.texture?.destroy?.();
-        }
-        if (environmentSamplingResource.ownsTexture) {
-          environmentSamplingResource.texture?.destroy?.();
-        }
-        brdfLutResource.texture?.destroy?.();
-        if (baseColorAtlasResource.ownsTexture) {
-          baseColorAtlasResource.texture?.destroy?.();
-        }
+    outputTexture.destroy?.();
+    if (environmentMapResource.ownsTexture) {
+      environmentMapResource.texture?.destroy?.();
+    }
+    if (environmentSamplingResource.ownsTexture) {
+      environmentSamplingResource.texture?.destroy?.();
+    }
+    if (mediumTextureResource.ownsTexture) {
+      mediumTextureResource.texture?.destroy?.();
+    }
+    brdfLutResource.texture?.destroy?.();
+    if (baseColorAtlasResource.ownsTexture) {
+      baseColorAtlasResource.texture?.destroy?.();
+    }
     if (metallicRoughnessAtlasResource.ownsTexture) {
       metallicRoughnessAtlasResource.texture?.destroy?.();
     }

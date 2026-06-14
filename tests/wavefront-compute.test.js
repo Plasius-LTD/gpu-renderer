@@ -710,7 +710,10 @@ test("wavefront compute applies environment ambient on terminal surface collisio
   assert.match(source, /let baseline = max\(config\.pathResolveSettings\.y, 0\.0\);/);
   assert.match(source, /let daylightFloor = max\(config\.pathResolveSettings\.y, 0\.0\) \* 0\.08;/);
   assert.match(source, /let hdriFloor = max\(config\.environmentMapSettings\.w, 0\.0\) \* 0\.02;/);
-  assert.match(source, /let response = stabilize_surface_path_response\(ray, hit, surface_path_response\(hit\)\);/);
+  assert.match(
+    source,
+    /let response = stabilize_surface_path_response\(\s+ray,\s+hit,\s+surface_path_response\(hit\) \* segmentTransmittance\s+\);/
+  );
   assert.match(source, /let surfaceColor = max\(hit\.color\.xyz, config\.ambientColor\.xyz\);/);
   assert.match(source, /let sunlitFloor = sunlit_baseline_radiance\(normal\);/);
   assert.match(source, /let glossiness = surface_glossiness\(hit\);/);
@@ -726,7 +729,7 @@ test("wavefront compute applies environment ambient on terminal surface collisio
   assert.match(source, /record_deferred_terminal_source\(ray, terminal_surface_environment_source\(ray, hit\)\);/);
   assert.match(
     source,
-    /let terminalEnvironment = terminal_surface_environment_contribution\(ray, hit\);/
+    /let terminalEnvironment = terminal_surface_environment_contribution\(\s+ray,\s+arrivingThroughput,\s+hit\s+\);/
   );
   assert.match(
     source,
@@ -734,7 +737,7 @@ test("wavefront compute applies environment ambient on terminal surface collisio
   );
   assert.match(
     source,
-    /let overflowEnvironment = terminal_surface_environment_contribution\(ray, hit\);/
+    /let overflowEnvironment = terminal_surface_environment_contribution\(\s+ray,\s+arrivingThroughput,\s+hit\s+\);/
   );
 });
 
@@ -761,13 +764,15 @@ test("wavefront compute estimates direct environment light before random continu
   assert.match(source, /nDotL \* misWeight \/ max\(lightSample\.pdf, 0\.000001\)/);
   assert.match(source, /let transmissionReflectChance = select\(/);
   assert.doesNotMatch(source, /mix\(reflectChance, max\(reflectChance, 1\.0 - transmission\), transmission > 0\.001\)/);
+  assert.match(source, /let segmentTransmittance = medium_transmittance\(ray\.mediumRefId, hit\.distance\);/);
+  assert.match(source, /let arrivingThroughput = ray\.throughput\.xyz \* segmentTransmittance;/);
   assert.match(
     source,
     /let shouldEstimateDirectEnvironment =\s+\(hit\.materialKind == 0u \|\| hit\.materialKind == 1u\) &&\s+hit\.material\.z >= 0\.95 &&\s+ray\.bounce < 2u;/
   );
   assert.match(
     source,
-    /let directEnvironment = surface_direct_environment_contribution\(ray, hit\);/
+    /let directEnvironment = surface_direct_environment_contribution\(\s+RayRecord\(/
   );
   assert.match(
     source,
@@ -775,10 +780,10 @@ test("wavefront compute estimates direct environment light before random continu
   );
   assert.ok(
     source.indexOf("let shouldEstimateDirectEnvironment =") <
-      source.indexOf("let directEnvironment = surface_direct_environment_contribution(ray, hit);")
+      source.indexOf("let directEnvironment = surface_direct_environment_contribution(")
   );
   assert.ok(
-    source.indexOf("let directEnvironment = surface_direct_environment_contribution(ray, hit);") <
+    source.indexOf("let directEnvironment = surface_direct_environment_contribution(") <
       source.indexOf("if (ray.bounce + 1u >= config.maxDepth)")
   );
 });
@@ -815,7 +820,7 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
   assert.equal(config.deferredPathResolve, false);
   assert.match(source, /fn deferred_path_resolve_enabled\(\) -> bool/);
   assert.match(source, /fn clear_deferred_path\(rayId: u32\)/);
-  assert.match(source, /record_deferred_terminal_source\(ray, sourceRadiance\);/);
+  assert.match(source, /record_deferred_terminal_source\(ray, sourceRadiance \* segmentTransmittance\);/);
   assert.match(source, /sourceRadiance = sourceRadiance \* misWeight;/);
   assert.match(source, /fn resolve_deferred_path_radiance\(rayId: u32\) -> vec3<f32>/);
   assert.match(source, /let terminal = pathVertices\[path_vertex_index\(rayId, config\.maxDepth\)\];/);
@@ -829,6 +834,51 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
   assert.match(source, /if \(config\.deferredPathResolve\) \{/);
   assert.match(source, /createGpuSubmissionBatcher\(\{/);
   assert.match(source, /encodeTileOutput\(batch\.reserve\(1\), tile, configOffset, parallelism\);/);
+});
+
+test("wavefront compute exposes medium-table contracts and Beer-Lambert transport hooks", () => {
+  const source = readRendererSource();
+  const types = readRendererTypes();
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 32,
+    height: 32,
+    meshes: [
+      {
+        materialRefId: 3,
+        positions: [-1, 0, 0, 1, 0, 0, 0, 1, 0],
+        indices: [0, 1, 2],
+        materialKind: "transparent",
+        material: {
+          transmission: 1,
+          volume: {
+            thickness: 0.35,
+            attenuationColor: [0.72, 0.84, 0.96, 1],
+            attenuationDistance: 0.4,
+          },
+        },
+      },
+    ],
+  });
+
+  assert.match(types, /export interface WavefrontMediumInput/);
+  assert.match(types, /export interface WavefrontVolumeInput/);
+  assert.match(types, /readonly volume\?: WavefrontVolumeInput \| null;/);
+  assert.match(types, /readonly thickness: number;/);
+  assert.match(types, /readonly mediums\?: readonly WavefrontMediumInput\[\]/);
+  assert.match(types, /readonly mediumCount: number;/);
+  assert.match(source, /const MEDIUM_TABLE_ROWS = 2;/);
+  assert.match(source, /function deriveWavefrontMeshMedium/);
+  assert.match(source, /function createMediumTextureResource/);
+  assert.match(source, /@group\(0\) @binding\(32\) var mediumTableTexture: texture_2d<f32>/);
+  assert.match(source, /fn medium_transmittance\(mediumRefId: u32, distance: f32\) -> vec3<f32>/);
+  assert.match(source, /exp\(-extinction\.x \* distance\)/);
+  assert.match(source, /fn transmitted_medium_ref_id\(ray: RayRecord, hit: HitRecord\) -> u32/);
+  assert.equal(config.mediumCount, 2);
+  assert.deepEqual(config.mediums.map((medium) => medium.id), [0, 3]);
+  assert.equal(config.gpuMeshSource.meshes.records[0].thickness, 0.35);
+  assert.ok(config.mediums[1].absorption[0] > 0);
+  assert.ok(config.mediums[1].absorption[1] > 0);
+  assert.ok(config.mediums[1].absorption[2] > 0);
 });
 
 test("wavefront compute caches the generated BRDF LUT upload", () => {
@@ -1002,6 +1052,30 @@ test("wavefront mesh acceleration preserves triangle vertices and normals", () =
   assert.deepEqual(acceleration.nodes[0].bounds.max, [2, 2, 0]);
 });
 
+test("wavefront mesh normalization derives transport medium from volume inputs", () => {
+  const mesh = normalizeWavefrontMesh({
+    id: 21,
+    positions: [0, 0, 0, 2, 0, 0, 0, 2, 0],
+    indices: [0, 1, 2],
+    materialRefId: 14,
+    material: {
+      transmission: 1,
+      volume: {
+        thickness: 0.18,
+        attenuationColor: [0.7, 0.82, 0.94, 1],
+        attenuationDistance: 0.5,
+      },
+    },
+  });
+
+  assert.equal(mesh.mediumRefId, 14);
+  assert.equal(mesh.thickness, 0.18);
+  assert.equal(mesh.medium?.id, 14);
+  assert.ok((mesh.medium?.absorption[0] ?? 0) > 0);
+  assert.ok((mesh.medium?.absorption[1] ?? 0) > 0);
+  assert.ok((mesh.medium?.absorption[2] ?? 0) > 0);
+});
+
 test("wavefront GPU mesh source packs raw mesh buffers without CPU BVH output", () => {
   const meshes = [
     {
@@ -1051,6 +1125,7 @@ test("wavefront GPU material source packs per-mesh factors and atlases", () => {
       sheen: 0.2,
       clearcoat: 0.6,
       clearcoatRoughness: 0.15,
+      thickness: 0.42,
       material: {
         baseColorTexture: {
           width: 2,
@@ -1089,7 +1164,7 @@ test("wavefront GPU material source packs per-mesh factors and atlases", () => {
   assert.deepEqual(round(floats.slice(4, 8)), [1.5, 1, 0.5, 1]);
   assert.deepEqual(round(floats.slice(8, 12)), [0.35, 0.9, 0.8, 1.45]);
   assert.deepEqual(round(floats.slice(12, 16)), [0.2, 0.2, 0.2, 0.6]);
-  assert.deepEqual(round(floats.slice(16, 20)), [0.15, 1, 0, 0]);
+  assert.deepEqual(round(floats.slice(16, 20)), [0.15, 1, 0, 0.42]);
   assert.deepEqual(round(floats.slice(20, 24)), [1, 1, 1, 1]);
   assert.equal(Number(floats[44].toFixed(2)), 0.75);
   assert.ok(source.baseColorAtlas.width >= 4);
@@ -1387,10 +1462,12 @@ test("wavefront scene objects pack into stable GPU record layout", () => {
       {
         id: 7,
         type: "sphere",
+        mediumRefId: 9,
         center: [1, 2, 3],
         radius: 0.75,
         color: [0.1, 0.2, 0.3, 0.4],
         emission: [5, 4, 3, 1],
+        thickness: 0.28,
       },
     ],
     2
@@ -1405,9 +1482,11 @@ test("wavefront scene objects pack into stable GPU record layout", () => {
   assert.equal(uints[0], wavefrontSceneObjectKinds.sphere);
   assert.equal(uints[1], 7);
   assert.equal(uints[2], wavefrontMaterialKinds.emissive);
-  assert.deepEqual(round(floats.slice(4, 8)), [1, 2, 3, 0]);
-  assert.deepEqual(round(floats.slice(8, 12)), [0.75, 0.75, 0.75, 0]);
-  assert.deepEqual(round(floats.slice(16, 20)), [5, 4, 3, 1]);
+  assert.equal(uints[4], 9);
+  assert.deepEqual(round(floats.slice(8, 12)), [1, 2, 3, 0]);
+  assert.deepEqual(round(floats.slice(12, 16)), [0.75, 0.75, 0.75, 0]);
+  assert.deepEqual(round(floats.slice(20, 24)), [5, 4, 3, 1]);
+  assert.deepEqual(round(floats.slice(32, 36)), [0.08, 1, 0, 0.28]);
 });
 
 test("wavefront scene objects pack opacity in material channel z", () => {
@@ -1424,7 +1503,7 @@ test("wavefront scene objects pack opacity in material channel z", () => {
   ]);
   const floats = new Float32Array(packed.buffer);
 
-  assert.deepEqual(round(floats.slice(20, 24)), [0.91, 0, 0.35, 1.45]);
+  assert.deepEqual(round(floats.slice(24, 28)), [0.91, 0, 0.35, 1.45]);
 });
 
 test("wavefront compute helper reports unavailable WebGPU when navigator.gpu is missing", () => {
@@ -1557,6 +1636,11 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
           normals: [0, 0, 1, 0, 0.4, 0.9, 0.4, 0, 0.9],
           materialKind: "emissive",
           emission: [4, 3, 2, 1],
+          medium: {
+            id: 5,
+            attenuationColor: [0.82, 0.88, 0.94, 1],
+            attenuationDistance: 0.6,
+          },
         },
       ],
     });
@@ -1595,6 +1679,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     assert.equal(frame.environmentMap.rotationRadians, 0.25);
     assert.equal(frame.environmentMap.ambientStrength, 0.44);
     assert.equal(frame.environmentMap.hasImportanceData, true);
+    assert.equal(frame.mediumCount, 2);
     assert.equal(frame.commandSubmissions, 2);
     assert.equal(frame.gpuParallelism.physicalCoreCount, null);
     assert.equal(frame.gpuParallelism.physicalCoreCountAvailable, false);
@@ -1645,6 +1730,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     assert.equal(snapshot.environmentMap.width, 2);
     assert.equal(snapshot.environmentMap.mipLevelCount, 2);
     assert.equal(snapshot.environmentMap.hasImportanceData, true);
+    assert.equal(snapshot.mediumCount, 2);
     assert.equal(snapshot.accelerationBuilt, true);
     assert.equal(snapshot.accelerationBuildCount, 1);
     assert.equal(snapshot.deferredPathResolve, true);
@@ -1670,7 +1756,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     assert.ok(device.renderPasses >= 1);
     assert.equal(device.drawCalls.includes(3), true);
     assert.ok(device.queue.submissions.length >= 1);
-    assert.equal(device.queue.textureWrites.length, 9);
+    assert.equal(device.queue.textureWrites.length, 10);
     assert.equal(device.queue.textureWrites[0].size.width, 2);
     assert.equal(device.queue.textureWrites[0].size.height, 1);
     assert.equal(device.queue.textureWrites[0].layout.bytesPerRow, 256);

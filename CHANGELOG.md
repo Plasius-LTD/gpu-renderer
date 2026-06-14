@@ -46,6 +46,10 @@ All notable changes to this project will be documented in this file.
     highlight proxy.
   - Added ADR and design coverage for prefiltered HDRI, BRDF LUT, and MIS-based
     environment lighting in the wavefront display-quality path.
+  - Added ADR/design coverage and public contract support for authored volume
+    transport so mesh materials can derive Beer-Lambert media from glTF-style
+    attenuation inputs while preserving shell thickness in GPU material
+    packing.
   - Added adaptive `renderFrame(...)` sampling controls so callers can cap a
     frame with `frameTimeBudgetMs`, guarantee a `minimumSamplesPerPixel`, and
     inspect actual `renderedSamplesPerPixel` separately from the configured SPP
