@@ -27,7 +27,7 @@
   "scripts": {
     "build": "tsup",
     "demo": "python3 -m http.server --directory ..",
-    "typecheck": "node --check src/index.js && node --check src/wavefront-compute.js",
+    "typecheck": "node --check src/index.js && node --check src/wavefront-frame-runtime.js && node --check src/wavefront-compute.js",
     "audit:eslint": "eslint . --max-warnings=0",
     "audit:deps": "npm ls --all --omit=optional --omit=peer > /dev/null 2>&1 || true",
     "audit:npm": "npm audit --audit-level=high --omit=dev",

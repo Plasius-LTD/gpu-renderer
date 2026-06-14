@@ -5,6 +5,7 @@ export {
   createWavefrontBvhBuildLevels,
   createWavefrontBvhSortStages,
   createWavefrontEmissiveTriangleIndexSource,
+  createWavefrontGpuMaterialSource,
   createWavefrontGpuMeshSource,
   createWavefrontMeshAcceleration,
   createWavefrontPathTracingComputeConfig,
@@ -148,6 +149,57 @@ const rendererAccelerationStructurePolicies = Object.freeze(
     })
   )
 );
+
+function clampWavefrontAdaptiveSamplesPerPixel(value) {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(1, Math.min(256, Math.round(value)));
+}
+
+export function createWavefrontAdaptiveSamplingLevels(options = {}) {
+  const requestedSamplesPerPixel = clampWavefrontAdaptiveSamplesPerPixel(
+    options.samplesPerPixel ?? 1
+  );
+  const minimumSamplesPerPixel = Math.min(
+    requestedSamplesPerPixel,
+    clampWavefrontAdaptiveSamplesPerPixel(options.minimumSamplesPerPixel ?? 1)
+  );
+  const frameTimeBudgetMs = Number.isFinite(options.frameTimeBudgetMs)
+    ? Math.max(0, Number(options.frameTimeBudgetMs))
+    : 0;
+  const levels = new Set([minimumSamplesPerPixel, requestedSamplesPerPixel]);
+  let currentSamplesPerPixel = minimumSamplesPerPixel;
+
+  while (currentSamplesPerPixel < requestedSamplesPerPixel) {
+    levels.add(currentSamplesPerPixel);
+    currentSamplesPerPixel *= 2;
+  }
+
+  levels.add(Math.min(currentSamplesPerPixel, requestedSamplesPerPixel));
+
+  return Object.freeze({
+    requestedSamplesPerPixel,
+    minimumSamplesPerPixel,
+    frameTimeBudgetMs,
+    levels: Object.freeze(
+      [...levels]
+        .sort((left, right) => left - right)
+        .map((samplesPerPixel) =>
+          Object.freeze({
+            id: `${samplesPerPixel}spp`,
+            label: `${samplesPerPixel} spp`,
+            estimatedCostMs: samplesPerPixel,
+            config: Object.freeze({
+              samplesPerPixel,
+              frameTimeBudgetMs,
+              minimumSamplesPerPixel,
+            }),
+          })
+        )
+    ),
+  });
+}
 
 function createWavefrontField(name, type, description) {
   return Object.freeze({

@@ -8,3 +8,8 @@
 - [ADR 0006: WebGPU Wavefront Compute Path Tracing](./adr-0006-webgpu-wavefront-compute-path-tracing.md)
 - [ADR 0007: Mesh BVH Wavefront Path Tracing As Display Quality Baseline](./adr-0007-triangle-mesh-wavefront-path-tracing.md)
 - [ADR 0008: Deferred Terminal Path Resolve For Wavefront Path Tracing](./adr-0008-deferred-terminal-path-resolve.md)
+- [ADR 0009: Shadowed Direct Light And Bounded Attenuation For Deferred Wavefront Resolve](./adr-0009-shadowed-direct-light-for-deferred-wavefront-resolve.md)
+- [ADR 0010: GPU Hit-Time Material Texture Sampling For Wavefront Path Tracing](./adr-0010-gpu-hit-material-texture-sampling.md)
+- [ADR 0011: Generic glTF Material Transport For Wavefront Shading](./adr-0011-generic-gltf-material-transport.md)
+- [ADR 0012: Environment Specular Response For Wavefront Shading](./adr-0012-environment-specular-response-for-wavefront-shading.md)
+- [ADR 0013: HDRI Prefilter, BRDF LUT, And MIS For Wavefront Environment Lighting](./adr-0013-hdri-brdf-lut-and-mis-for-wavefront-environment-lighting.md)

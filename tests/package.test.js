@@ -4,6 +4,7 @@ import {
   bindRendererToXrManager,
   createGpuRenderer,
   createRendererDebugHooks,
+  createWavefrontAdaptiveSamplingLevels,
   defaultRendererWorkerProfile,
   defaultRendererClearColor,
   getRendererWorkerManifest,
@@ -15,6 +16,13 @@ import {
   rendererWorkerQueueClass,
   supportsWebGpu,
 } from "../src/index.js";
+import {
+  createGpuParallelismCounters,
+  createGpuSubmissionBatcher,
+  createGpuWorkerJobDiagnostics,
+  recordDirectDispatch,
+  recordIndirectDispatch,
+} from "../src/wavefront-frame-runtime.js";
 
 class FakeRenderPass {
   constructor() {
@@ -264,6 +272,76 @@ test("createRendererDebugHooks records frame samples against a debug session", (
   ]);
 });
 
+test("wavefront frame runtime tracks dispatch diagnostics without renderer state", () => {
+  const counters = createGpuParallelismCounters();
+
+  recordDirectDispatch(counters, [8], 64);
+  recordIndirectDispatch(counters, 5, 64);
+
+  const diagnostics = createGpuWorkerJobDiagnostics(
+    {
+      directDispatches: counters.directDispatches,
+      indirectDispatches: counters.indirectDispatches,
+    },
+    2,
+    10,
+    true
+  );
+
+  assert.equal(counters.directDispatches, 1);
+  assert.equal(counters.directWorkgroups, 8);
+  assert.equal(counters.directShaderInvocations, 512);
+  assert.equal(counters.indirectDispatches, 1);
+  assert.equal(counters.estimatedIndirectWorkgroupsUpperBound, 5);
+  assert.equal(diagnostics.completedPerFrame, 2);
+  assert.equal(diagnostics.completedPerSubmission, 1);
+  assert.equal(diagnostics.completedPerSecond, 200);
+});
+
+test("wavefront frame runtime batches submissions against a per-submit pass ceiling", () => {
+  const labels = [];
+  const submits = [];
+  const device = {
+    createCommandEncoder({ label }) {
+      labels.push(label);
+      return {
+        finish() {
+          return { label };
+        },
+      };
+    },
+    queue: {
+      submit(commandBuffers) {
+        submits.push(commandBuffers.map((buffer) => buffer.label));
+      },
+    },
+  };
+
+  const batch = createGpuSubmissionBatcher({
+    device,
+    frameIndex: 9,
+    maxFramePassesPerSubmission: 3,
+    startingSubmissionCount: 2,
+  });
+
+  const first = batch.reserve(2);
+  const second = batch.reserve(2);
+  batch.reserve(1);
+  const flushed = batch.flush();
+
+  assert.notEqual(first, second);
+  assert.equal(flushed, 2);
+  assert.deepEqual(submits, [
+    ["plasius.wavefront.frame.9.batched.3"],
+    ["plasius.wavefront.frame.9.batched.4"],
+  ]);
+  assert.deepEqual(labels, [
+    "plasius.wavefront.frame.9.batched.3",
+    "plasius.wavefront.frame.9.batched.4",
+    "plasius.wavefront.frame.9.batched.5",
+  ]);
+});
+
 test("createRendererDebugHooks forwards owner metadata and dynamic targets", () => {
   const callbacks = [];
   const hooks = createRendererDebugHooks({
@@ -330,6 +408,22 @@ test("renderer worker profiles expose realtime and xr frame-stage DAGs", () => {
       "Frame-stage DAG for XR rendering with late-latch coordination before main encode and submit.",
     jobs: ["acquire", "visibility", "lateLatch", "mainEncode", "submit"],
   });
+});
+
+test("wavefront adaptive sampling levels expose bounded power-of-two ladders", () => {
+  const plan = createWavefrontAdaptiveSamplingLevels({
+    samplesPerPixel: 32,
+    frameTimeBudgetMs: 16,
+    minimumSamplesPerPixel: 1,
+  });
+
+  assert.equal(plan.requestedSamplesPerPixel, 32);
+  assert.equal(plan.minimumSamplesPerPixel, 1);
+  assert.equal(plan.frameTimeBudgetMs, 16);
+  assert.deepEqual(
+    plan.levels.map((level) => level.config.samplesPerPixel),
+    [1, 2, 4, 8, 16, 32]
+  );
 });
 
 test("renderer worker manifests publish queue, priority, and dependency metadata", () => {

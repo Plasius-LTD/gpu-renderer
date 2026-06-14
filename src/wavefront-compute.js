@@ -1,8 +1,19 @@
+import {
+  createGpuParallelismCounters,
+  createGpuParallelismDiagnostics,
+  createGpuSubmissionBatcher,
+  createGpuWorkerJobDiagnostics,
+  recordDirectDispatch,
+  recordIndirectDispatch,
+} from "./wavefront-frame-runtime.js"
+
 const DEFAULT_WIDTH = 1280;
 const DEFAULT_HEIGHT = 720;
 const DEFAULT_MAX_DEPTH = 6;
 const DEFAULT_TILE_SIZE = 128;
 const DEFAULT_SAMPLES_PER_PIXEL = 1;
+const MAX_SAMPLES_PER_PIXEL = 256;
+const DEFAULT_BRDF_LUT_SIZE = 256;
 const DEFAULT_MAX_FRAME_PASSES_PER_SUBMISSION = 256;
 const DEFAULT_SCENE_OBJECT_CAPACITY = 128;
 const DEFAULT_ENVIRONMENT_PORTAL_CAPACITY = 32;
@@ -11,22 +22,27 @@ export const rendererWavefrontComputeMode = "webgpu-compute";
 export const rendererWavefrontComputeWorkgroupSize = WORKGROUP_SIZE;
 export const rendererWavefrontComputeStatsStride = 8;
 const RAY_RECORD_BYTES = 80;
-const HIT_RECORD_BYTES = 208;
-const SCENE_OBJECT_RECORD_BYTES = 96;
+const HIT_RECORD_BYTES = 256;
+const SCENE_OBJECT_RECORD_BYTES = 144;
 const MESH_VERTEX_RECORD_BYTES = 48;
-const MESH_RANGE_RECORD_BYTES = 96;
-const TRIANGLE_RECORD_BYTES = 208;
+const MESH_RANGE_RECORD_BYTES = 240;
+const TRIANGLE_RECORD_BYTES = 352;
+const GPU_MATERIAL_RECORD_BYTES = 192;
 const BVH_NODE_RECORD_BYTES = 48;
 const BVH_LEAF_REF_RECORD_BYTES = 16;
 const EMISSIVE_TRIANGLE_INDEX_BYTES = 4;
 const ENVIRONMENT_PORTAL_RECORD_BYTES = 96;
 const ACCUMULATION_RECORD_BYTES = 16;
 const PATH_VERTEX_RECORD_BYTES = 16;
-const CONFIG_BUFFER_BYTES = 304;
+const GPU_SUBMITTED_WORK_TIMEOUT_MS = 5_000;
+const GPU_READBACK_COMPLETION_TIMEOUT_MS = 60_000;
+const GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS = 60_000;
+const CONFIG_BUFFER_BYTES = 320;
 const COUNTER_DISPATCH_ARGS_OFFSET = 16;
 const INDIRECT_DISPATCH_ARGS_BYTES = 12;
 const COUNTER_BUFFER_BYTES = 32;
 const TRACE_STORAGE_BUFFER_BINDINGS = 10;
+const BRDF_LUT_UPLOAD_CACHE = new Map();
 const HIT_TYPE_SURFACE = 0;
 const HIT_TYPE_EMISSIVE = 1;
 const MATERIAL_DIFFUSE = 0;
@@ -66,6 +82,7 @@ export const wavefrontPathTracingComputeLimits = Object.freeze({
   meshVertexRecordBytes: MESH_VERTEX_RECORD_BYTES,
   meshRangeRecordBytes: MESH_RANGE_RECORD_BYTES,
   triangleRecordBytes: TRIANGLE_RECORD_BYTES,
+  materialRecordBytes: GPU_MATERIAL_RECORD_BYTES,
   bvhNodeRecordBytes: BVH_NODE_RECORD_BYTES,
   bvhLeafReferenceRecordBytes: BVH_LEAF_REF_RECORD_BYTES,
   emissiveTriangleIndexBytes: EMISSIVE_TRIANGLE_INDEX_BYTES,
@@ -164,6 +181,38 @@ function asColor(value, fallback = [1, 1, 1, 1]) {
   ];
 }
 
+function maxComponent(value) {
+  return Math.max(value?.[0] ?? 0, value?.[1] ?? 0, value?.[2] ?? 0);
+}
+
+function deriveLegacySheenColor(baseColor, sheen, sheenTint) {
+  const sheenStrength = clamp(Number(sheen) || 0, 0, 1);
+  if (sheenStrength <= 0) {
+    return [0, 0, 0, 1];
+  }
+  const tint = clamp(Number(sheenTint) || 0, 0, 1);
+  const base = asColor(baseColor, [1, 1, 1, 1]);
+  return [
+    clamp((1 - tint) * sheenStrength + base[0] * tint * sheenStrength, 0, 1),
+    clamp((1 - tint) * sheenStrength + base[1] * tint * sheenStrength, 0, 1),
+    clamp((1 - tint) * sheenStrength + base[2] * tint * sheenStrength, 0, 1),
+    1,
+  ];
+}
+
+function resolveSheenColor(input, fallbackBaseColor) {
+  if (input?.sheenColor || input?.material?.sheenColor) {
+    return asColor(input.sheenColor ?? input.material?.sheenColor, [0, 0, 0, 1]).map((value, index) =>
+      index < 3 ? clamp(value, 0, 1) : 1
+    );
+  }
+  return deriveLegacySheenColor(
+    fallbackBaseColor,
+    input?.sheen ?? input?.material?.sheen,
+    input?.sheenTint ?? input?.material?.sheenTint
+  );
+}
+
 function resolveEnvironmentMap(input = null) {
   const source = input && typeof input === "object" ? input : null;
   const hasTexture = Boolean(source?.view || source?.texture || source?.data);
@@ -173,6 +222,11 @@ function resolveEnvironmentMap(input = null) {
     enabled: hasTexture && source?.enabled !== false,
     width,
     height,
+    mipLevelCount: readPositiveInteger(
+      "environmentMap.mipLevelCount",
+      source?.mipLevelCount,
+      1
+    ),
     format: typeof source?.format === "string" ? source.format : "rgba16float",
     projection: typeof source?.projection === "string" ? source.projection : "equirectangular",
     texture: source?.texture ?? null,
@@ -185,6 +239,7 @@ function resolveEnvironmentMap(input = null) {
       0,
       readFiniteNumber("environmentMap.ambientStrength", source?.ambientStrength, 0.32)
     ),
+    hasImportanceData: source?.hasImportanceData === true,
   });
 }
 
@@ -394,7 +449,8 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
           input.halfExtent ?? input.halfExtents ?? input.extents ?? bounds?.halfExtent,
           [0.5, 0.5, 0.5]
         ).map((value) => Math.max(value, 0.001));
-  const materialKind = readMaterialKind(input.materialKind ?? input.material?.kind);
+  const materialKindInput = input.materialKind ?? input.material?.kind;
+  const materialKind = readMaterialKind(materialKindInput);
   const color = asColor(
     input.color ??
       input.baseColor ??
@@ -407,14 +463,30 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
     input.emission ?? input.emissive ?? input.material?.emission ?? input.material?.emissive,
     [0, 0, 0, 1]
   );
+  const opacity = clamp(readFiniteNumber("opacity", input.opacity ?? input.material?.opacity, color[3] ?? 1), 0, 1);
+  const transmission = clamp(
+    readFiniteNumber("transmission", input.transmission ?? input.material?.transmission, 0),
+    0,
+    1
+  );
+  const sheenColor = resolveSheenColor(input, color);
+  const specularColor = asColor(
+    input.specularColor ?? input.material?.specularColor,
+    [1, 1, 1, 1]
+  ).map((value, componentIndex) => (componentIndex < 3 ? clamp(value, 0, 1) : 1));
+  const resolvedMaterialKind =
+    emission[0] > 0 || emission[1] > 0 || emission[2] > 0
+      ? MATERIAL_EMISSIVE
+      : materialKindInput === undefined || materialKindInput === null
+        ? transmission > 0.001 || opacity < 0.999
+          ? MATERIAL_TRANSPARENT
+          : materialKind
+        : materialKind;
 
   return Object.freeze({
     id: readNonNegativeInteger("id", input.id, index + 1),
     kind,
-    materialKind:
-      emission[0] > 0 || emission[1] > 0 || emission[2] > 0
-        ? MATERIAL_EMISSIVE
-        : materialKind,
+    materialKind: resolvedMaterialKind,
     flags: readNonNegativeInteger("flags", input.flags, 0),
     center: Object.freeze(center),
     halfExtent: Object.freeze(halfExtent),
@@ -422,8 +494,24 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
     emission: Object.freeze(emission),
     roughness: clamp(readFiniteNumber("roughness", input.roughness ?? input.material?.roughness, 0.72), 0, 1),
     metallic: clamp(readFiniteNumber("metallic", input.metallic ?? input.material?.metallic, 0), 0, 1),
-    opacity: clamp(readFiniteNumber("opacity", input.opacity ?? input.material?.opacity, color[3] ?? 1), 0, 1),
+    opacity,
     ior: clamp(readFiniteNumber("ior", input.ior ?? input.material?.ior, 1.45), 1, 3),
+    sheen: clamp(readFiniteNumber("sheen", input.sheen ?? input.material?.sheen, 0), 0, 1),
+    sheenTint: clamp(readFiniteNumber("sheenTint", input.sheenTint ?? input.material?.sheenTint, 0), 0, 1),
+    sheenColor: Object.freeze(sheenColor),
+    clearcoat: clamp(readFiniteNumber("clearcoat", input.clearcoat ?? input.material?.clearcoat, 0), 0, 1),
+    clearcoatRoughness: clamp(
+      readFiniteNumber(
+        "clearcoatRoughness",
+        input.clearcoatRoughness ?? input.material?.clearcoatRoughness,
+        0.08
+      ),
+      0,
+      1
+    ),
+    specular: clamp(readFiniteNumber("specular", input.specular ?? input.material?.specular, 1), 0, 1),
+    specularColor: Object.freeze(specularColor),
+    transmission,
   });
 }
 
@@ -507,7 +595,8 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
           readFiniteNumber("mesh uv", value, 0)
         )
       : null;
-  const materialKind = readMaterialKind(input.materialKind ?? input.material?.kind);
+  const materialKindInput = input.materialKind ?? input.material?.kind;
+  const materialKind = readMaterialKind(materialKindInput);
   const color = asColor(
     input.color ??
       input.baseColor ??
@@ -520,6 +609,25 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     input.emission ?? input.emissive ?? input.material?.emission ?? input.material?.emissive,
     [0, 0, 0, 1]
   );
+  const opacity = clamp(readFiniteNumber("opacity", input.opacity ?? input.material?.opacity, color[3] ?? 1), 0, 1);
+  const transmission = clamp(
+    readFiniteNumber("transmission", input.transmission ?? input.material?.transmission, 0),
+    0,
+    1
+  );
+  const sheenColor = resolveSheenColor(input, color);
+  const specularColor = asColor(
+    input.specularColor ?? input.material?.specularColor,
+    [1, 1, 1, 1]
+  ).map((value, componentIndex) => (componentIndex < 3 ? clamp(value, 0, 1) : 1));
+  const resolvedMaterialKind =
+    emission[0] > 0 || emission[1] > 0 || emission[2] > 0
+      ? MATERIAL_EMISSIVE
+      : materialKindInput === undefined || materialKindInput === null
+        ? transmission > 0.001 || opacity < 0.999
+          ? MATERIAL_TRANSPARENT
+          : materialKind
+        : materialKind;
 
   return Object.freeze({
     id: readNonNegativeInteger("mesh id", input.id, meshIndex + 1),
@@ -527,10 +635,7 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     indices: Object.freeze(indices),
     normals: normals ? Object.freeze(normals) : null,
     uvs: uvs ? Object.freeze(uvs) : null,
-    materialKind:
-      emission[0] > 0 || emission[1] > 0 || emission[2] > 0
-        ? MATERIAL_EMISSIVE
-        : materialKind,
+    materialKind: resolvedMaterialKind,
     flags: readNonNegativeInteger("mesh flags", input.flags, 0),
     materialRefId: readNonNegativeInteger(
       "mesh materialRefId",
@@ -546,9 +651,187 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     emission: Object.freeze(emission),
     roughness: clamp(readFiniteNumber("roughness", input.roughness ?? input.material?.roughness, 0.72), 0, 1),
     metallic: clamp(readFiniteNumber("metallic", input.metallic ?? input.material?.metallic, 0), 0, 1),
-    opacity: clamp(readFiniteNumber("opacity", input.opacity ?? input.material?.opacity, color[3] ?? 1), 0, 1),
+    opacity,
     ior: clamp(readFiniteNumber("ior", input.ior ?? input.material?.ior, 1.45), 1, 3),
+    sheen: clamp(readFiniteNumber("sheen", input.sheen ?? input.material?.sheen, 0), 0, 1),
+    sheenTint: clamp(readFiniteNumber("sheenTint", input.sheenTint ?? input.material?.sheenTint, 0), 0, 1),
+    sheenColor: Object.freeze(sheenColor),
+    clearcoat: clamp(readFiniteNumber("clearcoat", input.clearcoat ?? input.material?.clearcoat, 0), 0, 1),
+    clearcoatRoughness: clamp(
+      readFiniteNumber(
+        "clearcoatRoughness",
+        input.clearcoatRoughness ?? input.material?.clearcoatRoughness,
+        0.08
+      ),
+      0,
+      1
+    ),
+    specular: clamp(readFiniteNumber("specular", input.specular ?? input.material?.specular, 1), 0, 1),
+    specularColor: Object.freeze(specularColor),
+    transmission,
+    baseColorTexture: input.baseColorTexture ?? input.material?.baseColorTexture ?? null,
+    metallicRoughnessTexture:
+      input.metallicRoughnessTexture ?? input.material?.metallicRoughnessTexture ?? null,
+    normalTexture: input.normalTexture ?? input.material?.normalTexture ?? null,
+    occlusionTexture: input.occlusionTexture ?? input.material?.occlusionTexture ?? null,
+    emissiveTexture: input.emissiveTexture ?? input.material?.emissiveTexture ?? null,
   });
+}
+
+function clampUnit(value) {
+  return clamp(Number(value) || 0, 0, 1);
+}
+
+function srgbToLinear(value) {
+  const channel = clampUnit(value);
+  if (channel <= 0.04045) {
+    return channel / 12.92;
+  }
+  return ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+function sampleTextureRgba(texture, uv = [0, 0], colorSpace = "linear") {
+  if (
+    !texture ||
+    !Number.isFinite(texture.width) ||
+    !Number.isFinite(texture.height) ||
+    !texture.data ||
+    texture.width <= 0 ||
+    texture.height <= 0
+  ) {
+    return [1, 1, 1, 1];
+  }
+  const u = ((uv[0] % 1) + 1) % 1;
+  const v = ((uv[1] % 1) + 1) % 1;
+  const x = Math.min(texture.width - 1, Math.max(0, Math.round(u * (texture.width - 1))));
+  const y = Math.min(texture.height - 1, Math.max(0, Math.round((1 - v) * (texture.height - 1))));
+  const offset = (y * texture.width + x) * 4;
+  const data = texture.data;
+  const scale = resolveTextureSampleScale(data);
+  const defaultChannel = scale === 1 ? 1 : Math.round(1 / scale);
+  const color = [
+    (data[offset] ?? defaultChannel) * scale,
+    (data[offset + 1] ?? defaultChannel) * scale,
+    (data[offset + 2] ?? defaultChannel) * scale,
+    (data[offset + 3] ?? defaultChannel) * scale,
+  ];
+  if (colorSpace === "srgb") {
+    return [srgbToLinear(color[0]), srgbToLinear(color[1]), srgbToLinear(color[2]), color[3]];
+  }
+  return color;
+}
+
+function resolveTextureSampleScale(data) {
+  if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
+    return 1 / 255;
+  }
+  if (data instanceof Uint16Array) {
+    return 1 / 65535;
+  }
+  if (Array.isArray(data) && data.some((value) => Number(value) > 1)) {
+    return 1 / 255;
+  }
+  return 1;
+}
+
+function normalizeVectorOrFallback(vector, fallback) {
+  return normalize(Array.isArray(vector) ? vector : fallback, fallback);
+}
+
+function buildTriangleTangentBasis(v0, v1, v2, uv0, uv1, uv2, fallbackNormal) {
+  const edge1 = subtract(v1, v0);
+  const edge2 = subtract(v2, v0);
+  const deltaUv1 = [uv1[0] - uv0[0], uv1[1] - uv0[1]];
+  const deltaUv2 = [uv2[0] - uv0[0], uv2[1] - uv0[1]];
+  const determinant = deltaUv1[0] * deltaUv2[1] - deltaUv1[1] * deltaUv2[0];
+  if (Math.abs(determinant) < 1e-6) {
+    const tangentFallback = Math.abs(fallbackNormal[1]) < 0.999 ? [0, 1, 0] : [1, 0, 0];
+    const tangent = normalize(cross(tangentFallback, fallbackNormal), [1, 0, 0]);
+    const bitangent = normalize(cross(fallbackNormal, tangent), [0, 0, 1]);
+    return { tangent, bitangent };
+  }
+  const inverse = 1 / determinant;
+  const tangent = normalize(
+    [
+      inverse * (edge1[0] * deltaUv2[1] - edge2[0] * deltaUv1[1]),
+      inverse * (edge1[1] * deltaUv2[1] - edge2[1] * deltaUv1[1]),
+      inverse * (edge1[2] * deltaUv2[1] - edge2[2] * deltaUv1[1]),
+    ],
+    [1, 0, 0]
+  );
+  const bitangent = normalize(
+    [
+      inverse * (-edge1[0] * deltaUv2[0] + edge2[0] * deltaUv1[0]),
+      inverse * (-edge1[1] * deltaUv2[0] + edge2[1] * deltaUv1[0]),
+      inverse * (-edge1[2] * deltaUv2[0] + edge2[2] * deltaUv1[0]),
+    ],
+    [0, 0, 1]
+  );
+  return { tangent, bitangent };
+}
+
+function applyNormalMap(normal, tangent, bitangent, normalTexture, uv) {
+  if (!normalTexture) {
+    return normalizeVectorOrFallback(normal, [0, 1, 0]);
+  }
+  const sample = sampleTextureRgba(normalTexture, uv, "linear");
+  const strength = clampUnit(normalTexture.scale ?? 1);
+  const tangentNormal = normalize(
+    [
+      (sample[0] * 2 - 1) * strength,
+      (sample[1] * 2 - 1) * strength,
+      1 + (sample[2] * 2 - 1 - 1) * strength,
+    ],
+    [0, 0, 1]
+  );
+  return normalize(
+    [
+      tangent[0] * tangentNormal[0] + bitangent[0] * tangentNormal[1] + normal[0] * tangentNormal[2],
+      tangent[1] * tangentNormal[0] + bitangent[1] * tangentNormal[1] + normal[1] * tangentNormal[2],
+      tangent[2] * tangentNormal[0] + bitangent[2] * tangentNormal[1] + normal[2] * tangentNormal[2],
+    ],
+    normal
+  );
+}
+
+function sampleBaseColor(mesh, uv) {
+  const sample = mesh.baseColorTexture ? sampleTextureRgba(mesh.baseColorTexture, uv, "srgb") : [1, 1, 1, 1];
+  return [
+    clampUnit(mesh.color[0] * sample[0]),
+    clampUnit(mesh.color[1] * sample[1]),
+    clampUnit(mesh.color[2] * sample[2]),
+    clampUnit((mesh.color[3] ?? 1) * sample[3]),
+  ];
+}
+
+function sampleSurfaceMaterial(mesh, uv) {
+  const textureSample = mesh.metallicRoughnessTexture
+    ? sampleTextureRgba(mesh.metallicRoughnessTexture, uv, "linear")
+    : [1, 1, 1, 1];
+  return {
+    roughness: clamp(mesh.roughness * textureSample[1], 0, 1),
+    metallic: clamp(mesh.metallic * textureSample[2], 0, 1),
+  };
+}
+
+function averageColors(colors) {
+  const count = Math.max(colors.length, 1);
+  return colors.reduce(
+    (accumulator, color) => [
+      accumulator[0] + color[0] / count,
+      accumulator[1] + color[1] / count,
+      accumulator[2] + color[2] / count,
+      accumulator[3] + color[3] / count,
+    ],
+    [0, 0, 0, 0]
+  );
+}
+
+function averageNumbers(values, fallback = 0) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return fallback;
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function createMeshTriangleRecords(meshes) {
@@ -571,6 +854,16 @@ function createMeshTriangleRecords(meshes) {
       const uv0 = mesh.uvs ? readVector2(mesh.uvs, a) : [0, 0];
       const uv1 = mesh.uvs ? readVector2(mesh.uvs, b) : [0, 0];
       const uv2 = mesh.uvs ? readVector2(mesh.uvs, c) : [0, 0];
+      const tangentBasis = buildTriangleTangentBasis(v0, v1, v2, uv0, uv1, uv2, faceNormal);
+      const shadedN0 = applyNormalMap(n0, tangentBasis.tangent, tangentBasis.bitangent, mesh.normalTexture, uv0);
+      const shadedN1 = applyNormalMap(n1, tangentBasis.tangent, tangentBasis.bitangent, mesh.normalTexture, uv1);
+      const shadedN2 = applyNormalMap(n2, tangentBasis.tangent, tangentBasis.bitangent, mesh.normalTexture, uv2);
+      const sampledColors = [sampleBaseColor(mesh, uv0), sampleBaseColor(mesh, uv1), sampleBaseColor(mesh, uv2)];
+      const sampledMaterials = [
+        sampleSurfaceMaterial(mesh, uv0),
+        sampleSurfaceMaterial(mesh, uv1),
+        sampleSurfaceMaterial(mesh, uv2),
+      ];
       const bounds = triangleBounds(v0, v1, v2);
 
       triangles.push(
@@ -581,18 +874,42 @@ function createMeshTriangleRecords(meshes) {
           flags: mesh.flags,
           materialRefId: mesh.materialRefId,
           mediumRefId: mesh.mediumRefId,
+          materialSlot: meshIndex,
           v0: Object.freeze(v0),
           v1: Object.freeze(v1),
           v2: Object.freeze(v2),
-          n0: Object.freeze(n0),
-          n1: Object.freeze(n1),
-          n2: Object.freeze(n2),
+          n0: Object.freeze(shadedN0),
+          n1: Object.freeze(shadedN1),
+          n2: Object.freeze(shadedN2),
           uv0: Object.freeze(uv0),
           uv1: Object.freeze(uv1),
           uv2: Object.freeze(uv2),
-          color: mesh.color,
+          color: Object.freeze(averageColors(sampledColors)),
           emission: mesh.emission,
-          material: Object.freeze([mesh.roughness, mesh.metallic, mesh.opacity, mesh.ior]),
+          material: Object.freeze([
+            averageNumbers(sampledMaterials.map((sample) => sample.roughness), mesh.roughness),
+            averageNumbers(sampledMaterials.map((sample) => sample.metallic), mesh.metallic),
+            mesh.opacity,
+            mesh.ior,
+          ]),
+          materialResponse: Object.freeze([
+            mesh.sheenColor[0] ?? 0,
+            mesh.sheenColor[1] ?? 0,
+            mesh.sheenColor[2] ?? 0,
+            mesh.clearcoat,
+          ]),
+          materialExtension: Object.freeze([
+            mesh.clearcoatRoughness,
+            mesh.specular,
+            mesh.transmission,
+            0,
+          ]),
+          specularColor: Object.freeze([
+            mesh.specularColor[0] ?? 1,
+            mesh.specularColor[1] ?? 1,
+            mesh.specularColor[2] ?? 1,
+            1,
+          ]),
           bounds: Object.freeze({
             min: Object.freeze(bounds.min),
             max: Object.freeze(bounds.max),
@@ -713,6 +1030,245 @@ function nextPowerOfTwo(value) {
   return 2 ** Math.ceil(Math.log2(value));
 }
 
+function textureComponentToByte(value, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  if (numeric >= 0 && numeric <= 1) {
+    return Math.max(0, Math.min(255, Math.round(numeric * 255)));
+  }
+  return Math.max(0, Math.min(255, Math.round(numeric)));
+}
+
+function createSolidTextureSample(width, height, rgba) {
+  const data = new Uint8Array(width * height * 4);
+  for (let offset = 0; offset < data.length; offset += 4) {
+    data[offset] = rgba[0];
+    data[offset + 1] = rgba[1];
+    data[offset + 2] = rgba[2];
+    data[offset + 3] = rgba[3];
+  }
+  return Object.freeze({
+    width,
+    height,
+    data,
+  });
+}
+
+function normalizeTextureSampleInput(texture, fallbackColor) {
+  if (
+    !texture ||
+    !Number.isFinite(texture.width) ||
+    !Number.isFinite(texture.height) ||
+    texture.width <= 0 ||
+    texture.height <= 0
+  ) {
+    return createSolidTextureSample(1, 1, fallbackColor);
+  }
+
+  const pixelCount = Math.trunc(texture.width) * Math.trunc(texture.height) * 4;
+  const source =
+    ArrayBuffer.isView(texture.data) || Array.isArray(texture.data) ? texture.data : null;
+  if (!source || source.length < pixelCount) {
+    return createSolidTextureSample(1, 1, fallbackColor);
+  }
+
+  const data = new Uint8Array(pixelCount);
+  for (let index = 0; index < pixelCount; index += 1) {
+    data[index] = textureComponentToByte(source[index], fallbackColor[index % 4]);
+  }
+
+  return Object.freeze({
+    width: Math.trunc(texture.width),
+    height: Math.trunc(texture.height),
+    data,
+  });
+}
+
+function buildTextureAtlas(textures, fallbackColor) {
+  const padding = 1;
+  const defaultTexture = createSolidTextureSample(1, 1, fallbackColor);
+  const uniqueEntries = [{ source: null, texture: defaultTexture }];
+  const bySource = new Map();
+
+  for (const texture of Array.isArray(textures) ? textures : []) {
+    if (!texture || bySource.has(texture)) {
+      continue;
+    }
+    const normalized = normalizeTextureSampleInput(texture, fallbackColor);
+    bySource.set(texture, uniqueEntries.length);
+    uniqueEntries.push({ source: texture, texture: normalized });
+  }
+
+  const totalArea = uniqueEntries.reduce((sum, entry) => {
+    return sum + (entry.texture.width + padding * 2) * (entry.texture.height + padding * 2);
+  }, 0);
+  const maxTileWidth = uniqueEntries.reduce((maxWidth, entry) => {
+    return Math.max(maxWidth, entry.texture.width + padding * 2);
+  }, 1);
+  const targetWidth = Math.max(
+    maxTileWidth,
+    nextPowerOfTwo(Math.max(maxTileWidth, Math.ceil(Math.sqrt(totalArea))))
+  );
+
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowHeight = 0;
+  let atlasWidth = 0;
+  const placements = uniqueEntries.map((entry) => {
+    const tileWidth = entry.texture.width + padding * 2;
+    const tileHeight = entry.texture.height + padding * 2;
+    if (cursorX > 0 && cursorX + tileWidth > targetWidth) {
+      cursorX = 0;
+      cursorY += rowHeight;
+      rowHeight = 0;
+    }
+    const placement = Object.freeze({
+      x: cursorX,
+      y: cursorY,
+      tileWidth,
+      tileHeight,
+      width: entry.texture.width,
+      height: entry.texture.height,
+    });
+    cursorX += tileWidth;
+    atlasWidth = Math.max(atlasWidth, cursorX);
+    rowHeight = Math.max(rowHeight, tileHeight);
+    return placement;
+  });
+
+  const atlasHeight = Math.max(1, cursorY + rowHeight);
+  const atlasData = new Uint8Array(Math.max(1, atlasWidth * atlasHeight * 4));
+
+  const writePixel = (x, y, rgba) => {
+    const offset = (y * atlasWidth + x) * 4;
+    atlasData[offset] = rgba[0];
+    atlasData[offset + 1] = rgba[1];
+    atlasData[offset + 2] = rgba[2];
+    atlasData[offset + 3] = rgba[3];
+  };
+
+  const rects = placements.map((placement, entryIndex) => {
+    const { texture } = uniqueEntries[entryIndex];
+    for (let y = 0; y < placement.tileHeight; y += 1) {
+      for (let x = 0; x < placement.tileWidth; x += 1) {
+        const sampleX = Math.max(0, Math.min(texture.width - 1, x - padding));
+        const sampleY = Math.max(0, Math.min(texture.height - 1, y - padding));
+        const sourceOffset = (sampleY * texture.width + sampleX) * 4;
+        writePixel(placement.x + x, placement.y + y, texture.data.slice(sourceOffset, sourceOffset + 4));
+      }
+    }
+    return Object.freeze([
+      (placement.x + padding) / Math.max(1, atlasWidth),
+      (placement.y + padding) / Math.max(1, atlasHeight),
+      placement.width / Math.max(1, atlasWidth),
+      placement.height / Math.max(1, atlasHeight),
+    ]);
+  });
+
+  const rectBySource = new Map();
+  uniqueEntries.forEach((entry, index) => {
+    if (entry.source) {
+      rectBySource.set(entry.source, rects[index]);
+    }
+  });
+
+  return Object.freeze({
+    width: Math.max(1, atlasWidth),
+    height: Math.max(1, atlasHeight),
+    data: atlasData,
+    defaultRect: rects[0],
+    resolveRect(texture) {
+      return rectBySource.get(texture) ?? rects[0];
+    },
+  });
+}
+
+export function createWavefrontGpuMaterialSource(meshes = []) {
+  const source = Array.isArray(meshes) ? meshes : [meshes];
+  const normalized = source.map((meshInput, meshIndex) => normalizeWavefrontMesh(meshInput, meshIndex));
+  const baseColorAtlas = buildTextureAtlas(
+    normalized.map((mesh) => mesh.baseColorTexture),
+    [255, 255, 255, 255]
+  );
+  const metallicRoughnessAtlas = buildTextureAtlas(
+    normalized.map((mesh) => mesh.metallicRoughnessTexture),
+    [255, 255, 255, 255]
+  );
+  const normalAtlas = buildTextureAtlas(
+    normalized.map((mesh) => mesh.normalTexture),
+    [128, 128, 255, 255]
+  );
+  const occlusionAtlas = buildTextureAtlas(
+    normalized.map((mesh) => mesh.occlusionTexture),
+    [255, 255, 255, 255]
+  );
+  const emissiveAtlas = buildTextureAtlas(
+    normalized.map((mesh) => mesh.emissiveTexture),
+    [255, 255, 255, 255]
+  );
+  const bytes = new ArrayBuffer(Math.max(1, normalized.length) * GPU_MATERIAL_RECORD_BYTES);
+  const floatView = new Float32Array(bytes);
+
+  normalized.forEach((mesh, meshIndex) => {
+    const byteOffset = meshIndex * GPU_MATERIAL_RECORD_BYTES;
+    writeVec4(floatView, byteOffset, mesh.color);
+    writeVec4(floatView, byteOffset + 16, mesh.emission);
+    writeVec4(floatView, byteOffset + 32, [
+      mesh.roughness,
+      mesh.metallic,
+      mesh.opacity,
+      mesh.ior,
+    ]);
+    writeVec4(floatView, byteOffset + 48, [
+      mesh.sheenColor[0] ?? 0,
+      mesh.sheenColor[1] ?? 0,
+      mesh.sheenColor[2] ?? 0,
+      mesh.clearcoat,
+    ]);
+    writeVec4(floatView, byteOffset + 64, [
+      mesh.clearcoatRoughness,
+      mesh.specular,
+      mesh.transmission,
+      0,
+    ]);
+    writeVec4(floatView, byteOffset + 80, [
+      mesh.specularColor[0] ?? 1,
+      mesh.specularColor[1] ?? 1,
+      mesh.specularColor[2] ?? 1,
+      1,
+    ]);
+    writeVec4(floatView, byteOffset + 96, baseColorAtlas.resolveRect(mesh.baseColorTexture));
+    writeVec4(
+      floatView,
+      byteOffset + 112,
+      metallicRoughnessAtlas.resolveRect(mesh.metallicRoughnessTexture)
+    );
+    writeVec4(floatView, byteOffset + 128, normalAtlas.resolveRect(mesh.normalTexture));
+    writeVec4(floatView, byteOffset + 144, occlusionAtlas.resolveRect(mesh.occlusionTexture));
+    writeVec4(floatView, byteOffset + 160, emissiveAtlas.resolveRect(mesh.emissiveTexture));
+    writeVec4(floatView, byteOffset + 176, [
+      clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
+      clampUnit(mesh.occlusionTexture?.strength ?? 1),
+      clampUnit(mesh.emissiveTexture?.strength ?? 1),
+      0,
+    ]);
+  });
+
+  return Object.freeze({
+    buffer: bytes,
+    count: normalized.length,
+    recordBytes: GPU_MATERIAL_RECORD_BYTES,
+    records: Object.freeze(normalized),
+    baseColorAtlas,
+    metallicRoughnessAtlas,
+    normalAtlas,
+    occlusionAtlas,
+    emissiveAtlas,
+  });
+}
+
 function estimateBvhLeafSortCapacity(triangleCount) {
   return triangleCount <= 0 ? 0 : nextPowerOfTwo(triangleCount);
 }
@@ -783,9 +1339,10 @@ function resolveAccelerationBuildMode(options = {}) {
   return mode;
 }
 
-export function createWavefrontGpuMeshSource(meshes = []) {
+export function createWavefrontGpuMeshSource(meshes = [], gpuMaterialSourceInput = null) {
   const source = Array.isArray(meshes) ? meshes : [meshes];
   const normalized = source.map((meshInput, meshIndex) => normalizeWavefrontMesh(meshInput, meshIndex));
+  const gpuMaterialSource = gpuMaterialSourceInput ?? createWavefrontGpuMaterialSource(normalized);
   const vertexCount = normalized.reduce((count, mesh) => count + mesh.positions.length / 3, 0);
   const indexCount = normalized.reduce((count, mesh) => count + mesh.indices.length, 0);
   const triangleCount = Math.floor(indexCount / 3);
@@ -842,7 +1399,7 @@ export function createWavefrontGpuMeshSource(meshes = []) {
     meshUints[meshOffset + 8] = mesh.indices.length / 3;
     meshUints[meshOffset + 9] = meshVertexBase;
     meshUints[meshOffset + 10] = meshVertexCount;
-    meshUints[meshOffset + 11] = 0;
+    meshUints[meshOffset + 11] = meshIndex;
     const floatOffset = meshOffset;
     writeVec4(meshFloats, floatOffset * 4 + 48, mesh.color);
     writeVec4(meshFloats, floatOffset * 4 + 64, mesh.emission);
@@ -851,6 +1408,55 @@ export function createWavefrontGpuMeshSource(meshes = []) {
       mesh.metallic,
       mesh.opacity,
       mesh.ior,
+    ]);
+    writeVec4(meshFloats, floatOffset * 4 + 96, [
+      mesh.sheenColor[0] ?? 0,
+      mesh.sheenColor[1] ?? 0,
+      mesh.sheenColor[2] ?? 0,
+      mesh.clearcoat,
+    ]);
+    writeVec4(meshFloats, floatOffset * 4 + 112, [
+      mesh.clearcoatRoughness,
+      mesh.specular,
+      mesh.transmission,
+      0,
+    ]);
+    writeVec4(meshFloats, floatOffset * 4 + 128, [
+      mesh.specularColor[0] ?? 1,
+      mesh.specularColor[1] ?? 1,
+      mesh.specularColor[2] ?? 1,
+      1,
+    ]);
+    writeVec4(
+      meshFloats,
+      floatOffset * 4 + 144,
+      gpuMaterialSource.baseColorAtlas.resolveRect(mesh.baseColorTexture)
+    );
+    writeVec4(
+      meshFloats,
+      floatOffset * 4 + 160,
+      gpuMaterialSource.metallicRoughnessAtlas.resolveRect(mesh.metallicRoughnessTexture)
+    );
+    writeVec4(
+      meshFloats,
+      floatOffset * 4 + 176,
+      gpuMaterialSource.normalAtlas.resolveRect(mesh.normalTexture)
+    );
+    writeVec4(
+      meshFloats,
+      floatOffset * 4 + 192,
+      gpuMaterialSource.occlusionAtlas.resolveRect(mesh.occlusionTexture)
+    );
+    writeVec4(
+      meshFloats,
+      floatOffset * 4 + 208,
+      gpuMaterialSource.emissiveAtlas.resolveRect(mesh.emissiveTexture)
+    );
+    writeVec4(meshFloats, floatOffset * 4 + 224, [
+      clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
+      clampUnit(mesh.occlusionTexture?.strength ?? 1),
+      clampUnit(mesh.emissiveTexture?.strength ?? 1),
+      0,
     ]);
 
     vertexCursor += meshVertexCount;
@@ -1188,12 +1794,14 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     options.environmentPortalCapacity,
     0
   );
+  const materialCapacity = readNonNegativeInteger("materialCapacity", options.materialCapacity, 0);
   const queueBytes = tilePixelCapacity * RAY_RECORD_BYTES;
   const hitBytes = tilePixelCapacity * HIT_RECORD_BYTES;
   const accumulationBytes = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
   const pathVertexBytes = tilePixelCapacity * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
   const sceneObjectBytes = sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES;
   const triangleBytes = triangleCapacity * TRIANGLE_RECORD_BYTES;
+  const materialTableBytes = materialCapacity * GPU_MATERIAL_RECORD_BYTES;
   const bvhNodeBytes = bvhNodeCapacity * BVH_NODE_RECORD_BYTES;
   const bvhLeafReferenceBytes = bvhLeafSortCapacity * BVH_LEAF_REF_RECORD_BYTES;
   const emissiveTriangleMetadataBytes =
@@ -1209,6 +1817,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     pathVertexBytes,
     sceneObjectBytes,
     triangleBytes,
+    materialTableBytes,
     bvhNodeBytes,
     bvhLeafReferenceBytes,
     emissiveTriangleMetadataBytes,
@@ -1223,6 +1832,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
       pathVertexBytes +
       sceneObjectBytes +
       triangleBytes +
+      materialTableBytes +
       bvhNodeBytes +
       bvhLeafReferenceBytes +
       emissiveTriangleMetadataBytes +
@@ -1244,7 +1854,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   const samplesPerPixel = clamp(
     readPositiveInteger("samplesPerPixel", options.samplesPerPixel, DEFAULT_SAMPLES_PER_PIXEL),
     1,
-    64
+    MAX_SAMPLES_PER_PIXEL
   );
   const maxFramePassesPerSubmission = clamp(
     readPositiveInteger(
@@ -1262,9 +1872,13 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   );
   const meshes = normalizeMeshes(options);
   const meshSourceShape = estimateMeshSourceShape(meshes);
+  const gpuMaterialSource =
+    meshes.length > 0
+      ? createWavefrontGpuMaterialSource(meshes)
+      : createWavefrontGpuMaterialSource([]);
   const gpuMeshSource =
     meshes.length > 0
-      ? createWavefrontGpuMeshSource(meshes)
+      ? createWavefrontGpuMeshSource(meshes, gpuMaterialSource)
       : createWavefrontGpuMeshSource([]);
   const meshAcceleration =
     accelerationBuildMode === "cpu-debug"
@@ -1360,6 +1974,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     accelerationBuildMode,
     gpuAccelerationBuildRequired: accelerationBuildMode === "gpu" && triangleCount > 0,
     gpuMeshSource,
+    gpuMaterialSource,
     meshAcceleration,
     emissiveTriangleIndices,
     emissiveTriangleCount: emissiveTriangleIndices.count,
@@ -1390,6 +2005,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
       maxDepth,
       sceneObjectCapacity,
       triangleCapacity,
+      materialCapacity: gpuMaterialSource.count,
       bvhNodeCapacity,
       bvhLeafSortCapacity,
       emissiveTriangleCapacity: emissiveTriangleIndices.capacity,
@@ -1483,6 +2099,24 @@ export function packWavefrontSceneObjects(sceneObjects, capacity = sceneObjects.
       object.opacity,
       object.ior,
     ]);
+    writeVec4(floatView, byteOffset + 96, [
+      object.sheenColor[0] ?? 0,
+      object.sheenColor[1] ?? 0,
+      object.sheenColor[2] ?? 0,
+      object.clearcoat,
+    ]);
+    writeVec4(floatView, byteOffset + 112, [
+      object.clearcoatRoughness,
+      object.specular,
+      object.transmission,
+      0,
+    ]);
+    writeVec4(floatView, byteOffset + 128, [
+      object.specularColor[0] ?? 1,
+      object.specularColor[1] ?? 1,
+      object.specularColor[2] ?? 1,
+      1,
+    ]);
   });
 
   return Object.freeze({
@@ -1511,7 +2145,7 @@ export function packWavefrontTriangles(triangles, capacity = triangles.length) {
     uintView[u32 + 3] = triangle.flags;
     uintView[u32 + 4] = triangle.materialRefId;
     uintView[u32 + 5] = triangle.mediumRefId;
-    uintView[u32 + 6] = 0;
+    uintView[u32 + 6] = triangle.materialSlot ?? 0;
     uintView[u32 + 7] = 0;
     writeVec4(floatView, byteOffset + 32, [...triangle.v0, 0]);
     writeVec4(floatView, byteOffset + 48, [...triangle.v1, 0]);
@@ -1524,6 +2158,15 @@ export function packWavefrontTriangles(triangles, capacity = triangles.length) {
     writeVec4(floatView, byteOffset + 160, triangle.color);
     writeVec4(floatView, byteOffset + 176, triangle.emission);
     writeVec4(floatView, byteOffset + 192, triangle.material);
+    writeVec4(floatView, byteOffset + 208, triangle.materialResponse);
+    writeVec4(floatView, byteOffset + 224, triangle.materialExtension ?? [0.08, 1, 0, 0]);
+    writeVec4(floatView, byteOffset + 240, triangle.specularColor ?? [1, 1, 1, 1]);
+    writeVec4(floatView, byteOffset + 256, triangle.baseColorAtlas ?? [0, 0, 1, 1]);
+    writeVec4(floatView, byteOffset + 272, triangle.metallicRoughnessAtlas ?? [0, 0, 1, 1]);
+    writeVec4(floatView, byteOffset + 288, triangle.normalAtlas ?? [0, 0, 1, 1]);
+    writeVec4(floatView, byteOffset + 304, triangle.occlusionAtlas ?? [0, 0, 1, 1]);
+    writeVec4(floatView, byteOffset + 320, triangle.emissiveAtlas ?? [0, 0, 1, 1]);
+    writeVec4(floatView, byteOffset + 336, triangle.textureSettings ?? [1, 1, 1, 0]);
   });
 
   return Object.freeze({
@@ -1622,6 +2265,12 @@ function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
     config.environmentLighting.sunlitBaseline,
     0,
     0,
+  ]);
+  writeVec4(floatView, 304, [
+    config.environmentMap.width ?? 1,
+    config.environmentMap.height ?? 1,
+    config.environmentMap.mipLevelCount ?? 1,
+    config.environmentMap.hasImportanceData ? 1 : 0,
   ]);
   return bytes;
 }
@@ -1813,6 +2462,7 @@ export function intersectWavefrontReferenceTriangle(ray, triangle, options = {})
     color: triangle.color,
     emission: triangle.emission,
     material: triangle.material,
+    materialResponse: triangle.materialResponse,
   });
 }
 
@@ -1840,6 +2490,7 @@ function createWavefrontReferenceEnvironmentHit(config, ray) {
     color: Object.freeze([0, 0, 0, 0]),
     emission: radiance,
     material: Object.freeze([1, 0, 1, 1]),
+    materialResponse: Object.freeze([0, 0, 0, 0]),
   });
 }
 
@@ -1932,12 +2583,375 @@ function environmentMapIntegerScale(data) {
   return 1;
 }
 
+function environmentMapHasSamplingData(environmentMap) {
+  if (!environmentMap || !environmentMap.data) {
+    return false;
+  }
+  const width = Math.max(1, environmentMap.width ?? 1);
+  const height = Math.max(1, environmentMap.height ?? 1);
+  return environmentMap.data.length >= width * height * 4;
+}
+
+function createRgba8TextureUpload(source) {
+  const width = Math.max(1, Math.trunc(source.width));
+  const height = Math.max(1, Math.trunc(source.height));
+  const bytesPerRow = alignTo(width * 4, 256);
+  const bytes = new Uint8Array(bytesPerRow * height);
+  const data = source.data instanceof Uint8Array ? source.data : new Uint8Array(source.data);
+  for (let y = 0; y < height; y += 1) {
+    const sourceOffset = y * width * 4;
+    const targetOffset = y * bytesPerRow;
+    bytes.set(data.subarray(sourceOffset, sourceOffset + width * 4), targetOffset);
+  }
+  return Object.freeze({
+    bytes,
+    bytesPerRow,
+    width,
+    height,
+  });
+}
+
 function readEnvironmentMapComponent(data, index, fallback, integerScale = 1) {
   if (!data || index >= data.length) {
     return fallback;
   }
   const value = Number(data[index]);
   return Number.isFinite(value) ? Math.max(0, value) * integerScale : fallback;
+}
+
+function reflectVector(direction, normal) {
+  return subtract(direction, scale(normal, 2 * dot(direction, normal)));
+}
+
+function buildOrthonormalBasis(normal) {
+  const tangentFallback = Math.abs(normal[1]) < 0.999 ? [0, 1, 0] : [1, 0, 0];
+  const tangent = normalize(cross(tangentFallback, normal), [1, 0, 0]);
+  const bitangent = normalize(cross(normal, tangent), [0, 0, 1]);
+  return { tangent, bitangent };
+}
+
+function localToWorld(local, normal) {
+  const basis = buildOrthonormalBasis(normal);
+  return normalize(
+    add(
+      add(scale(basis.tangent, local[0]), scale(basis.bitangent, local[1])),
+      scale(normal, local[2])
+    ),
+    normal
+  );
+}
+
+function radicalInverseVdc(bits) {
+  let value = bits >>> 0;
+  value = ((value << 16) | (value >>> 16)) >>> 0;
+  value = (((value & 0x55555555) << 1) | ((value & 0xaaaaaaaa) >>> 1)) >>> 0;
+  value = (((value & 0x33333333) << 2) | ((value & 0xcccccccc) >>> 2)) >>> 0;
+  value = (((value & 0x0f0f0f0f) << 4) | ((value & 0xf0f0f0f0) >>> 4)) >>> 0;
+  value = (((value & 0x00ff00ff) << 8) | ((value & 0xff00ff00) >>> 8)) >>> 0;
+  return value * 2.3283064365386963e-10;
+}
+
+function hammersley(index, count) {
+  return [index / Math.max(count, 1), radicalInverseVdc(index)];
+}
+
+function importanceSampleGgx(sample, roughness, normal) {
+  const alpha = Math.max(roughness * roughness, 0.0001);
+  const phi = 2 * Math.PI * sample[0];
+  const cosTheta = Math.sqrt((1 - sample[1]) / (1 + (alpha * alpha - 1) * sample[1]));
+  const sinTheta = Math.sqrt(Math.max(0, 1 - cosTheta * cosTheta));
+  const halfVector = localToWorld(
+    [Math.cos(phi) * sinTheta, Math.sin(phi) * sinTheta, cosTheta],
+    normal
+  );
+  return normalize(halfVector, normal);
+}
+
+function distributionGgx(nDotH, roughness) {
+  const alpha = Math.max(roughness * roughness, 0.0001);
+  const alpha2 = alpha * alpha;
+  const denom = (nDotH * nDotH) * (alpha2 - 1) + 1;
+  return alpha2 / Math.max(Math.PI * denom * denom, 0.000001);
+}
+
+function geometrySchlickGgx(nDotV, roughness) {
+  const k = ((roughness + 1) * (roughness + 1)) / 8;
+  return nDotV / Math.max(nDotV * (1 - k) + k, 0.000001);
+}
+
+function geometrySmith(nDotV, nDotL, roughness) {
+  return geometrySchlickGgx(nDotV, roughness) * geometrySchlickGgx(nDotL, roughness);
+}
+
+function integrateBrdfSample(nDotV, roughness, sampleCount) {
+  const viewDirection = [Math.sqrt(Math.max(0, 1 - nDotV * nDotV)), 0, nDotV];
+  const normal = [0, 0, 1];
+  let scaleTerm = 0;
+  let biasTerm = 0;
+  for (let index = 0; index < sampleCount; index += 1) {
+    const xi = hammersley(index, sampleCount);
+    const halfVector = importanceSampleGgx(xi, roughness, normal);
+    const vDotH = Math.max(dot(viewDirection, halfVector), 0);
+    const lightDirection = normalize(
+      subtract(scale(halfVector, 2 * vDotH), viewDirection),
+      normal
+    );
+    const nDotL = Math.max(lightDirection[2], 0);
+    const nDotH = Math.max(halfVector[2], 0);
+    if (nDotL <= 0 || nDotH <= 0 || vDotH <= 0) {
+      continue;
+    }
+    const geometry = geometrySmith(nDotV, nDotL, roughness);
+    const visibility = (geometry * vDotH) / Math.max(nDotH * nDotV, 0.000001);
+    const fresnel = (1 - vDotH) ** 5;
+    scaleTerm += (1 - fresnel) * visibility;
+    biasTerm += fresnel * visibility;
+  }
+  return [scaleTerm / sampleCount, biasTerm / sampleCount];
+}
+
+function createBrdfLutUploadBytes(size = DEFAULT_BRDF_LUT_SIZE, sampleCount = 1024) {
+  const cacheKey = `${Math.max(1, Math.trunc(size))}:${Math.max(1, Math.trunc(sampleCount))}`;
+  const cached = BRDF_LUT_UPLOAD_CACHE.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const width = Math.max(1, Math.trunc(size));
+  const height = Math.max(1, Math.trunc(size));
+  const rowBytes = width * 8;
+  const bytesPerRow = alignTo(rowBytes, 256);
+  const bytes = new Uint8Array(bytesPerRow * height);
+  const view = new DataView(bytes.buffer);
+  for (let y = 0; y < height; y += 1) {
+    const roughness = (y + 0.5) / height;
+    for (let x = 0; x < width; x += 1) {
+      const nDotV = Math.max((x + 0.5) / width, 0.0001);
+      const [scaleTerm, biasTerm] = integrateBrdfSample(nDotV, roughness, sampleCount);
+      const offset = y * bytesPerRow + x * 8;
+      view.setUint16(offset, float32ToFloat16Bits(scaleTerm), true);
+      view.setUint16(offset + 2, float32ToFloat16Bits(biasTerm), true);
+      view.setUint16(offset + 4, float32ToFloat16Bits(0), true);
+      view.setUint16(offset + 6, float32ToFloat16Bits(1), true);
+    }
+  }
+  const upload = Object.freeze({ bytes, bytesPerRow, width, height });
+  BRDF_LUT_UPLOAD_CACHE.set(cacheKey, upload);
+  return upload;
+}
+
+function createLinearEnvironmentPixels(environmentMap, fallbackColor) {
+  const width = Math.max(1, environmentMap.width);
+  const height = Math.max(1, environmentMap.height);
+  const pixels = new Float32Array(width * height * 4);
+  const data = environmentMap.data;
+  const integerScale = environmentMapIntegerScale(data);
+  for (let index = 0; index < width * height; index += 1) {
+    const sourceOffset = index * 4;
+    const targetOffset = index * 4;
+    pixels[targetOffset] = readEnvironmentMapComponent(data, sourceOffset, fallbackColor[0], integerScale);
+    pixels[targetOffset + 1] = readEnvironmentMapComponent(data, sourceOffset + 1, fallbackColor[1], integerScale);
+    pixels[targetOffset + 2] = readEnvironmentMapComponent(data, sourceOffset + 2, fallbackColor[2], integerScale);
+    pixels[targetOffset + 3] = readEnvironmentMapComponent(data, sourceOffset + 3, fallbackColor[3] ?? 1, integerScale);
+  }
+  return pixels;
+}
+
+function environmentUvToDirection(u, v, rotationRadians = 0) {
+  const angle = (u - rotationRadians / (2 * Math.PI) - 0.5) * 2 * Math.PI;
+  const theta = v * Math.PI;
+  const sinTheta = Math.sin(theta);
+  return [
+    Math.cos(angle) * sinTheta,
+    Math.cos(theta),
+    Math.sin(angle) * sinTheta,
+  ];
+}
+
+function sampleEnvironmentPixelsBilinear(pixels, width, height, u, v) {
+  const wrappedU = ((u % 1) + 1) % 1;
+  const clampedV = clamp(v, 0, 1);
+  const x = wrappedU * width - 0.5;
+  const y = clampedV * height - 0.5;
+  const x0 = ((Math.floor(x) % width) + width) % width;
+  const y0 = clamp(Math.floor(y), 0, height - 1);
+  const x1 = (x0 + 1) % width;
+  const y1 = clamp(y0 + 1, 0, height - 1);
+  const tx = x - Math.floor(x);
+  const ty = y - Math.floor(y);
+  const read = (px, py) => {
+    const offset = (py * width + px) * 4;
+    return [pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]];
+  };
+  const a = read(x0, y0);
+  const b = read(x1, y0);
+  const c = read(x0, y1);
+  const d = read(x1, y1);
+  const mixPair = (first, second, factor) => first * (1 - factor) + second * factor;
+  return [
+    mixPair(mixPair(a[0], b[0], tx), mixPair(c[0], d[0], tx), ty),
+    mixPair(mixPair(a[1], b[1], tx), mixPair(c[1], d[1], tx), ty),
+    mixPair(mixPair(a[2], b[2], tx), mixPair(c[2], d[2], tx), ty),
+    mixPair(mixPair(a[3], b[3], tx), mixPair(c[3], d[3], tx), ty),
+  ];
+}
+
+function directionToEnvironmentUv(direction, rotationRadians = 0) {
+  const unitDirection = normalize(direction, [0, 1, 0]);
+  const rotationTurns = rotationRadians / (2 * Math.PI);
+  const u = ((((Math.atan2(unitDirection[2], unitDirection[0]) / (2 * Math.PI)) + 0.5 + rotationTurns) % 1) + 1) % 1;
+  const v = Math.acos(clamp(unitDirection[1], -1, 1)) / Math.PI;
+  return [u, clamp(v, 0, 1)];
+}
+
+function sampleEnvironmentRadiance(pixels, width, height, direction, rotationRadians = 0) {
+  const [u, v] = directionToEnvironmentUv(direction, rotationRadians);
+  return sampleEnvironmentPixelsBilinear(pixels, width, height, u, v);
+}
+
+function createFloat16RgbaUploadFromLevels(levels) {
+  return levels.map((level) => {
+    const rowBytes = level.width * 8;
+    const bytesPerRow = alignTo(rowBytes, 256);
+    const bytes = new Uint8Array(bytesPerRow * level.height);
+    const view = new DataView(bytes.buffer);
+    for (let y = 0; y < level.height; y += 1) {
+      for (let x = 0; x < level.width; x += 1) {
+        const sourceOffset = (y * level.width + x) * 4;
+        const targetOffset = y * bytesPerRow + x * 8;
+        view.setUint16(targetOffset, float32ToFloat16Bits(level.data[sourceOffset]), true);
+        view.setUint16(targetOffset + 2, float32ToFloat16Bits(level.data[sourceOffset + 1]), true);
+        view.setUint16(targetOffset + 4, float32ToFloat16Bits(level.data[sourceOffset + 2]), true);
+        view.setUint16(targetOffset + 6, float32ToFloat16Bits(level.data[sourceOffset + 3]), true);
+      }
+    }
+    return Object.freeze({ bytes, bytesPerRow, width: level.width, height: level.height });
+  });
+}
+
+function createPrefilteredEnvironmentLevels(environmentMap, fallbackColor) {
+  const sourcePixels = createLinearEnvironmentPixels(environmentMap, fallbackColor);
+  const sourceWidth = Math.max(1, environmentMap.width);
+  const sourceHeight = Math.max(1, environmentMap.height);
+  const mipLevelCount = Math.max(1, Math.floor(Math.log2(Math.max(sourceWidth, sourceHeight))) + 1);
+  const levels = [
+    Object.freeze({
+      width: sourceWidth,
+      height: sourceHeight,
+      data: sourcePixels,
+    }),
+  ];
+  for (let mipLevel = 1; mipLevel < mipLevelCount; mipLevel += 1) {
+    const width = Math.max(1, sourceWidth >> mipLevel);
+    const height = Math.max(1, sourceHeight >> mipLevel);
+    const roughness = mipLevelCount <= 1 ? 0 : mipLevel / (mipLevelCount - 1);
+    const data = new Float32Array(width * height * 4);
+    const sampleCount = roughness < 0.25 ? 64 : roughness < 0.6 ? 96 : 128;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const direction = environmentUvToDirection((x + 0.5) / width, (y + 0.5) / height, environmentMap.rotationRadians);
+        const normal = normalize(direction, [0, 1, 0]);
+        const viewDirection = normal;
+        let totalWeight = 0;
+        const accum = [0, 0, 0];
+        for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+          const xi = hammersley(sampleIndex, sampleCount);
+          const halfVector = importanceSampleGgx(xi, roughness, normal);
+          const viewDotHalf = Math.max(dot(viewDirection, halfVector), 0);
+          const lightDirection = normalize(
+            subtract(scale(halfVector, 2 * viewDotHalf), viewDirection),
+            normal
+          );
+          const nDotL = Math.max(dot(normal, lightDirection), 0);
+          if (nDotL <= 0.000001) {
+            continue;
+          }
+          const radiance = sampleEnvironmentRadiance(
+            sourcePixels,
+            sourceWidth,
+            sourceHeight,
+            lightDirection,
+            environmentMap.rotationRadians
+          );
+          accum[0] += radiance[0] * nDotL;
+          accum[1] += radiance[1] * nDotL;
+          accum[2] += radiance[2] * nDotL;
+          totalWeight += nDotL;
+        }
+        const offset = (y * width + x) * 4;
+        data[offset] = accum[0] / Math.max(totalWeight, 0.000001);
+        data[offset + 1] = accum[1] / Math.max(totalWeight, 0.000001);
+        data[offset + 2] = accum[2] / Math.max(totalWeight, 0.000001);
+        data[offset + 3] = 1;
+      }
+    }
+    levels.push(Object.freeze({ width, height, data }));
+  }
+  return Object.freeze({
+    levels,
+    mipLevelCount,
+    width: sourceWidth,
+    height: sourceHeight,
+  });
+}
+
+function createEnvironmentSamplingTables(environmentMap, fallbackColor) {
+  if (!environmentMapHasSamplingData(environmentMap)) {
+    return Object.freeze({
+      width: 1,
+      height: 1,
+      pdf: new Float32Array([1]),
+      marginalCdf: new Float32Array([1]),
+      conditionalCdf: new Float32Array([1]),
+      hasImportanceData: false,
+    });
+  }
+  const pixels = createLinearEnvironmentPixels(environmentMap, fallbackColor);
+  const width = Math.max(1, environmentMap.width);
+  const height = Math.max(1, environmentMap.height);
+  const pdf = new Float32Array(width * height);
+  const marginalCdf = new Float32Array(height);
+  const conditionalCdf = new Float32Array(width * height);
+  const rowSums = new Float32Array(height);
+  let totalWeight = 0;
+  for (let y = 0; y < height; y += 1) {
+    const theta = ((y + 0.5) / height) * Math.PI;
+    const sinTheta = Math.max(Math.sin(theta), 0.0001);
+    let rowWeight = 0;
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 4;
+      const luminance = pixels[offset] * 0.2126 + pixels[offset + 1] * 0.7152 + pixels[offset + 2] * 0.0722;
+      const weight = Math.max(luminance * sinTheta, 0.000001);
+      pdf[y * width + x] = weight;
+      rowWeight += weight;
+      conditionalCdf[y * width + x] = rowWeight;
+    }
+    rowSums[y] = rowWeight;
+    totalWeight += rowWeight;
+    if (rowWeight > 0) {
+      for (let x = 0; x < width; x += 1) {
+        conditionalCdf[y * width + x] /= rowWeight;
+      }
+    } else {
+      for (let x = 0; x < width; x += 1) {
+        conditionalCdf[y * width + x] = (x + 1) / width;
+      }
+    }
+    marginalCdf[y] = totalWeight;
+  }
+  for (let y = 0; y < height; y += 1) {
+    marginalCdf[y] /= Math.max(totalWeight, 0.000001);
+  }
+  for (let index = 0; index < pdf.length; index += 1) {
+    pdf[index] /= Math.max(totalWeight, 0.000001);
+  }
+  return Object.freeze({
+    width,
+    height,
+    pdf,
+    marginalCdf,
+    conditionalCdf,
+    hasImportanceData: true,
+  });
 }
 
 function createEnvironmentMapUploadBytes(environmentMap, fallbackColor) {
@@ -1970,12 +2984,13 @@ function createEnvironmentMapUploadBytes(environmentMap, fallbackColor) {
     }
   }
 
-  return Object.freeze({
+  const upload = Object.freeze({
     bytes,
     bytesPerRow,
     width,
     height,
   });
+  return upload;
 }
 
 function createEnvironmentMapResource(device, constants, environmentMap, fallbackColor) {
@@ -1988,9 +3003,13 @@ function createEnvironmentMapResource(device, constants, environmentMap, fallbac
         addressModeV: "clamp-to-edge",
         magFilter: "linear",
         minFilter: "linear",
+        mipmapFilter: "linear",
       }),
       texture: null,
       ownsTexture: false,
+      width: Math.max(1, environmentMap.width),
+      height: Math.max(1, environmentMap.height),
+      mipLevelCount: Math.max(1, environmentMap.mipLevelCount ?? 1),
     });
   }
 
@@ -2003,17 +3022,95 @@ function createEnvironmentMapResource(device, constants, environmentMap, fallbac
         addressModeV: "clamp-to-edge",
         magFilter: "linear",
         minFilter: "linear",
+        mipmapFilter: "linear",
       }),
       texture: environmentMap.texture,
       ownsTexture: false,
+      width: Math.max(1, environmentMap.width),
+      height: Math.max(1, environmentMap.height),
+      mipLevelCount: Math.max(1, environmentMap.mipLevelCount ?? 1),
     });
   }
 
-  const upload = createEnvironmentMapUploadBytes(environmentMap, fallbackColor);
+  const prefiltered = createPrefilteredEnvironmentLevels(environmentMap, fallbackColor);
+  const uploads = createFloat16RgbaUploadFromLevels(prefiltered.levels);
   const texture = device.createTexture({
     label: environmentMap.enabled
       ? "plasius.wavefront.environmentMap"
       : "plasius.wavefront.environmentMapFallback",
+    size: { width: prefiltered.width, height: prefiltered.height },
+    format: "rgba16float",
+    mipLevelCount: prefiltered.mipLevelCount,
+    usage: constants.texture.TEXTURE_BINDING | constants.texture.COPY_DST,
+  });
+  uploads.forEach((upload, mipLevel) => {
+    device.queue.writeTexture(
+      { texture, mipLevel },
+      upload.bytes,
+      { bytesPerRow: upload.bytesPerRow, rowsPerImage: upload.height },
+      { width: upload.width, height: upload.height, depthOrArrayLayers: 1 }
+    );
+  });
+  return Object.freeze({
+    view: texture.createView(),
+    sampler: environmentMap.sampler ?? device.createSampler({
+      label: "plasius.wavefront.environmentMapSampler",
+      addressModeU: "repeat",
+      addressModeV: "clamp-to-edge",
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+    }),
+    texture,
+    ownsTexture: true,
+    width: prefiltered.width,
+    height: prefiltered.height,
+    mipLevelCount: prefiltered.mipLevelCount,
+  });
+}
+
+function createEnvironmentSamplingTextureResource(device, constants, environmentMap, fallbackColor) {
+  const tables = createEnvironmentSamplingTables(environmentMap, fallbackColor);
+  const rowBytes = tables.width * 8;
+  const bytesPerRow = alignTo(rowBytes, 256);
+  const bytes = new Uint8Array(bytesPerRow * tables.height);
+  const view = new DataView(bytes.buffer);
+  for (let y = 0; y < tables.height; y += 1) {
+    for (let x = 0; x < tables.width; x += 1) {
+      const probability = tables.pdf[y * tables.width + x];
+      const conditional = tables.conditionalCdf[y * tables.width + x];
+      const marginal = tables.marginalCdf[y];
+      const offset = y * bytesPerRow + x * 8;
+      view.setUint16(offset, float32ToFloat16Bits(probability), true);
+      view.setUint16(offset + 2, float32ToFloat16Bits(conditional), true);
+      view.setUint16(offset + 4, float32ToFloat16Bits(marginal), true);
+      view.setUint16(offset + 6, float32ToFloat16Bits(1), true);
+    }
+  }
+  const texture = device.createTexture({
+    label: "plasius.wavefront.environmentSampling",
+    size: { width: tables.width, height: tables.height },
+    format: "rgba16float",
+    usage: constants.texture.TEXTURE_BINDING | constants.texture.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture },
+    bytes,
+    { bytesPerRow, rowsPerImage: tables.height },
+    { width: tables.width, height: tables.height, depthOrArrayLayers: 1 }
+  );
+  return Object.freeze({
+    view: texture.createView(),
+    texture,
+    ownsTexture: true,
+    hasImportanceData: tables.hasImportanceData,
+  });
+}
+
+function createBrdfLutResource(device, constants, size = DEFAULT_BRDF_LUT_SIZE) {
+  const upload = createBrdfLutUploadBytes(size);
+  const texture = device.createTexture({
+    label: "plasius.wavefront.brdfLut",
     size: { width: upload.width, height: upload.height },
     format: "rgba16float",
     usage: constants.texture.TEXTURE_BINDING | constants.texture.COPY_DST,
@@ -2026,14 +3123,37 @@ function createEnvironmentMapResource(device, constants, environmentMap, fallbac
   );
   return Object.freeze({
     view: texture.createView(),
-    sampler: environmentMap.sampler ?? device.createSampler({
-      label: "plasius.wavefront.environmentMapSampler",
-      addressModeU: "repeat",
+    sampler: device.createSampler({
+      label: "plasius.wavefront.brdfLutSampler",
+      addressModeU: "clamp-to-edge",
       addressModeV: "clamp-to-edge",
       magFilter: "linear",
       minFilter: "linear",
     }),
     texture,
+    ownsTexture: true,
+    width: upload.width,
+    height: upload.height,
+  });
+}
+
+function createAtlasTextureResource(device, constants, atlas, label) {
+  const upload = createRgba8TextureUpload(atlas);
+  const texture = device.createTexture({
+    label,
+    size: { width: upload.width, height: upload.height },
+    format: "rgba8unorm",
+    usage: constants.texture.TEXTURE_BINDING | constants.texture.COPY_DST,
+  });
+  device.queue.writeTexture(
+    { texture },
+    upload.bytes,
+    { bytesPerRow: upload.bytesPerRow, rowsPerImage: upload.height },
+    { width: upload.width, height: upload.height, depthOrArrayLayers: 1 }
+  );
+  return Object.freeze({
+    texture,
+    view: texture.createView(),
     ownsTexture: true,
   });
 }
@@ -2084,6 +3204,26 @@ async function createComputePipeline(device, shaderModule, layout, entryPoint, l
   }
 }
 
+async function assertShaderModuleCompiles(shaderModule, label) {
+  if (typeof shaderModule?.compilationInfo !== "function") {
+    return;
+  }
+  const info = await shaderModule.compilationInfo();
+  const messages = Array.isArray(info?.messages) ? info.messages : [];
+  const errors = messages.filter((message) => message?.type === "error");
+  if (errors.length <= 0) {
+    return;
+  }
+  const diagnostics = errors
+    .map((message) => {
+      const line = Number.isFinite(message.lineNum) ? message.lineNum : "?";
+      const column = Number.isFinite(message.linePos) ? message.linePos : "?";
+      return `line ${line}:${column} ${message.message}`;
+    })
+    .join("\n");
+  throw new Error(`WGSL compilation preflight failed for ${label}:\n${diagnostics}`);
+}
+
 async function createRenderPipeline(device, descriptor) {
   if (typeof device.createRenderPipelineAsync === "function") {
     return device.createRenderPipelineAsync(descriptor);
@@ -2093,6 +3233,7 @@ async function createRenderPipeline(device, descriptor) {
 
 const WAVEFRONT_COMPUTE_WGSL = `
 const RAY_FLAG_GUIDED_EMISSIVE: u32 = 1u;
+const RAY_FLAG_DELTA_SAMPLE: u32 = 2u;
 
 struct RayRecord {
   rayId: u32,
@@ -2118,11 +3259,12 @@ struct HitRecord {
   primitiveId: u32,
   materialRefId: u32,
   mediumRefId: u32,
+  materialSlot: u32,
   pad0: u32,
   pad1: u32,
-  pad2: u32,
   distance: f32,
-  pad3: vec3<f32>,
+  occlusion: f32,
+  pad2: vec2<f32>,
   position: vec4<f32>,
   geometricNormal: vec4<f32>,
   shadingNormal: vec4<f32>,
@@ -2131,6 +3273,9 @@ struct HitRecord {
   color: vec4<f32>,
   emission: vec4<f32>,
   material: vec4<f32>,
+  materialResponse: vec4<f32>,
+  materialExtension: vec4<f32>,
+  specularColor: vec4<f32>,
 };
 
 struct SceneObject {
@@ -2143,6 +3288,9 @@ struct SceneObject {
   color: vec4<f32>,
   emission: vec4<f32>,
   material: vec4<f32>,
+  materialResponse: vec4<f32>,
+  materialExtension: vec4<f32>,
+  specularColor: vec4<f32>,
 };
 
 struct TriangleRecord {
@@ -2152,7 +3300,7 @@ struct TriangleRecord {
   flags: u32,
   materialRefId: u32,
   mediumRefId: u32,
-  pad0: u32,
+  materialSlot: u32,
   pad1: u32,
   v0: vec4<f32>,
   v1: vec4<f32>,
@@ -2165,6 +3313,15 @@ struct TriangleRecord {
   color: vec4<f32>,
   emission: vec4<f32>,
   material: vec4<f32>,
+  materialResponse: vec4<f32>,
+  materialExtension: vec4<f32>,
+  specularColor: vec4<f32>,
+  baseColorAtlas: vec4<f32>,
+  metallicRoughnessAtlas: vec4<f32>,
+  normalAtlas: vec4<f32>,
+  occlusionAtlas: vec4<f32>,
+  emissiveAtlas: vec4<f32>,
+  textureSettings: vec4<f32>,
 };
 
 struct BvhNode {
@@ -2185,10 +3342,10 @@ struct BvhLeafRef {
 
 struct ScatterResult {
   direction: vec4<f32>,
+  pdf: f32,
   flags: u32,
   pad0: u32,
   pad1: u32,
-  pad2: u32,
 };
 
 struct MeshVertex {
@@ -2209,10 +3366,19 @@ struct MeshRange {
   triangleCount: u32,
   firstVertex: u32,
   vertexCount: u32,
-  pad0: u32,
+  materialSlot: u32,
   color: vec4<f32>,
   emission: vec4<f32>,
   material: vec4<f32>,
+  materialResponse: vec4<f32>,
+  materialExtension: vec4<f32>,
+  specularColor: vec4<f32>,
+  baseColorAtlas: vec4<f32>,
+  metallicRoughnessAtlas: vec4<f32>,
+  normalAtlas: vec4<f32>,
+  occlusionAtlas: vec4<f32>,
+  emissiveAtlas: vec4<f32>,
+  textureSettings: vec4<f32>,
 };
 
 struct FrameConfig {
@@ -2253,6 +3419,7 @@ struct FrameConfig {
   _portalPad1: u32,
   environmentMapSettings: vec4<f32>,
   pathResolveSettings: vec4<f32>,
+  environmentMapMeta: vec4<f32>,
 };
 
 struct Counters {
@@ -2315,6 +3482,15 @@ struct EnvironmentPortal {
 @group(0) @binding(20) var environmentMapTexture: texture_2d<f32>;
 @group(0) @binding(21) var environmentMapSampler: sampler;
 @group(0) @binding(22) var<storage, read_write> pathVertices: array<vec4<f32>>;
+@group(0) @binding(23) var baseColorAtlasTexture: texture_2d<f32>;
+@group(0) @binding(24) var metallicRoughnessAtlasTexture: texture_2d<f32>;
+@group(0) @binding(25) var normalAtlasTexture: texture_2d<f32>;
+@group(0) @binding(26) var occlusionAtlasTexture: texture_2d<f32>;
+@group(0) @binding(27) var emissiveAtlasTexture: texture_2d<f32>;
+@group(0) @binding(28) var materialAtlasSampler: sampler;
+@group(0) @binding(29) var brdfLutTexture: texture_2d<f32>;
+@group(0) @binding(30) var brdfLutSampler: sampler;
+@group(0) @binding(31) var environmentSamplingTexture: texture_2d<f32>;
 
 fn hash_u32(value: u32) -> u32 {
   var x = value;
@@ -2351,12 +3527,156 @@ fn safe_normalize(value: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
   return value / len;
 }
 
+struct TangentBasis {
+  tangent: vec3<f32>,
+  bitangent: vec3<f32>,
+};
+
+struct SurfaceMaterialSample {
+  color: vec4<f32>,
+  emission: vec4<f32>,
+  material: vec4<f32>,
+  materialResponse: vec4<f32>,
+  materialExtension: vec4<f32>,
+  specularColor: vec4<f32>,
+  shadingNormal: vec3<f32>,
+  occlusion: f32,
+};
+
+fn srgb_to_linear_channel(value: f32) -> f32 {
+  if (value <= 0.04045) {
+    return value / 12.92;
+  }
+  return pow((value + 0.055) / 1.055, 2.4);
+}
+
+fn srgb_to_linear_vec3(value: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>(
+    srgb_to_linear_channel(value.x),
+    srgb_to_linear_channel(value.y),
+    srgb_to_linear_channel(value.z)
+  );
+}
+
+fn wrap_uv(uv: vec2<f32>) -> vec2<f32> {
+  return fract(fract(uv) + vec2<f32>(1.0));
+}
+
+fn atlas_sample_uv(rect: vec4<f32>, uv: vec2<f32>) -> vec2<f32> {
+  let local = wrap_uv(uv);
+  let clamped = clamp(local, vec2<f32>(0.001), vec2<f32>(0.999));
+  return rect.xy + clamped * rect.zw;
+}
+
+fn sample_atlas(textureRef: texture_2d<f32>, rect: vec4<f32>, uv: vec2<f32>) -> vec4<f32> {
+  return textureSampleLevel(textureRef, materialAtlasSampler, atlas_sample_uv(rect, uv), 0.0);
+}
+
+fn build_triangle_tangent_basis(
+  triangle: TriangleRecord,
+  fallbackNormal: vec3<f32>
+) -> TangentBasis {
+  let edge1 = triangle.v1.xyz - triangle.v0.xyz;
+  let edge2 = triangle.v2.xyz - triangle.v0.xyz;
+  let uv0 = triangle.uv0uv1.xy;
+  let uv1 = triangle.uv0uv1.zw;
+  let uv2 = triangle.uv2Pad.xy;
+  let deltaUv1 = uv1 - uv0;
+  let deltaUv2 = uv2 - uv0;
+  let determinant = deltaUv1.x * deltaUv2.y - deltaUv1.y * deltaUv2.x;
+  if (abs(determinant) <= 0.000001) {
+    let tangentFallback = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(fallbackNormal.y) >= 0.999);
+    let tangent = safe_normalize(cross(tangentFallback, fallbackNormal), vec3<f32>(1.0, 0.0, 0.0));
+    let bitangent = safe_normalize(cross(fallbackNormal, tangent), vec3<f32>(0.0, 0.0, 1.0));
+    return TangentBasis(tangent, bitangent);
+  }
+  let inverse = 1.0 / determinant;
+  let tangent = safe_normalize(
+    inverse * (edge1 * deltaUv2.y - edge2 * deltaUv1.y),
+    vec3<f32>(1.0, 0.0, 0.0)
+  );
+  let bitangent = safe_normalize(
+    inverse * (-edge1 * deltaUv2.x + edge2 * deltaUv1.x),
+    vec3<f32>(0.0, 0.0, 1.0)
+  );
+  return TangentBasis(tangent, bitangent);
+}
+
+fn sample_surface_material(
+  triangle: TriangleRecord,
+  uv: vec2<f32>,
+  geometricNormal: vec3<f32>,
+  shadingNormal: vec3<f32>
+) -> SurfaceMaterialSample {
+  let baseColorTexel = sample_atlas(baseColorAtlasTexture, triangle.baseColorAtlas, uv);
+  let baseColor = vec4<f32>(
+    clamp(triangle.color.rgb * srgb_to_linear_vec3(baseColorTexel.rgb), vec3<f32>(0.0), vec3<f32>(1.0)),
+    clamp(triangle.color.a * baseColorTexel.a, 0.0, 1.0)
+  );
+  let metallicRoughnessTexel = sample_atlas(
+    metallicRoughnessAtlasTexture,
+    triangle.metallicRoughnessAtlas,
+    uv
+  );
+  let normalTexel = sample_atlas(normalAtlasTexture, triangle.normalAtlas, uv);
+  let occlusionTexel = sample_atlas(occlusionAtlasTexture, triangle.occlusionAtlas, uv);
+  let emissiveTexel = sample_atlas(emissiveAtlasTexture, triangle.emissiveAtlas, uv);
+  let normalScale = clamp(triangle.textureSettings.x, 0.0, 1.0);
+  let tangentBasis = build_triangle_tangent_basis(triangle, geometricNormal);
+  let tangentNormal = safe_normalize(
+    vec3<f32>(
+      (normalTexel.x * 2.0 - 1.0) * normalScale,
+      (normalTexel.y * 2.0 - 1.0) * normalScale,
+      1.0 + ((normalTexel.z * 2.0 - 1.0) - 1.0) * normalScale
+    ),
+    vec3<f32>(0.0, 0.0, 1.0)
+  );
+  let mappedNormal = safe_normalize(
+    tangentBasis.tangent * tangentNormal.x +
+      tangentBasis.bitangent * tangentNormal.y +
+      shadingNormal * tangentNormal.z,
+    shadingNormal
+  );
+  let emission = vec4<f32>(
+    max(
+      triangle.emission.rgb *
+        srgb_to_linear_vec3(emissiveTexel.rgb) *
+        max(triangle.textureSettings.z, 0.0),
+      vec3<f32>(0.0)
+    ),
+    clamp(triangle.emission.a * emissiveTexel.a, 0.0, 1.0)
+  );
+  return SurfaceMaterialSample(
+    baseColor,
+    emission,
+    vec4<f32>(
+      clamp(triangle.material.x * metallicRoughnessTexel.y, 0.0, 1.0),
+      clamp(triangle.material.y * metallicRoughnessTexel.z, 0.0, 1.0),
+      clamp(triangle.material.z * baseColor.a, 0.0, 1.0),
+      clamp(triangle.material.w, 1.0, 3.0)
+    ),
+    triangle.materialResponse,
+    triangle.materialExtension,
+    triangle.specularColor,
+    repair_shading_normal(geometricNormal, mappedNormal),
+    clamp(
+      mix(1.0, occlusionTexel.x, clamp(triangle.textureSettings.y, 0.0, 1.0)),
+      0.0,
+      1.0
+    )
+  );
+}
+
 fn saturate(value: f32) -> f32 {
   return clamp(value, 0.0, 1.0);
 }
 
 fn max_component(value: vec3<f32>) -> f32 {
   return max(max(value.x, value.y), value.z);
+}
+
+fn radiance_luminance(value: vec3<f32>) -> f32 {
+  return dot(value, vec3<f32>(0.2126, 0.7152, 0.0722));
 }
 
 fn environment_map_enabled() -> bool {
@@ -2487,6 +3807,343 @@ fn environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
     select(vec3<f32>(1.0), portalScale, portalHit);
 }
 
+fn direct_environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+  let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
+  let portalScale = environment_portal_radiance_scale(origin, rayDirection);
+  let portalHit = max_component(portalScale) > 0.0001;
+  if (
+    config.environmentPortalCount > 0u &&
+    config.environmentPortalMode == 2u &&
+    !portalHit
+  ) {
+    return vec3<f32>(0.0);
+  }
+  return base_environment_radiance(rayDirection) *
+    select(vec3<f32>(1.0), portalScale, portalHit);
+}
+
+fn radical_inverse_vdc(bitsValue: u32) -> f32 {
+  var bits = bitsValue;
+  bits = (bits << 16u) | (bits >> 16u);
+  bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xaaaaaaaau) >> 1u);
+  bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xccccccccu) >> 2u);
+  bits = ((bits & 0x0f0f0f0fu) << 4u) | ((bits & 0xf0f0f0f0u) >> 4u);
+  bits = ((bits & 0x00ff00ffu) << 8u) | ((bits & 0xff00ff00u) >> 8u);
+  return f32(bits) * 2.3283064365386963e-10;
+}
+
+fn hammersley_2d(index: u32, count: u32) -> vec2<f32> {
+  return vec2<f32>(f32(index) / max(f32(count), 1.0), radical_inverse_vdc(index));
+}
+
+fn build_basis_tangent(normal: vec3<f32>) -> vec3<f32> {
+  let tangentFallback = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(normal.y) >= 0.999);
+  return safe_normalize(cross(tangentFallback, normal), vec3<f32>(1.0, 0.0, 0.0));
+}
+
+fn local_to_world(local: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+  let tangent = build_basis_tangent(normal);
+  let bitangent = safe_normalize(cross(normal, tangent), vec3<f32>(0.0, 0.0, 1.0));
+  return safe_normalize(tangent * local.x + bitangent * local.y + normal * local.z, normal);
+}
+
+fn cosine_sample_hemisphere(sample: vec2<f32>, normal: vec3<f32>) -> vec3<f32> {
+  let phi = 6.28318530718 * sample.x;
+  let radius = sqrt(sample.y);
+  let x = cos(phi) * radius;
+  let y = sin(phi) * radius;
+  let z = sqrt(max(0.0, 1.0 - sample.y));
+  return local_to_world(vec3<f32>(x, y, z), normal);
+}
+
+fn importance_sample_ggx(sample: vec2<f32>, roughness: f32, normal: vec3<f32>) -> vec3<f32> {
+  let alpha = max(roughness * roughness, 0.0001);
+  let phi = 6.28318530718 * sample.x;
+  let cosTheta = sqrt((1.0 - sample.y) / max(1.0 + (alpha * alpha - 1.0) * sample.y, 0.0001));
+  let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
+  let localHalf = vec3<f32>(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+  return local_to_world(localHalf, normal);
+}
+
+fn distribution_ggx(normal: vec3<f32>, halfVector: vec3<f32>, roughness: f32) -> f32 {
+  let alpha = max(roughness * roughness, 0.0001);
+  let alpha2 = alpha * alpha;
+  let nDotH = saturate(dot(normal, halfVector));
+  let denominator = nDotH * nDotH * (alpha2 - 1.0) + 1.0;
+  return alpha2 / max(3.14159265359 * denominator * denominator, 0.000001);
+}
+
+fn geometry_schlick_ggx(nDotValue: f32, roughness: f32) -> f32 {
+  let k = ((roughness + 1.0) * (roughness + 1.0)) / 8.0;
+  return nDotValue / max(nDotValue * (1.0 - k) + k, 0.000001);
+}
+
+fn geometry_smith(normal: vec3<f32>, viewDirection: vec3<f32>, lightDirection: vec3<f32>, roughness: f32) -> f32 {
+  let nDotV = saturate(dot(normal, viewDirection));
+  let nDotL = saturate(dot(normal, lightDirection));
+  return geometry_schlick_ggx(nDotV, roughness) * geometry_schlick_ggx(nDotL, roughness);
+}
+
+fn fresnel_schlick(cosine: f32, f0: vec3<f32>) -> vec3<f32> {
+  return f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - cosine, 5.0);
+}
+
+fn sample_brdf_lut(nDotV: f32, roughness: f32) -> vec2<f32> {
+  let uv = vec2<f32>(clamp(nDotV, 0.0, 1.0), clamp(roughness, 0.0, 1.0));
+  return textureSampleLevel(brdfLutTexture, brdfLutSampler, uv, 0.0).xy;
+}
+
+fn prefiltered_environment_radiance(direction: vec3<f32>, roughness: f32) -> vec3<f32> {
+  let uv = environment_map_uv(direction);
+  let maxLevel = max(config.environmentMapMeta.z - 1.0, 0.0);
+  let lod = clamp(roughness, 0.0, 1.0) * maxLevel;
+  let texel = max(textureSampleLevel(environmentMapTexture, environmentMapSampler, uv, lod).rgb, vec3<f32>(0.0));
+  return texel * max(config.environmentMapSettings.y, 0.0);
+}
+
+fn environment_pdf_dimensions() -> vec2<u32> {
+  return vec2<u32>(
+    max(u32(config.environmentMapMeta.x), 1u),
+    max(u32(config.environmentMapMeta.y), 1u)
+  );
+}
+
+fn environment_importance_sampling_enabled() -> bool {
+  return config.environmentMapMeta.w > 0.5;
+}
+
+fn uniform_sphere_pdf() -> f32 {
+  return 1.0 / (4.0 * 3.14159265359);
+}
+
+fn sample_uniform_sphere_direction(sample: vec2<f32>) -> vec3<f32> {
+  let z = 1.0 - 2.0 * sample.y;
+  let radial = sqrt(max(1.0 - z * z, 0.0));
+  let phi = sample.x * 6.28318530718;
+  return vec3<f32>(cos(phi) * radial, z, sin(phi) * radial);
+}
+
+fn environment_sampling_texel(x: u32, y: u32) -> vec4<f32> {
+  return textureLoad(environmentSamplingTexture, vec2<i32>(i32(x), i32(y)), 0);
+}
+
+fn environment_pdf_texel(x: u32, y: u32) -> f32 {
+  return environment_sampling_texel(x, y).x;
+}
+
+fn environment_row_cdf_texel(y: u32) -> f32 {
+  return environment_sampling_texel(0u, y).z;
+}
+
+fn environment_column_cdf_texel(x: u32, y: u32) -> f32 {
+  return environment_sampling_texel(x, y).y;
+}
+
+fn environment_direction_pdf(direction: vec3<f32>) -> f32 {
+  if (!environment_importance_sampling_enabled()) {
+    return uniform_sphere_pdf();
+  }
+  let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
+  let uv = environment_map_uv(rayDirection);
+  let dimensions = environment_pdf_dimensions();
+  let width = max(f32(dimensions.x), 1.0);
+  let height = max(f32(dimensions.y), 1.0);
+  let x = min(u32(uv.x * width), dimensions.x - 1u);
+  let y = min(u32(uv.y * height), dimensions.y - 1u);
+  let discretePdf = max(environment_pdf_texel(x, y), 0.0);
+  let sinTheta = sqrt(max(1.0 - rayDirection.y * rayDirection.y, 0.0));
+  let solidAngle = max((2.0 * 3.14159265359 * 3.14159265359 * sinTheta) / (width * height), 0.000001);
+  return discretePdf / solidAngle;
+}
+
+fn sample_row_cdf(count: u32, sampleValue: f32) -> u32 {
+  if (count == 0u) {
+    return 0u;
+  }
+  var low = 0u;
+  var high = count - 1u;
+  loop {
+    if (low >= high) {
+      break;
+    }
+    let mid = (low + high) / 2u;
+    let cdfValue = environment_row_cdf_texel(mid);
+    if (sampleValue <= cdfValue) {
+      high = mid;
+    } else {
+      low = mid + 1u;
+    }
+  }
+  return min(low, count - 1u);
+}
+
+fn sample_column_cdf(row: u32, count: u32, sampleValue: f32) -> u32 {
+  if (count == 0u) {
+    return 0u;
+  }
+  var low = 0u;
+  var high = count - 1u;
+  loop {
+    if (low >= high) {
+      break;
+    }
+    let mid = (low + high) / 2u;
+    let cdfValue = environment_column_cdf_texel(mid, row);
+    if (sampleValue <= cdfValue) {
+      high = mid;
+    } else {
+      low = mid + 1u;
+    }
+  }
+  return min(low, count - 1u);
+}
+
+struct EnvironmentSample {
+  direction: vec3<f32>,
+  radiance: vec3<f32>,
+  pdf: f32,
+};
+
+fn sample_environment_importance(sample: vec2<f32>) -> EnvironmentSample {
+  if (!environment_importance_sampling_enabled()) {
+    let direction = sample_uniform_sphere_direction(sample);
+    return EnvironmentSample(direction, base_environment_radiance(direction), uniform_sphere_pdf());
+  }
+  let dimensions = environment_pdf_dimensions();
+  let row = sample_row_cdf(dimensions.y, sample.y);
+  let column = sample_column_cdf(row, dimensions.x, sample.x);
+  let uv = vec2<f32>(
+    (f32(column) + 0.5) / max(f32(dimensions.x), 1.0),
+    (f32(row) + 0.5) / max(f32(dimensions.y), 1.0)
+  );
+  let theta = uv.y * 3.14159265359;
+  let phi = (uv.x - 0.5 - config.environmentMapSettings.z / 6.28318530718) * 6.28318530718;
+  let sinTheta = sin(theta);
+  let direction = vec3<f32>(cos(phi) * sinTheta, cos(theta), sin(phi) * sinTheta);
+  let pdf = environment_direction_pdf(direction);
+  return EnvironmentSample(direction, base_environment_radiance(direction), pdf);
+}
+
+fn power_heuristic(pdfA: f32, pdfB: f32) -> f32 {
+  let a2 = pdfA * pdfA;
+  let b2 = pdfB * pdfB;
+  return a2 / max(a2 + b2, 0.000001);
+}
+
+fn visible_environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+  let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
+  let visible = !scene_visibility_blocked(origin, rayDirection, 1000000.0);
+  return select(vec3<f32>(0.0), direct_environment_radiance(origin, rayDirection), visible);
+}
+
+fn glossy_environment_direction(
+  incidentDirection: vec3<f32>,
+  normal: vec3<f32>,
+  roughness: f32,
+  normalBlendScale: f32
+) -> vec3<f32> {
+  let reflectionDirection = reflect(incidentDirection, normal);
+  let blend = clamp(roughness * roughness * normalBlendScale, 0.0, 0.92);
+  return safe_normalize(mix(reflectionDirection, normal, blend), normal);
+}
+
+fn surface_glossiness(hit: HitRecord) -> f32 {
+  let roughness = clamp(hit.material.x, 0.0, 1.0);
+  let metallic = clamp(hit.material.y, 0.0, 1.0);
+  let sheen = clamp(max_component(hit.materialResponse.xyz), 0.0, 1.0);
+  let clearcoat = clamp(hit.materialResponse.w, 0.0, 1.0);
+  let specularWeight = clamp(hit.materialExtension.y, 0.0, 1.0);
+  let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
+  let baseGloss =
+    max(
+      clearcoat,
+      max(sheen * 0.72, max(specularWeight * (0.38 + metallic * 0.62), transmission))
+    );
+  return clamp(baseGloss * (1.0 - roughness * 0.72) + metallic * (1.0 - roughness) * 0.35, 0.0, 1.0);
+}
+
+fn surface_specular_f0(hit: HitRecord, surfaceColor: vec3<f32>) -> vec3<f32> {
+  let metallic = clamp(hit.material.y, 0.0, 1.0);
+  let specularWeight = clamp(hit.materialExtension.y, 0.0, 1.0);
+  let specularColor = clamp(hit.specularColor.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
+  let dielectricF0 = vec3<f32>(0.04) * specularWeight * specularColor;
+  return mix(dielectricF0, surfaceColor, metallic);
+}
+
+fn surface_bsdf_sampling_weights(hit: HitRecord) -> vec3<f32> {
+  let metallic = clamp(hit.material.y, 0.0, 1.0);
+  let clearcoat = clamp(hit.materialResponse.w, 0.0, 1.0);
+  let specularWeight = clamp(hit.materialExtension.y, 0.0, 1.0);
+  let diffuseWeight = clamp(
+    (1.0 - metallic) * max(1.0 - specularWeight * 0.5 - clearcoat * 0.25, 0.15),
+    0.0,
+    1.0
+  );
+  let specWeight = clamp(max(metallic, specularWeight * 0.75) * (1.0 - clearcoat * 0.5), 0.0, 1.0);
+  let clearcoatWeight = clamp(clearcoat, 0.0, 1.0);
+  let totalWeight = max(diffuseWeight + specWeight + clearcoatWeight, 0.000001);
+  return vec3<f32>(
+    diffuseWeight / totalWeight,
+    specWeight / totalWeight,
+    clearcoatWeight / totalWeight
+  );
+}
+
+fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirection: vec3<f32>) -> vec3<f32> {
+  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
+  let roughness = clamp(hit.material.x, 0.0, 1.0);
+  let metallic = clamp(hit.material.y, 0.0, 1.0);
+  let clearcoat = clamp(hit.materialResponse.w, 0.0, 1.0);
+  let clearcoatRoughness = clamp(hit.materialExtension.x, 0.0, 1.0);
+  let occlusion = clamp(hit.occlusion, 0.0, 1.0);
+  let nDotV = saturate(dot(normal, viewDirection));
+  let nDotL = saturate(dot(normal, lightDirection));
+  if (nDotV <= 0.0 || nDotL <= 0.0) {
+    return vec3<f32>(0.0);
+  }
+  let halfVector = safe_normalize(viewDirection + lightDirection, normal);
+  let vDotH = saturate(dot(viewDirection, halfVector));
+  let f0 = surface_specular_f0(hit, surfaceColor);
+  let fresnel = fresnel_schlick(vDotH, f0);
+  let distribution = distribution_ggx(normal, halfVector, roughness);
+  let geometry = geometry_smith(normal, viewDirection, lightDirection, roughness);
+  let specular = (distribution * geometry * fresnel) / max(4.0 * nDotV * nDotL, 0.000001);
+  let diffuseWeight = (1.0 - metallic) * (1.0 - clearcoat * 0.24) * (1.0 - clamp(max_component(fresnel), 0.0, 0.98));
+  let diffuse = surfaceColor * diffuseWeight / 3.14159265359;
+  let clearcoatHalf = safe_normalize(viewDirection + lightDirection, normal);
+  let clearcoatDistribution = distribution_ggx(normal, clearcoatHalf, max(clearcoatRoughness, 0.02));
+  let clearcoatGeometry = geometry_smith(normal, viewDirection, lightDirection, max(clearcoatRoughness, 0.02));
+  let clearcoatFresnel = fresnel_schlick(saturate(dot(viewDirection, clearcoatHalf)), vec3<f32>(0.04));
+  let clearcoatTerm =
+    (clearcoatDistribution * clearcoatGeometry * clearcoatFresnel) /
+    max(4.0 * nDotV * nDotL, 0.000001) *
+    clearcoat;
+  return (diffuse + specular + clearcoatTerm) * mix(0.42, 1.0, occlusion);
+}
+
+fn diffuse_pdf(normal: vec3<f32>, lightDirection: vec3<f32>) -> f32 {
+  return saturate(dot(normal, lightDirection)) / 3.14159265359;
+}
+
+fn ggx_pdf(normal: vec3<f32>, viewDirection: vec3<f32>, lightDirection: vec3<f32>, roughness: f32) -> f32 {
+  let halfVector = safe_normalize(viewDirection + lightDirection, normal);
+  let nDotH = saturate(dot(normal, halfVector));
+  let vDotH = saturate(dot(viewDirection, halfVector));
+  let distribution = distribution_ggx(normal, halfVector, roughness);
+  return (distribution * nDotH) / max(4.0 * vDotH, 0.000001);
+}
+
+fn evaluate_surface_bsdf_pdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirection: vec3<f32>) -> f32 {
+  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let roughness = clamp(hit.material.x, 0.0, 1.0);
+  let weights = surface_bsdf_sampling_weights(hit);
+  let diffuseTerm = diffuse_pdf(normal, lightDirection);
+  let specTerm = ggx_pdf(normal, viewDirection, lightDirection, max(roughness, 0.02));
+  let clearcoatTerm = ggx_pdf(normal, viewDirection, lightDirection, max(clamp(hit.materialExtension.x, 0.0, 1.0), 0.02));
+  return weights.x * diffuseTerm + weights.y * specTerm + weights.z * clearcoatTerm;
+}
+
 fn gated_environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
   let portalScale = environment_portal_radiance_scale(origin, safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0)));
   if (
@@ -2502,9 +4159,45 @@ fn gated_environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<f
 fn surface_path_response(hit: HitRecord) -> vec3<f32> {
   let color = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let opacity = clamp(hit.material.z, 0.0, 1.0);
+  let occlusion = clamp(hit.occlusion, 0.0, 1.0);
   let materialEnergy = select(0.68, 0.92, hit.materialKind == 1u || hit.materialKind == 2u);
   let transparentEnergy = select(materialEnergy, 0.9, hit.hitType == 3u);
-  return mix(vec3<f32>(1.0), color, max(opacity, 0.18)) * transparentEnergy;
+  return mix(vec3<f32>(1.0), color, max(opacity, 0.18)) * transparentEnergy * mix(0.55, 1.0, occlusion);
+}
+
+fn bounded_path_response_luminance(ray: RayRecord, hit: HitRecord) -> f32 {
+  let daylightFloor = max(config.pathResolveSettings.y, 0.0) * 0.08;
+  let hdriFloor = max(config.environmentMapSettings.w, 0.0) * 0.02;
+  let sceneFloor = max(daylightFloor, hdriFloor);
+  if (sceneFloor <= 0.000001) {
+    return 0.0;
+  }
+  let bounceRatio = select(
+    0.0,
+    f32(ray.bounce) / max(f32(config.maxDepth - 1u), 1.0),
+    config.maxDepth > 1u
+  );
+  let bounceScale = 1.0 - bounceRatio * 0.55;
+  let materialScale = select(1.0, 0.34, hit.materialKind == 1u || hit.materialKind == 2u);
+  let transparentScale = select(materialScale, 0.58, hit.hitType == 3u);
+  let opacityScale = mix(0.55, 1.0, clamp(hit.material.z, 0.0, 1.0));
+  return sceneFloor * bounceScale * transparentScale * opacityScale;
+}
+
+fn stabilize_surface_path_response(ray: RayRecord, hit: HitRecord, response: vec3<f32>) -> vec3<f32> {
+  let minimumLuminance = bounded_path_response_luminance(ray, hit);
+  let responseLuminance = radiance_luminance(response);
+  if (minimumLuminance <= 0.000001 || responseLuminance >= minimumLuminance) {
+    return response;
+  }
+  let tintBase = max(response, max(hit.color.xyz * 0.65, config.ambientColor.xyz * 0.35));
+  let tint = tintBase / max(max_component(tintBase), 0.0001);
+  let lifted = select(
+    tint * minimumLuminance,
+    response * (minimumLuminance / max(responseLuminance, 0.0001)),
+    responseLuminance > 0.0001
+  );
+  return clamp(lifted, vec3<f32>(0.0), vec3<f32>(0.98));
 }
 
 fn sunlit_baseline_radiance(normal: vec3<f32>) -> vec3<f32> {
@@ -2523,12 +4216,24 @@ fn sunlit_baseline_radiance(normal: vec3<f32>) -> vec3<f32> {
   return clamp_sample_radiance(sunTint * baseline * skyFacing * directionalWeight * 0.04);
 }
 
-fn terminal_surface_environment_source(hit: HitRecord) -> vec3<f32> {
+fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
-  let normalEnvironment = gated_environment_radiance(
-    hit.position.xyz + normal * 0.003,
-    normal
+  let origin = hit.position.xyz + normal * 0.003;
+  let roughness = clamp(hit.material.x, 0.0, 1.0);
+  let glossiness = surface_glossiness(hit);
+  let normalEnvironment = gated_environment_radiance(origin, normal);
+  let viewDirection = safe_normalize(-ray.direction.xyz, normal);
+  let reflectionDirection = glossy_environment_direction(
+    ray.direction.xyz,
+    normal,
+    roughness,
+    mix(0.88, 0.38, glossiness)
   );
+  let reflectionEnvironment = prefiltered_environment_radiance(reflectionDirection, roughness);
+  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
+  let f0 = surface_specular_f0(hit, surfaceColor);
+  let brdfTerm = sample_brdf_lut(saturate(dot(normal, viewDirection)), roughness);
+  let specularEnvironment = reflectionEnvironment * (f0 * brdfTerm.x + vec3<f32>(brdfTerm.y));
   let sunlitFloor = sunlit_baseline_radiance(normal);
   let ambientFloor = select(
     max(config.ambientColor.xyz, sunlitFloor * 0.82),
@@ -2540,17 +4245,23 @@ fn terminal_surface_environment_source(hit: HitRecord) -> vec3<f32> {
     max(config.environmentMapSettings.w, max(0.12, config.pathResolveSettings.y * 0.42)),
     environment_map_enabled()
   );
-  let environmentFloor = max(ambientFloor, max(sunlitFloor, normalEnvironment * environmentInfluence));
+  let glossyEnvironment = max(
+    normalEnvironment,
+    max(reflectionEnvironment * mix(0.24, 0.92, glossiness), specularEnvironment)
+  );
+  let environmentFloor = max(ambientFloor, max(sunlitFloor, glossyEnvironment * environmentInfluence));
   let materialFloor = select(0.7, 1.0, hit.materialKind == 0u || hit.materialKind == 3u);
   return clamp_sample_radiance(environmentFloor * materialFloor);
 }
 
 fn terminal_surface_environment_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);
+  let occlusion = mix(0.75, 1.0, clamp(hit.occlusion, 0.0, 1.0));
   return clamp_sample_radiance(
     ray.throughput.xyz *
     surfaceColor *
-    terminal_surface_environment_source(hit)
+    terminal_surface_environment_source(ray, hit) *
+    occlusion
   );
 }
 
@@ -2583,6 +4294,10 @@ fn direct_environment_portal_irradiance(origin: vec3<f32>, normal: vec3<f32>) ->
     );
     let area = max(portal.position.w, 0.0001);
     let distanceFalloff = clamp(area / max(distanceSquared, area * 0.25), 0.0, 2.5);
+    let traceDistance = max(sqrt(distanceSquared) - 0.01, 0.01);
+    if (scene_visibility_blocked(origin, direction, traceDistance)) {
+      continue;
+    }
     irradiance = irradiance +
       portal.color.rgb *
       portal.normal.w *
@@ -2594,48 +4309,79 @@ fn direct_environment_portal_irradiance(origin: vec3<f32>, normal: vec3<f32>) ->
   return irradiance;
 }
 
+fn visibility_test_ray(origin: vec3<f32>, direction: vec3<f32>) -> RayRecord {
+  let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
+  return RayRecord(
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    vec4<f32>(origin, 1.0),
+    vec4<f32>(rayDirection, 0.0),
+    vec4<f32>(1.0, 1.0, 1.0, 1.0)
+  );
+}
+
+fn scene_visibility_blocked(origin: vec3<f32>, direction: vec3<f32>, maxDistance: f32) -> bool {
+  let testRay = visibility_test_ray(origin, direction);
+  let nearest = max(maxDistance, 0.001);
+
+  for (var objectIndex = 0u; objectIndex < config.sceneObjectCount; objectIndex = objectIndex + 1u) {
+    let object = sceneObjects[objectIndex];
+    var current = no_candidate();
+    if (object.kind == 1u) {
+      current = intersect_sphere(testRay, object);
+    } else if (object.kind == 2u) {
+      current = intersect_box(testRay, object);
+    }
+    if (current.hit == 1u && current.distance < nearest) {
+      return true;
+    }
+  }
+
+  let meshCandidate = intersect_bvh(testRay, nearest);
+  return meshCandidate.hit == 1u && meshCandidate.distance < nearest;
+}
+
 fn surface_direct_environment_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
   let origin = hit.position.xyz + normal * 0.003;
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
-  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
-  let roughness = clamp(hit.material.x, 0.0, 1.0);
-  let metallic = clamp(hit.material.y, 0.0, 1.0);
-
-  let normalEnvironment = gated_environment_radiance(origin, normal);
-  let skyVisibility = 0.35 + saturate(normal.y * 0.5 + 0.5) * 0.45;
-  let sunlitFloor = sunlit_baseline_radiance(normal);
-  let ambientIrradiance = max(
-    select(config.ambientColor.xyz * 0.72, config.ambientColor.xyz * 0.28, environment_map_enabled()),
-    sunlitFloor * select(0.72, 0.45, environment_map_enabled())
-  );
-  let environmentIrradianceScale = select(
-    max(0.16, config.pathResolveSettings.y * 0.45),
-    max(config.environmentMapSettings.w, max(0.16, config.pathResolveSettings.y * 0.45)),
-    environment_map_enabled()
-  );
-  let skyIrradiance = max(ambientIrradiance, normalEnvironment * skyVisibility * environmentIrradianceScale);
-
-  let sunDirection = safe_normalize(
-    config.environmentSunDirectionIntensity.xyz,
-    vec3<f32>(0.0, 1.0, 0.0)
-  );
-  let sunFacing = saturate(dot(normal, sunDirection));
-  let sunRadiance = gated_environment_radiance(origin, sunDirection);
-  let sunIrradiance = sunRadiance * sunFacing * 0.2;
-  let portalIrradiance = direct_environment_portal_irradiance(origin, normal);
-
-  let diffuseWeight = select(1.0 - metallic * 0.65, 0.22, hit.materialKind == 1u);
-  let diffuse = surfaceColor * (skyIrradiance + sunIrradiance + portalIrradiance) * diffuseWeight;
-
-  let halfVector = safe_normalize(sunDirection + viewDirection, normal);
-  let specularPower = 8.0 + (1.0 - roughness) * 96.0;
-  let specularFacing = pow(saturate(dot(normal, halfVector)), specularPower) * sunFacing;
-  let specularTint = mix(vec3<f32>(0.04), surfaceColor, metallic);
-  let specular = specularTint * sunRadiance * specularFacing * select(0.16, 0.48, hit.materialKind == 1u || hit.materialKind == 2u);
-
-  let bounceWeight = select(1.0, 0.38, ray.bounce > 0u);
-  return clamp_sample_radiance(ray.throughput.xyz * (diffuse + specular) * bounceWeight);
+  let lightSample = sample_environment_importance(vec2<f32>(
+    random01(mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 41u)),
+    random01(mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 43u))
+  ));
+  if (lightSample.pdf <= 0.000001) {
+    return vec3<f32>(0.0);
+  }
+  let lightDirection = safe_normalize(lightSample.direction, normal);
+  let nDotL = saturate(dot(normal, lightDirection));
+  if (nDotL <= 0.000001) {
+    return vec3<f32>(0.0);
+  }
+  if (scene_visibility_blocked(origin, lightDirection, 1000000.0)) {
+    return vec3<f32>(0.0);
+  }
+  let incidentRadiance = direct_environment_radiance(origin, lightDirection);
+  if (max_component(incidentRadiance) <= 0.000001) {
+    return vec3<f32>(0.0);
+  }
+  let bsdf = evaluate_surface_bsdf(hit, viewDirection, lightDirection);
+  if (max_component(bsdf) <= 0.000001) {
+    return vec3<f32>(0.0);
+  }
+  let bsdfPdf = evaluate_surface_bsdf_pdf(hit, viewDirection, lightDirection);
+  let misWeight = power_heuristic(lightSample.pdf, bsdfPdf);
+  let contribution =
+    ray.throughput.xyz *
+    bsdf *
+    incidentRadiance *
+    (nDotL * misWeight / max(lightSample.pdf, 0.000001));
+  return clamp_sample_radiance(contribution);
 }
 
 fn default_mesh_range() -> MeshRange {
@@ -2654,7 +4400,16 @@ fn default_mesh_range() -> MeshRange {
     0u,
     vec4<f32>(0.72, 0.72, 0.68, 1.0),
     vec4<f32>(0.0),
-    vec4<f32>(0.72, 0.0, 1.0, 1.45)
+    vec4<f32>(0.72, 0.0, 1.0, 1.45),
+    vec4<f32>(0.0, 0.0, 0.0, 0.08),
+    vec4<f32>(1.0, 1.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(1.0, 1.0, 1.0, 0.0)
   );
 }
 
@@ -2750,7 +4505,7 @@ fn prepareMeshTrianglesAndLeaves(@builtin(global_invocation_id) globalId: vec3<u
     mesh.flags,
     mesh.materialRefId,
     mesh.mediumRefId,
-    0u,
+    mesh.materialSlot,
     0u,
     vec4<f32>(vertex0.position.xyz, 0.0),
     vec4<f32>(vertex1.position.xyz, 0.0),
@@ -2762,7 +4517,16 @@ fn prepareMeshTrianglesAndLeaves(@builtin(global_invocation_id) globalId: vec3<u
     vec4<f32>(uv2, 0.0, 0.0),
     mesh.color,
     mesh.emission,
-    mesh.material
+    mesh.material,
+    mesh.materialResponse,
+    mesh.materialExtension,
+    mesh.specularColor,
+    mesh.baseColorAtlas,
+    mesh.metallicRoughnessAtlas,
+    mesh.normalAtlas,
+    mesh.occlusionAtlas,
+    mesh.emissiveAtlas,
+    mesh.textureSettings
   );
 
   let leafBase = config.triangleCount - 1u;
@@ -2921,7 +4685,8 @@ fn make_miss(ray: RayRecord) -> HitRecord {
     0u,
     0u,
     -1.0,
-    vec3<f32>(0.0),
+    1.0,
+    vec2<f32>(0.0),
     vec4<f32>(ray.origin.xyz + ray.direction.xyz * 1000.0, 1.0),
     vec4<f32>(-ray.direction.xyz, 0.0),
     vec4<f32>(-ray.direction.xyz, 0.0),
@@ -2929,7 +4694,10 @@ fn make_miss(ray: RayRecord) -> HitRecord {
     vec4<f32>(0.0),
     vec4<f32>(radiance, 1.0),
     vec4<f32>(0.0),
-    vec4<f32>(1.0, 0.0, 1.0, 1.0)
+    vec4<f32>(1.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 0.0, 0.08),
+    vec4<f32>(0.08, 1.0, 0.0, 0.0),
+    vec4<f32>(1.0, 1.0, 1.0, 1.0)
   );
 }
 
@@ -3224,6 +4992,19 @@ fn denoise_range_space(value: vec3<f32>) -> vec3<f32> {
   return value / (vec3<f32>(1.0) + value);
 }
 
+fn denoise_sample_count() -> f32 {
+  return clamp(1.0 / max(config.projectionAndSampling.z, 0.000001), 1.0, 256.0);
+}
+
+fn denoise_strength() -> f32 {
+  let spp = denoise_sample_count();
+  return clamp(0.44 / sqrt(spp), 0.08, 0.44);
+}
+
+fn denoise_kernel_radius() -> i32 {
+  return select(1i, 2i, denoise_sample_count() < 2.5);
+}
+
 @compute @workgroup_size(64)
 fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let index = globalId.x;
@@ -3262,7 +5043,10 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
     vec4<f32>(0.0),
     vec4<f32>(0.0),
     vec4<f32>(0.0),
-    vec4<f32>(1.0, 0.0, 1.0, 1.0)
+    vec4<f32>(1.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 0.0, 0.08),
+    vec4<f32>(0.08, 1.0, 0.0, 0.0),
+    vec4<f32>(1.0, 1.0, 1.0, 1.0)
   );
   var candidate = no_candidate();
   var hitTriangle = TriangleRecord(
@@ -3284,7 +5068,16 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
     vec4<f32>(0.0),
     vec4<f32>(0.0),
     vec4<f32>(0.0),
-    vec4<f32>(1.0, 0.0, 1.0, 1.0)
+    vec4<f32>(1.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 0.0, 0.08),
+    vec4<f32>(0.08, 1.0, 0.0, 0.0),
+    vec4<f32>(1.0, 1.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(1.0, 1.0, 1.0, 0.0)
   );
 
   for (var objectIndex = 0u; objectIndex < config.sceneObjectCount; objectIndex = objectIndex + 1u) {
@@ -3317,16 +5110,28 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let position = ray.origin.xyz + ray.direction.xyz * candidate.distance;
   let hitMaterialKind = select(hitObject.materialKind, hitTriangle.materialKind, candidate.triangleIndex != 0xffffffffu);
   let hitObjectId = select(hitObject.objectId, hitTriangle.meshId, candidate.triangleIndex != 0xffffffffu);
-  let hitColor = select(hitObject.color, hitTriangle.color, candidate.triangleIndex != 0xffffffffu);
-  let hitEmission = select(hitObject.emission, hitTriangle.emission, candidate.triangleIndex != 0xffffffffu);
-  let hitMaterial = select(hitObject.material, hitTriangle.material, candidate.triangleIndex != 0xffffffffu);
+  let meshSurface = sample_surface_material(
+    hitTriangle,
+    candidate.uv,
+    candidate.geometricNormal,
+    candidate.shadingNormal
+  );
+  let hitColor = select(hitObject.color, meshSurface.color, candidate.triangleIndex != 0xffffffffu);
+  let hitEmission = select(hitObject.emission, meshSurface.emission, candidate.triangleIndex != 0xffffffffu);
+  let hitMaterial = select(hitObject.material, meshSurface.material, candidate.triangleIndex != 0xffffffffu);
+  let hitMaterialResponse = select(hitObject.materialResponse, meshSurface.materialResponse, candidate.triangleIndex != 0xffffffffu);
+  let hitMaterialExtension = select(hitObject.materialExtension, meshSurface.materialExtension, candidate.triangleIndex != 0xffffffffu);
+  let hitSpecularColor = select(hitObject.specularColor, meshSurface.specularColor, candidate.triangleIndex != 0xffffffffu);
+  let hitShadingNormal = select(candidate.shadingNormal, meshSurface.shadingNormal, candidate.triangleIndex != 0xffffffffu);
   let hitPrimitiveId = select(candidate.primitiveId, hitTriangle.triangleId, candidate.triangleIndex != 0xffffffffu);
   let hitMaterialRefId = select(candidate.materialRefId, hitTriangle.materialRefId, candidate.triangleIndex != 0xffffffffu);
   let hitMediumRefId = select(candidate.mediumRefId, hitTriangle.mediumRefId, candidate.triangleIndex != 0xffffffffu);
+  let hitMaterialSlot = select(0u, hitTriangle.materialSlot, candidate.triangleIndex != 0xffffffffu);
+  let hitOcclusion = select(1.0, meshSurface.occlusion, candidate.triangleIndex != 0xffffffffu);
   var hitType = 0u;
   if (hitMaterialKind == 4u || emission_power(hitEmission) > 0.0001) {
     hitType = 1u;
-  } else if (hitMaterialKind == 3u || hitMaterial.z < 0.999) {
+  } else if (hitMaterialKind == 3u || hitMaterial.z < 0.999 || hitMaterialExtension.z > 0.001) {
     hitType = 3u;
   }
   atomicAdd(&counters.hitCount, 1u);
@@ -3340,19 +5145,23 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
     hitPrimitiveId,
     hitMaterialRefId,
     hitMediumRefId,
-    0u,
+    hitMaterialSlot,
     0u,
     0u,
     candidate.distance,
-    vec3<f32>(0.0),
+    hitOcclusion,
+    vec2<f32>(0.0),
     vec4<f32>(position, 1.0),
     vec4<f32>(candidate.geometricNormal, 0.0),
-    vec4<f32>(candidate.shadingNormal, 0.0),
+    vec4<f32>(hitShadingNormal, 0.0),
     vec4<f32>(candidate.barycentric, 0.0),
     vec4<f32>(candidate.uv, 0.0, 0.0),
     hitColor,
     hitEmission,
-    hitMaterial
+    hitMaterial,
+    hitMaterialResponse,
+    hitMaterialExtension,
+    hitSpecularColor
   );
 }
 
@@ -3421,60 +5230,106 @@ fn sample_environment_portal_direction(hit: HitRecord, seed: u32, fallback: vec3
 }
 
 fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult {
+  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let viewDirection = safe_normalize(-ray.direction.xyz, normal);
   let roughness = clamp(hit.material.x, 0.0, 1.0);
-  if (hit.materialKind == 1u) {
+  let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
+  if (hit.materialKind == 1u && roughness <= 0.02) {
     return ScatterResult(
-      vec4<f32>(
-        safe_normalize(
-          reflect(ray.direction.xyz, hit.shadingNormal.xyz) + random_unit_vector(seed) * roughness,
-          hit.shadingNormal.xyz
-        ),
-        0.0
-      ),
-      0u,
-      0u,
+      vec4<f32>(reflect(ray.direction.xyz, normal), 0.0),
+      1.0,
+      RAY_FLAG_DELTA_SAMPLE,
       0u,
       0u
     );
   }
 
-  if (hit.materialKind == 2u || hit.materialKind == 3u) {
+  if (hit.materialKind == 2u || hit.materialKind == 3u || transmission > 0.001) {
     let ior = max(hit.material.w, 1.01);
     let etaRatio = select(ior, 1.0 / ior, hit.frontFace == 1u);
-    let cosTheta = min(dot(-ray.direction.xyz, hit.shadingNormal.xyz), 1.0);
+    let cosTheta = min(dot(-ray.direction.xyz, normal), 1.0);
     let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
     let cannotRefract = etaRatio * sinTheta > 1.0;
     let reflectChance = schlick(cosTheta, etaRatio);
-    if (cannotRefract || random01(seed + 23u) < reflectChance) {
-      return ScatterResult(vec4<f32>(reflect(ray.direction.xyz, hit.shadingNormal.xyz), 0.0), 0u, 0u, 0u, 0u);
+    let transmissionReflectChance = select(
+      reflectChance,
+      max(reflectChance, 1.0 - transmission),
+      transmission > 0.001
+    );
+    if (cannotRefract || random01(seed + 23u) < transmissionReflectChance) {
+      return ScatterResult(
+        vec4<f32>(reflect(ray.direction.xyz, normal), 0.0),
+        1.0,
+        RAY_FLAG_DELTA_SAMPLE,
+        0u,
+        0u
+      );
     }
-    return ScatterResult(vec4<f32>(refract_direction(ray.direction.xyz, hit.shadingNormal.xyz, etaRatio), 0.0), 0u, 0u, 0u, 0u);
+    return ScatterResult(
+      vec4<f32>(refract_direction(ray.direction.xyz, normal, etaRatio), 0.0),
+      1.0,
+      RAY_FLAG_DELTA_SAMPLE,
+      0u,
+      0u
+    );
   }
 
-  let randomDiffuse = safe_normalize(
-    hit.shadingNormal.xyz + random_unit_vector(seed),
-    hit.shadingNormal.xyz
-  );
-  let guidedLight = sample_emissive_triangle_direction(hit, seed, randomDiffuse);
-  let canSampleLight = dot(hit.shadingNormal.xyz, guidedLight) > -0.04;
-  let guideProbability = select(0.38, 0.72, ray.bounce == 0u);
-  let useGuidedLight = canSampleLight && random01(seed + 37u) < guideProbability;
-  let guidedPortal = sample_environment_portal_direction(hit, seed, randomDiffuse);
-  let canSamplePortal = dot(hit.shadingNormal.xyz, guidedPortal) > -0.04;
-  let useGuidedPortal =
-    !useGuidedLight &&
-    canSamplePortal &&
-    config.environmentPortalCount > 0u &&
-    config.environmentPortalMode > 0u &&
-    random01(seed + 89u) < 0.58;
-  let guidedDirection = select(randomDiffuse, guidedPortal, useGuidedPortal);
-  return ScatterResult(
-    vec4<f32>(select(guidedDirection, guidedLight, useGuidedLight), 0.0),
-    select(0u, RAY_FLAG_GUIDED_EMISSIVE, useGuidedLight),
-    0u,
-    0u,
-    0u
-  );
+  let guidedEmissiveAvailable = config.emissiveTriangleCount > 0u;
+  let guidedPortalAvailable =
+    config.environmentPortalCount > 0u && config.environmentPortalMode != 0u;
+  let guidedSelector = random01(seed + 17u);
+  if (guidedEmissiveAvailable && guidedSelector < 0.18) {
+    let guidedDirection = sample_emissive_triangle_direction(hit, seed + 101u, normal);
+    if (dot(normal, guidedDirection) > 0.000001) {
+      let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
+      return ScatterResult(
+        vec4<f32>(guidedDirection, 0.0),
+        guidedPdf,
+        RAY_FLAG_GUIDED_EMISSIVE,
+        0u,
+        0u
+      );
+    }
+  }
+  if (guidedPortalAvailable && guidedSelector < 0.32) {
+    let guidedDirection = sample_environment_portal_direction(hit, seed + 131u, normal);
+    if (dot(normal, guidedDirection) > 0.000001) {
+      let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
+      return ScatterResult(vec4<f32>(guidedDirection, 0.0), guidedPdf, 0u, 0u, 0u);
+    }
+  }
+
+  let weights = surface_bsdf_sampling_weights(hit);
+  let selector = random01(seed + 31u);
+  var lightDirection = normal;
+  if (selector < weights.x) {
+    lightDirection = cosine_sample_hemisphere(
+      vec2<f32>(random01(seed + 37u), random01(seed + 41u)),
+      normal
+    );
+  } else if (selector < weights.x + weights.y) {
+    let halfVector = importance_sample_ggx(
+      vec2<f32>(random01(seed + 47u), random01(seed + 53u)),
+      max(roughness, 0.02),
+      normal
+    );
+    lightDirection = safe_normalize(reflect(-viewDirection, halfVector), normal);
+  } else {
+    let halfVector = importance_sample_ggx(
+      vec2<f32>(random01(seed + 59u), random01(seed + 61u)),
+      max(clamp(hit.materialExtension.x, 0.0, 1.0), 0.02),
+      normal
+    );
+    lightDirection = safe_normalize(reflect(-viewDirection, halfVector), normal);
+  }
+  if (dot(normal, lightDirection) <= 0.000001) {
+    lightDirection = cosine_sample_hemisphere(
+      vec2<f32>(random01(seed + 67u), random01(seed + 71u)),
+      normal
+    );
+  }
+  let pdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, lightDirection), 0.000001);
+  return ScatterResult(vec4<f32>(lightDirection, 0.0), pdf, 0u, 0u, 0u);
 }
 
 @compute @workgroup_size(64)
@@ -3504,10 +5359,17 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   }
 
   if (hit.hitType == 2u) {
+    var sourceRadiance = hit.color.xyz;
+    if ((ray.flags & RAY_FLAG_DELTA_SAMPLE) == 0u) {
+      let bsdfPdf = max(ray.throughput.w, 0.000001);
+      let lightPdf = environment_direction_pdf(ray.direction.xyz);
+      let misWeight = power_heuristic(bsdfPdf, lightPdf);
+      sourceRadiance = sourceRadiance * misWeight;
+    }
     if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(ray, hit.color.xyz);
+      record_deferred_terminal_source(ray, sourceRadiance);
     } else {
-      contribution = clamp_sample_radiance(ray.throughput.xyz * max(hit.color.xyz, config.ambientColor.xyz));
+      contribution = clamp_sample_radiance(ray.throughput.xyz * sourceRadiance);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(contribution * sample_weight(), 1.0);
     }
@@ -3515,13 +5377,13 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  let response = surface_path_response(hit);
+  let response = stabilize_surface_path_response(ray, hit, surface_path_response(hit));
   record_deferred_path_response(ray, response);
 
   let shouldEstimateDirectEnvironment =
-    !deferred_path_resolve_enabled() &&
     (hit.materialKind == 0u || hit.materialKind == 1u) &&
-    hit.material.z >= 0.95;
+    hit.material.z >= 0.95 &&
+    ray.bounce < 2u;
   if (shouldEstimateDirectEnvironment) {
     let directEnvironment = surface_direct_environment_contribution(ray, hit);
     accumulation[ray.rayId] =
@@ -3530,7 +5392,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   if (ray.bounce + 1u >= config.maxDepth) {
     if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(ray, terminal_surface_environment_source(hit));
+      record_deferred_terminal_source(ray, terminal_surface_environment_source(ray, hit));
     } else {
       let terminalEnvironment = terminal_surface_environment_contribution(ray, hit);
       accumulation[ray.rayId] =
@@ -3545,7 +5407,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let nextIndex = atomicAdd(&counters.nextCount, 1u);
   if (nextIndex >= config.tilePixelCount) {
     if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(ray, terminal_surface_environment_source(hit));
+      record_deferred_terminal_source(ray, terminal_surface_environment_source(ray, hit));
     } else {
       let overflowEnvironment = terminal_surface_environment_contribution(ray, hit);
       accumulation[ray.rayId] =
@@ -3566,7 +5428,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     0u,
     vec4<f32>(offset_origin(hit.position.xyz, hit.shadingNormal.xyz), 1.0),
     scatter.direction,
-    vec4<f32>(throughput, ray.throughput.w)
+    vec4<f32>(throughput, scatter.pdf)
   );
 }
 
@@ -3635,8 +5497,11 @@ fn denoiseLinearRadiance(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   let pixel = vec2<i32>(i32(x), i32(y));
   let center = textureLoad(denoiseInputRadiance, pixel, 0).xyz;
-  var sum = center * 1.4;
-  var totalWeight = 1.4;
+  let strength = denoise_strength();
+  let kernelRadius = denoise_kernel_radius();
+  let centerWeight = 1.7 - strength * 0.35;
+  var sum = center * centerWeight;
+  var totalWeight = centerWeight;
   let centerRange = denoise_range_space(center);
 
   for (var oy = -2i; oy <= 2i; oy = oy + 1i) {
@@ -3644,13 +5509,16 @@ fn denoiseLinearRadiance(@builtin(global_invocation_id) globalId: vec3<u32>) {
       if (ox == 0i && oy == 0i) {
         continue;
       }
+      if (abs(ox) > kernelRadius || abs(oy) > kernelRadius) {
+        continue;
+      }
       let sx = clamp(i32(x) + ox, 0i, i32(config.canvasWidth) - 1i);
       let sy = clamp(i32(y) + oy, 0i, i32(config.canvasHeight) - 1i);
       let sampleColor = textureLoad(denoiseInputRadiance, vec2<i32>(sx, sy), 0).xyz;
       let colorDistance = length(denoise_range_space(sampleColor) - centerRange);
-      let rangeWeight = 1.0 / (1.0 + colorDistance * 7.0);
-      let distanceWeight = 1.0 / (1.0 + f32(ox * ox + oy * oy) * 0.24);
-      let diagonalWeight = select(1.0, 0.78, abs(ox) + abs(oy) > 2i);
+      let rangeWeight = 1.0 / (1.0 + colorDistance * (11.0 + strength * 6.0));
+      let distanceWeight = 1.0 / (1.0 + f32(ox * ox + oy * oy) * (0.62 + strength * 0.24));
+      let diagonalWeight = select(1.0, 0.92, abs(ox) + abs(oy) > 1i);
       let weight = rangeWeight * diagonalWeight * distanceWeight;
       sum = sum + sampleColor * weight;
       totalWeight = totalWeight + weight;
@@ -3658,8 +5526,9 @@ fn denoiseLinearRadiance(@builtin(global_invocation_id) globalId: vec3<u32>) {
   }
 
   let filtered = sum / max(totalWeight, 0.0001);
-  let outlier = saturate(length(denoise_range_space(center) - denoise_range_space(filtered)) * 2.4);
-  let color = min(mix(center, filtered, 0.52 + outlier * 0.18), vec3<f32>(16.0));
+  let outlier = saturate(length(denoise_range_space(center) - denoise_range_space(filtered)) * 2.1);
+  let blend = min(0.3, strength * (0.62 + outlier * 0.12));
+  let color = min(mix(center, filtered, blend), vec3<f32>(16.0));
   textureStore(denoisedRadianceImage, pixel, vec4<f32>(color, 1.0));
 }
 
@@ -3673,8 +5542,10 @@ fn resolveDenoisedOutputImage(@builtin(global_invocation_id) globalId: vec3<u32>
 
   let pixel = vec2<i32>(i32(x), i32(y));
   let center = textureLoad(finalDenoiseInputRadiance, pixel, 0).xyz;
-  var sum = center * 1.25;
-  var totalWeight = 1.25;
+  let strength = denoise_strength();
+  let centerWeight = 1.35 - strength * 0.25;
+  var sum = center * centerWeight;
+  var totalWeight = centerWeight;
   let centerRange = denoise_range_space(center);
 
   for (var oy = -1i; oy <= 1i; oy = oy + 1i) {
@@ -3686,8 +5557,8 @@ fn resolveDenoisedOutputImage(@builtin(global_invocation_id) globalId: vec3<u32>
       let sy = clamp(i32(y) + oy, 0i, i32(config.canvasHeight) - 1i);
       let sampleColor = textureLoad(finalDenoiseInputRadiance, vec2<i32>(sx, sy), 0).xyz;
       let colorDistance = length(denoise_range_space(sampleColor) - centerRange);
-      let rangeWeight = 1.0 / (1.0 + colorDistance * 9.0);
-      let distanceWeight = 1.0 / (1.0 + f32(ox * ox + oy * oy) * 0.4);
+      let rangeWeight = 1.0 / (1.0 + colorDistance * (12.0 + strength * 8.0));
+      let distanceWeight = 1.0 / (1.0 + f32(ox * ox + oy * oy) * (0.82 + strength * 0.28));
       let weight = rangeWeight * distanceWeight;
       sum = sum + sampleColor * weight;
       totalWeight = totalWeight + weight;
@@ -3695,8 +5566,9 @@ fn resolveDenoisedOutputImage(@builtin(global_invocation_id) globalId: vec3<u32>
   }
 
   let filtered = sum / max(totalWeight, 0.0001);
-  let outlier = saturate(length(denoise_range_space(center) - denoise_range_space(filtered)) * 2.8);
-  let radiance = min(mix(center, filtered, 0.28 + outlier * 0.12), vec3<f32>(16.0));
+  let outlier = saturate(length(denoise_range_space(center) - denoise_range_space(filtered)) * 2.2);
+  let blend = min(0.18, strength * (0.42 + outlier * 0.08));
+  let radiance = min(mix(center, filtered, blend), vec3<f32>(16.0));
   textureStore(denoisedOutputImage, pixel, vec4<f32>(tone_map_radiance(radiance), 1.0));
 }
 `;
@@ -3801,94 +5673,45 @@ function createGpuAdapterParallelismDiagnostics(adapter, device) {
   });
 }
 
-function createGpuParallelismCounters() {
-  return {
-    directDispatches: 0,
-    directWorkgroups: 0,
-    directShaderInvocations: 0,
-    multiWorkgroupDispatches: 0,
-    largestDirectWorkgroupsPerDispatch: 0,
-    indirectDispatches: 0,
-    estimatedIndirectWorkgroupsUpperBound: 0,
-    estimatedIndirectShaderInvocationsUpperBound: 0,
-    indirectDispatchesWithMultiWorkgroupCapacity: 0,
-    largestEstimatedIndirectWorkgroupsPerDispatch: 0,
-  };
-}
-
-function countDispatchWorkgroups(groups) {
-  return groups.reduce((product, value) => {
-    const numeric = Number(value ?? 1);
-    const count = Number.isFinite(numeric) ? Math.max(1, Math.trunc(numeric)) : 1;
-    return product * count;
-  }, 1);
-}
-
-function recordDirectDispatch(parallelism, groups, invocationsPerWorkgroup = WORKGROUP_SIZE) {
-  const workgroups = countDispatchWorkgroups(groups);
-  parallelism.directDispatches += 1;
-  parallelism.directWorkgroups += workgroups;
-  parallelism.directShaderInvocations += workgroups * invocationsPerWorkgroup;
-  parallelism.largestDirectWorkgroupsPerDispatch = Math.max(
-    parallelism.largestDirectWorkgroupsPerDispatch,
-    workgroups
-  );
-  if (workgroups > 1) {
-    parallelism.multiWorkgroupDispatches += 1;
-  }
-}
-
-function recordIndirectDispatch(parallelism, estimatedWorkgroupsUpperBound, invocationsPerWorkgroup = WORKGROUP_SIZE) {
-  const workgroups = Math.max(1, Math.trunc(Number(estimatedWorkgroupsUpperBound) || 1));
-  parallelism.indirectDispatches += 1;
-  parallelism.estimatedIndirectWorkgroupsUpperBound += workgroups;
-  parallelism.estimatedIndirectShaderInvocationsUpperBound += workgroups * invocationsPerWorkgroup;
-  parallelism.largestEstimatedIndirectWorkgroupsPerDispatch = Math.max(
-    parallelism.largestEstimatedIndirectWorkgroupsPerDispatch,
-    workgroups
-  );
-  if (workgroups > 1) {
-    parallelism.indirectDispatchesWithMultiWorkgroupCapacity += 1;
-  }
-}
-
-function createGpuParallelismDiagnostics(adapterDiagnostics, counters) {
-  const totalEstimatedWorkgroupsUpperBound =
-    counters.directWorkgroups + counters.estimatedIndirectWorkgroupsUpperBound;
-  const totalEstimatedShaderInvocationsUpperBound =
-    counters.directShaderInvocations + counters.estimatedIndirectShaderInvocationsUpperBound;
-  const exposesMultiWorkgroupParallelism =
-    counters.multiWorkgroupDispatches > 0 || counters.indirectDispatchesWithMultiWorkgroupCapacity > 0;
-  return Object.freeze({
-    ...adapterDiagnostics,
-    directDispatches: counters.directDispatches,
-    directWorkgroups: counters.directWorkgroups,
-    directShaderInvocations: counters.directShaderInvocations,
-    multiWorkgroupDispatches: counters.multiWorkgroupDispatches,
-    largestDirectWorkgroupsPerDispatch: counters.largestDirectWorkgroupsPerDispatch,
-    indirectDispatches: counters.indirectDispatches,
-    estimatedIndirectWorkgroupsUpperBound: counters.estimatedIndirectWorkgroupsUpperBound,
-    estimatedIndirectShaderInvocationsUpperBound: counters.estimatedIndirectShaderInvocationsUpperBound,
-    indirectDispatchesWithMultiWorkgroupCapacity: counters.indirectDispatchesWithMultiWorkgroupCapacity,
-    largestEstimatedIndirectWorkgroupsPerDispatch: counters.largestEstimatedIndirectWorkgroupsPerDispatch,
-    totalEstimatedWorkgroupsUpperBound,
-    totalEstimatedShaderInvocationsUpperBound,
-    exposesMultiWorkgroupParallelism,
-    likelyUsesMoreThanOnePhysicalGpuCore: null,
-    coreUtilizationStatus: "not-exposed-by-webgpu",
-  });
-}
-
 function createEnvironmentMapSnapshot(environmentMap) {
   return Object.freeze({
     enabled: environmentMap.enabled,
     width: environmentMap.width,
     height: environmentMap.height,
+    mipLevelCount: environmentMap.mipLevelCount ?? 1,
     projection: environmentMap.projection,
     intensity: environmentMap.intensity,
     rotationRadians: environmentMap.rotationRadians,
     ambientStrength: environmentMap.ambientStrength,
+    hasImportanceData: environmentMap.hasImportanceData === true,
   });
+}
+
+function nowMs() {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
+}
+
+function estimateSubmittedGpuWorkTimeoutMs(config, tileCount, overrideTimeoutMs = null) {
+  if (Number.isFinite(overrideTimeoutMs)) {
+    return Math.max(1, Math.trunc(Number(overrideTimeoutMs)));
+  }
+  const samplesPerPixel = Math.max(
+    1,
+    Number(config?.renderedSamplesPerPixel ?? config?.samplesPerPixel ?? 1)
+  );
+  const maxDepth = Math.max(1, Number(config?.maxDepth ?? 1));
+  const deferredResolvePasses = config?.deferredPathResolve ? 1 : 0;
+  const denoisePasses = config?.denoise ? (samplesPerPixel < 4 ? 2 : 1) : 0;
+  const tiles = Math.max(1, Number(tileCount ?? 1));
+  const estimatedPasses =
+    tiles * (samplesPerPixel * (maxDepth + 1 + deferredResolvePasses) + denoisePasses + 1);
+  return Math.min(
+    GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS,
+    GPU_SUBMITTED_WORK_TIMEOUT_MS + estimatedPasses * 5
+  );
 }
 
 export async function createWavefrontPathTracingComputeRenderer(options = {}) {
@@ -4116,6 +5939,60 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     config.environmentMap,
     config.environmentColor
   );
+  const environmentSamplingResource = createEnvironmentSamplingTextureResource(
+    device,
+    constants,
+    config.environmentMap,
+    config.environmentColor
+  );
+  config = Object.freeze({
+    ...config,
+    environmentMap: Object.freeze({
+      ...config.environmentMap,
+      width: environmentMapResource.width,
+      height: environmentMapResource.height,
+      mipLevelCount: environmentMapResource.mipLevelCount,
+      hasImportanceData: environmentSamplingResource.hasImportanceData,
+    }),
+  });
+  const brdfLutResource = createBrdfLutResource(device, constants);
+  const baseColorAtlasResource = createAtlasTextureResource(
+    device,
+    constants,
+    config.gpuMaterialSource.baseColorAtlas,
+    "plasius.wavefront.materialAtlas.baseColor"
+  );
+  const metallicRoughnessAtlasResource = createAtlasTextureResource(
+    device,
+    constants,
+    config.gpuMaterialSource.metallicRoughnessAtlas,
+    "plasius.wavefront.materialAtlas.metallicRoughness"
+  );
+  const normalAtlasResource = createAtlasTextureResource(
+    device,
+    constants,
+    config.gpuMaterialSource.normalAtlas,
+    "plasius.wavefront.materialAtlas.normal"
+  );
+  const occlusionAtlasResource = createAtlasTextureResource(
+    device,
+    constants,
+    config.gpuMaterialSource.occlusionAtlas,
+    "plasius.wavefront.materialAtlas.occlusion"
+  );
+  const emissiveAtlasResource = createAtlasTextureResource(
+    device,
+    constants,
+    config.gpuMaterialSource.emissiveAtlas,
+    "plasius.wavefront.materialAtlas.emissive"
+  );
+  const materialAtlasSampler = device.createSampler({
+    label: "plasius.wavefront.materialAtlasSampler",
+    addressModeU: "clamp-to-edge",
+    addressModeV: "clamp-to-edge",
+    magFilter: "linear",
+    minFilter: "linear",
+  });
 
   const traceBindGroupLayout = device.createBindGroupLayout({
     label: "plasius.wavefront.traceBindGroupLayout",
@@ -4147,6 +6024,15 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       { binding: 20, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
       { binding: 21, visibility: constants.shader.COMPUTE, sampler: { type: "filtering" } },
       { binding: 22, visibility: constants.shader.COMPUTE, buffer: { type: "storage" } },
+      { binding: 23, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 24, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 25, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 26, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 27, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 28, visibility: constants.shader.COMPUTE, sampler: { type: "filtering" } },
+      { binding: 29, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 30, visibility: constants.shader.COMPUTE, sampler: { type: "filtering" } },
+      { binding: 31, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
     ],
   });
   const accelerationBindGroupLayout = device.createBindGroupLayout({
@@ -4225,6 +6111,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     label: "plasius.wavefront.computeShader",
     code: WAVEFRONT_COMPUTE_WGSL,
   });
+  await assertShaderModuleCompiles(computeShader, "plasius.wavefront.computeShader");
 
   const pipelines = {
     prepareMeshTrianglesAndLeaves: await createComputePipeline(
@@ -4326,6 +6213,15 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         { binding: 20, resource: environmentMapResource.view },
         { binding: 21, resource: environmentMapResource.sampler },
         { binding: 22, resource: { buffer: pathVertexBuffer } },
+        { binding: 23, resource: baseColorAtlasResource.view },
+        { binding: 24, resource: metallicRoughnessAtlasResource.view },
+        { binding: 25, resource: normalAtlasResource.view },
+        { binding: 26, resource: occlusionAtlasResource.view },
+        { binding: 27, resource: emissiveAtlasResource.view },
+        { binding: 28, resource: materialAtlasSampler },
+        { binding: 29, resource: brdfLutResource.view },
+        { binding: 30, resource: brdfLutResource.sampler },
+        { binding: 31, resource: environmentSamplingResource.view },
       ],
     });
   }
@@ -4381,6 +6277,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     outputView,
     "plasius.wavefront.bind.denoise.scratchToOutput"
   );
+  const denoiseDirectResolveBindGroup = createDenoiseResolveBindGroup(
+    radianceView,
+    outputView,
+    "plasius.wavefront.bind.denoise.radianceToOutput"
+  );
 
   const presentBindGroupLayout = device.createBindGroupLayout({
     label: "plasius.wavefront.presentBindGroupLayout",
@@ -4420,24 +6321,137 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   let accelerationBuilt = !config.gpuAccelerationBuildRequired;
   let accelerationBuildCount = 0;
   let activeCameraOptions = options.camera ?? DEFAULT_CAMERA;
+  let lastCompletedFrameTimeMs = null;
+  let lastCompletedSamplesPerPixel = Math.max(1, config.samplesPerPixel);
   let lastGpuParallelism = createGpuParallelismDiagnostics(
     gpuAdapterParallelism,
     createGpuParallelismCounters()
   );
 
+  function resolveRenderedSamplesPerPixel(renderOptions = {}, awaitGPUCompletion = true) {
+    const targetSamplesPerPixel = clamp(
+      readPositiveInteger(
+        "samplesPerPixel",
+        renderOptions.samplesPerPixel,
+        config.samplesPerPixel
+      ),
+      1,
+      config.samplesPerPixel
+    );
+    const frameTimeBudgetMs = Number.isFinite(renderOptions.frameTimeBudgetMs)
+      ? Math.max(0, Number(renderOptions.frameTimeBudgetMs))
+      : null;
+    const minimumSamplesPerPixel = clamp(
+      readPositiveInteger(
+        "minimumSamplesPerPixel",
+        renderOptions.minimumSamplesPerPixel,
+        frameTimeBudgetMs !== null && targetSamplesPerPixel > 1 ? 1 : targetSamplesPerPixel
+      ),
+      1,
+      targetSamplesPerPixel
+    );
+    if (frameTimeBudgetMs === null || !awaitGPUCompletion || targetSamplesPerPixel <= minimumSamplesPerPixel) {
+      return Object.freeze({
+        renderedSamplesPerPixel: targetSamplesPerPixel,
+        targetSamplesPerPixel,
+        minimumSamplesPerPixel,
+        frameTimeBudgetMs,
+        budgetConstrained: false,
+      });
+    }
+    const estimatedSampleTimeMs =
+      Number.isFinite(lastCompletedFrameTimeMs) && lastCompletedFrameTimeMs > 0
+        ? lastCompletedFrameTimeMs / Math.max(1, lastCompletedSamplesPerPixel)
+        : null;
+    if (!Number.isFinite(estimatedSampleTimeMs) || estimatedSampleTimeMs <= 0) {
+      return Object.freeze({
+        renderedSamplesPerPixel: minimumSamplesPerPixel,
+        targetSamplesPerPixel,
+        minimumSamplesPerPixel,
+        frameTimeBudgetMs,
+        budgetConstrained: minimumSamplesPerPixel < targetSamplesPerPixel,
+      });
+    }
+    const budgetLimitedSamples = clamp(
+      Math.floor(frameTimeBudgetMs / estimatedSampleTimeMs),
+      minimumSamplesPerPixel,
+      targetSamplesPerPixel
+    );
+    return Object.freeze({
+      renderedSamplesPerPixel: budgetLimitedSamples,
+      targetSamplesPerPixel,
+      minimumSamplesPerPixel,
+      frameTimeBudgetMs,
+      budgetConstrained: budgetLimitedSamples < targetSamplesPerPixel,
+    });
+  }
+
+  function createFrameStats({
+    frameIndex,
+    accelerationBuildSubmitted,
+    frameSubmissionCount,
+    parallelismCounters,
+    renderedSamplesPerPixel,
+    targetSamplesPerPixel,
+    frameTimeBudgetMs,
+    budgetConstrained,
+  }) {
+    lastGpuParallelism = createGpuParallelismDiagnostics(gpuAdapterParallelism, parallelismCounters);
+    const commandSubmissions = frameSubmissionCount + (accelerationBuildSubmitted ? 1 : 0);
+    return Object.freeze({
+      frame,
+      frameIndex,
+      width: config.width,
+      height: config.height,
+      maxDepth: config.maxDepth,
+      tiles: tiles.length,
+      tileSize: config.tileSize,
+      samplesPerPixel: targetSamplesPerPixel,
+      renderedSamplesPerPixel,
+      frameTimeBudgetMs,
+      budgetConstrained,
+      maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
+      screenRays: config.width * config.height,
+      primaryRays: config.width * config.height * renderedSamplesPerPixel,
+      sceneObjectCount: config.sceneObjectCount,
+      triangleCount: config.triangleCount,
+      emissiveTriangleCount: config.emissiveTriangleCount,
+      environmentPortalCount: config.environmentPortalCount,
+      environmentPortalMode: config.environmentPortalMode,
+      environmentMap: createEnvironmentMapSnapshot(config.environmentMap),
+      deferredPathResolve: config.deferredPathResolve,
+      bvhNodeCount: config.bvhNodeCount,
+      displayQuality: config.displayQuality,
+      accelerationBuildMode: config.accelerationBuildMode,
+      gpuAccelerationBuildRequired: config.gpuAccelerationBuildRequired,
+      accelerationBuildSubmitted,
+      accelerationBuilt,
+      accelerationBuildCount,
+      commandSubmissions,
+      frameConfigSlots: frameConfigSlotCount,
+      gpuParallelism: lastGpuParallelism,
+      memory: config.memory,
+    });
+  }
+
+  function writeFrameConfigSlot(slot, tile, frameIndex, buildRange = {}) {
+    if (slot >= frameConfigSlotCount) {
+      throw new Error("Wavefront frame config slot capacity exceeded.");
+    }
+    const offset = slot * configBufferStride;
+    device.queue.writeBuffer(
+      configBuffer,
+      offset,
+      createConfigPayload(config, tile, frameIndex, buildRange)
+    );
+    return offset;
+  }
+
   function createFrameConfigWriter(frameIndex) {
     let slot = 0;
     return (tile, buildRange = {}) => {
-      if (slot >= frameConfigSlotCount) {
-        throw new Error("Wavefront frame config slot capacity exceeded.");
-      }
-      const offset = slot * configBufferStride;
+      const offset = writeFrameConfigSlot(slot, tile, frameIndex, buildRange);
       slot += 1;
-      device.queue.writeBuffer(
-        configBuffer,
-        offset,
-        createConfigPayload(config, tile, frameIndex, buildRange)
-      );
       return offset;
     };
   }
@@ -4483,7 +6497,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     passEncoder.setPipeline(pipelines.prepareMeshTrianglesAndLeaves);
     const prepareWorkgroups = Math.ceil(config.bvhLeafSortCapacity / WORKGROUP_SIZE);
     passEncoder.dispatchWorkgroups(prepareWorkgroups);
-    recordDirectDispatch(parallelism, [prepareWorkgroups]);
+    recordDirectDispatch(parallelism, [prepareWorkgroups], WORKGROUP_SIZE);
     passEncoder.setPipeline(pipelines.sortBvhLeafRefs);
     for (let stageIndex = 0; stageIndex < config.bvhSortStages.length; stageIndex += 1) {
       passEncoder.setBindGroup(0, bvhBuildBindGroup, [
@@ -4491,13 +6505,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       ]);
       const sortWorkgroups = Math.ceil(config.bvhLeafSortCapacity / WORKGROUP_SIZE);
       passEncoder.dispatchWorkgroups(sortWorkgroups);
-      recordDirectDispatch(parallelism, [sortWorkgroups]);
+      recordDirectDispatch(parallelism, [sortWorkgroups], WORKGROUP_SIZE);
     }
     passEncoder.setBindGroup(0, bvhBuildBindGroup, [0]);
     passEncoder.setPipeline(pipelines.writeSortedBvhLeaves);
     const leafWriteWorkgroups = Math.ceil(config.triangleCount / WORKGROUP_SIZE);
     passEncoder.dispatchWorkgroups(leafWriteWorkgroups);
-    recordDirectDispatch(parallelism, [leafWriteWorkgroups]);
+    recordDirectDispatch(parallelism, [leafWriteWorkgroups], WORKGROUP_SIZE);
     passEncoder.setPipeline(pipelines.buildBvhInternalLevel);
     for (let levelIndex = 0; levelIndex < config.bvhBuildLevels.length; levelIndex += 1) {
       const buildLevel = config.bvhBuildLevels[levelIndex];
@@ -4506,7 +6520,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       ]);
       const levelWorkgroups = Math.ceil(buildLevel.count / WORKGROUP_SIZE);
       passEncoder.dispatchWorkgroups(levelWorkgroups);
-      recordDirectDispatch(parallelism, [levelWorkgroups]);
+      recordDirectDispatch(parallelism, [levelWorkgroups], WORKGROUP_SIZE);
     }
     passEncoder.end();
     device.queue.submit([encoder.finish()]);
@@ -4524,7 +6538,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     generatePass.setBindGroup(0, bindGroups[0], [configOffset]);
     generatePass.setPipeline(pipelines.generatePrimaryRays);
     generatePass.dispatchWorkgroups(tileWorkgroups);
-    recordDirectDispatch(parallelism, [tileWorkgroups]);
+    recordDirectDispatch(parallelism, [tileWorkgroups], WORKGROUP_SIZE);
     generatePass.end();
 
     for (let bounceIndex = 0; bounceIndex < config.maxDepth; bounceIndex += 1) {
@@ -4541,10 +6555,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       passEncoder.setBindGroup(0, bindGroups[bounceIndex % 2], [configOffset]);
       passEncoder.setPipeline(pipelines.intersectActiveQueue);
       passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
-      recordIndirectDispatch(parallelism, tileWorkgroups);
+      recordIndirectDispatch(parallelism, tileWorkgroups, WORKGROUP_SIZE);
       passEncoder.setPipeline(pipelines.resolveSurfaceRecords);
       passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
-      recordIndirectDispatch(parallelism, tileWorkgroups);
+      recordIndirectDispatch(parallelism, tileWorkgroups, WORKGROUP_SIZE);
       passEncoder.setPipeline(pipelines.compactAndSwapQueues);
       passEncoder.dispatchWorkgroups(1);
       recordDirectDispatch(parallelism, [1], 1);
@@ -4561,32 +6575,47 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     passEncoder.setBindGroup(0, bindGroups[0], [configOffset]);
     passEncoder.setPipeline(pipelines.accumulateTerminalRadiance);
     passEncoder.dispatchWorkgroups(tileWorkgroups);
-    recordDirectDispatch(parallelism, [tileWorkgroups]);
+    recordDirectDispatch(parallelism, [tileWorkgroups], WORKGROUP_SIZE);
     passEncoder.end();
   }
 
-  function encodeDenoise(encoder, configOffset, parallelism) {
+  function encodeDenoise(encoder, configOffset, parallelism, renderedSamplesPerPixel = config.samplesPerPixel) {
     if (!config.denoise) {
       return;
     }
     const denoiseWorkgroupsX = Math.ceil(config.width / 8);
     const denoiseWorkgroupsY = Math.ceil(config.height / 8);
-    const radiancePass = encoder.beginComputePass({
-      label: "plasius.wavefront.denoiseRadiancePass",
-    });
-    radiancePass.setBindGroup(0, denoiseRadianceBindGroup, [configOffset]);
-    radiancePass.setPipeline(pipelines.denoiseLinearRadiance);
-    radiancePass.dispatchWorkgroups(denoiseWorkgroupsX, denoiseWorkgroupsY);
-    recordDirectDispatch(parallelism, [denoiseWorkgroupsX, denoiseWorkgroupsY]);
-    radiancePass.end();
+    const useTwoPassDenoise = renderedSamplesPerPixel < 4;
+    if (useTwoPassDenoise) {
+      const radiancePass = encoder.beginComputePass({
+        label: "plasius.wavefront.denoiseRadiancePass",
+      });
+      radiancePass.setBindGroup(0, denoiseRadianceBindGroup, [configOffset]);
+      radiancePass.setPipeline(pipelines.denoiseLinearRadiance);
+      radiancePass.dispatchWorkgroups(denoiseWorkgroupsX, denoiseWorkgroupsY);
+      recordDirectDispatch(
+        parallelism,
+        [denoiseWorkgroupsX, denoiseWorkgroupsY],
+        WORKGROUP_SIZE
+      );
+      radiancePass.end();
+    }
 
     const resolvePass = encoder.beginComputePass({
       label: "plasius.wavefront.denoiseResolvePass",
     });
-    resolvePass.setBindGroup(0, denoiseResolveBindGroup, [configOffset]);
+    resolvePass.setBindGroup(
+      0,
+      useTwoPassDenoise ? denoiseResolveBindGroup : denoiseDirectResolveBindGroup,
+      [configOffset]
+    );
     resolvePass.setPipeline(pipelines.resolveDenoisedOutputImage);
     resolvePass.dispatchWorkgroups(denoiseWorkgroupsX, denoiseWorkgroupsY);
-    recordDirectDispatch(parallelism, [denoiseWorkgroupsX, denoiseWorkgroupsY]);
+    recordDirectDispatch(
+      parallelism,
+      [denoiseWorkgroupsX, denoiseWorkgroupsY],
+      WORKGROUP_SIZE
+    );
     resolvePass.end();
   }
 
@@ -4609,105 +6638,233 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     passEncoder.end();
   }
 
-  function dispatchFrame(frameIndex, parallelism) {
+  function dispatchFrame(frameIndex, parallelism, renderedSamplesPerPixel = config.samplesPerPixel) {
     const writeFrameConfig = createFrameConfigWriter(frameIndex);
-    let submissionCount = 0;
-    let encodedFramePasses = 0;
-    let encoder = device.createCommandEncoder({
-      label: `plasius.wavefront.frame.${frameIndex}.batched.${submissionCount + 1}`,
+    const batch = createGpuSubmissionBatcher({
+      device,
+      frameIndex,
+      maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
     });
 
-    function submitCurrentEncoder() {
-      if (encodedFramePasses <= 0) {
-        return;
-      }
-      device.queue.submit([encoder.finish()]);
-      submissionCount += 1;
-      encodedFramePasses = 0;
-      encoder = device.createCommandEncoder({
-        label: `plasius.wavefront.frame.${frameIndex}.batched.${submissionCount + 1}`,
-      });
-    }
-
-    function reserveEncoder(passCount = 1) {
-      if (
-        encodedFramePasses > 0 &&
-        encodedFramePasses + passCount > config.maxFramePassesPerSubmission
-      ) {
-        submitCurrentEncoder();
-      }
-      encodedFramePasses += passCount;
-      return encoder;
-    }
-
     for (const tile of tiles) {
-      for (let sampleIndex = 0; sampleIndex < config.samplesPerPixel; sampleIndex += 1) {
+      for (let sampleIndex = 0; sampleIndex < renderedSamplesPerPixel; sampleIndex += 1) {
         const configOffset = writeFrameConfig(tile, {
           sampleIndex,
-          sampleWeight: 1 / config.samplesPerPixel,
+          sampleWeight: 1 / renderedSamplesPerPixel,
         });
-        encodeTileSample(reserveEncoder(), tile, configOffset, parallelism);
+        encodeTileSample(
+          batch.reserve(config.maxDepth + 1),
+          tile,
+          configOffset,
+          parallelism
+        );
         if (config.deferredPathResolve) {
-          encodeTileOutput(reserveEncoder(), tile, configOffset, parallelism);
+          encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
         }
       }
       if (!config.deferredPathResolve) {
         const outputConfigOffset = writeFrameConfig(tile, {
           sampleIndex: 0,
-          sampleWeight: 1 / config.samplesPerPixel,
+          sampleWeight: 1 / renderedSamplesPerPixel,
         });
-        encodeTileOutput(reserveEncoder(), tile, outputConfigOffset, parallelism);
+        encodeTileOutput(batch.reserve(1), tile, outputConfigOffset, parallelism);
       }
     }
     if (config.denoise) {
       const denoiseConfigOffset = writeFrameConfig(
         { x: 0, y: 0, width: config.width, height: config.height },
-        { sampleIndex: 0, sampleWeight: 1 / config.samplesPerPixel }
+        { sampleIndex: 0, sampleWeight: 1 / renderedSamplesPerPixel }
       );
-      encodeDenoise(reserveEncoder(), denoiseConfigOffset, parallelism);
+      const denoisePassCount = renderedSamplesPerPixel < 4 ? 2 : 1;
+      encodeDenoise(
+        batch.reserve(denoisePassCount),
+        denoiseConfigOffset,
+        parallelism,
+        renderedSamplesPerPixel
+      );
     }
-    encodePresent(reserveEncoder());
-    submitCurrentEncoder();
-    return submissionCount;
+    encodePresent(batch.reserve(1));
+    return batch.flush();
   }
 
-  function renderOnce() {
+  function renderOnce(renderOptions = {}, resolvedSamplingPlan = null) {
+    const frameStartTimeMs = nowMs();
     frame += 1;
     const frameIndex = frame + config.frameIndex;
+    const samplingPlan = resolvedSamplingPlan ?? resolveRenderedSamplesPerPixel(renderOptions, false);
     const parallelismCounters = createGpuParallelismCounters();
     const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
-    const frameSubmissionCount = dispatchFrame(frameIndex, parallelismCounters);
-    lastGpuParallelism = createGpuParallelismDiagnostics(gpuAdapterParallelism, parallelismCounters);
+    const frameSubmissionCount = dispatchFrame(
+      frameIndex,
+      parallelismCounters,
+      samplingPlan.renderedSamplesPerPixel
+    );
+    const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
     return Object.freeze({
-      frame,
-      width: config.width,
-      height: config.height,
-      maxDepth: config.maxDepth,
-      tiles: tiles.length,
-      tileSize: config.tileSize,
-      samplesPerPixel: config.samplesPerPixel,
-      maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
-      screenRays: config.width * config.height,
-      primaryRays: config.width * config.height * config.samplesPerPixel,
-      sceneObjectCount: config.sceneObjectCount,
-      triangleCount: config.triangleCount,
-      emissiveTriangleCount: config.emissiveTriangleCount,
-      environmentPortalCount: config.environmentPortalCount,
-      environmentPortalMode: config.environmentPortalMode,
-      environmentMap: createEnvironmentMapSnapshot(config.environmentMap),
-      deferredPathResolve: config.deferredPathResolve,
-      bvhNodeCount: config.bvhNodeCount,
-      displayQuality: config.displayQuality,
-      accelerationBuildMode: config.accelerationBuildMode,
-      gpuAccelerationBuildRequired: config.gpuAccelerationBuildRequired,
-      accelerationBuildSubmitted,
-      accelerationBuilt,
-      accelerationBuildCount,
-      commandSubmissions: frameSubmissionCount + (accelerationBuildSubmitted ? 1 : 0),
-      frameConfigSlots: frameConfigSlotCount,
-      gpuParallelism: lastGpuParallelism,
-      memory: config.memory,
+      ...createFrameStats({
+        frameIndex,
+        accelerationBuildSubmitted,
+        frameSubmissionCount,
+        parallelismCounters,
+        renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel,
+        targetSamplesPerPixel: samplingPlan.targetSamplesPerPixel,
+        frameTimeBudgetMs: samplingPlan.frameTimeBudgetMs,
+        budgetConstrained: samplingPlan.budgetConstrained,
+      }),
+      gpuWorkerJobs: createGpuWorkerJobDiagnostics(
+        lastGpuParallelism,
+        frameSubmissionCount + (accelerationBuildSubmitted ? 1 : 0),
+        frameTimeMs,
+        false
+      ),
     });
+  }
+
+  async function waitForSubmittedGpuWork(options = {}) {
+    if (typeof device.queue.onSubmittedWorkDone !== "function") {
+      return true;
+    }
+    const timeoutMs = Math.max(
+      1,
+      Number.isFinite(options.timeoutMs)
+        ? Number(options.timeoutMs)
+        : GPU_SUBMITTED_WORK_TIMEOUT_MS
+    );
+    const allowTimeout = options.allowTimeout !== false;
+    const completionPromise = device.queue.onSubmittedWorkDone().then(
+      () => ({ status: "done" }),
+      (error) => {
+        throw error;
+      }
+    );
+    const lossPromise =
+      typeof device.lost?.then === "function"
+        ? device.lost.then((info) => {
+            throw new Error(
+              `WebGPU device lost while waiting for submitted work (${info?.reason ?? "unknown"}).`
+            );
+          })
+        : null;
+    let timeoutHandle = null;
+    let resolveTimeoutPromise = null;
+    let timeoutSettled = false;
+    const settleTimeoutPromise = (value) => {
+      if (timeoutSettled) {
+        return;
+      }
+      timeoutSettled = true;
+      resolveTimeoutPromise?.(value);
+    };
+    const timeoutPromise = new Promise((resolve) => {
+      resolveTimeoutPromise = resolve;
+      timeoutHandle = setTimeout(() => settleTimeoutPromise({ status: "timeout" }), timeoutMs);
+    });
+    let result;
+    try {
+      result = await Promise.race(
+        [completionPromise, timeoutPromise, lossPromise].filter(Boolean)
+      );
+    } finally {
+      if (timeoutHandle !== null) {
+        clearTimeout(timeoutHandle);
+        settleTimeoutPromise({ status: "cancelled" });
+      }
+    }
+    if (result?.status === "timeout") {
+      if (!allowTimeout) {
+        throw new Error(`Timed out after ${timeoutMs} ms waiting for submitted GPU work.`);
+      }
+      console.warn(
+        `[plasius.wavefront] Submitted GPU work did not report completion within ${timeoutMs} ms; continuing.`
+      );
+      return false;
+    }
+    return true;
+  }
+
+  function dispatchFrameAwaitingGpu(
+    frameIndex,
+    parallelism,
+    renderedSamplesPerPixel = config.samplesPerPixel
+  ) {
+    const samplePassesPerSample = config.maxDepth + 1 + (config.deferredPathResolve ? 1 : 0);
+    const denoisePassCount = config.denoise ? (renderedSamplesPerPixel < 4 ? 2 : 1) : 0;
+    const tailPassCount = denoisePassCount + 1;
+    const sampleBatchSize = Math.max(
+      1,
+      Math.floor(
+        Math.max(config.maxFramePassesPerSubmission - tailPassCount, 1) /
+          Math.max(samplePassesPerSample, 1)
+      )
+    );
+    let submissionCount = 0;
+
+    for (const tile of tiles) {
+      for (
+        let sampleStart = 0;
+        sampleStart < renderedSamplesPerPixel;
+        sampleStart += sampleBatchSize
+      ) {
+        const sampleEnd = Math.min(renderedSamplesPerPixel, sampleStart + sampleBatchSize);
+        const batch = createGpuSubmissionBatcher({
+          device,
+          frameIndex,
+          maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
+          startingSubmissionCount: submissionCount,
+        });
+        let slot = 0;
+        for (let sampleIndex = sampleStart; sampleIndex < sampleEnd; sampleIndex += 1) {
+          const configOffset = writeFrameConfigSlot(slot, tile, frameIndex, {
+            sampleIndex,
+            sampleWeight: 1 / renderedSamplesPerPixel,
+          });
+          slot += 1;
+          encodeTileSample(
+            batch.reserve(config.maxDepth + 1),
+            tile,
+            configOffset,
+            parallelism
+          );
+          if (config.deferredPathResolve) {
+            encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
+          }
+        }
+        if (!config.deferredPathResolve && sampleEnd >= renderedSamplesPerPixel) {
+          const outputConfigOffset = writeFrameConfigSlot(slot, tile, frameIndex, {
+            sampleIndex: 0,
+            sampleWeight: 1 / renderedSamplesPerPixel,
+          });
+          encodeTileOutput(batch.reserve(1), tile, outputConfigOffset, parallelism);
+        }
+        batch.flush();
+        submissionCount += batch.getSubmissionCount();
+      }
+    }
+
+    const tail = createGpuSubmissionBatcher({
+      device,
+      frameIndex,
+      maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
+      startingSubmissionCount: submissionCount,
+    });
+    if (config.denoise) {
+      const denoiseConfigOffset = writeFrameConfigSlot(
+        0,
+        { x: 0, y: 0, width: config.width, height: config.height },
+        frameIndex,
+        { sampleIndex: 0, sampleWeight: 1 / renderedSamplesPerPixel }
+      );
+      encodeDenoise(
+        tail.reserve(denoisePassCount),
+        denoiseConfigOffset,
+        parallelism,
+        renderedSamplesPerPixel
+      );
+    }
+    encodePresent(tail.reserve(1));
+    tail.flush();
+    submissionCount += tail.getSubmissionCount();
+    return submissionCount;
   }
 
   async function readOutputProbe(optionsForProbe = {}) {
@@ -4722,6 +6879,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       size: 256,
       usage: constants.buffer.COPY_DST | constants.buffer.MAP_READ,
     });
+    await waitForSubmittedGpuWork({
+      timeoutMs: GPU_READBACK_COMPLETION_TIMEOUT_MS,
+      allowTimeout: false,
+    });
     const encoder = device.createCommandEncoder({
       label: "plasius.wavefront.outputProbe.copy",
     });
@@ -4731,6 +6892,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       { width: 1, height: 1, depthOrArrayLayers: 1 }
     );
     device.queue.submit([encoder.finish()]);
+    await waitForSubmittedGpuWork({
+      timeoutMs: GPU_READBACK_COMPLETION_TIMEOUT_MS,
+      allowTimeout: false,
+    });
     await readback.mapAsync(mapMode.READ);
     const bytes = new Uint8Array(readback.getMappedRange()).slice(0, 4);
     readback.unmap();
@@ -4744,7 +6909,60 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   async function renderFrame(renderOptions = {}) {
-    const frameStats = renderOnce();
+    const awaitGPUCompletion = renderOptions.awaitGPUCompletion !== false;
+    const samplingPlan = resolveRenderedSamplesPerPixel(renderOptions, awaitGPUCompletion);
+    const useThrottledHighSamplePath =
+      awaitGPUCompletion && samplingPlan.renderedSamplesPerPixel >= 8;
+    const submittedWorkTimeoutMs = estimateSubmittedGpuWorkTimeoutMs(
+      { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
+      tiles.length,
+      renderOptions.submittedWorkTimeoutMs
+    );
+    const frameStartTimeMs = nowMs();
+    const submissionWaitOptions = awaitGPUCompletion
+      ? { timeoutMs: submittedWorkTimeoutMs, allowTimeout: false }
+      : { timeoutMs: submittedWorkTimeoutMs };
+    let frameStats;
+    if (useThrottledHighSamplePath) {
+      frame += 1;
+      const frameIndex = frame + config.frameIndex;
+      const parallelismCounters = createGpuParallelismCounters();
+      const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
+      const frameSubmissionCount = dispatchFrameAwaitingGpu(
+        frameIndex,
+        parallelismCounters,
+        samplingPlan.renderedSamplesPerPixel
+      );
+      frameStats = createFrameStats({
+        frameIndex,
+        accelerationBuildSubmitted,
+        frameSubmissionCount,
+        parallelismCounters,
+        renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel,
+        targetSamplesPerPixel: samplingPlan.targetSamplesPerPixel,
+        frameTimeBudgetMs: samplingPlan.frameTimeBudgetMs,
+        budgetConstrained: samplingPlan.budgetConstrained,
+      });
+    } else {
+      frameStats = renderOnce(renderOptions, samplingPlan);
+    }
+    if (awaitGPUCompletion) {
+      await waitForSubmittedGpuWork(submissionWaitOptions);
+    }
+    const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
+    if (awaitGPUCompletion) {
+      lastCompletedFrameTimeMs = frameTimeMs;
+      lastCompletedSamplesPerPixel = frameStats.renderedSamplesPerPixel ?? frameStats.samplesPerPixel;
+    }
+    frameStats = Object.freeze({
+      ...frameStats,
+      gpuWorkerJobs: createGpuWorkerJobDiagnostics(
+        frameStats.gpuParallelism,
+        frameStats.commandSubmissions,
+        frameTimeMs,
+        awaitGPUCompletion
+      ),
+    });
     const probe =
       renderOptions.readOutputProbe === false ? null : await readOutputProbe(renderOptions.probe);
     const maxChannel = probe ? Math.max(...probe.rgba.slice(0, 3)) : 0;
@@ -4769,10 +6987,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
   }
 
-  function updateSceneObjects(sceneObjects) {
-    const nextPackedScene = packWavefrontSceneObjects(sceneObjects, config.sceneObjectCapacity);
-    packedScene = nextPackedScene;
-    config = createWavefrontPathTracingComputeConfig({
+  function rebuildLiveConfig(overrides = {}) {
+    return createWavefrontPathTracingComputeConfig({
       ...options,
       canvas,
       width: config.width,
@@ -4783,27 +6999,25 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       sceneObjectCapacity: config.sceneObjectCapacity,
       sceneObjects: packedScene.objects,
       camera: activeCameraOptions,
+      environmentMap: {
+        ...config.environmentMap,
+      },
       frameIndex: config.frameIndex,
+      ...overrides,
     });
+  }
+
+  function updateSceneObjects(sceneObjects) {
+    const nextPackedScene = packWavefrontSceneObjects(sceneObjects, config.sceneObjectCapacity);
+    packedScene = nextPackedScene;
+    config = rebuildLiveConfig();
     device.queue.writeBuffer(sceneObjectBuffer, 0, packedScene.buffer);
     return config;
   }
 
   function updateCamera(cameraOptions = {}) {
     activeCameraOptions = cameraOptions;
-    config = createWavefrontPathTracingComputeConfig({
-      ...options,
-      canvas,
-      width: config.width,
-      height: config.height,
-      maxDepth: config.maxDepth,
-      tileSize: config.tileSize,
-      samplesPerPixel: config.samplesPerPixel,
-      sceneObjectCapacity: config.sceneObjectCapacity,
-      sceneObjects: packedScene.objects,
-      camera: activeCameraOptions,
-      frameIndex: config.frameIndex,
-    });
+    config = rebuildLiveConfig();
     return config;
   }
 
@@ -4856,9 +7070,28 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     activeDispatchBuffer.destroy?.();
     radianceTexture.destroy?.();
     denoiseScratchTexture.destroy?.();
-    outputTexture.destroy?.();
-    if (environmentMapResource.ownsTexture) {
-      environmentMapResource.texture?.destroy?.();
+        outputTexture.destroy?.();
+        if (environmentMapResource.ownsTexture) {
+          environmentMapResource.texture?.destroy?.();
+        }
+        if (environmentSamplingResource.ownsTexture) {
+          environmentSamplingResource.texture?.destroy?.();
+        }
+        brdfLutResource.texture?.destroy?.();
+        if (baseColorAtlasResource.ownsTexture) {
+          baseColorAtlasResource.texture?.destroy?.();
+        }
+    if (metallicRoughnessAtlasResource.ownsTexture) {
+      metallicRoughnessAtlasResource.texture?.destroy?.();
+    }
+    if (normalAtlasResource.ownsTexture) {
+      normalAtlasResource.texture?.destroy?.();
+    }
+    if (occlusionAtlasResource.ownsTexture) {
+      occlusionAtlasResource.texture?.destroy?.();
+    }
+    if (emissiveAtlasResource.ownsTexture) {
+      emissiveAtlasResource.texture?.destroy?.();
     }
     context.unconfigure?.();
   }

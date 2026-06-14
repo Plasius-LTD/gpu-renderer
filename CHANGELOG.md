@@ -12,22 +12,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
-
-- **Changed**
-  - (placeholder)
-
-- **Fixed**
-  - (placeholder)
-
-- **Security**
-  - (placeholder)
-
-## [0.2.4] - 2026-06-11
-
-- **Added**
   - Added `updateCamera(...)` support for wavefront renderers so validation
     views can animate camera movement without rebuilding mesh buffers.
+  - Added `gpuWorkerJobs` diagnostics to wavefront frame stats so callers can
+    inspect completed compute-dispatch jobs per frame, per second, and per
+    command submission alongside the existing GPU parallelism figures.
   - Added `gpuParallelism` diagnostics to wavefront frame stats and snapshots so
     consumers can inspect adapter compute limits, direct workgroups,
     indirect-dispatch estimates, and whether a frame exposes multi-workgroup GPU
@@ -38,17 +27,72 @@ All notable changes to this project will be documented in this file.
   - Added default-on `deferredPathResolve` support for wavefront tracing so
     surface traversal records material responses and terminal source radiance
     before the output pass resolves the path backward into pixel accumulation.
+  - Added design and ADR coverage for shadow-tested direct light and bounded
+    bounce attenuation in deferred wavefront path resolution.
+  - Added display-quality material-response support for sheen, clearcoat, and
+    decoded base-colour, metallic-roughness, normal, and occlusion maps in the
+    wavefront mesh path.
+  - Added GPU hit-time material atlas sampling for display-quality wavefront
+    tracing so exact hit UVs now drive base-colour, metallic-roughness, normal,
+    occlusion, and emissive texture evaluation on the GPU instead of relying on
+    CPU-baked triangle averages.
+  - Added ADR and design coverage for generic glTF material transport so
+    specular colour, sheen colour, transmission, clearcoat, and IOR can travel
+    through the shared wavefront shading path instead of being inferred from
+    demo-specific material names.
+  - Added ADR and design coverage for environment-driven glossy surface
+    response so specular, sheen, and clearcoat shading can use reflection-
+    aligned environment radiance instead of leaning primarily on a sun-only
+    highlight proxy.
+  - Added ADR and design coverage for prefiltered HDRI, BRDF LUT, and MIS-based
+    environment lighting in the wavefront display-quality path.
+  - Added adaptive `renderFrame(...)` sampling controls so callers can cap a
+    frame with `frameTimeBudgetMs`, guarantee a `minimumSamplesPerPixel`, and
+    inspect actual `renderedSamplesPerPixel` separately from the configured SPP
+    ceiling.
+  - Added `createWavefrontAdaptiveSamplingLevels(...)` so consumers can hand
+    wavefront SPP adaptation to `@plasius/gpu-performance` without duplicating
+    renderer-specific ladder construction in app or demo code.
 
 - **Changed**
+  - Changed internal wavefront frame batching and dispatch-diagnostics plumbing
+    to live in a dedicated runtime helper module so scheduling concerns stay
+    separated from shader and pipeline assembly.
   - Changed wavefront frame dispatch to split large tile/sample workloads into
     bounded command submissions instead of encoding an entire high-resolution
     frame into one command buffer.
-  - Changed display-quality wavefront tracing to require one additional
-    path-vertex storage buffer, raising the trace-stage storage-buffer request
-    from 9 to 10.
+  - Changed display-quality wavefront tracing to pack HDRI importance-sampling
+    PDFs and CDFs into one GPU texture so the MIS path stays compatible with
+    adapters that expose only the existing 10 trace-stage storage buffers.
   - Changed wavefront terminal/direct environment estimates to consume
     `environmentLighting.sunlitBaseline` as a time-of-day daylight floor instead
     of relying only on restrained ambient colour.
+  - Changed deferred wavefront surface resolution to allow explicit
+    shadow-tested direct lighting before terminal continuation resolution and to
+    remap extremely dark bounce responses to a small scene-brightness floor.
+  - Changed wavefront denoise to adapt its kernel strength to SPP and to skip
+    the intermediate full-screen scratch pass for 4+ SPP frames, reducing blur
+    and denoise cost on cleaner renders.
+  - Changed async wavefront frame rendering to wait for submitted GPU work and
+    to batch higher-SPP workloads more defensibly, while raising the SPP ceiling
+    from 64 to 256 for higher-end GPUs.
+  - Changed awaited high-SPP wavefront rendering to fence submitted GPU work
+    once per `renderFrame(...)` call instead of after every intermediate command
+    submission.
+  - Changed wavefront scene, mesh, triangle, material, and hit records to carry
+    generic glTF-style specular colour, sheen colour, and transmission inputs
+    in addition to the existing roughness, metallic, clearcoat, and IOR data.
+  - Changed direct and terminal wavefront surface environment shading to sample
+    reflection-aligned environment radiance for glossy materials before adding
+    narrower sun highlights, improving leather, chrome, and polished-surface
+    response without model-specific rules.
+  - Changed wavefront environment-lighting setup to prepare roughness-aware HDRI
+    resources, a BRDF integration LUT, and HDRI importance-sampling tables for
+    display-quality renders.
+  - Changed wavefront continuation sampling to emit BSDF PDFs for diffuse,
+    conductor, clearcoat, and transmission paths so environment misses and
+    explicit HDRI samples can use MIS instead of the older light-guidance
+    heuristics.
 
 - **Fixed**
   - Fixed low-sample wavefront renders so non-emissive surface hits receive a
@@ -56,6 +100,12 @@ All notable changes to this project will be documented in this file.
   - Reduced deterministic environment fill on direct surface hits so ambient
     rescue lighting no longer washes dark materials toward the full scene
     ambient colour.
+  - Fixed wavefront output-probe readback so higher-SPP validation renders wait
+    for submitted GPU work before mapping the staging buffer, avoiding
+    `GPUBuffer.mapAsync(...)` lifetime failures during probe capture.
+  - Fixed display-quality environment misses so non-delta BSDF paths now apply
+    MIS weighting against the HDRI direction PDF instead of overcounting raw
+    sky radiance on termination.
 
 - **Security**
   - (placeholder)
@@ -349,4 +399,3 @@ All notable changes to this project will be documented in this file.
 [0.1.12]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.12
 [0.1.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.14
 [0.2.1]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.1
-[0.2.4]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.4
