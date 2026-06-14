@@ -23,6 +23,20 @@ All notable changes to this project will be documented in this file.
 - **Security**
   - (placeholder)
 
+## [0.2.5] - 2026-06-14
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
 ## [0.2.4] - 2026-06-11
 
 - **Added**
@@ -350,3 +364,4 @@ All notable changes to this project will be documented in this file.
 [0.1.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.14
 [0.2.1]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.1
 [0.2.4]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.4
+[0.2.5]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.5
