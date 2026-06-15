@@ -420,7 +420,7 @@ test("wavefront compute compatibility exports expose the canonical mesh shader",
   assert.match(shaderSource, /fn write_active_dispatch_args/);
   assert.doesNotMatch(shaderSource, /intersectSphere/);
   assert.match(types, /hitRecordBytes: 256;/);
-  assert.match(types, /sceneObjectRecordBytes: 144;/);
+  assert.match(types, /sceneObjectRecordBytes: 160;/);
   assert.match(types, /meshRangeRecordBytes: 240;/);
   assert.match(types, /triangleRecordBytes: 352;/);
   assert.match(types, /materialRecordBytes: 192;/);
@@ -867,7 +867,7 @@ test("wavefront compute exposes medium-table contracts and Beer-Lambert transpor
   assert.match(types, /readonly mediums\?: readonly WavefrontMediumInput\[\]/);
   assert.match(types, /readonly mediumCount: number;/);
   assert.match(source, /const MEDIUM_TABLE_ROWS = 2;/);
-  assert.match(source, /function deriveWavefrontMeshMedium/);
+  assert.match(source, /function deriveWavefrontTransportMedium/);
   assert.match(source, /function createMediumTextureResource/);
   assert.match(source, /@group\(0\) @binding\(32\) var mediumTableTexture: texture_2d<f32>/);
   assert.match(source, /fn medium_transmittance\(mediumRefId: u32, distance: f32\) -> vec3<f32>/);
@@ -1074,6 +1074,23 @@ test("wavefront mesh normalization derives transport medium from volume inputs",
   assert.ok((mesh.medium?.absorption[0] ?? 0) > 0);
   assert.ok((mesh.medium?.absorption[1] ?? 0) > 0);
   assert.ok((mesh.medium?.absorption[2] ?? 0) > 0);
+});
+
+test("wavefront mesh normalization honors explicit mediumRefId for inline media", () => {
+  const mesh = normalizeWavefrontMesh({
+    id: 22,
+    positions: [0, 0, 0, 2, 0, 0, 0, 2, 0],
+    indices: [0, 1, 2],
+    mediumRefId: 19,
+    medium: {
+      attenuationColor: [0.68, 0.76, 0.9, 1],
+      attenuationDistance: 0.35,
+    },
+  });
+
+  assert.equal(mesh.medium?.id, 19);
+  assert.equal(mesh.mediumRefId, 19);
+  assert.ok((mesh.medium?.absorption[0] ?? 0) > 0);
 });
 
 test("wavefront GPU mesh source packs raw mesh buffers without CPU BVH output", () => {
@@ -1456,6 +1473,42 @@ test("wavefront scene object normalization derives boxes from bounds", () => {
   assert.equal(object.metallic, 0.9);
 });
 
+test("wavefront scene object normalization derives medium ids from inline media", () => {
+  const object = normalizeWavefrontSceneObject({
+    id: 43,
+    type: "sphere",
+    radius: 1,
+    medium: {
+      attenuationColor: [0.72, 0.84, 0.96, 1],
+      attenuationDistance: 0.45,
+    },
+  });
+
+  assert.ok((object.medium?.id ?? 0) > 0);
+  assert.equal(object.mediumRefId, object.medium?.id);
+  assert.ok((object.medium?.absorption[0] ?? 0) > 0);
+});
+
+test("wavefront scene object normalization derives media from volume inputs", () => {
+  const object = normalizeWavefrontSceneObject({
+    id: 44,
+    type: "sphere",
+    radius: 1,
+    material: {
+      transmission: 1,
+      volume: {
+        thickness: 0.2,
+        attenuationColor: [0.7, 0.82, 0.94, 1],
+        attenuationDistance: 0.5,
+      },
+    },
+  });
+
+  assert.equal(object.mediumRefId, 44);
+  assert.equal(object.medium?.id, 44);
+  assert.ok((object.medium?.absorption[0] ?? 0) > 0);
+});
+
 test("wavefront scene objects pack into stable GPU record layout", () => {
   const packed = packWavefrontSceneObjects(
     [
@@ -1775,6 +1828,51 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     assert.equal(canvas.context.configured, null);
     assert.equal(device.buffers.every((buffer) => buffer.destroyed), true);
     assert.equal(device.textures.every((texture) => texture.destroyed), true);
+  });
+});
+
+serialWebGpuTest("wavefront renderer rebuilds medium GPU resources when scene media changes", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      width: 8,
+      height: 8,
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device),
+      sceneObjects: [],
+    });
+
+    const baselineTextureWrites = device.queue.textureWrites.length;
+    const baselineMediumTextures = device.textures.filter(
+      (texture) => texture.descriptor.label === "plasius.wavefront.mediumTable"
+    );
+    const nextConfig = renderer.updateSceneObjects([
+      {
+        id: 91,
+        type: "sphere",
+        radius: 0.75,
+        material: {
+          transmission: 1,
+          volume: {
+            thickness: 0.14,
+            attenuationColor: [0.74, 0.84, 0.96, 1],
+            attenuationDistance: 0.4,
+          },
+        },
+      },
+    ]);
+
+    assert.equal(nextConfig.mediumCount, 2);
+    assert.equal(device.queue.textureWrites.length, baselineTextureWrites + 1);
+    assert.equal(device.queue.textureWrites.at(-1)?.size.height, 2);
+    const updatedMediumTextures = device.textures.filter(
+      (texture) => texture.descriptor.label === "plasius.wavefront.mediumTable"
+    );
+    assert.equal(updatedMediumTextures.length, baselineMediumTextures.length + 1);
+    assert.equal(baselineMediumTextures[0].destroyed, true);
+    assert.equal(updatedMediumTextures.at(-1)?.destroyed, false);
+
+    renderer.destroy();
   });
 });
 

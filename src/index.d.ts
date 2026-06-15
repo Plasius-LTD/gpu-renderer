@@ -952,7 +952,7 @@ export const wavefrontPathTracingComputeLimits: Readonly<{
   traceStorageBufferBindings: number;
   rayRecordBytes: 80;
   hitRecordBytes: 256;
-  sceneObjectRecordBytes: 144;
+  sceneObjectRecordBytes: 160;
   meshVertexRecordBytes: 48;
   meshRangeRecordBytes: 240;
   triangleRecordBytes: 352;

@@ -13,7 +13,8 @@ const DEFAULT_MAX_DEPTH = 6;
 const DEFAULT_TILE_SIZE = 128;
 const DEFAULT_SAMPLES_PER_PIXEL = 1;
 const MAX_SAMPLES_PER_PIXEL = 256;
-const DEFAULT_BRDF_LUT_SIZE = 256;
+const DEFAULT_BRDF_LUT_SIZE = 128;
+const DEFAULT_BRDF_LUT_SAMPLE_COUNT = 256;
 const DEFAULT_MAX_FRAME_PASSES_PER_SUBMISSION = 256;
 const DEFAULT_SCENE_OBJECT_CAPACITY = 128;
 const DEFAULT_ENVIRONMENT_PORTAL_CAPACITY = 32;
@@ -482,9 +483,29 @@ function normalizeWavefrontThickness(input, label) {
   );
 }
 
-function deriveWavefrontMeshMedium(input, fallbackId = 1) {
+function resolveWavefrontMediumId(input, fallbackId = 1) {
+  return (
+    input?.mediumRefId ??
+    input?.mediumId ??
+    input?.material?.mediumId ??
+    input?.materialRefId ??
+    input?.material?.id ??
+    input?.materialId ??
+    input?.id ??
+    fallbackId
+  );
+}
+
+function deriveWavefrontTransportMedium(input, fallbackId = 1) {
+  const resolvedId = resolveWavefrontMediumId(input, fallbackId);
   if (input?.medium) {
-    return normalizeWavefrontMedium(input.medium, fallbackId);
+    return normalizeWavefrontMedium(
+      {
+        ...input.medium,
+        id: input.medium.id ?? input.medium.mediumId ?? resolvedId,
+      },
+      fallbackId
+    );
   }
   const volume = resolveWavefrontVolumeInput(input);
   if (!volume) {
@@ -492,14 +513,7 @@ function deriveWavefrontMeshMedium(input, fallbackId = 1) {
   }
   return normalizeWavefrontMedium(
     {
-      id:
-        input.mediumRefId ??
-        input.mediumId ??
-        input.material?.mediumId ??
-        input.materialRefId ??
-        input.materialId ??
-        input.id ??
-        fallbackId,
+      id: resolvedId,
       phaseModel: volume.phaseModel,
       density: volume.density,
       attenuationColor: volume.attenuationColor,
@@ -640,8 +654,7 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
     input.specularColor ?? input.material?.specularColor,
     [1, 1, 1, 1]
   ).map((value, componentIndex) => (componentIndex < 3 ? clamp(value, 0, 1) : 1));
-  const medium =
-    input.medium ? normalizeWavefrontMedium(input.medium, index + 1) : null;
+  const medium = deriveWavefrontTransportMedium(input, index + 1);
   const resolvedMaterialKind =
     emission[0] > 0 || emission[1] > 0 || emission[2] > 0
       ? MATERIAL_EMISSIVE
@@ -658,7 +671,7 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
     flags: readNonNegativeInteger("flags", input.flags, 0),
     mediumRefId: readNonNegativeInteger(
       "mediumRefId",
-      input.mediumRefId ?? input.medium?.id ?? input.mediumId,
+      input.mediumRefId ?? medium?.id ?? input.medium?.id ?? input.mediumId,
       0
     ),
     medium,
@@ -795,7 +808,7 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     input.specularColor ?? input.material?.specularColor,
     [1, 1, 1, 1]
   ).map((value, componentIndex) => (componentIndex < 3 ? clamp(value, 0, 1) : 1));
-  const medium = deriveWavefrontMeshMedium(input, meshIndex + 1);
+  const medium = deriveWavefrontTransportMedium(input, meshIndex + 1);
   const resolvedMaterialKind =
     emission[0] > 0 || emission[1] > 0 || emission[2] > 0
       ? MATERIAL_EMISSIVE
@@ -2901,7 +2914,10 @@ function integrateBrdfSample(nDotV, roughness, sampleCount) {
   return [scaleTerm / sampleCount, biasTerm / sampleCount];
 }
 
-function createBrdfLutUploadBytes(size = DEFAULT_BRDF_LUT_SIZE, sampleCount = 1024) {
+function createBrdfLutUploadBytes(
+  size = DEFAULT_BRDF_LUT_SIZE,
+  sampleCount = DEFAULT_BRDF_LUT_SAMPLE_COUNT
+) {
   const cacheKey = `${Math.max(1, Math.trunc(size))}:${Math.max(1, Math.trunc(sampleCount))}`;
   const cached = BRDF_LUT_UPLOAD_CACHE.get(cacheKey);
   if (cached) {
@@ -3375,6 +3391,36 @@ function createMediumTextureResource(device, constants, mediums) {
     count: normalized.length,
     width,
   });
+}
+
+function mediumTablesEqual(left, right) {
+  const leftMediums = Array.isArray(left) ? left : [];
+  const rightMediums = Array.isArray(right) ? right : [];
+  if (leftMediums.length !== rightMediums.length) {
+    return false;
+  }
+  for (let index = 0; index < leftMediums.length; index += 1) {
+    const leftMedium = leftMediums[index];
+    const rightMedium = rightMediums[index];
+    if ((leftMedium?.id ?? 0) !== (rightMedium?.id ?? 0)) {
+      return false;
+    }
+    if ((leftMedium?.phaseModel ?? 0) !== (rightMedium?.phaseModel ?? 0)) {
+      return false;
+    }
+    if ((leftMedium?.density ?? 0) !== (rightMedium?.density ?? 0)) {
+      return false;
+    }
+    for (let component = 0; component < 3; component += 1) {
+      if ((leftMedium?.absorption?.[component] ?? 0) !== (rightMedium?.absorption?.[component] ?? 0)) {
+        return false;
+      }
+      if ((leftMedium?.scattering?.[component] ?? 0) !== (rightMedium?.scattering?.[component] ?? 0)) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 function createAtlasTextureResource(device, constants, atlas, label) {
@@ -6281,7 +6327,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     config.environmentMap,
     config.environmentColor
   );
-  const mediumTextureResource = createMediumTextureResource(
+  let mediumTextureResource = createMediumTextureResource(
     device,
     constants,
     config.mediums
@@ -6569,10 +6615,14 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
   }
 
-  const bindGroups = [
-    createTraceBindGroup(activeQueue, nextQueue, "plasius.wavefront.bind.activeNext"),
-    createTraceBindGroup(nextQueue, activeQueue, "plasius.wavefront.bind.nextActive"),
-  ];
+  function createTraceBindGroups() {
+    return [
+      createTraceBindGroup(activeQueue, nextQueue, "plasius.wavefront.bind.activeNext"),
+      createTraceBindGroup(nextQueue, activeQueue, "plasius.wavefront.bind.nextActive"),
+    ];
+  }
+
+  let bindGroups = createTraceBindGroups();
   const bvhBuildBindGroup = device.createBindGroup({
     label: "plasius.wavefront.bind.bvhBuild",
     layout: accelerationBindGroupLayout,
@@ -7351,10 +7401,23 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
   }
 
+  function rebuildMediumResources(nextConfig) {
+    const previousMediumTextureResource = mediumTextureResource;
+    mediumTextureResource = createMediumTextureResource(device, constants, nextConfig.mediums);
+    bindGroups = createTraceBindGroups();
+    if (previousMediumTextureResource?.ownsTexture) {
+      previousMediumTextureResource.texture?.destroy?.();
+    }
+  }
+
   function updateSceneObjects(sceneObjects) {
     const nextPackedScene = packWavefrontSceneObjects(sceneObjects, config.sceneObjectCapacity);
     packedScene = nextPackedScene;
-    config = rebuildLiveConfig();
+    const nextConfig = rebuildLiveConfig();
+    if (!mediumTablesEqual(config.mediums, nextConfig.mediums)) {
+      rebuildMediumResources(nextConfig);
+    }
+    config = nextConfig;
     device.queue.writeBuffer(sceneObjectBuffer, 0, packedScene.buffer);
     return config;
   }
