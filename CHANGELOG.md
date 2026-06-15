@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.7] - 2026-06-15
+
+- **Added**
   - Added `updateCamera(...)` support for wavefront renderers so validation
     views can animate camera movement without rebuilding mesh buffers.
   - Added `gpuWorkerJobs` diagnostics to wavefront frame stats so callers can
@@ -403,3 +417,4 @@ All notable changes to this project will be documented in this file.
 [0.1.12]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.12
 [0.1.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.14
 [0.2.1]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.1
+[0.2.7]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.7
