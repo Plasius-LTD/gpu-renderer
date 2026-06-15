@@ -13,3 +13,4 @@
 - [ADR 0011: Generic glTF Material Transport For Wavefront Shading](./adr-0011-generic-gltf-material-transport.md)
 - [ADR 0012: Environment Specular Response For Wavefront Shading](./adr-0012-environment-specular-response-for-wavefront-shading.md)
 - [ADR 0013: HDRI Prefilter, BRDF LUT, And MIS For Wavefront Environment Lighting](./adr-0013-hdri-brdf-lut-and-mis-for-wavefront-environment-lighting.md)
+- [ADR 0014: Wavefront Volume And Medium Transport For Authored Materials](./adr-0014-wavefront-volume-medium-transport.md)
