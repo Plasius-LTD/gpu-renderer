@@ -14,3 +14,4 @@
 - [ADR 0012: Environment Specular Response For Wavefront Shading](./adr-0012-environment-specular-response-for-wavefront-shading.md)
 - [ADR 0013: HDRI Prefilter, BRDF LUT, And MIS For Wavefront Environment Lighting](./adr-0013-hdri-brdf-lut-and-mis-for-wavefront-environment-lighting.md)
 - [ADR 0014: Wavefront Volume And Medium Transport For Authored Materials](./adr-0014-wavefront-volume-medium-transport.md)
+- [ADR 0015: Default Display-Quality Mesh Acceleration To CPU-Built BVH Upload](./adr-0015-display-quality-cpu-upload-bvh-default.md)

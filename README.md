@@ -180,15 +180,20 @@ project-wide display-quality baseline for path-traced rendering, not a
 Product-Studio-only requirement.
 
 Mesh inputs are normalized into triangle records, packed into GPU buffers, and
-uploaded as source buffers for GPU triangle assembly and GPU BVH construction.
-Vertex normals are preserved for smooth shading; when normals are absent the
-triangle geometric normal is used. The display-quality path uses
-`accelerationBuildMode: "gpu"` and rejects CPU-built acceleration. The
-`createWavefrontMeshAcceleration(...)` helper remains available only for debug
-fixtures and deterministic layout tests. GPU BVH construction now uses
-Morton-style centroid keys to sort leaf references before sorted leaves and
-level-concurrent internal nodes are materialized. The current mesh path is the
-GPU runtime baseline under active hardening.
+uploaded as source buffers for tracing. Vertex normals are preserved for smooth
+shading; when normals are absent the triangle geometric normal is used. The
+display-quality path now defaults to `accelerationBuildMode: "cpu-upload"` so
+CPU-built BVH nodes and triangle records are uploaded once and then reused by
+the GPU tracing passes. Set `accelerationBuildMode: "gpu"` only when you
+explicitly want the experimental GPU-side BVH assembly path for validation or
+development. The `createWavefrontMeshAcceleration(...)` helper is therefore no
+longer debug-only; it is the stable display-quality acceleration builder,
+whereas GPU BVH construction remains available behind the explicit mode switch.
+CPU-upload records still preserve the raw material factors plus atlas rects and
+texture settings expected by the GPU hit-time samplers; they are not meant to
+replace exact UV-driven sampling with CPU-baked triangle averages.
+The GPU BVH path still uses Morton-style centroid keys to sort leaf references
+before sorted leaves and level-concurrent internal nodes are materialized.
 When mesh inputs also carry UVs plus decoded base-colour,
 metallic-roughness, normal, occlusion, or emissive maps, the display-quality
 path now packs them into GPU texture atlases and samples them at the resolved
@@ -281,7 +286,9 @@ with active continuation rays instead of the maximum tile capacity, while still
 avoiding CPU readback between bounces. WebGPU
 still preserves ordering between dependent bounce passes, but the renderer
 keeps CPU queue submissions bounded rather than forcing one submission per
-tile/sample.
+tile/sample. Awaited higher-SPP submission slicing remains tile-major because
+the accumulation buffer is tile-local; changing that order to sample-major
+would mix samples across tiles and corrupt the resolved image.
 Environment-light portals can additionally guide and gate sky/HDRI contribution
 through rectangular openings such as windows. `environmentPortalMode: "guide"`
 biases diffuse continuation rays toward configured openings, while

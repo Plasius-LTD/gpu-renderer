@@ -58,10 +58,31 @@ All notable changes to this project will be documented in this file.
     wavefront SPP adaptation to `@plasius/gpu-performance` without duplicating
     renderer-specific ladder construction in app or demo code.
 
+- **Fixed**
+  - Awaited wavefront frame waits now scale their submitted-work timeout by
+    actual triangle load as well as pass count, preventing mesh-heavy
+    validation frames from failing early while the GPU is still legitimately
+    finishing the submitted work.
+  - Awaited high-SPP wavefront frames now break first-frame GPU work into
+    progressive 1-SPP submission slices with bounded wait windows, which avoids
+    queueing an entire heavy validation frame ahead of a single completion wait
+    and materially reduces browser-side device-loss risk on mesh renders.
+  - Fixed the display-quality `cpu-upload` mesh path so uploaded triangle
+    records preserve raw material factors, atlas rects, and texture settings
+    for GPU hit-time sampling instead of baking CPU-side averages that could
+    corrupt leather, wood, and chrome shading with the wrong atlas region.
+  - Fixed awaited `>= 8 spp` wavefront scheduling to stay tile-major while the
+    accumulation buffer is tile-local, preventing repeated-tile/striped image
+    corruption and stalled validation captures on higher-SPP frames.
+
 - **Changed**
   - Changed internal wavefront frame batching and dispatch-diagnostics plumbing
     to live in a dedicated runtime helper module so scheduling concerns stay
     separated from shader and pipeline assembly.
+  - Changed display-quality mesh tracing to default to `accelerationBuildMode:
+    "cpu-upload"` so stable CPU-built BVH uploads are used for validation and
+    demo rendering unless callers explicitly opt into the experimental GPU-side
+    BVH construction path.
   - Changed wavefront frame dispatch to split large tile/sample workloads into
     bounded command submissions instead of encoding an entire high-resolution
     frame into one command buffer.
