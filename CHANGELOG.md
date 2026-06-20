@@ -57,6 +57,8 @@ All notable changes to this project will be documented in this file.
   - Added `createWavefrontAdaptiveSamplingLevels(...)` so consumers can hand
     wavefront SPP adaptation to `@plasius/gpu-performance` without duplicating
     renderer-specific ladder construction in app or demo code.
+  - Added ADR 0016 for the mixed environment/emissive direct-light MIS
+    contract used by the wavefront display-quality renderer.
 
 - **Fixed**
   - Awaited wavefront frame waits now scale their submitted-work timeout by
@@ -118,6 +120,10 @@ All notable changes to this project will be documented in this file.
     conductor, clearcoat, and transmission paths so environment misses and
     explicit HDRI samples can use MIS instead of the older light-guidance
     heuristics.
+  - Changed wavefront explicit direct lighting to use a one-sample
+    environment/emissive mixture with solid-angle-normalized area-light PDFs
+    and BSDF-semantic eligibility instead of the older material-kind/bounce
+    gate.
 
 - **Fixed**
   - Fixed low-sample wavefront renders so non-emissive surface hits receive a

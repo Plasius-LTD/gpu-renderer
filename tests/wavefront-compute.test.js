@@ -742,11 +742,15 @@ test("wavefront compute applies environment ambient on terminal surface collisio
   );
 });
 
-test("wavefront compute estimates direct environment light before random continuation", () => {
+test("wavefront compute samples all-material direct light with MIS before random continuation", () => {
   const source = readRendererSource();
 
   assert.match(source, /fn direct_environment_radiance/);
   assert.match(source, /fn sample_environment_importance/);
+  assert.match(source, /struct DirectLightSample/);
+  assert.match(source, /fn sample_emissive_triangle_light/);
+  assert.match(source, /fn sample_direct_light/);
+  assert.match(source, /fn surface_supports_direct_lighting/);
   assert.match(source, /u32\(config\.environmentMapMeta\.x\)/);
   assert.match(source, /u32\(config\.environmentMapMeta\.y\)/);
   assert.match(source, /if \(count == 0u\) \{\s+return 0u;\s+\}/);
@@ -755,10 +759,10 @@ test("wavefront compute estimates direct environment light before random continu
   assert.match(source, /fn evaluate_surface_bsdf_pdf/);
   assert.match(source, /fn visibility_test_ray/);
   assert.match(source, /fn scene_visibility_blocked/);
-  assert.match(source, /fn surface_direct_environment_contribution/);
-  assert.match(source, /let lightSample = sample_environment_importance\(vec2<f32>\(/);
-  assert.match(source, /if \(scene_visibility_blocked\(origin, lightDirection, 1000000\.0\)\) \{/);
-  assert.match(source, /let incidentRadiance = direct_environment_radiance\(origin, lightDirection\);/);
+  assert.match(source, /fn surface_direct_light_contribution/);
+  assert.match(source, /let lightSample = sample_direct_light\(hit, ray, normal\);/);
+  assert.match(source, /if \(scene_visibility_blocked\(origin, lightDirection, lightSample\.maxDistance\)\) \{/);
+  assert.match(source, /let incidentRadiance = lightSample\.radiance\.xyz;/);
   assert.match(source, /let bsdf = evaluate_surface_bsdf\(hit, viewDirection, lightDirection\);/);
   assert.match(source, /let bsdfPdf = evaluate_surface_bsdf_pdf\(hit, viewDirection, lightDirection\);/);
   assert.match(source, /let misWeight = power_heuristic\(lightSample\.pdf, bsdfPdf\);/);
@@ -767,26 +771,43 @@ test("wavefront compute estimates direct environment light before random continu
   assert.doesNotMatch(source, /mix\(reflectChance, max\(reflectChance, 1\.0 - transmission\), transmission > 0\.001\)/);
   assert.match(source, /let segmentTransmittance = medium_transmittance\(ray\.mediumRefId, hit\.distance\);/);
   assert.match(source, /let arrivingThroughput = ray\.throughput\.xyz \* segmentTransmittance;/);
-  assert.match(
+  assert.match(source, /let shouldEstimateDirectLight = surface_supports_direct_lighting\(hit\);/);
+  assert.doesNotMatch(
     source,
-    /let shouldEstimateDirectEnvironment =\s+\(hit\.materialKind == 0u \|\| hit\.materialKind == 1u\) &&\s+hit\.material\.z >= 0\.95 &&\s+ray\.bounce < 2u;/
+    /\(hit\.materialKind == 0u \|\| hit\.materialKind == 1u\) &&\s+hit\.material\.z >= 0\.95 &&\s+ray\.bounce < 2u/
   );
   assert.match(
     source,
-    /let directEnvironment = surface_direct_environment_contribution\(\s+RayRecord\(/
+    /let directLight = surface_direct_light_contribution\(\s+RayRecord\(/
   );
   assert.match(
     source,
-    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directEnvironment \* sample_weight\(\), 0\.0\);/
+    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directLight \* sample_weight\(\), 0\.0\);/
   );
   assert.ok(
-    source.indexOf("let shouldEstimateDirectEnvironment =") <
-      source.indexOf("let directEnvironment = surface_direct_environment_contribution(")
+    source.indexOf("let shouldEstimateDirectLight =") <
+      source.indexOf("let directLight = surface_direct_light_contribution(")
   );
   assert.ok(
-    source.indexOf("let directEnvironment = surface_direct_environment_contribution(") <
+    source.indexOf("let directLight = surface_direct_light_contribution(") <
       source.indexOf("if (ray.bounce + 1u >= config.maxDepth)")
   );
+});
+
+test("wavefront compute converts emissive area PDFs to solid-angle MIS measures", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /fn triangle_surface_area\(triangle: TriangleRecord\) -> f32/);
+  assert.match(source, /fn solid_angle_pdf_from_area_pdf\(/);
+  assert.match(source, /let geometry = max\(dot\(lightNormal, -lightDirection\), 0\.0\);/);
+  assert.match(source, /return areaPdf \* distanceSquared \/ max\(geometry, 0\.000001\);/);
+  assert.match(source, /let areaPdf = 1\.0 \/ max\(triangleArea \* f32\(config\.emissiveTriangleCount\), 0\.000001\);/);
+  assert.match(
+    source,
+    /let lightPdf = solid_angle_pdf_from_area_pdf\(areaPdf, hit\.position\.xyz, lightPoint, lightNormal\);/
+  );
+  assert.match(source, /let environmentSelectionProbability = select\(1\.0, 0\.5, config\.emissiveTriangleCount > 0u\);/);
+  assert.match(source, /return DirectLightSample\(vec4<f32>\(lightDirection, 0\.0\), vec4<f32>\(radiance, 0\.0\), lightPdf, traceDistance, 0u, 1u\);/);
 });
 
 test("wavefront compute samples material textures on the GPU at the resolved hit UV", () => {
@@ -830,7 +851,7 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
   assert.match(source, /let resolved = resolve_deferred_path_radiance\(index\) \* sample_weight\(\);/);
   assert.match(
     source,
-    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directEnvironment \* sample_weight\(\), 0\.0\);/
+    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directLight \* sample_weight\(\), 0\.0\);/
   );
   assert.match(source, /if \(config\.deferredPathResolve\) \{/);
   assert.match(source, /createGpuSubmissionBatcher\(\{/);
