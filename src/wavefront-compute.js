@@ -4214,6 +4214,15 @@ struct EnvironmentSample {
   pdf: f32,
 };
 
+struct DirectLightSample {
+  direction: vec4<f32>,
+  radiance: vec4<f32>,
+  pdf: f32,
+  maxDistance: f32,
+  flags: u32,
+  valid: u32,
+};
+
 fn sample_environment_importance(sample: vec2<f32>) -> EnvironmentSample {
   if (!environment_importance_sampling_enabled()) {
     let direction = sample_uniform_sphere_direction(sample);
@@ -4232,6 +4241,34 @@ fn sample_environment_importance(sample: vec2<f32>) -> EnvironmentSample {
   let direction = vec3<f32>(cos(phi) * sinTheta, cos(theta), sin(phi) * sinTheta);
   let pdf = environment_direction_pdf(direction);
   return EnvironmentSample(direction, base_environment_radiance(direction), pdf);
+}
+
+fn triangle_surface_normal(triangle: TriangleRecord) -> vec3<f32> {
+  let edge1 = triangle.v1.xyz - triangle.v0.xyz;
+  let edge2 = triangle.v2.xyz - triangle.v0.xyz;
+  return safe_normalize(cross(edge1, edge2), vec3<f32>(0.0, 1.0, 0.0));
+}
+
+fn triangle_surface_area(triangle: TriangleRecord) -> f32 {
+  let edge1 = triangle.v1.xyz - triangle.v0.xyz;
+  let edge2 = triangle.v2.xyz - triangle.v0.xyz;
+  return max(length(cross(edge1, edge2)) * 0.5, 0.000001);
+}
+
+fn solid_angle_pdf_from_area_pdf(
+  areaPdf: f32,
+  shadingPoint: vec3<f32>,
+  lightPoint: vec3<f32>,
+  lightNormal: vec3<f32>
+) -> f32 {
+  let offset = lightPoint - shadingPoint;
+  let distanceSquared = max(dot(offset, offset), 0.000001);
+  let lightDirection = safe_normalize(offset, lightNormal);
+  let geometry = max(dot(lightNormal, -lightDirection), 0.0);
+  if (geometry <= 0.000001) {
+    return 0.0;
+  }
+  return areaPdf * distanceSquared / max(geometry, 0.000001);
 }
 
 fn power_heuristic(pdfA: f32, pdfB: f32) -> f32 {
@@ -4615,26 +4652,106 @@ fn scene_visibility_blocked(origin: vec3<f32>, direction: vec3<f32>, maxDistance
   return meshCandidate.hit == 1u && meshCandidate.distance < nearest;
 }
 
-fn surface_direct_environment_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+fn sample_emissive_triangle_light(hit: HitRecord, seed: u32) -> DirectLightSample {
+  if (config.emissiveTriangleCount == 0u) {
+    return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
+  }
+  let lightSlot = min(
+    u32(random01(seed + 71u) * f32(config.emissiveTriangleCount)),
+    config.emissiveTriangleCount - 1u
+  );
+  let lightMetadata = bvhNodes[config.bvhNodeCapacity + lightSlot];
+  let triangleIndex = lightMetadata.childOrFirst;
+  if (triangleIndex >= config.triangleCount) {
+    return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
+  }
+
+  let lightTriangle = triangles[triangleIndex];
+  let triangleArea = triangle_surface_area(lightTriangle);
+  let lightNormal = triangle_surface_normal(lightTriangle);
+  let r1 = random01(seed + 101u);
+  let r2 = random01(seed + 193u);
+  let root = sqrt(r1);
+  let b0 = 1.0 - root;
+  let b1 = root * (1.0 - r2);
+  let b2 = root * r2;
+  let lightPoint =
+    lightTriangle.v0.xyz * b0 +
+    lightTriangle.v1.xyz * b1 +
+    lightTriangle.v2.xyz * b2;
+  let lightDirection = safe_normalize(lightPoint - hit.position.xyz, lightNormal);
+  let traceDistance = max(distance(lightPoint, hit.position.xyz) - 0.01, 0.01);
+  let areaPdf = 1.0 / max(triangleArea * f32(config.emissiveTriangleCount), 0.000001);
+  let lightPdf = solid_angle_pdf_from_area_pdf(areaPdf, hit.position.xyz, lightPoint, lightNormal);
+  if (lightPdf <= 0.000001) {
+    return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
+  }
+  let radiance = max(lightTriangle.emission.xyz, lightTriangle.color.xyz);
+  if (max_component(radiance) <= 0.000001) {
+    return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
+  }
+  return DirectLightSample(vec4<f32>(lightDirection, 0.0), vec4<f32>(radiance, 0.0), lightPdf, traceDistance, 0u, 1u);
+}
+
+fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> DirectLightSample {
+  let environmentSelectionProbability = select(1.0, 0.5, config.emissiveTriangleCount > 0u);
+  let selector = random01(mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 41u));
+  if (selector < environmentSelectionProbability) {
+    let environmentSample = sample_environment_importance(vec2<f32>(
+      selector / max(environmentSelectionProbability, 0.000001),
+      random01(mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 43u))
+    ));
+    let lightDirection = safe_normalize(environmentSample.direction, normal);
+    let radiance = direct_environment_radiance(hit.position.xyz + normal * 0.003, lightDirection);
+    return DirectLightSample(
+      vec4<f32>(lightDirection, 0.0),
+      vec4<f32>(radiance, 0.0),
+      environmentSample.pdf * environmentSelectionProbability,
+      1000000.0,
+      0u,
+      1u
+    );
+  }
+  let emissiveSample = sample_emissive_triangle_light(hit, mix_seed(
+    ray.sourcePixelId,
+    ray.sampleId,
+    ray.bounce,
+    config.frameIndex,
+    47u
+  ));
+  if (emissiveSample.valid == 0u) {
+    return emissiveSample;
+  }
+  return DirectLightSample(
+    emissiveSample.direction,
+    emissiveSample.radiance,
+    emissiveSample.pdf * (1.0 - environmentSelectionProbability),
+    emissiveSample.maxDistance,
+    emissiveSample.flags,
+    emissiveSample.valid
+  );
+}
+
+fn surface_direct_light_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
   let origin = hit.position.xyz + normal * 0.003;
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
-  let lightSample = sample_environment_importance(vec2<f32>(
-    random01(mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 41u)),
-    random01(mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 43u))
-  ));
+  let lightSample = sample_direct_light(hit, ray, normal);
+  if (lightSample.valid == 0u) {
+    return vec3<f32>(0.0);
+  }
   if (lightSample.pdf <= 0.000001) {
     return vec3<f32>(0.0);
   }
-  let lightDirection = safe_normalize(lightSample.direction, normal);
+  let lightDirection = safe_normalize(lightSample.direction.xyz, normal);
   let nDotL = saturate(dot(normal, lightDirection));
   if (nDotL <= 0.000001) {
     return vec3<f32>(0.0);
   }
-  if (scene_visibility_blocked(origin, lightDirection, 1000000.0)) {
+  if (scene_visibility_blocked(origin, lightDirection, lightSample.maxDistance)) {
     return vec3<f32>(0.0);
   }
-  let incidentRadiance = direct_environment_radiance(origin, lightDirection);
+  let incidentRadiance = lightSample.radiance.xyz;
   if (max_component(incidentRadiance) <= 0.000001) {
     return vec3<f32>(0.0);
   }
@@ -5461,29 +5578,20 @@ fn refract_direction(unitDirection: vec3<f32>, normal: vec3<f32>, etaRatio: f32)
   return safe_normalize(rOutPerp + rOutParallel, reflect(unitDirection, normal));
 }
 
-fn sample_emissive_triangle_direction(hit: HitRecord, seed: u32, fallback: vec3<f32>) -> vec3<f32> {
-  if (config.emissiveTriangleCount == 0u) {
-    return fallback;
-  }
-  let lightSlot = min(u32(random01(seed + 71u) * f32(config.emissiveTriangleCount)), config.emissiveTriangleCount - 1u);
-  let lightMetadata = bvhNodes[config.bvhNodeCapacity + lightSlot];
-  let triangleIndex = lightMetadata.childOrFirst;
-  if (triangleIndex >= config.triangleCount) {
-    return fallback;
-  }
+fn surface_supports_direct_lighting(hit: HitRecord) -> bool {
+  let roughness = clamp(hit.material.x, 0.0, 1.0);
+  let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
+  let deltaMetal = hit.materialKind == 1u && roughness <= 0.02;
+  let refractive = hit.materialKind == 2u || hit.materialKind == 3u || transmission > 0.001;
+  return !(deltaMetal || refractive);
+}
 
-  let lightTriangle = triangles[triangleIndex];
-  let r1 = random01(seed + 101u);
-  let r2 = random01(seed + 193u);
-  let root = sqrt(r1);
-  let b0 = 1.0 - root;
-  let b1 = root * (1.0 - r2);
-  let b2 = root * r2;
-  let lightPoint =
-    lightTriangle.v0.xyz * b0 +
-    lightTriangle.v1.xyz * b1 +
-    lightTriangle.v2.xyz * b2;
-  return safe_normalize(lightPoint - hit.position.xyz, fallback);
+fn sample_emissive_triangle_direction(hit: HitRecord, seed: u32, fallback: vec3<f32>) -> vec3<f32> {
+  let lightSample = sample_emissive_triangle_light(hit, seed);
+  if (lightSample.valid == 0u) {
+    return fallback;
+  }
+  return safe_normalize(lightSample.direction.xyz, fallback);
 }
 
 fn sample_environment_portal_direction(hit: HitRecord, seed: u32, fallback: vec3<f32>) -> vec3<f32> {
@@ -5658,12 +5766,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   );
   record_deferred_path_response(ray, response);
 
-  let shouldEstimateDirectEnvironment =
-    (hit.materialKind == 0u || hit.materialKind == 1u) &&
-    hit.material.z >= 0.95 &&
-    ray.bounce < 2u;
-  if (shouldEstimateDirectEnvironment) {
-    let directEnvironment = surface_direct_environment_contribution(
+  let shouldEstimateDirectLight = surface_supports_direct_lighting(hit);
+  if (shouldEstimateDirectLight) {
+    let directLight = surface_direct_light_contribution(
       RayRecord(
         ray.rayId,
         ray.parentRayId,
@@ -5680,7 +5785,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       hit
     );
     accumulation[ray.rayId] =
-      accumulation[ray.rayId] + vec4<f32>(directEnvironment * sample_weight(), 0.0);
+      accumulation[ray.rayId] + vec4<f32>(directLight * sample_weight(), 0.0);
   }
 
   if (ray.bounce + 1u >= config.maxDepth) {
