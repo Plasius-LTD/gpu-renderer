@@ -219,7 +219,9 @@ reflection/refraction tree.
 `samplesPerPixel` controls how many GPU primary-ray samples are accumulated per
 screen pixel within a single render. This multiplies dispatch work but does not
 increase the tile queue memory footprint, so 720p/1080p/4K targets remain
-bounded by `tileSize`. When `denoise` is enabled the renderer writes raw
+bounded by `tileSize`. `maxDepth` is bounded at 32 for offline/reference
+renders, allowing 20-bounce quality checks while keeping path-vertex memory
+explicit and predictable. When `denoise` is enabled the renderer writes raw
 linear radiance to an `rgba16float` texture first, then runs a two-stage
 full-frame GPU denoise through an `rgba16float` scratch texture before final
 tone mapping into the presented `rgba8unorm` output. Filtering in linear

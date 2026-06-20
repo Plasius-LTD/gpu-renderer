@@ -10,6 +10,7 @@ import {
 const DEFAULT_WIDTH = 1280;
 const DEFAULT_HEIGHT = 720;
 const DEFAULT_MAX_DEPTH = 6;
+const MAX_PATH_TRACING_DEPTH = 32;
 const DEFAULT_TILE_SIZE = 128;
 const DEFAULT_SAMPLES_PER_PIXEL = 1;
 const MAX_SAMPLES_PER_PIXEL = 256;
@@ -1889,7 +1890,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   const maxDepth = clamp(
     readPositiveInteger("maxDepth", options.maxDepth, DEFAULT_MAX_DEPTH),
     1,
-    16
+    MAX_PATH_TRACING_DEPTH
   );
   const sceneObjectCapacity = readPositiveInteger(
     "sceneObjectCapacity",
@@ -1968,7 +1969,11 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   const canvas = options.canvas;
   const width = readPositiveInteger("width", options.width, getCanvasDimension(canvas, "width", DEFAULT_WIDTH));
   const height = readPositiveInteger("height", options.height, getCanvasDimension(canvas, "height", DEFAULT_HEIGHT));
-  const maxDepth = clamp(readPositiveInteger("maxDepth", options.maxDepth, DEFAULT_MAX_DEPTH), 1, 16);
+  const maxDepth = clamp(
+    readPositiveInteger("maxDepth", options.maxDepth, DEFAULT_MAX_DEPTH),
+    1,
+    MAX_PATH_TRACING_DEPTH
+  );
   const tileSize = clamp(readPositiveInteger("tileSize", options.tileSize, DEFAULT_TILE_SIZE), 16, 512);
   const samplesPerPixel = clamp(
     readPositiveInteger("samplesPerPixel", options.samplesPerPixel, DEFAULT_SAMPLES_PER_PIXEL),
