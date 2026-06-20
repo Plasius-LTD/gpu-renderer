@@ -40,6 +40,7 @@ const PATH_VERTEX_RECORD_BYTES = 16;
 const GPU_SUBMITTED_WORK_TIMEOUT_MS = 5_000;
 const GPU_READBACK_COMPLETION_TIMEOUT_MS = 60_000;
 const GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS = 60_000;
+const GPU_MAX_SUBMITTED_WORK_DEADLINE_MS = 180_000;
 const CONFIG_BUFFER_BYTES = 320;
 const COUNTER_DISPATCH_ARGS_OFFSET = 16;
 const INDIRECT_DISPATCH_ARGS_BYTES = 12;
@@ -933,104 +934,9 @@ function normalizeVectorOrFallback(vector, fallback) {
   return normalize(Array.isArray(vector) ? vector : fallback, fallback);
 }
 
-function buildTriangleTangentBasis(v0, v1, v2, uv0, uv1, uv2, fallbackNormal) {
-  const edge1 = subtract(v1, v0);
-  const edge2 = subtract(v2, v0);
-  const deltaUv1 = [uv1[0] - uv0[0], uv1[1] - uv0[1]];
-  const deltaUv2 = [uv2[0] - uv0[0], uv2[1] - uv0[1]];
-  const determinant = deltaUv1[0] * deltaUv2[1] - deltaUv1[1] * deltaUv2[0];
-  if (Math.abs(determinant) < 1e-6) {
-    const tangentFallback = Math.abs(fallbackNormal[1]) < 0.999 ? [0, 1, 0] : [1, 0, 0];
-    const tangent = normalize(cross(tangentFallback, fallbackNormal), [1, 0, 0]);
-    const bitangent = normalize(cross(fallbackNormal, tangent), [0, 0, 1]);
-    return { tangent, bitangent };
-  }
-  const inverse = 1 / determinant;
-  const tangent = normalize(
-    [
-      inverse * (edge1[0] * deltaUv2[1] - edge2[0] * deltaUv1[1]),
-      inverse * (edge1[1] * deltaUv2[1] - edge2[1] * deltaUv1[1]),
-      inverse * (edge1[2] * deltaUv2[1] - edge2[2] * deltaUv1[1]),
-    ],
-    [1, 0, 0]
-  );
-  const bitangent = normalize(
-    [
-      inverse * (-edge1[0] * deltaUv2[0] + edge2[0] * deltaUv1[0]),
-      inverse * (-edge1[1] * deltaUv2[0] + edge2[1] * deltaUv1[0]),
-      inverse * (-edge1[2] * deltaUv2[0] + edge2[2] * deltaUv1[0]),
-    ],
-    [0, 0, 1]
-  );
-  return { tangent, bitangent };
-}
-
-function applyNormalMap(normal, tangent, bitangent, normalTexture, uv) {
-  if (!normalTexture) {
-    return normalizeVectorOrFallback(normal, [0, 1, 0]);
-  }
-  const sample = sampleTextureRgba(normalTexture, uv, "linear");
-  const strength = clampUnit(normalTexture.scale ?? 1);
-  const tangentNormal = normalize(
-    [
-      (sample[0] * 2 - 1) * strength,
-      (sample[1] * 2 - 1) * strength,
-      1 + (sample[2] * 2 - 1 - 1) * strength,
-    ],
-    [0, 0, 1]
-  );
-  return normalize(
-    [
-      tangent[0] * tangentNormal[0] + bitangent[0] * tangentNormal[1] + normal[0] * tangentNormal[2],
-      tangent[1] * tangentNormal[0] + bitangent[1] * tangentNormal[1] + normal[1] * tangentNormal[2],
-      tangent[2] * tangentNormal[0] + bitangent[2] * tangentNormal[1] + normal[2] * tangentNormal[2],
-    ],
-    normal
-  );
-}
-
-function sampleBaseColor(mesh, uv) {
-  const sample = mesh.baseColorTexture ? sampleTextureRgba(mesh.baseColorTexture, uv, "srgb") : [1, 1, 1, 1];
-  return [
-    clampUnit(mesh.color[0] * sample[0]),
-    clampUnit(mesh.color[1] * sample[1]),
-    clampUnit(mesh.color[2] * sample[2]),
-    clampUnit((mesh.color[3] ?? 1) * sample[3]),
-  ];
-}
-
-function sampleSurfaceMaterial(mesh, uv) {
-  const textureSample = mesh.metallicRoughnessTexture
-    ? sampleTextureRgba(mesh.metallicRoughnessTexture, uv, "linear")
-    : [1, 1, 1, 1];
-  return {
-    roughness: clamp(mesh.roughness * textureSample[1], 0, 1),
-    metallic: clamp(mesh.metallic * textureSample[2], 0, 1),
-  };
-}
-
-function averageColors(colors) {
-  const count = Math.max(colors.length, 1);
-  return colors.reduce(
-    (accumulator, color) => [
-      accumulator[0] + color[0] / count,
-      accumulator[1] + color[1] / count,
-      accumulator[2] + color[2] / count,
-      accumulator[3] + color[3] / count,
-    ],
-    [0, 0, 0, 0]
-  );
-}
-
-function averageNumbers(values, fallback = 0) {
-  if (!Array.isArray(values) || values.length === 0) {
-    return fallback;
-  }
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function createMeshTriangleRecords(meshes) {
+function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
   const source = Array.isArray(meshes) ? meshes : [];
+  const resolvedMaterialSource = gpuMaterialSource ?? createWavefrontGpuMaterialSource(source);
   let nextTriangleId = 0;
   return source.flatMap((meshInput, meshIndex) => {
     const mesh = normalizeWavefrontMesh(meshInput, meshIndex);
@@ -1049,16 +955,6 @@ function createMeshTriangleRecords(meshes) {
       const uv0 = mesh.uvs ? readVector2(mesh.uvs, a) : [0, 0];
       const uv1 = mesh.uvs ? readVector2(mesh.uvs, b) : [0, 0];
       const uv2 = mesh.uvs ? readVector2(mesh.uvs, c) : [0, 0];
-      const tangentBasis = buildTriangleTangentBasis(v0, v1, v2, uv0, uv1, uv2, faceNormal);
-      const shadedN0 = applyNormalMap(n0, tangentBasis.tangent, tangentBasis.bitangent, mesh.normalTexture, uv0);
-      const shadedN1 = applyNormalMap(n1, tangentBasis.tangent, tangentBasis.bitangent, mesh.normalTexture, uv1);
-      const shadedN2 = applyNormalMap(n2, tangentBasis.tangent, tangentBasis.bitangent, mesh.normalTexture, uv2);
-      const sampledColors = [sampleBaseColor(mesh, uv0), sampleBaseColor(mesh, uv1), sampleBaseColor(mesh, uv2)];
-      const sampledMaterials = [
-        sampleSurfaceMaterial(mesh, uv0),
-        sampleSurfaceMaterial(mesh, uv1),
-        sampleSurfaceMaterial(mesh, uv2),
-      ];
       const bounds = triangleBounds(v0, v1, v2);
 
       triangles.push(
@@ -1073,17 +969,17 @@ function createMeshTriangleRecords(meshes) {
           v0: Object.freeze(v0),
           v1: Object.freeze(v1),
           v2: Object.freeze(v2),
-          n0: Object.freeze(shadedN0),
-          n1: Object.freeze(shadedN1),
-          n2: Object.freeze(shadedN2),
+          n0: Object.freeze(n0),
+          n1: Object.freeze(n1),
+          n2: Object.freeze(n2),
           uv0: Object.freeze(uv0),
           uv1: Object.freeze(uv1),
           uv2: Object.freeze(uv2),
-          color: Object.freeze(averageColors(sampledColors)),
+          color: mesh.color,
           emission: mesh.emission,
           material: Object.freeze([
-            averageNumbers(sampledMaterials.map((sample) => sample.roughness), mesh.roughness),
-            averageNumbers(sampledMaterials.map((sample) => sample.metallic), mesh.metallic),
+            mesh.roughness,
+            mesh.metallic,
             mesh.opacity,
             mesh.ior,
           ]),
@@ -1104,6 +1000,27 @@ function createMeshTriangleRecords(meshes) {
             mesh.specularColor[1] ?? 1,
             mesh.specularColor[2] ?? 1,
             1,
+          ]),
+          baseColorAtlas: Object.freeze(
+            resolvedMaterialSource.baseColorAtlas.resolveRect(mesh.baseColorTexture)
+          ),
+          metallicRoughnessAtlas: Object.freeze(
+            resolvedMaterialSource.metallicRoughnessAtlas.resolveRect(mesh.metallicRoughnessTexture)
+          ),
+          normalAtlas: Object.freeze(
+            resolvedMaterialSource.normalAtlas.resolveRect(mesh.normalTexture)
+          ),
+          occlusionAtlas: Object.freeze(
+            resolvedMaterialSource.occlusionAtlas.resolveRect(mesh.occlusionTexture)
+          ),
+          emissiveAtlas: Object.freeze(
+            resolvedMaterialSource.emissiveAtlas.resolveRect(mesh.emissiveTexture)
+          ),
+          textureSettings: Object.freeze([
+            clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
+            clampUnit(mesh.occlusionTexture?.strength ?? 1),
+            clampUnit(mesh.emissiveTexture?.strength ?? 1),
+            0,
           ]),
           bounds: Object.freeze({
             min: Object.freeze(bounds.min),
@@ -1187,9 +1104,10 @@ function buildBvh(triangles, maxLeafTriangles = 4) {
   });
 }
 
-export function createWavefrontMeshAcceleration(meshes = []) {
+export function createWavefrontMeshAcceleration(meshes = [], gpuMaterialSource = null) {
   const source = Array.isArray(meshes) ? meshes : [meshes];
-  const triangles = createMeshTriangleRecords(source);
+  const resolvedMaterialSource = gpuMaterialSource ?? createWavefrontGpuMaterialSource(source);
+  const triangles = createMeshTriangleRecords(source, resolvedMaterialSource);
   return buildBvh(triangles);
 }
 
@@ -1524,12 +1442,13 @@ export function createWavefrontBvhBuildLevels(triangleCountInput) {
 }
 
 function resolveAccelerationBuildMode(options = {}) {
-  const mode = options.accelerationBuildMode ?? (options.displayQuality === true ? "gpu" : "cpu-debug");
-  if (mode !== "gpu" && mode !== "cpu-debug") {
-    throw new Error("accelerationBuildMode must be either \"gpu\" or \"cpu-debug\".");
-  }
-  if (options.displayQuality === true && mode !== "gpu") {
-    throw new Error("Display-quality path tracing requires GPU-built mesh acceleration.");
+  const requestedMode =
+    options.accelerationBuildMode ?? (options.displayQuality === true ? "cpu-upload" : "cpu-debug");
+  const mode = requestedMode === "cpu-debug" ? "cpu-upload" : requestedMode;
+  if (mode !== "gpu" && mode !== "cpu-upload") {
+    throw new Error(
+      "accelerationBuildMode must be either \"gpu\", \"cpu-upload\", or the legacy alias \"cpu-debug\"."
+    );
   }
   return mode;
 }
@@ -2081,8 +2000,8 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
       ? createWavefrontGpuMeshSource(meshes, gpuMaterialSource)
       : createWavefrontGpuMeshSource([]);
   const meshAcceleration =
-    accelerationBuildMode === "cpu-debug"
-      ? createWavefrontMeshAcceleration(meshes)
+    accelerationBuildMode === "cpu-upload"
+      ? createWavefrontMeshAcceleration(meshes, gpuMaterialSource)
       : Object.freeze({ nodes: Object.freeze([]), triangles: Object.freeze([]) });
   const emissiveTriangleIndices = createWavefrontEmissiveTriangleIndexSource(
     meshes,
@@ -6076,9 +5995,28 @@ function nowMs() {
   return Date.now();
 }
 
-function estimateSubmittedGpuWorkTimeoutMs(config, tileCount, overrideTimeoutMs = null) {
+function estimateAccelerationBuildWaitFactor(config) {
+  if (config?.gpuAccelerationBuildRequired !== true) {
+    return 1;
+  }
+  const bvhSortStageCount = Array.isArray(config?.bvhSortStages) ? config.bvhSortStages.length : 0;
+  const bvhBuildLevelCount = Array.isArray(config?.bvhBuildLevels) ? config.bvhBuildLevels.length : 0;
+  const accelerationStageCount = 2 + bvhSortStageCount + bvhBuildLevelCount;
+  return Math.max(1, 1 + accelerationStageCount / 96);
+}
+
+function estimateSubmittedGpuWorkTiming(
+  config,
+  tileCount,
+  overrideTimeoutMs = null,
+  options = {}
+) {
   if (Number.isFinite(overrideTimeoutMs)) {
-    return Math.max(1, Math.trunc(Number(overrideTimeoutMs)));
+    const overrideMs = Math.max(1, Math.trunc(Number(overrideTimeoutMs)));
+    return Object.freeze({
+      timeoutMs: overrideMs,
+      maxWaitMs: overrideMs,
+    });
   }
   const samplesPerPixel = Math.max(
     1,
@@ -6090,10 +6028,28 @@ function estimateSubmittedGpuWorkTimeoutMs(config, tileCount, overrideTimeoutMs 
   const tiles = Math.max(1, Number(tileCount ?? 1));
   const estimatedPasses =
     tiles * (samplesPerPixel * (maxDepth + 1 + deferredResolvePasses) + denoisePasses + 1);
-  return Math.min(
-    GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS,
-    GPU_SUBMITTED_WORK_TIMEOUT_MS + estimatedPasses * 5
+  const triangleCount = Math.max(0, Number(config?.triangleCount ?? 0));
+  const geometryFactor = Math.max(1, triangleCount / 131072);
+  const includeAccelerationBuild = options.includeAccelerationBuild === true;
+  const accelerationFactor = includeAccelerationBuild
+    ? estimateAccelerationBuildWaitFactor(config)
+    : 1;
+  const estimatedWindowMs = Math.round(
+    (GPU_SUBMITTED_WORK_TIMEOUT_MS + estimatedPasses * 5) * geometryFactor * accelerationFactor
   );
+  const timeoutMs = Math.min(
+    GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS,
+    Math.max(GPU_SUBMITTED_WORK_TIMEOUT_MS, estimatedWindowMs)
+  );
+  const maxWaitMultiplier = includeAccelerationBuild ? 3 : 2;
+  const maxWaitMs = Math.min(
+    GPU_MAX_SUBMITTED_WORK_DEADLINE_MS,
+    Math.max(timeoutMs, estimatedWindowMs * maxWaitMultiplier)
+  );
+  return Object.freeze({
+    timeoutMs,
+    maxWaitMs,
+  });
 }
 
 export async function createWavefrontPathTracingComputeRenderer(options = {}) {
@@ -7124,6 +7080,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         ? Number(options.timeoutMs)
         : GPU_SUBMITTED_WORK_TIMEOUT_MS
     );
+    const maxWaitMs = Math.max(
+      timeoutMs,
+      Number.isFinite(options.maxWaitMs) ? Number(options.maxWaitMs) : timeoutMs
+    );
     const allowTimeout = options.allowTimeout !== false;
     const completionPromise = device.queue.onSubmittedWorkDone().then(
       () => ({ status: "done" }),
@@ -7139,47 +7099,62 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
             );
           })
         : null;
-    let timeoutHandle = null;
-    let resolveTimeoutPromise = null;
-    let timeoutSettled = false;
-    const settleTimeoutPromise = (value) => {
-      if (timeoutSettled) {
-        return;
+    const startedAtMs = nowMs();
+    while (true) {
+      const elapsedMs = Math.max(0, nowMs() - startedAtMs);
+      const remainingMs = Math.max(0, maxWaitMs - elapsedMs);
+      if (remainingMs <= 0) {
+        if (!allowTimeout) {
+          throw new Error(`Timed out after ${Math.round(maxWaitMs)} ms waiting for submitted GPU work.`);
+        }
+        console.warn(
+          `[plasius.wavefront] Submitted GPU work did not report completion within ${Math.round(maxWaitMs)} ms; continuing.`
+        );
+        return false;
       }
-      timeoutSettled = true;
-      resolveTimeoutPromise?.(value);
-    };
-    const timeoutPromise = new Promise((resolve) => {
-      resolveTimeoutPromise = resolve;
-      timeoutHandle = setTimeout(() => settleTimeoutPromise({ status: "timeout" }), timeoutMs);
-    });
-    let result;
-    try {
-      result = await Promise.race(
-        [completionPromise, timeoutPromise, lossPromise].filter(Boolean)
-      );
-    } finally {
-      if (timeoutHandle !== null) {
-        clearTimeout(timeoutHandle);
-        settleTimeoutPromise({ status: "cancelled" });
+      const waitWindowMs = Math.max(1, Math.min(timeoutMs, remainingMs));
+      let timeoutHandle = null;
+      let resolveTimeoutPromise = null;
+      let timeoutSettled = false;
+      const settleTimeoutPromise = (value) => {
+        if (timeoutSettled) {
+          return;
+        }
+        timeoutSettled = true;
+        resolveTimeoutPromise?.(value);
+      };
+      const timeoutPromise = new Promise((resolve) => {
+        resolveTimeoutPromise = resolve;
+        timeoutHandle = setTimeout(
+          () => settleTimeoutPromise({ status: "timeout" }),
+          waitWindowMs
+        );
+      });
+      let result;
+      try {
+        result = await Promise.race(
+          [completionPromise, timeoutPromise, lossPromise].filter(Boolean)
+        );
+      } finally {
+        if (timeoutHandle !== null) {
+          clearTimeout(timeoutHandle);
+          settleTimeoutPromise({ status: "cancelled" });
+        }
+      }
+      if (result?.status === "done") {
+        return true;
+      }
+      if (result?.status !== "timeout") {
+        return true;
       }
     }
-    if (result?.status === "timeout") {
-      if (!allowTimeout) {
-        throw new Error(`Timed out after ${timeoutMs} ms waiting for submitted GPU work.`);
-      }
-      console.warn(
-        `[plasius.wavefront] Submitted GPU work did not report completion within ${timeoutMs} ms; continuing.`
-      );
-      return false;
-    }
-    return true;
   }
 
   function dispatchFrameAwaitingGpu(
     frameIndex,
     parallelism,
-    renderedSamplesPerPixel = config.samplesPerPixel
+    renderedSamplesPerPixel = config.samplesPerPixel,
+    optionsForFrame = {}
   ) {
     const samplePassesPerSample = config.maxDepth + 1 + (config.deferredPathResolve ? 1 : 0);
     const denoisePassCount = config.denoise ? (renderedSamplesPerPixel < 4 ? 2 : 1) : 0;
@@ -7188,25 +7163,50 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       1,
       Math.floor(
         Math.max(config.maxFramePassesPerSubmission - tailPassCount, 1) /
-          Math.max(samplePassesPerSample, 1)
+        Math.max(samplePassesPerSample, 1)
       )
     );
-    let submissionCount = 0;
+    const sampleRangeStart = clamp(
+      readNonNegativeInteger("sampleRangeStart", optionsForFrame.sampleRangeStart, 0),
+      0,
+      renderedSamplesPerPixel
+    );
+    const sampleRangeEnd = clamp(
+      readPositiveInteger("sampleRangeEnd", optionsForFrame.sampleRangeEnd, renderedSamplesPerPixel),
+      sampleRangeStart,
+      renderedSamplesPerPixel
+    );
+    const includeDenoise = optionsForFrame.includeDenoise === true;
+    const includePresent = optionsForFrame.includePresent === true;
+    const tileStartIndex = clamp(
+      readNonNegativeInteger("tileStartIndex", optionsForFrame.tileStartIndex, 0),
+      0,
+      tiles.length
+    );
+    const tileEndIndex = clamp(
+      readPositiveInteger("tileEndIndex", optionsForFrame.tileEndIndex, tiles.length),
+      tileStartIndex,
+      tiles.length
+    );
+    let submissionCount = Math.max(
+      0,
+      readNonNegativeInteger("startingSubmissionCount", optionsForFrame.startingSubmissionCount, 0)
+    );
+    let slot = Math.max(0, readNonNegativeInteger("startingSlot", optionsForFrame.startingSlot, 0));
 
-    for (const tile of tiles) {
+    for (const tile of tiles.slice(tileStartIndex, tileEndIndex)) {
       for (
-        let sampleStart = 0;
-        sampleStart < renderedSamplesPerPixel;
+        let sampleStart = sampleRangeStart;
+        sampleStart < sampleRangeEnd;
         sampleStart += sampleBatchSize
       ) {
-        const sampleEnd = Math.min(renderedSamplesPerPixel, sampleStart + sampleBatchSize);
+        const sampleEnd = Math.min(sampleRangeEnd, sampleStart + sampleBatchSize);
         const batch = createGpuSubmissionBatcher({
           device,
           frameIndex,
           maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
           startingSubmissionCount: submissionCount,
         });
-        let slot = 0;
         for (let sampleIndex = sampleStart; sampleIndex < sampleEnd; sampleIndex += 1) {
           const configOffset = writeFrameConfigSlot(slot, tile, frameIndex, {
             sampleIndex,
@@ -7223,11 +7223,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
             encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
           }
         }
-        if (!config.deferredPathResolve && sampleEnd >= renderedSamplesPerPixel) {
+        if (!config.deferredPathResolve && sampleRangeEnd >= renderedSamplesPerPixel) {
           const outputConfigOffset = writeFrameConfigSlot(slot, tile, frameIndex, {
             sampleIndex: 0,
             sampleWeight: 1 / renderedSamplesPerPixel,
           });
+          slot += 1;
           encodeTileOutput(batch.reserve(1), tile, outputConfigOffset, parallelism);
         }
         batch.flush();
@@ -7235,30 +7236,38 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       }
     }
 
-    const tail = createGpuSubmissionBatcher({
-      device,
-      frameIndex,
-      maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
-      startingSubmissionCount: submissionCount,
-    });
-    if (config.denoise) {
-      const denoiseConfigOffset = writeFrameConfigSlot(
-        0,
-        { x: 0, y: 0, width: config.width, height: config.height },
+    if (includeDenoise || includePresent) {
+      const tail = createGpuSubmissionBatcher({
+        device,
         frameIndex,
-        { sampleIndex: 0, sampleWeight: 1 / renderedSamplesPerPixel }
-      );
-      encodeDenoise(
-        tail.reserve(denoisePassCount),
-        denoiseConfigOffset,
-        parallelism,
-        renderedSamplesPerPixel
-      );
+        maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
+        startingSubmissionCount: submissionCount,
+      });
+      if (includeDenoise && config.denoise) {
+        const denoiseConfigOffset = writeFrameConfigSlot(
+          slot,
+          { x: 0, y: 0, width: config.width, height: config.height },
+          frameIndex,
+          { sampleIndex: 0, sampleWeight: 1 / renderedSamplesPerPixel }
+        );
+        slot += 1;
+        encodeDenoise(
+          tail.reserve(denoisePassCount),
+          denoiseConfigOffset,
+          parallelism,
+          renderedSamplesPerPixel
+        );
+      }
+      if (includePresent) {
+        encodePresent(tail.reserve(1));
+      }
+      tail.flush();
+      submissionCount += tail.getSubmissionCount();
     }
-    encodePresent(tail.reserve(1));
-    tail.flush();
-    submissionCount += tail.getSubmissionCount();
-    return submissionCount;
+    return Object.freeze({
+      submissionCount,
+      slot,
+    });
   }
 
   async function readOutputProbe(optionsForProbe = {}) {
@@ -7307,26 +7316,59 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     const samplingPlan = resolveRenderedSamplesPerPixel(renderOptions, awaitGPUCompletion);
     const useThrottledHighSamplePath =
       awaitGPUCompletion && samplingPlan.renderedSamplesPerPixel >= 8;
-    const submittedWorkTimeoutMs = estimateSubmittedGpuWorkTimeoutMs(
-      { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
-      tiles.length,
-      renderOptions.submittedWorkTimeoutMs
-    );
     const frameStartTimeMs = nowMs();
-    const submissionWaitOptions = awaitGPUCompletion
-      ? { timeoutMs: submittedWorkTimeoutMs, allowTimeout: false }
-      : { timeoutMs: submittedWorkTimeoutMs };
     let frameStats;
     if (useThrottledHighSamplePath) {
       frame += 1;
       const frameIndex = frame + config.frameIndex;
       const parallelismCounters = createGpuParallelismCounters();
       const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
-      const frameSubmissionCount = dispatchFrameAwaitingGpu(
-        frameIndex,
-        parallelismCounters,
-        samplingPlan.renderedSamplesPerPixel
-      );
+      let frameSubmissionCount = 0;
+      let frameConfigSlot = 0;
+      if (accelerationBuildSubmitted) {
+        const accelerationWaitOptions = {
+          ...estimateSubmittedGpuWorkTiming(
+            { ...config, renderedSamplesPerPixel: 1 },
+            1,
+            renderOptions.submittedWorkTimeoutMs,
+            { includeAccelerationBuild: true }
+          ),
+          allowTimeout: false,
+        };
+        await waitForSubmittedGpuWork(accelerationWaitOptions);
+      }
+      for (let tileIndex = 0; tileIndex < tiles.length; tileIndex += 1) {
+        const tileRangeDispatch = dispatchFrameAwaitingGpu(
+          frameIndex,
+          parallelismCounters,
+          samplingPlan.renderedSamplesPerPixel,
+          {
+            sampleRangeStart: 0,
+            sampleRangeEnd: samplingPlan.renderedSamplesPerPixel,
+            tileStartIndex: tileIndex,
+            tileEndIndex: tileIndex + 1,
+            startingSubmissionCount: frameSubmissionCount,
+            startingSlot: frameConfigSlot,
+            includeDenoise: tileIndex + 1 >= tiles.length,
+            includePresent: tileIndex + 1 >= tiles.length,
+          }
+        );
+        frameSubmissionCount = tileRangeDispatch.submissionCount;
+        frameConfigSlot = tileRangeDispatch.slot;
+        const tileWaitOptions = {
+          ...estimateSubmittedGpuWorkTiming(
+            { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
+            1,
+            renderOptions.submittedWorkTimeoutMs,
+            {
+              includeDenoise: tileIndex + 1 >= tiles.length && config.denoise,
+              includePresent: tileIndex + 1 >= tiles.length,
+            }
+          ),
+          allowTimeout: false,
+        };
+        await waitForSubmittedGpuWork(tileWaitOptions);
+      }
       frameStats = createFrameStats({
         frameIndex,
         accelerationBuildSubmitted,
@@ -7338,10 +7380,26 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         budgetConstrained: samplingPlan.budgetConstrained,
       });
     } else {
+      const submittedWorkTiming = estimateSubmittedGpuWorkTiming(
+        { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
+        tiles.length,
+        renderOptions.submittedWorkTimeoutMs,
+        { includeAccelerationBuild: config.gpuAccelerationBuildRequired && !accelerationBuilt }
+      );
+      const submissionWaitOptions = awaitGPUCompletion
+        ? {
+            timeoutMs: submittedWorkTiming.timeoutMs,
+            maxWaitMs: submittedWorkTiming.maxWaitMs,
+            allowTimeout: false,
+          }
+        : {
+            timeoutMs: submittedWorkTiming.timeoutMs,
+            maxWaitMs: submittedWorkTiming.maxWaitMs,
+          };
       frameStats = renderOnce(renderOptions, samplingPlan);
-    }
-    if (awaitGPUCompletion) {
-      await waitForSubmittedGpuWork(submissionWaitOptions);
+      if (awaitGPUCompletion) {
+        await waitForSubmittedGpuWork(submissionWaitOptions);
+      }
     }
     const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
     if (awaitGPUCompletion) {
