@@ -31,12 +31,23 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  prepare_release:
+    uses: Plasius-LTD/plasius-ltd-site/.github/workflows/release-prepare.yml@main
+    with:
+      bump: ${{ inputs.bump }}
+      preid: ${{ inputs.preid }}
+    secrets: inherit
+
   publish:
+    needs: prepare_release
     runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Use Node.js 24
         uses: actions/setup-node@v6
@@ -44,94 +55,17 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
 
-      - name: Prepare release metadata
+      - name: Use prepared release metadata
         id: pkg
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          BUMP: ${{ inputs.bump }}
-          PREID: ${{ inputs.preid }}
         run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          CURRENT_VER=$(node -p "require('./package.json').version")
-          NAME=$(node -p "require('./package.json').name")
-
-          if [ "${BUMP}" = "none" ]; then
-            NEW_VER="v${CURRENT_VER}"
-            # The later metadata step creates and pushes this tag before gh release create --verify-tag.
-          else
-            case "${BUMP:-patch}" in
-              major|minor|patch) ;;
-              *)
-                echo "Unknown bump type: ${BUMP}" >&2
-                exit 1
-                ;;
-            esac
-
-            REGISTRY_VER=$(npm view "$NAME" version 2>/dev/null || true)
-            TARGET_VER=$(node -e '
-          const [localVersion, registryVersion, bump, preid] = process.argv.slice(1);
-          const clean = (value) => String(value || "").replace(/^v/, "").trim();
-          const parse = (value) => {
-            const [core] = clean(value).split("-");
-            const parts = core.split(".").map((part) => Number(part));
-            if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) {
-              throw new Error(`Invalid semver value: ${value}`);
-            }
-            return parts;
-          };
-          const compare = (left, right) => {
-            for (let index = 0; index < 3; index += 1) {
-              const diff = left[index] - right[index];
-              if (diff !== 0) return diff;
-            }
-            return 0;
-          };
-
-          const local = parse(localVersion);
-          const registry = registryVersion ? parse(registryVersion) : local;
-          const base = compare(registry, local) > 0 ? registry : local;
-          let next;
-          switch (bump) {
-            case "major":
-              next = [base[0] + 1, 0, 0];
-              break;
-            case "minor":
-              next = [base[0], base[1] + 1, 0];
-              break;
-            case "patch":
-              next = [base[0], base[1], base[2] + 1];
-              break;
-            default:
-              throw new Error(`Unknown bump type: ${bump}`);
-          }
-
-          let version = next.join(".");
-          if (preid) {
-            version = `${version}-${preid}.0`;
-          }
-          process.stdout.write(version);
-          ' "$CURRENT_VER" "$REGISTRY_VER" "$BUMP" "${PREID:-}")
-            NEW_VER=$(npm version "$TARGET_VER" --no-git-tag-version --allow-same-version)
-          fi
-
-          echo "New version: $NEW_VER"
-
-          # Expose tag (vX.Y.Z) and version (X.Y.Z) for later steps
-          VER_NO_V=${NEW_VER#v}
-          echo "tag=$NEW_VER" >> "$GITHUB_OUTPUT"
-          echo "version=$VER_NO_V" >> "$GITHUB_OUTPUT"
-
-          NAME=$(node -p "require('./package.json').name")
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          if npm view "$NAME" version >/dev/null 2>&1; then
-            echo "flags=" >> "$GITHUB_OUTPUT"
-          else
-            echo "flags=--access public" >> "$GITHUB_OUTPUT"
-          fi
-
+          {
+            echo "mode=publish"
+            echo "name=${{ needs.prepare_release.outputs.name }}"
+            echo "tag=${{ needs.prepare_release.outputs.tag }}"
+            echo "version=${{ needs.prepare_release.outputs.version }}"
+            echo "flags=${{ needs.prepare_release.outputs.flags }}"
+            echo "published=${{ needs.prepare_release.outputs.published }}"
+          } >> "$GITHUB_OUTPUT"
       - name: Install deps (CI)
         run: npm ci
 
@@ -161,129 +95,30 @@ jobs:
         with:
           subject-path: sbom.cdx.json
 
-      - name: Update CHANGELOG.md (move Unreleased to new version)
+      - name: Create release tag from main
         env:
-          VERSION: ${{ steps.pkg.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.pkg.outputs.tag }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          verbose: true
         run: |
           set -euo pipefail
+          git fetch origin main --tags
+          git checkout -B main origin/main
 
-          FILE="CHANGELOG.md"
-          if [ ! -f "$FILE" ]; then
-            echo "No CHANGELOG.md found; skipping changelog update."
-            exit 0
-          fi
-
-          if grep -q "^## \[${VERSION}\]" "$FILE"; then
-            echo "CHANGELOG.md already contains a ${VERSION} release section; skipping changelog update."
-            exit 0
-          fi
-
-          DATE=$(date -u +%Y-%m-%d)
-          VERSION_LINE="## [${VERSION}] - ${DATE}"
-
-          # Identify Unreleased block boundaries
-          UNREL_START=$(grep -n '^## \[Unreleased\]' "$FILE" | cut -d: -f1 || true)
-          if [ -z "$UNREL_START" ]; then
-            echo "No '## [Unreleased]' section found; skipping changelog update."
-            exit 0
-          fi
-          NEXT_HDR=$(awk 'NR>'"$UNREL_START"' && /^## \[/{print NR; exit}' "$FILE")
-          if [ -z "$NEXT_HDR" ]; then
-            NEXT_HDR=$(wc -l < "$FILE")
-            NEXT_HDR=$((NEXT_HDR+1))
-          fi
-
-          # Extract sections
-          HEADER=$(sed -n "1,${UNREL_START}p" "$FILE")
-          UNREL_CONTENT=$(sed -n "$((UNREL_START+1)),$((NEXT_HDR-1))p" "$FILE")
-          TAIL=$(sed -n "${NEXT_HDR},\$p" "$FILE")
-
-          # Prepare new Unreleased template (Keep a Changelog style) without tabs/indent issues
-          NEW_UNRELEASED=$(printf '%s\n' \
-            '' \
-            '- **Added**' \
-            '  - (placeholder)' \
-            '' \
-            '- **Changed**' \
-            '  - (placeholder)' \
-            '' \
-            '- **Fixed**' \
-            '  - (placeholder)' \
-            '' \
-            '- **Security**' \
-            '  - (placeholder)')
-
-          # Build the new CHANGELOG content
-          TMP_FILE=$(mktemp)
-          {
-            printf "%s\n" "$HEADER"
-            printf "%s\n\n" "$NEW_UNRELEASED"
-            printf "%s\n" "$VERSION_LINE"
-            # If Unreleased was empty, at least add a placeholder so the section isn't blank
-            if [ -z "$(echo "$UNREL_CONTENT" | tr -d '\n' | tr -d '[:space:]')" ]; then
-              printf "### Changed\n- (no notable changes)\n\n"
-            else
-              printf "%s\n" "$UNREL_CONTENT"
-              # Ensure a trailing newline after the inserted section
-              printf "\n"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            if gh release view "${TAG}" >/dev/null 2>&1; then
+              IS_DRAFT="$(gh release view "${TAG}" --json isDraft --jq '.isDraft')"
+              if [ "${IS_DRAFT}" != "true" ]; then
+                echo "Published release ${TAG} already exists; reusing the existing tag."
+                exit 0
+              fi
             fi
-            printf "%s\n" "$TAIL"
-          } > "$TMP_FILE"
 
-          mv "$TMP_FILE" "$FILE"
-
-          # Update bottom compare links
-          # Update [Unreleased] compare to start at v${VERSION}
-          COMPARE_URL="https://github.com/${GITHUB_REPOSITORY}/compare/v${VERSION}...HEAD"
-          awk -v repl="[Unreleased]: ${COMPARE_URL}" 'BEGIN{OFS=FS} { if ($0 ~ /^\[Unreleased\]: /) { print repl } else { print } }' "$FILE" > "$FILE.tmp"
-          mv "$FILE.tmp" "$FILE"
-
-          # Append a link for the new version if not present
-          if ! grep -q "^\[${VERSION}\]:" "$FILE"; then
-            echo "[${VERSION}]: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}" >> "$FILE"
-          fi
-
-      - name: Commit release metadata and tag
-        env:
-          TAG: ${{ steps.pkg.outputs.tag }}
-          VERSION: ${{ steps.pkg.outputs.version }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch --tags origin
-          RELEASE_BRANCH="automation/release-${TAG#v}-${GITHUB_RUN_ID}"
-
-          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
-            echo "Tag ${TAG} already exists. Immutable releases must use a new version."
-            exit 1
-          fi
-
-          git add package.json package-lock.json CHANGELOG.md
-          METADATA_CHANGED=0
-          if git diff --cached --quiet; then
-            echo "No release metadata changes to commit for ${TAG}; tagging current HEAD."
-          else
-            git commit -m "chore: release ${TAG} [skip ci]"
-            METADATA_CHANGED=1
+            echo "Deleting stale unpublished tag ${TAG} before recreating it from main."
+            git push origin ":refs/tags/${TAG}"
           fi
 
           git tag "${TAG}"
-          if [ "$METADATA_CHANGED" = "1" ]; then
-            git push origin "HEAD:${RELEASE_BRANCH}" "${TAG}"
-            if ! gh pr create \
-              --base "${GITHUB_REF_NAME:-main}" \
-              --head "${RELEASE_BRANCH}" \
-              --title "docs(changelog): release ${TAG}" \
-              --body "Generated by the CD workflow for ${TAG}. The package publish uses the tagged release metadata commit; this PR persists package.json, package-lock.json, and CHANGELOG.md on the protected main branch."; then
-              echo "::warning::Unable to create release metadata PR from GitHub Actions. Branch ${RELEASE_BRANCH} and tag ${TAG} were pushed; publication will continue."
-            fi
-          else
-            git push origin "${TAG}"
-          fi
+          git push origin "${TAG}"
 
       - name: Create GitHub Release draft (immutable-safe)
         env:
