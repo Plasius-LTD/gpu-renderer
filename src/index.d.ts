@@ -813,6 +813,11 @@ export interface WavefrontPathTracingComputeFrameStats {
     ambientFallback: number;
     maxDepth: number;
   }>;
+  readonly terminalRadiance?: Readonly<{
+    totalLuminance: number;
+    ambientResidualLuminance: number;
+    ambientResidualShare: number;
+  }>;
   readonly queueOverflow?: number;
 }
 

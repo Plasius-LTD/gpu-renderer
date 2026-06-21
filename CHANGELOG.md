@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Added terminal-radiance diagnostics to awaited wavefront frame stats so
+    callers can measure total terminal luminance, ambient-residual luminance,
+    and ambient-residual share during renderer validation.
   - Added `updateCamera(...)` support for wavefront renderers so validation
     views can animate camera movement without rebuilding mesh buffers.
   - Added `gpuWorkerJobs` diagnostics to wavefront frame stats so callers can
