@@ -253,7 +253,11 @@ so bright presets retain colour at the last collision without returning to a
 whitewashed global ambient term. Extremely dark recorded bounce responses are
 also remapped to a small scene-brightness-driven luminance floor so bright
 low-sample scenes do not produce isolated black speckles when a valid terminal
-source was already found.
+source was already found. Awaited `renderFrame({ readStats: true })` results now
+expose `terminalRadiance.totalLuminance`,
+`terminalRadiance.ambientResidualLuminance`, and
+`terminalRadiance.ambientResidualShare` so validation harnesses can track how
+much of the final resolved image came from terminal ambient residuals.
 For static mesh scenes, the GPU acceleration build is submitted once and then
 reused by subsequent frames. Per-frame tracing writes one dynamic uniform slot
 per tile/sample or post-process pass and batches tile tracing, tile output,

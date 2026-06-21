@@ -702,6 +702,13 @@ test("wavefront compute guides and gates environment lighting through portals", 
 test("wavefront compute applies environment ambient on terminal surface collisions", () => {
   const source = readRendererSource();
 
+  assert.match(source, /struct TerminationMetrics {/);
+  assert.match(source, /ambientResidualLuminanceScaled: atomic<u32>/);
+  assert.match(source, /totalTerminalLuminanceScaled: atomic<u32>/);
+  assert.match(source, /const TERMINAL_SOURCE_KIND_EMISSIVE = 1u;/);
+  assert.match(source, /const TERMINAL_SOURCE_KIND_ENVIRONMENT = 2u;/);
+  assert.match(source, /const TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH = 3u;/);
+  assert.match(source, /const TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW = 4u;/);
   assert.match(source, /fn terminal_surface_environment_source/);
   assert.match(source, /fn terminal_surface_environment_contribution/);
   assert.match(source, /fn surface_path_response/);
@@ -727,18 +734,26 @@ test("wavefront compute applies environment ambient on terminal surface collisio
   assert.match(source, /let glossyEnvironment = max\(/);
   assert.match(source, /let environmentFloor = max\(ambientFloor, max\(sunlitFloor, glossyEnvironment \* environmentInfluence\)\);/);
   assert.match(source, /record_deferred_path_response\(ray, response\);/);
-  assert.match(source, /record_deferred_terminal_source\(ray, terminal_surface_environment_source\(ray, hit\)\);/);
+  assert.match(
+    source,
+    /record_deferred_terminal_source\(\s*ray,\s*terminal_surface_environment_source\(ray, hit\),\s*TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH\s*\);/
+  );
   assert.match(
     source,
     /let terminalEnvironment = terminal_surface_environment_contribution\(\s+ray,\s+arrivingThroughput,\s+hit\s+\);/
   );
+  assert.match(source, /record_termination_metrics\(/);
   assert.match(
     source,
-    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(terminalEnvironment \* sample_weight\(\), 1\.0\);/
+    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(weightedContribution, 1\.0\);/
   );
   assert.match(
     source,
     /let overflowEnvironment = terminal_surface_environment_contribution\(\s+ray,\s+arrivingThroughput,\s+hit\s+\);/
+  );
+  assert.match(
+    source,
+    /record_deferred_terminal_source\(\s*ray,\s*terminal_surface_environment_source\(ray, hit\),\s*TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW\s*\);/
   );
 });
 
@@ -842,7 +857,10 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
   assert.equal(config.deferredPathResolve, false);
   assert.match(source, /fn deferred_path_resolve_enabled\(\) -> bool/);
   assert.match(source, /fn clear_deferred_path\(rayId: u32\)/);
-  assert.match(source, /record_deferred_terminal_source\(ray, sourceRadiance \* segmentTransmittance\);/);
+  assert.match(
+    source,
+    /record_deferred_terminal_source\(\s*ray,\s*sourceRadiance \* segmentTransmittance,\s*TERMINAL_SOURCE_KIND_(EMISSIVE|ENVIRONMENT)\s*\);/
+  );
   assert.match(source, /sourceRadiance = sourceRadiance \* misWeight;/);
   assert.match(source, /fn resolve_deferred_path_radiance\(rayId: u32\) -> vec3<f32>/);
   assert.match(source, /let terminal = pathVertices\[path_vertex_index\(rayId, config\.maxDepth\)\];/);
@@ -1815,7 +1833,10 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     const frame = renderer.renderOnce();
     const secondFrame = renderer.renderOnce();
     const probe = await renderer.readOutputProbe({ x: 2, y: 3 });
-    const compatibilityFrame = await renderer.renderFrame({ probe: { x: 2, y: 3 } });
+    const compatibilityFrame = await renderer.renderFrame({
+      probe: { x: 2, y: 3 },
+      readStats: true,
+    });
     const movedConfig = renderer.updateCamera({
       position: [0.8, 1.3, 5.2],
       target: [0, 0.55, 0],
@@ -1878,6 +1899,11 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
       ambientFallback: 0,
       maxDepth: 0,
     });
+    assert.deepEqual(compatibilityFrame.terminalRadiance, {
+      totalLuminance: 0,
+      ambientResidualLuminance: 0,
+      ambientResidualShare: 0,
+    });
     assert.equal(frame.primaryRays, 128);
     assert.equal(frame.tiles, 1);
     assert.equal(frame.deferredPathResolve, true);
@@ -1916,7 +1942,9 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     assert.ok(device.copyBufferToBufferCalls.length >= 12);
     assert.equal(
       device.copyBufferToBufferCalls.every(
-        (call) => call.sourceOffset === 16 && call.destinationOffset === 0 && call.size === 12
+        (call) =>
+          (call.sourceOffset === 16 && call.destinationOffset === 0 && call.size === 12) ||
+          (call.sourceOffset === 0 && call.destinationOffset === 0 && call.size === 64)
       ),
       true
     );
