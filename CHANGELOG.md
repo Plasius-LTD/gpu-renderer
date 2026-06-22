@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.11] - 2026-06-22
+
+- **Added**
   - Added ADR 0017 to document physical deferred-throughput continuation,
     invalid-throughput fallback, and rollout expectations for
     `renderer.transport.physicalEstimator`.
@@ -443,3 +457,4 @@ All notable changes to this project will be documented in this file.
 [0.1.12]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.12
 [0.1.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.14
 [0.2.1]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.1
+[0.2.11]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.11
