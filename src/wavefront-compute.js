@@ -4895,7 +4895,7 @@ fn surface_bsdf_sampling_weights(hit: HitRecord) -> vec3<f32> {
 }
 
 fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirection: vec3<f32>) -> vec3<f32> {
-  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let normal = surface_shading_normal(hit);
   let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let metallic = clamp(hit.material.y, 0.0, 1.0);
@@ -4940,7 +4940,7 @@ fn ggx_pdf(normal: vec3<f32>, viewDirection: vec3<f32>, lightDirection: vec3<f32
 }
 
 fn evaluate_surface_bsdf_pdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirection: vec3<f32>) -> f32 {
-  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let normal = surface_shading_normal(hit);
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let weights = surface_bsdf_sampling_weights(hit);
   let diffuseTerm = diffuse_pdf(normal, lightDirection);
@@ -5019,14 +5019,14 @@ fn transmitted_medium_ref_id(ray: RayRecord, hit: HitRecord) -> u32 {
 }
 
 fn surface_delta_reflection_throughput(hit: HitRecord, viewDirection: vec3<f32>) -> vec3<f32> {
-  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let normal = surface_shading_normal(hit);
   let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let fresnel = fresnel_schlick(saturate(dot(normal, viewDirection)), surface_specular_f0(hit, surfaceColor));
   return sanitize_path_throughput(fresnel);
 }
 
 fn surface_delta_transmission_throughput(hit: HitRecord, viewDirection: vec3<f32>) -> vec3<f32> {
-  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let normal = surface_shading_normal(hit);
   let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
   let fresnel = fresnel_schlick(saturate(dot(normal, viewDirection)), surface_specular_f0(hit, surfaceColor));
@@ -5049,7 +5049,7 @@ fn surface_continuation_throughput(
   if (scatter.pdf <= 0.000001) {
     return vec3<f32>(0.0);
   }
-  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let normal = surface_shading_normal(hit);
   let bsdf = evaluate_surface_bsdf(hit, viewDirection, lightDirection);
   let nDotL = saturate(dot(normal, lightDirection));
   return sanitize_path_throughput(bsdf * (nDotL / scatter.pdf));
@@ -5072,8 +5072,8 @@ fn sunlit_baseline_radiance(normal: vec3<f32>) -> vec3<f32> {
 }
 
 fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
-  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
-  let origin = hit.position.xyz + normal * 0.003;
+  let normal = surface_shading_normal(hit);
+  let origin = offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, normal);
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let glossiness = surface_glossiness(hit);
   let normalEnvironment = gated_environment_radiance(origin, normal);
@@ -5256,7 +5256,10 @@ fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> Dir
       random01(mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 43u))
     ));
     let lightDirection = safe_normalize(environmentSample.direction, normal);
-    let radiance = direct_environment_radiance(hit.position.xyz + normal * 0.003, lightDirection);
+    let radiance = direct_environment_radiance(
+      offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection),
+      lightDirection
+    );
     return DirectLightSample(
       vec4<f32>(lightDirection, 0.0),
       vec4<f32>(radiance, 0.0),
@@ -5287,8 +5290,7 @@ fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> Dir
 }
 
 fn surface_direct_light_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
-  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
-  let origin = hit.position.xyz + normal * 0.003;
+  let normal = surface_shading_normal(hit);
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
   let lightSample = sample_direct_light(hit, ray, normal);
   if (lightSample.valid == 0u) {
@@ -5298,6 +5300,7 @@ fn surface_direct_light_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32
     return vec3<f32>(0.0);
   }
   let lightDirection = safe_normalize(lightSample.direction.xyz, normal);
+  let origin = offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection);
   let nDotL = saturate(dot(normal, lightDirection));
   if (nDotL <= 0.000001) {
     return vec3<f32>(0.0);
@@ -5750,6 +5753,11 @@ fn repair_shading_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>) -
   return normal;
 }
 
+fn surface_shading_normal(hit: HitRecord) -> vec3<f32> {
+  let geometric = safe_normalize(hit.geometricNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  return repair_shading_normal(geometric, hit.shadingNormal.xyz);
+}
+
 fn no_candidate() -> Candidate {
   return Candidate(
     0u,
@@ -6173,8 +6181,25 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
   );
 }
 
-fn offset_origin(position: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-  return position + normal * 0.0025;
+fn offset_origin(
+  position: vec3<f32>,
+  geometricNormal: vec3<f32>,
+  shadingNormal: vec3<f32>,
+  rayDirection: vec3<f32>
+) -> vec3<f32> {
+  let geometric = safe_normalize(geometricNormal, vec3<f32>(0.0, 1.0, 0.0));
+  let shading = repair_shading_normal(geometric, shadingNormal);
+  let raySide = select(-1.0, 1.0, dot(rayDirection, geometric) >= 0.0);
+  let orientedGeometric = geometric * raySide;
+  var orientedShading = shading * raySide;
+  if (dot(orientedShading, orientedGeometric) <= 0.0) {
+    orientedShading = orientedGeometric;
+  }
+  let offsetNormal = safe_normalize(orientedGeometric + orientedShading, orientedGeometric);
+  let positionScale = max(max(abs(position.x), abs(position.y)), abs(position.z));
+  let positionAwareEpsilon = positionScale * 0.00000047683716;
+  let offsetDistance = clamp(max(0.00025, positionAwareEpsilon), 0.00025, 0.01);
+  return position + offsetNormal * offsetDistance;
 }
 
 fn random_unit_vector(seed: u32) -> vec3<f32> {
@@ -6229,7 +6254,7 @@ fn sample_environment_portal_direction(hit: HitRecord, seed: u32, fallback: vec3
 }
 
 fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult {
-  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let normal = surface_shading_normal(hit);
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
@@ -6454,7 +6479,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   let seed = mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 11u);
   let scatter = scatter_direction(ray, hit, seed);
-  let continuationNormal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let continuationNormal = surface_shading_normal(hit);
   let continuationViewDirection = safe_normalize(-ray.direction.xyz, continuationNormal);
   let continuationLightDirection = safe_normalize(scatter.direction.xyz, continuationNormal);
   let continuationThroughput = surface_continuation_throughput(
@@ -6524,7 +6549,15 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     scatter.mediumRefId,
     scatter.flags,
     0u,
-    vec4<f32>(offset_origin(hit.position.xyz, hit.shadingNormal.xyz), 1.0),
+    vec4<f32>(
+      offset_origin(
+        hit.position.xyz,
+        hit.geometricNormal.xyz,
+        hit.shadingNormal.xyz,
+        scatter.direction.xyz
+      ),
+      1.0
+    ),
     scatter.direction,
     vec4<f32>(throughput, scatter.pdf)
   );

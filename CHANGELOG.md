@@ -15,7 +15,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
-  - (placeholder)
+  - Wavefront transport now derives continuation and visibility-ray origin offsets
+    from geometric/shading-normal agreement and ray direction instead of a fixed
+    shading-normal bias.
 
 - **Fixed**
   - (placeholder)

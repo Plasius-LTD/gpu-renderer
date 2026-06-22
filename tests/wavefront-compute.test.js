@@ -635,6 +635,34 @@ test("wavefront reference tracing selects the nearest triangle hit", () => {
   assert.equal(Number(hit.distance.toFixed(4)), 0.5);
 });
 
+test("wavefront reference tracing repairs flipped shading normals into the geometric hemisphere", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 1,
+    height: 1,
+    camera: {
+      position: [0, 0, 1],
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      fovYDegrees: 60,
+    },
+  });
+  const ray = createWavefrontReferenceRay(config, { jitterScale: 0 });
+  const acceleration = createWavefrontMeshAcceleration([
+    {
+      id: 14,
+      positions: [-1, -1, 0, 1, -1, 0, 0, 1, 0],
+      indices: [0, 1, 2],
+      normals: [0, 0, -1, 0, 0, -1, 0, 0, -1],
+    },
+  ]);
+
+  const hit = traceWavefrontReferenceTriangles(config, ray, acceleration.triangles);
+
+  assert.equal(hit.hitType, "surface");
+  assert.deepEqual(round(hit.geometricNormal), [0, 0, 1]);
+  assert.deepEqual(round(hit.shadingNormal), [0, 0, 1]);
+});
+
 test("wavefront reference triangle intersection rejects hits past max distance", () => {
   const config = createWavefrontPathTracingComputeConfig({
     width: 1,
@@ -664,6 +692,38 @@ test("wavefront reference triangle intersection rejects hits past max distance",
   assert.equal(directHit, null);
   assert.equal(tracedHit.hitType, "environment");
   assert.equal(tracedHit.distance, -1);
+});
+
+test("wavefront compute offsets continuation and visibility rays with geometric-normal-aware origins", () => {
+  const source = readRendererSource();
+
+  assert.match(
+    source,
+    /fn surface_shading_normal\(hit: HitRecord\) -> vec3<f32> \{\s+let geometric = safe_normalize\(hit\.geometricNormal\.xyz, vec3<f32>\(0\.0, 1\.0, 0\.0\)\);\s+return repair_shading_normal\(geometric, hit\.shadingNormal\.xyz\);\s+\}/
+  );
+  assert.match(
+    source,
+    /fn offset_origin\(\s*position: vec3<f32>,\s*geometricNormal: vec3<f32>,\s*shadingNormal: vec3<f32>,\s*rayDirection: vec3<f32>\s*\) -> vec3<f32>/
+  );
+  assert.match(source, /let raySide = select\(-1\.0, 1\.0, dot\(rayDirection, geometric\) >= 0\.0\);/);
+  assert.match(source, /let positionScale = max\(max\(abs\(position\.x\), abs\(position\.y\)\), abs\(position\.z\)\);/);
+  assert.match(source, /let positionAwareEpsilon = positionScale \* 0\.00000047683716;/);
+  assert.match(
+    source,
+    /let offsetDistance = clamp\(max\(0\.00025, positionAwareEpsilon\), 0\.00025, 0\.01\);/
+  );
+  assert.match(
+    source,
+    /let radiance = direct_environment_radiance\(\s*offset_origin\(hit\.position\.xyz, hit\.geometricNormal\.xyz, hit\.shadingNormal\.xyz, lightDirection\),\s*lightDirection\s*\);/
+  );
+  assert.match(
+    source,
+    /let origin = offset_origin\(\s*hit\.position\.xyz,\s*hit\.geometricNormal\.xyz,\s*hit\.shadingNormal\.xyz,\s*lightDirection\s*\);/
+  );
+  assert.match(
+    source,
+    /offset_origin\(\s*hit\.position\.xyz,\s*hit\.geometricNormal\.xyz,\s*hit\.shadingNormal\.xyz,\s*scatter\.direction\.xyz\s*\)/
+  );
 });
 
 test("wavefront compute denoise adapts filter cost and strength to spp", () => {
