@@ -12,7 +12,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added deterministic numeric transport-validation helpers and unit coverage
+    for BSDF PDF consistency, furnace-style reflectance bounds, and bounded
+    terminal-environment residual handling in the wavefront renderer.
 
 - **Changed**
   - (placeholder)
