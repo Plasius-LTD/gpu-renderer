@@ -836,7 +836,11 @@ test("wavefront compute samples all-material direct light with MIS before random
   );
   assert.match(
     source,
-    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directLight \* sample_weight\(\), 0\.0\);/
+    /let rawDirectLight = directLight \* sample_weight\(\);/
+  );
+  assert.match(
+    source,
+    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(weightedDirectLight, 0\.0\);/
   );
   assert.ok(
     source.indexOf("let shouldEstimateDirectLight =") <
@@ -957,15 +961,15 @@ test("wavefront BSDF numeric helpers keep furnace-style reflectance bounded", ()
   });
 });
 
-test("wavefront terminal environment helpers clamp residuals and keep invalid inputs finite", () => {
+test("wavefront terminal environment helpers preserve HDR residuals and keep invalid inputs finite", () => {
   const config = createWavefrontPathTracingComputeConfig({
     width: 16,
     height: 16,
     ambientColor: [0.24, 0.26, 0.3, 1],
     environmentLighting: {
-      sunlitBaseline: 1.8,
-      intensity: 2.4,
-      sunColor: [3.6, 3.3, 2.9, 1],
+      sunlitBaseline: 8,
+      intensity: 3.5,
+      sunColor: [12, 10, 8, 1],
     },
   });
   const hit = {
@@ -993,13 +997,12 @@ test("wavefront terminal environment helpers clamp residuals and keep invalid in
   bounded.source.forEach((value) => {
     assert.ok(Number.isFinite(value));
     assert.ok(value >= 0);
-    assert.ok(value <= 4);
   });
   bounded.contribution.forEach((value) => {
     assert.ok(Number.isFinite(value));
     assert.ok(value >= 0);
-    assert.ok(value <= 4);
   });
+  assert.ok(Math.max(...bounded.source, ...bounded.contribution) > 4);
 
   const invalid = computeWavefrontTerminalEnvironmentContributionReference(
     config,
@@ -1060,16 +1063,36 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
   assert.match(source, /let resolved = resolve_deferred_path_radiance\(index\) \* sample_weight\(\);/);
   assert.match(
     source,
-    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(directLight \* sample_weight\(\), 0\.0\);/
+    /let rawDirectLight = directLight \* sample_weight\(\);/
   );
   assert.match(source, /if \(config\.deferredPathResolve\) \{/);
   assert.match(source, /createGpuSubmissionBatcher\(\{/);
   assert.match(source, /encodeTileOutput\(batch\.reserve\(1\), tile, configOffset, parallelism\);/);
 });
 
+test("wavefront compute records radiance diagnostics instead of silently applying the legacy sample clamp", () => {
+  const source = readRendererSource();
+  const types = readRendererTypes();
+
+  assert.match(source, /fn record_radiance_diagnostics\(sample: vec3<f32>\)/);
+  assert.match(source, /invalidSampleCount: atomic<u32>/);
+  assert.match(source, /legacyClampEquivalentCount: atomic<u32>/);
+  assert.match(source, /record_radiance_diagnostics\(rawWeightedContribution\);/);
+  assert.match(source, /record_radiance_diagnostics\(resolved\);/);
+  assert.doesNotMatch(source, /contribution = clamp_sample_radiance\(/);
+  assert.doesNotMatch(source, /radiance = clamp_sample_radiance\(radiance \+ resolved\);/);
+  assert.match(types, /readonly radianceDiagnostics\?: Readonly<\{/);
+  assert.match(types, /invalidSamples: number;/);
+  assert.match(types, /legacyClampEquivalentSamples: number;/);
+});
+
 test("wavefront compute exposes medium-table contracts and Beer-Lambert transport hooks", () => {
   const source = readRendererSource();
   const types = readRendererTypes();
+  const mediumDesign = readFileSync(
+    new URL("../docs/design/wavefront-volume-medium-transport.md", import.meta.url),
+    "utf8"
+  );
   const config = createWavefrontPathTracingComputeConfig({
     width: 32,
     height: 32,
@@ -1104,6 +1127,13 @@ test("wavefront compute exposes medium-table contracts and Beer-Lambert transpor
   assert.match(source, /fn medium_transmittance\(mediumRefId: u32, distance: f32\) -> vec3<f32>/);
   assert.match(source, /exp\(-extinction\.x \* distance\)/);
   assert.match(source, /fn transmitted_medium_ref_id\(ray: RayRecord, hit: HitRecord\) -> u32/);
+  assert.match(source, /if \(!medium_valid\(hit\.mediumRefId\)\) \{\s+return ray\.mediumRefId;\s+\}/);
+  assert.match(
+    source,
+    /if \(hit\.frontFace == 1u\) \{\s+if \(ray\.mediumRefId == 0u \|\| ray\.mediumRefId == hit\.mediumRefId\) \{\s+return hit\.mediumRefId;\s+\}\s+return ray\.mediumRefId;\s+\}/
+  );
+  assert.match(mediumDesign, /single active medium/i);
+  assert.match(mediumDesign, /nested medium stacks fall back to the current ray medium/i);
   assert.equal(config.mediumCount, 2);
   assert.deepEqual(config.mediums.map((medium) => medium.id), [0, 3]);
   assert.equal(config.gpuMeshSource.meshes.records[0].thickness, 0.35);

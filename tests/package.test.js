@@ -329,7 +329,11 @@ test("wavefront transport guardrails summarize throughput memory and queue healt
   assert.equal(guardrails.current.commandSubmissions, 2);
   assert.equal(guardrails.current.memory.totalBytes, 3200);
   assert.equal(guardrails.current.deviceLossStatus, "not-detected");
-  assert.equal(guardrails.checks.length, 3);
+  assert.deepEqual(guardrails.current.radianceDiagnostics, {
+    invalidSamples: 0,
+    legacyClampEquivalentSamples: 0,
+  });
+  assert.equal(guardrails.checks.length, 4);
   assert.ok(guardrails.checks.every((check) => check.status === "pass"));
   assert.match(
     guardrails.checks.find((check) => check.id === "submission-batching").details,
@@ -359,6 +363,41 @@ test("wavefront transport guardrails warn when queue overflow or pending complet
   assert.ok(guardrails.checks.some((check) => check.id === "queue-overflow" && check.status === "warn"));
   assert.ok(
     guardrails.checks.some((check) => check.id === "submission-batching" && check.status === "warn")
+  );
+});
+
+test("wavefront transport guardrails surface invalid and legacy-clamp-equivalent radiance samples", () => {
+  const guardrails = createWavefrontTransportGuardrailSummary({
+    commandSubmissions: 1,
+    maxFramePassesPerSubmission: 4,
+    queueOverflow: 0,
+    radianceDiagnostics: {
+      invalidSamples: 1,
+      legacyClampEquivalentSamples: 3,
+    },
+    gpuWorkerJobs: {
+      completedPerFrame: 4,
+      completedPerSecond: 80,
+      completedPerSubmission: 4,
+      directDispatchesCompleted: 4,
+      indirectDispatchesCompleted: 0,
+      frameTimeMs: 50,
+      awaitedGpuCompletion: true,
+    },
+  });
+
+  assert.equal(guardrails.status, "fail");
+  assert.deepEqual(guardrails.current.radianceDiagnostics, {
+    invalidSamples: 1,
+    legacyClampEquivalentSamples: 3,
+  });
+  assert.ok(
+    guardrails.checks.some(
+      (check) =>
+        check.id === "radiance-diagnostics" &&
+        check.status === "fail" &&
+        /invalid radiance sample/.test(check.details)
+    )
   );
 });
 

@@ -31,6 +31,17 @@ shared wavefront renderer without demo-local medium construction.
 5. Surface resolution multiplies travelled throughput by Beer-Lambert
    transmittance for the distance traversed in the current medium.
 
+## Current Fallback Contract
+
+- The renderer currently supports a single active medium per ray.
+- Invalid or unknown `mediumRefId` values fall back to the current ray medium
+  instead of propagating a broken lookup.
+- Nested medium stacks fall back to the current ray medium until dedicated
+  stack support is scoped; entering a second medium while another is active
+  preserves the existing medium id instead of pretending stack semantics exist.
+- Exiting the active medium returns the ray to vacuum (`0`) only when the
+  surface medium id matches the current ray medium id.
+
 ## Explicit Non-Goals
 
 - nested medium stacks;
@@ -41,5 +52,7 @@ shared wavefront renderer without demo-local medium construction.
 ## Validation
 
 - unit coverage for implicit medium derivation from volume inputs;
+- unit coverage for invalid `mediumRefId` fallback and single-slot nested-medium
+  fallback behavior;
 - stable packing tests for scene-object and material records;
 - renderer typecheck, build, lint, tests, and coverage.

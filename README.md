@@ -220,7 +220,9 @@ GPU ray, and applies Beer-Lambert transmittance to travelled segments on the
 GPU. Thickness is now preserved in material packing for later shell-volume
 work, but the current renderer still tracks only one active medium id per ray
 and does not yet implement nested media, spectral dispersion, or a branching
-reflection/refraction tree.
+reflection/refraction tree. Invalid medium ids fall back to the current ray
+medium, and entering a second medium while one is already active preserves the
+existing medium id until dedicated stack support is implemented.
 
 `samplesPerPixel` controls how many GPU primary-ray samples are accumulated per
 screen pixel within a single render. This multiplies dispatch work but does not
@@ -239,9 +241,7 @@ separate shadow/direct-light pass: the active ray still has to hit emissive
 geometry or miss into the environment before radiance is committed. Guided
 emissive hits carry a bounded estimator weight so finite light guidance does not
 over-expose low-sample renders before full material PDFs/MIS are implemented.
-High-energy samples are clamped in linear radiance space to keep low-sample
-preview output stable while production sampling, temporal accumulation, and
-better material PDFs are hardened. By default, `deferredPathResolve` records
+By default, `deferredPathResolve` records
 per-bounce material responses in a tile-bounded path buffer and records the
 terminal emissive/HDRI/environment source in the final path slot. The output
 pass then resolves that recorded path backward and adds the weighted sample to
@@ -262,10 +262,16 @@ whitewashed global ambient term. Extremely dark recorded bounce responses are
 also remapped to a small scene-brightness-driven luminance floor so bright
 low-sample scenes do not produce isolated black speckles when a valid terminal
 source was already found. Awaited `renderFrame({ readStats: true })` results now
-expose `terminalRadiance.totalLuminance`,
+keep linear accumulation unclamped, sanitize only invalid or half-float-
+overflow samples before presentation, and expose
+`terminalRadiance.totalLuminance`,
 `terminalRadiance.ambientResidualLuminance`, and
 `terminalRadiance.ambientResidualShare` so validation harnesses can track how
 much of the final resolved image came from terminal ambient residuals.
+The same stats also expose `radianceDiagnostics.invalidSamples` and
+`radianceDiagnostics.legacyClampEquivalentSamples`, so hardening scenes can
+measure NaN/Inf cleanup and legacy-4.0-equivalent fireflies without
+re-introducing a hidden estimator clamp.
 For static mesh scenes, the GPU acceleration build is submitted once and then
 reused by subsequent frames. Per-frame tracing writes one dynamic uniform slot
 per tile/sample or post-process pass and batches tile tracing, tile output,
@@ -292,13 +298,13 @@ GPU core counts, so `physicalCoreCount` remains `null`; use
 `largestEstimatedIndirectWorkgroupsPerDispatch` to confirm the renderer is
 issuing multi-workgroup GPU work. Awaited frame results also expose a
 `transportGuardrails` summary with jobs/frame, jobs/s, jobs/submission, command
-submissions, queue-overflow count, total tracked memory bytes, and device-loss
-status so validation harnesses can gate transport work without scraping ad hoc
-metrics from multiple fields. Treat any sustained >10% drop in jobs/submission
-or jobs/s versus the approved baseline as a release-validation failure unless a
-linked ticket explicitly approves the regression; `submission-batching` warns
-when the renderer falls back to roughly one GPU job per submission despite a
-higher pass ceiling.
+submissions, queue-overflow count, radiance diagnostics, total tracked memory
+bytes, and device-loss status so validation harnesses can gate transport work
+without scraping ad hoc metrics from multiple fields. Treat any sustained >10%
+drop in jobs/submission or jobs/s versus the approved baseline as a
+release-validation failure unless a linked ticket explicitly approves the
+regression; `submission-batching` warns when the renderer falls back to roughly
+one GPU job per submission despite a higher pass ceiling.
 submitting work that can occupy more than one GPU execution unit. After each
 primary-ray or compaction pass, the GPU writes the active-ray workgroup count
 into the counter buffer and the encoder copies it into an indirect-dispatch
