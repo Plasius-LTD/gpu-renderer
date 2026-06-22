@@ -15,6 +15,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.16] - 2026-06-22
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Wavefront transport now derives continuation and visibility-ray origin offsets
     from geometric/shading-normal agreement and ray direction instead of a fixed
     shading-normal bias.
@@ -536,3 +550,4 @@ All notable changes to this project will be documented in this file.
 [0.2.13]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.13
 [0.2.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.14
 [0.2.15]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.15
+[0.2.16]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.16
