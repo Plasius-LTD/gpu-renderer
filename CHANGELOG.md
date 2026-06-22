@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.14] - 2026-06-22
+
+- **Added**
   - Added deterministic numeric transport-validation helpers and unit coverage
     for BSDF PDF consistency, furnace-style reflectance bounds, and bounded
     terminal-environment residual handling in the wavefront renderer.
@@ -496,3 +510,4 @@ All notable changes to this project will be documented in this file.
 [0.2.11]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.11
 [0.2.12]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.12
 [0.2.13]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.13
+[0.2.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.14
