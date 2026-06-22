@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 import {
   createWavefrontPathTracingComputeRenderer,
@@ -35,6 +35,8 @@ import {
   estimateWavefrontDirectionalHemisphericalReflectance,
   validateWavefrontBsdfSample,
 } from "../src/wavefront-compute.js";
+import { dispatchWavefrontGpuAccelerationBuild } from "../src/wavefront-acceleration-builder.js";
+import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
 
 const gpuConstants = Object.freeze({
   buffer: Object.freeze({
@@ -65,7 +67,12 @@ function round(values) {
 }
 
 function readRendererSource() {
-  return readFileSync(new URL("../src/wavefront-compute.js", import.meta.url), "utf8");
+  const sourceDir = new URL("../src/", import.meta.url);
+  return readdirSync(sourceDir)
+    .filter((fileName) => fileName.endsWith(".js"))
+    .sort()
+    .map((fileName) => readFileSync(new URL(fileName, sourceDir), "utf8"))
+    .join("\n");
 }
 
 function readRendererTypes() {
@@ -740,7 +747,7 @@ test("wavefront compute denoise adapts filter cost and strength to spp", () => {
   assert.match(source, /fn denoise_sample_count\(\) -> f32/);
   assert.match(source, /fn denoise_strength\(\) -> f32/);
   assert.match(source, /fn denoise_kernel_radius\(\) -> i32/);
-  assert.match(source, /function encodeDenoise\(encoder, configOffset, parallelism, renderedSamplesPerPixel = config\.samplesPerPixel\)/);
+  assert.match(source, /encodeDenoise\(encoder, configOffset, parallelism, renderedSamplesPerPixel\)/);
   assert.match(source, /const useTwoPassDenoise = renderedSamplesPerPixel < 4;/);
   assert.match(source, /const denoisePassCount = renderedSamplesPerPixel < 4 \? 2 : 1;/);
   assert.match(source, /tone_map_radiance/);
@@ -1379,6 +1386,90 @@ test("wavefront BVH build levels schedule parent nodes concurrently bottom-up", 
     config.memory.bvhLeafReferenceBytes,
     8 * wavefrontPathTracingComputeLimits.bvhLeafReferenceRecordBytes
   );
+});
+
+test("wavefront acceleration builder skips inactive or already-built configurations", () => {
+  assert.equal(
+    dispatchWavefrontGpuAccelerationBuild({
+      config: { gpuAccelerationBuildRequired: false },
+      accelerationBuilt: false,
+    }),
+    false
+  );
+  assert.equal(
+    dispatchWavefrontGpuAccelerationBuild({
+      config: { gpuAccelerationBuildRequired: true },
+      accelerationBuilt: true,
+    }),
+    false
+  );
+});
+
+test("wavefront acceleration builder schedules sort and internal-level GPU passes", () => {
+  const device = new FakeWavefrontDevice();
+  const baseConfig = createWavefrontPathTracingComputeConfig({
+    width: 32,
+    height: 32,
+    tileSize: 32,
+    displayQuality: true,
+    accelerationBuildMode: "gpu",
+    meshes: [
+      {
+        positions: [
+          0, 0, 0,
+          1, 0, 0,
+          0, 1, 0,
+          1, 1, 0,
+          2, 1, 0,
+          1, 2, 0,
+          2, 2, 0,
+          3, 2, 0,
+          2, 3, 0,
+        ],
+      },
+    ],
+  });
+  const config = Object.freeze({
+    ...baseConfig,
+    bvhLeafSortCapacity: 128,
+    bvhSortStages: Object.freeze([
+      { compareDistance: 1, sequenceSize: 2 },
+      { compareDistance: 2, sequenceSize: 4 },
+    ]),
+    bvhBuildLevels: Object.freeze([
+      { start: 1, count: 2 },
+      { start: 0, count: 1 },
+    ]),
+  });
+  const parallelism = createGpuParallelismCounters();
+  const pipelines = {
+    prepareMeshTrianglesAndLeaves: { label: "prepare" },
+    sortBvhLeafRefs: { label: "sort" },
+    writeSortedBvhLeaves: { label: "leaves" },
+    buildBvhInternalLevel: { label: "internal" },
+  };
+
+  const submitted = dispatchWavefrontGpuAccelerationBuild({
+    config,
+    accelerationBuilt: false,
+    tiles: [{ x: 0, y: 0, width: 32, height: 32 }],
+    device,
+    bvhBuildConfigBuffer: { label: "config" },
+    configBufferStride: 320,
+    bvhBuildBindGroup: { label: "bvh" },
+    pipelines,
+    parallelism,
+    frameIndex: 7,
+  });
+
+  assert.equal(submitted, true);
+  assert.equal(device.queue.submissions.length, 1);
+  assert.equal(device.queue.writes.length, 5);
+  assert.equal(device.computePasses, 1);
+  assert.equal(device.computePassesEnded, 1);
+  assert.equal(device.dispatches.length, 6);
+  assert.equal(parallelism.directDispatches, 6);
+  assert.equal(parallelism.multiWorkgroupDispatches > 0, true);
 });
 
 test("wavefront mesh acceleration preserves triangle vertices and normals", () => {

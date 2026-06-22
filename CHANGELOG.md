@@ -83,7 +83,9 @@ All notable changes to this project will be documented in this file.
     terminal-environment residual handling in the wavefront renderer.
 
 - **Changed**
-  - (placeholder)
+  - Split the renderer and wavefront implementation into purpose-specific
+    modules while preserving the existing public package exports, and updated
+    source syntax checks to cover every JavaScript file under `src/`.
 
 - **Fixed**
   - (placeholder)
