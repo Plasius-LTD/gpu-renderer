@@ -15,6 +15,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.15] - 2026-06-22
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Changed wavefront terminal and direct-light accumulation to preserve HDR
     linear radiance through accumulation and deferred resolve, while sanitizing
     only invalid or half-float-overflow samples before presentation.
@@ -519,3 +533,4 @@ All notable changes to this project will be documented in this file.
 [0.2.12]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.12
 [0.2.13]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.13
 [0.2.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.14
+[0.2.15]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.15
