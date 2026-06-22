@@ -47,6 +47,8 @@ const CONFIG_BUFFER_BYTES = 320;
 const COUNTER_DISPATCH_ARGS_OFFSET = 16;
 const INDIRECT_DISPATCH_ARGS_BYTES = 12;
 const COUNTER_BUFFER_BYTES = 64;
+const HALF_FLOAT_MAX = 65_504;
+const LEGACY_SAMPLE_RADIANCE_CLAMP = 4;
 const TERMINATION_LUMINANCE_SCALE = 1_000_000;
 const COUNTER_TERMINATION_EMISSIVE_OFFSET = 8;
 const COUNTER_TERMINATION_ENVIRONMENT_OFFSET = 9;
@@ -54,6 +56,8 @@ const COUNTER_TERMINATION_AMBIENT_MAX_DEPTH_OFFSET = 10;
 const COUNTER_TERMINATION_QUEUE_OVERFLOW_OFFSET = 11;
 const COUNTER_TERMINATION_AMBIENT_LUMINANCE_OFFSET = 12;
 const COUNTER_TERMINATION_TOTAL_LUMINANCE_OFFSET = 13;
+const COUNTER_RADIANCE_INVALID_OFFSET = 14;
+const COUNTER_RADIANCE_LEGACY_CLAMP_EQUIVALENT_OFFSET = 15;
 const TRACE_STORAGE_BUFFER_BINDINGS = 10;
 const BRDF_LUT_UPLOAD_CACHE = new Map();
 const HIT_TYPE_SURFACE = 0;
@@ -102,6 +106,10 @@ const EMPTY_TERMINATION_METRICS = Object.freeze({
     totalLuminance: 0,
     ambientResidualLuminance: 0,
     ambientResidualShare: 0,
+  }),
+  radianceDiagnostics: Object.freeze({
+    invalidSamples: 0,
+    legacyClampEquivalentSamples: 0,
   }),
 });
 
@@ -2919,12 +2927,31 @@ function coerceWavefrontVec3(value, fallback) {
   ];
 }
 
-function clampWavefrontSampleRadiance(value) {
+function sanitizeWavefrontLinearRadianceComponent(value) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.min(value, HALF_FLOAT_MAX);
+}
+
+function sanitizeWavefrontLinearRadiance(value) {
   return [
-    clamp(Number(value?.[0]) || 0, 0, 4),
-    clamp(Number(value?.[1]) || 0, 0, 4),
-    clamp(Number(value?.[2]) || 0, 0, 4),
+    sanitizeWavefrontLinearRadianceComponent(value?.[0]),
+    sanitizeWavefrontLinearRadianceComponent(value?.[1]),
+    sanitizeWavefrontLinearRadianceComponent(value?.[2]),
   ];
+}
+
+function wavefrontSampleHasInvalidRadiance(value) {
+  return [value?.[0], value?.[1], value?.[2]].some(
+    (component) => !Number.isFinite(component) || component < 0
+  );
+}
+
+function wavefrontSampleExceedsLegacyClamp(value) {
+  return [value?.[0], value?.[1], value?.[2]].some(
+    (component) => Number.isFinite(component) && component > LEGACY_SAMPLE_RADIANCE_CLAMP
+  );
 }
 
 function fresnelSchlick(cosine, f0) {
@@ -3134,7 +3161,7 @@ function sunlitBaselineRadianceReference(configInput, normal) {
   const skyFacing = 0.35 + clamp(normal[1] * 0.5 + 0.5, 0, 1) * 0.65;
   const directionalWeight = 0.38 + sunFacing * 0.62;
   const sunTint = maxVec3(asVec3(config.environmentLighting?.sunColor, DEFAULT_ENVIRONMENT_LIGHTING.sunColor), [0, 0, 0]);
-  return clampWavefrontSampleRadiance(
+  return sanitizeWavefrontLinearRadiance(
     sunTint.map((value) => value * baseline * skyFacing * directionalWeight * 0.04)
   );
 }
@@ -3274,9 +3301,9 @@ export function computeWavefrontTerminalEnvironmentContributionReference(
     maxVec3(sunlitFloor, scale(glossyEnvironment, environmentInfluence))
   );
   const materialFloor = hit.materialKind === 0 || hit.materialKind === 3 ? 1 : 0.7;
-  const source = clampWavefrontSampleRadiance(scale(environmentFloor, materialFloor));
+  const source = sanitizeWavefrontLinearRadiance(scale(environmentFloor, materialFloor));
   const occlusion = mixScalar(0.75, 1, clamp(hit.occlusion, 0, 1));
-  const contribution = clampWavefrontSampleRadiance(
+  const contribution = sanitizeWavefrontLinearRadiance(
     scale(
       multiplyVec3(
         multiplyVec3(sanitizeWavefrontThroughput(throughputInput), maxVec3(hit.color, ambientColor)),
@@ -3288,6 +3315,14 @@ export function computeWavefrontTerminalEnvironmentContributionReference(
   return Object.freeze({
     source: Object.freeze(source),
     contribution: Object.freeze(contribution),
+    radianceDiagnostics: Object.freeze({
+      invalidSamples:
+        (wavefrontSampleHasInvalidRadiance(source) ? 1 : 0) +
+        (wavefrontSampleHasInvalidRadiance(contribution) ? 1 : 0),
+      legacyClampEquivalentSamples:
+        (wavefrontSampleExceedsLegacyClamp(source) ? 1 : 0) +
+        (wavefrontSampleExceedsLegacyClamp(contribution) ? 1 : 0),
+    }),
   });
 }
 
@@ -4128,8 +4163,8 @@ struct TerminationMetrics {
   ambientQueueOverflowCount: atomic<u32>,
   ambientResidualLuminanceScaled: atomic<u32>,
   totalTerminalLuminanceScaled: atomic<u32>,
-  _pad0: u32,
-  _pad1: u32,
+  invalidSampleCount: atomic<u32>,
+  legacyClampEquivalentCount: atomic<u32>,
 };
 
 const TERMINAL_SOURCE_KIND_EMISSIVE = 1u;
@@ -4454,7 +4489,7 @@ fn record_deferred_terminal_source(ray: RayRecord, sourceRadiance: vec3<f32>, so
     return;
   }
   pathVertices[path_vertex_index(ray.rayId, config.maxDepth)] =
-    vec4<f32>(clamp_sample_radiance(sourceRadiance), f32(sourceKind));
+    vec4<f32>(sanitize_linear_radiance(sourceRadiance), f32(sourceKind));
 }
 
 fn environment_map_uv(direction: vec3<f32>) -> vec2<f32> {
@@ -4968,11 +5003,14 @@ fn medium_transmittance(mediumRefId: u32, distance: f32) -> vec3<f32> {
 }
 
 fn transmitted_medium_ref_id(ray: RayRecord, hit: HitRecord) -> u32 {
-  if (hit.mediumRefId == 0u) {
+  if (!medium_valid(hit.mediumRefId)) {
     return ray.mediumRefId;
   }
   if (hit.frontFace == 1u) {
-    return hit.mediumRefId;
+    if (ray.mediumRefId == 0u || ray.mediumRefId == hit.mediumRefId) {
+      return hit.mediumRefId;
+    }
+    return ray.mediumRefId;
   }
   if (ray.mediumRefId == hit.mediumRefId) {
     return 0u;
@@ -5030,7 +5068,7 @@ fn sunlit_baseline_radiance(normal: vec3<f32>) -> vec3<f32> {
   let skyFacing = 0.35 + saturate(normal.y * 0.5 + 0.5) * 0.65;
   let directionalWeight = 0.38 + sunFacing * 0.62;
   let sunTint = max(config.environmentSunColor.xyz, vec3<f32>(0.0));
-  return clamp_sample_radiance(sunTint * baseline * skyFacing * directionalWeight * 0.04);
+  return sanitize_linear_radiance(sunTint * baseline * skyFacing * directionalWeight * 0.04);
 }
 
 fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
@@ -5068,7 +5106,7 @@ fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f
   );
   let environmentFloor = max(ambientFloor, max(sunlitFloor, glossyEnvironment * environmentInfluence));
   let materialFloor = select(0.7, 1.0, hit.materialKind == 0u || hit.materialKind == 3u);
-  return clamp_sample_radiance(environmentFloor * materialFloor);
+  return sanitize_linear_radiance(environmentFloor * materialFloor);
 }
 
 fn terminal_surface_environment_contribution(
@@ -5078,7 +5116,7 @@ fn terminal_surface_environment_contribution(
 ) -> vec3<f32> {
   let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);
   let occlusion = mix(0.75, 1.0, clamp(hit.occlusion, 0.0, 1.0));
-  return clamp_sample_radiance(
+  return sanitize_linear_radiance(
     throughput *
     surfaceColor *
     terminal_surface_environment_source(ray, hit) *
@@ -5282,7 +5320,7 @@ fn surface_direct_light_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32
     bsdf *
     incidentRadiance *
     (nDotL * misWeight / max(lightSample.pdf, 0.000001));
-  return clamp_sample_radiance(contribution);
+  return sanitize_linear_radiance(contribution);
 }
 
 fn default_mesh_range() -> MeshRange {
@@ -5869,8 +5907,37 @@ fn sample_weight() -> f32 {
   return max(config.projectionAndSampling.z, 0.000001);
 }
 
-fn clamp_sample_radiance(value: vec3<f32>) -> vec3<f32> {
-  return min(max(value, vec3<f32>(0.0)), vec3<f32>(4.0));
+fn sanitize_linear_radiance_component(value: f32) -> f32 {
+  let resolved = select(0.0, value, value == value);
+  return clamp(resolved, 0.0, 65504.0);
+}
+
+fn sanitize_linear_radiance(value: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>(
+    sanitize_linear_radiance_component(value.x),
+    sanitize_linear_radiance_component(value.y),
+    sanitize_linear_radiance_component(value.z)
+  );
+}
+
+fn radiance_sample_is_invalid(value: vec3<f32>) -> bool {
+  return
+    value.x != value.x || value.y != value.y || value.z != value.z ||
+    value.x < 0.0 || value.y < 0.0 || value.z < 0.0 ||
+    abs(value.x) > 65504.0 || abs(value.y) > 65504.0 || abs(value.z) > 65504.0;
+}
+
+fn radiance_sample_exceeds_legacy_clamp(value: vec3<f32>) -> bool {
+  return value.x > 4.0 || value.y > 4.0 || value.z > 4.0;
+}
+
+fn record_radiance_diagnostics(sample: vec3<f32>) {
+  if (radiance_sample_is_invalid(sample)) {
+    atomicAdd(&counters.termination.invalidSampleCount, 1u);
+  }
+  if (radiance_sample_exceeds_legacy_clamp(sample)) {
+    atomicAdd(&counters.termination.legacyClampEquivalentCount, 1u);
+  }
 }
 
 fn tone_map_radiance(value: vec3<f32>) -> vec3<f32> {
@@ -5948,6 +6015,8 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicStore(&counters.termination.ambientQueueOverflowCount, 0u);
     atomicStore(&counters.termination.ambientResidualLuminanceScaled, 0u);
     atomicStore(&counters.termination.totalTerminalLuminanceScaled, 0u);
+    atomicStore(&counters.termination.invalidSampleCount, 0u);
+    atomicStore(&counters.termination.legacyClampEquivalentCount, 0u);
     write_active_dispatch_args(config.tilePixelCount);
   }
   if (index >= config.tilePixelCount) {
@@ -6297,8 +6366,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         TERMINAL_SOURCE_KIND_EMISSIVE
       );
     } else {
-      contribution = clamp_sample_radiance(arrivingThroughput * sourceRadiance);
-      let weightedContribution = contribution * sample_weight();
+      let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(TERMINAL_SOURCE_KIND_EMISSIVE, weightedContribution);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
@@ -6322,8 +6392,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         TERMINAL_SOURCE_KIND_ENVIRONMENT
       );
     } else {
-      contribution = clamp_sample_radiance(arrivingThroughput * sourceRadiance);
-      let weightedContribution = contribution * sample_weight();
+      let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(TERMINAL_SOURCE_KIND_ENVIRONMENT, weightedContribution);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
@@ -6350,8 +6421,11 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       ),
       hit
     );
+    let rawDirectLight = directLight * sample_weight();
+    record_radiance_diagnostics(rawDirectLight);
+    let weightedDirectLight = sanitize_linear_radiance(rawDirectLight);
     accumulation[ray.rayId] =
-      accumulation[ray.rayId] + vec4<f32>(directLight * sample_weight(), 0.0);
+      accumulation[ray.rayId] + vec4<f32>(weightedDirectLight, 0.0);
   }
 
   if (ray.bounce + 1u >= config.maxDepth) {
@@ -6367,7 +6441,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         arrivingThroughput,
         hit
       );
-      let weightedContribution = terminalEnvironment * sample_weight();
+      let rawWeightedContribution = terminalEnvironment * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH, weightedContribution);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
@@ -6400,7 +6476,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         arrivingThroughput,
         hit
       );
-      let weightedContribution = terminalEnvironment * sample_weight();
+      let rawWeightedContribution = terminalEnvironment * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH, weightedContribution);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
@@ -6422,7 +6500,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         arrivingThroughput,
         hit
       );
-      let weightedContribution = overflowEnvironment * sample_weight();
+      let rawWeightedContribution = overflowEnvironment * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(
         TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW,
         weightedContribution
@@ -6480,7 +6560,7 @@ fn resolve_deferred_path_radiance(rayId: u32) -> vec3<f32> {
       radiance = radiance * throughput.xyz;
     }
   }
-  return clamp_sample_radiance(radiance);
+  return sanitize_linear_radiance(radiance);
 }
 
 @compute @workgroup_size(64)
@@ -6496,14 +6576,17 @@ fn accumulateTerminalRadiance(@builtin(global_invocation_id) globalId: vec3<u32>
   if (deferred_path_resolve_enabled()) {
     let terminal = pathVertices[path_vertex_index(index, config.maxDepth)];
     let resolved = resolve_deferred_path_radiance(index) * sample_weight();
-    record_termination_metrics(u32(terminal.w), resolved);
-    radiance = clamp_sample_radiance(radiance + resolved);
+    record_radiance_diagnostics(resolved);
+    let safeResolved = sanitize_linear_radiance(resolved);
+    record_termination_metrics(u32(terminal.w), safeResolved);
+    radiance = sanitize_linear_radiance(radiance + safeResolved);
     accumulation[index] = vec4<f32>(radiance, 1.0);
   }
 
-  textureStore(radianceImage, pixel, vec4<f32>(radiance, 1.0));
+  let linearOutput = sanitize_linear_radiance(radiance);
+  textureStore(radianceImage, pixel, vec4<f32>(linearOutput, 1.0));
   if (config.denoise == 0u) {
-    textureStore(outputImage, pixel, vec4<f32>(tone_map_radiance(radiance), 1.0));
+    textureStore(outputImage, pixel, vec4<f32>(tone_map_radiance(linearOutput), 1.0));
   }
 }
 
@@ -7540,6 +7623,9 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     const totalLuminance =
       (countersView[COUNTER_TERMINATION_TOTAL_LUMINANCE_OFFSET] ?? 0) /
       TERMINATION_LUMINANCE_SCALE;
+    const invalidSamples = countersView[COUNTER_RADIANCE_INVALID_OFFSET] ?? 0;
+    const legacyClampEquivalentSamples =
+      countersView[COUNTER_RADIANCE_LEGACY_CLAMP_EQUIVALENT_OFFSET] ?? 0;
     const ambientResidualShare =
       totalLuminance > 0 ? ambientResidualLuminance / totalLuminance : 0;
     return Object.freeze({
@@ -7554,6 +7640,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         totalLuminance,
         ambientResidualLuminance,
         ambientResidualShare,
+      }),
+      radianceDiagnostics: Object.freeze({
+        invalidSamples,
+        legacyClampEquivalentSamples,
       }),
     });
   }
@@ -8215,6 +8305,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       bounces: [],
       termination: terminationMetrics.termination,
       terminalRadiance: terminationMetrics.terminalRadiance,
+      radianceDiagnostics: terminationMetrics.radianceDiagnostics,
       queueOverflow: terminationMetrics.queueOverflow,
     });
     return Object.freeze({

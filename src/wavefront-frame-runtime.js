@@ -176,6 +176,14 @@ export function createWavefrontTransportGuardrailSummary(frameStats, options = {
     options.deviceLossStatus ?? frameStats?.deviceLossStatus,
     awaitedGpuCompletion
   )
+  const invalidSamples = Math.max(
+    0,
+    Number(frameStats?.radianceDiagnostics?.invalidSamples ?? 0)
+  )
+  const legacyClampEquivalentSamples = Math.max(
+    0,
+    Number(frameStats?.radianceDiagnostics?.legacyClampEquivalentSamples ?? 0)
+  )
   const memory = summarizeWavefrontMemory(frameStats?.memory)
   const checks = Object.freeze([
     createTransportGuardrailCheck(
@@ -209,6 +217,15 @@ export function createWavefrontTransportGuardrailSummary(frameStats, options = {
           ? `Only ${completedPerSubmission.toFixed(2)} GPU jobs completed per command submission despite a ${maxFramePassesPerSubmission}-pass ceiling.`
           : `${completedPerFrame} GPU jobs completed across ${commandSubmissions} command submissions (${completedPerSubmission.toFixed(2)} jobs/submission).`
     ),
+    createTransportGuardrailCheck(
+      "radiance-diagnostics",
+      invalidSamples > 0 ? "fail" : legacyClampEquivalentSamples > 0 ? "warn" : "pass",
+      invalidSamples > 0
+        ? `Renderer recorded ${invalidSamples} invalid radiance sample(s); inspect transport math before trusting the frame.`
+        : legacyClampEquivalentSamples > 0
+          ? `${legacyClampEquivalentSamples} weighted sample(s) exceeded the legacy 4.0 preview clamp threshold; convergence stayed unbiased, but review firefly diagnostics before rollout.`
+          : "No invalid radiance samples or legacy-clamp-equivalent fireflies were recorded."
+    ),
   ])
   const status = checks.some((check) => check.status === "fail")
     ? "fail"
@@ -228,6 +245,10 @@ export function createWavefrontTransportGuardrailSummary(frameStats, options = {
       maxFramePassesPerSubmission,
       queueOverflow,
       deviceLossStatus,
+      radianceDiagnostics: Object.freeze({
+        invalidSamples,
+        legacyClampEquivalentSamples,
+      }),
       memory,
     }),
     checks,

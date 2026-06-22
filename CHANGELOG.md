@@ -15,10 +15,18 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
-  - (placeholder)
+  - Changed wavefront terminal and direct-light accumulation to preserve HDR
+    linear radiance through accumulation and deferred resolve, while sanitizing
+    only invalid or half-float-overflow samples before presentation.
 
 - **Fixed**
-  - (placeholder)
+  - Fixed the renderer's legacy per-sample `4.0` radiance clamp so HDR
+    fireflies are now measured through `radianceDiagnostics` and
+    `transportGuardrails` instead of being silently biased out of the linear
+    estimator path.
+  - Fixed medium handoff fallback so invalid medium ids and unsupported nested
+    medium transitions keep the current ray medium instead of propagating a
+    broken or pretend stack state.
 
 - **Security**
   - (placeholder)

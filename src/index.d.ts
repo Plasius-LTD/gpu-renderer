@@ -810,6 +810,10 @@ export interface WavefrontPathTracingComputeFrameStats {
       maxFramePassesPerSubmission: number;
       queueOverflow: number;
       deviceLossStatus: "not-detected" | "pending" | "not-exposed" | "lost";
+      radianceDiagnostics: Readonly<{
+        invalidSamples: number;
+        legacyClampEquivalentSamples: number;
+      }>;
       memory: Readonly<{
         totalBytes: number;
         breakdown: WavefrontPathTracingMemoryEstimate | null;
@@ -844,6 +848,10 @@ export interface WavefrontPathTracingComputeFrameStats {
     totalLuminance: number;
     ambientResidualLuminance: number;
     ambientResidualShare: number;
+  }>;
+  readonly radianceDiagnostics?: Readonly<{
+    invalidSamples: number;
+    legacyClampEquivalentSamples: number;
   }>;
   readonly queueOverflow?: number;
 }
