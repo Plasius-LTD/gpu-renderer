@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Added ADR 0017 to document physical deferred-throughput continuation,
+    invalid-throughput fallback, and rollout expectations for
+    `renderer.transport.physicalEstimator`.
   - Added terminal-radiance diagnostics to awaited wavefront frame stats so
     callers can measure total terminal luminance, ambient-residual luminance,
     and ambient-residual share during renderer validation.
@@ -64,6 +67,10 @@ All notable changes to this project will be documented in this file.
     contract used by the wavefront display-quality renderer.
 
 - **Fixed**
+  - Fixed deferred wavefront continuation to record sanitized physical
+    throughput segments instead of heuristic path-response colours, with
+    explicit delta-lobe tagging and bounded terminal fallback for invalid
+    continuation throughput.
   - Awaited wavefront frame waits now scale their submitted-work timeout by
     actual triangle load as well as pass count, preventing mesh-heavy
     validation frames from failing early while the GPU is still legitimately
