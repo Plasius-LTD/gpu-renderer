@@ -30,6 +30,11 @@ import {
   wavefrontPathTracingComputeLimits,
   wavefrontSceneObjectKinds,
 } from "../src/index.js";
+import {
+  computeWavefrontTerminalEnvironmentContributionReference,
+  estimateWavefrontDirectionalHemisphericalReflectance,
+  validateWavefrontBsdfSample,
+} from "../src/wavefront-compute.js";
 
 const gpuConstants = Object.freeze({
   buffer: Object.freeze({
@@ -857,6 +862,156 @@ test("wavefront compute converts emissive area PDFs to solid-angle MIS measures"
   );
   assert.match(source, /let environmentSelectionProbability = select\(1\.0, 0\.5, config\.emissiveTriangleCount > 0u\);/);
   assert.match(source, /return DirectLightSample\(vec4<f32>\(lightDirection, 0\.0\), vec4<f32>\(radiance, 0\.0\), lightPdf, traceDistance, 0u, 1u\);/);
+});
+
+test("wavefront BSDF numeric helpers flag PDF mismatches and invalid MIS measures", () => {
+  const hit = {
+    color: [0.78, 0.66, 0.52],
+    shadingNormal: [0, 1, 0],
+    roughness: 0.34,
+    metallic: 0.18,
+    clearcoat: 0.12,
+    clearcoatRoughness: 0.08,
+    specularWeight: 1,
+    occlusion: 0.94,
+  };
+  const viewDirection = [0, 1, 0];
+  const lightDirection = [0.24, 0.94, 0.23];
+
+  const matched = validateWavefrontBsdfSample({
+    hit,
+    viewDirection,
+    lightDirection,
+    lightPdf: 0.17,
+  });
+  assert.equal(matched.pdfMismatch, false);
+  assert.ok(matched.expectedPdf > 0);
+  assert.ok(matched.misWeight > 0 && matched.misWeight < 1);
+  matched.continuationThroughput.forEach((value) => {
+    assert.ok(Number.isFinite(value));
+    assert.ok(value >= 0);
+  });
+
+  const mismatched = validateWavefrontBsdfSample({
+    hit,
+    viewDirection,
+    lightDirection,
+    sampledPdf: matched.expectedPdf * 0.25,
+    lightPdf: 0.17,
+  });
+  assert.equal(mismatched.pdfMismatch, true);
+
+  const invalid = validateWavefrontBsdfSample({
+    hit,
+    viewDirection,
+    lightDirection,
+    sampledPdf: Number.NaN,
+    lightPdf: Number.POSITIVE_INFINITY,
+  });
+  assert.equal(invalid.misWeight, 0);
+  assert.deepEqual(invalid.continuationThroughput, [0, 0, 0]);
+});
+
+test("wavefront BSDF numeric helpers keep furnace-style reflectance bounded", () => {
+  const viewDirection = [0, 1, 0];
+  const materials = [
+    {
+      color: [0.82, 0.74, 0.68],
+      shadingNormal: [0, 1, 0],
+      roughness: 0.65,
+      metallic: 0,
+      clearcoat: 0,
+      specularWeight: 1,
+      occlusion: 1,
+    },
+    {
+      color: [0.92, 0.87, 0.81],
+      shadingNormal: [0, 1, 0],
+      roughness: 0.22,
+      metallic: 1,
+      clearcoat: 0,
+      specularWeight: 1,
+      occlusion: 1,
+    },
+    {
+      color: [0.68, 0.74, 0.82],
+      shadingNormal: [0, 1, 0],
+      roughness: 0.28,
+      metallic: 0.08,
+      clearcoat: 0.65,
+      clearcoatRoughness: 0.05,
+      specularWeight: 1,
+      occlusion: 0.96,
+    },
+  ];
+
+  materials.forEach((material) => {
+    const reflectance = estimateWavefrontDirectionalHemisphericalReflectance(material, viewDirection, {
+      sampleCount: 1024,
+    });
+    reflectance.forEach((value) => {
+      assert.ok(Number.isFinite(value));
+      assert.ok(value >= 0);
+      assert.ok(value <= 1.05);
+    });
+  });
+});
+
+test("wavefront terminal environment helpers clamp residuals and keep invalid inputs finite", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 16,
+    height: 16,
+    ambientColor: [0.24, 0.26, 0.3, 1],
+    environmentLighting: {
+      sunlitBaseline: 1.8,
+      intensity: 2.4,
+      sunColor: [3.6, 3.3, 2.9, 1],
+    },
+  });
+  const hit = {
+    color: [1.6, 1.4, 1.2],
+    shadingNormal: [0, 1, 0],
+    position: [0, 0.5, 0],
+    roughness: 0.05,
+    metallic: 0.92,
+    clearcoat: 0.4,
+    clearcoatRoughness: 0.04,
+    specularWeight: 1,
+    occlusion: 0.1,
+    materialKind: 1,
+  };
+  const ray = {
+    direction: [0.18, -0.96, 0.21],
+  };
+
+  const bounded = computeWavefrontTerminalEnvironmentContributionReference(
+    config,
+    ray,
+    [48, 36, 24],
+    hit
+  );
+  bounded.source.forEach((value) => {
+    assert.ok(Number.isFinite(value));
+    assert.ok(value >= 0);
+    assert.ok(value <= 4);
+  });
+  bounded.contribution.forEach((value) => {
+    assert.ok(Number.isFinite(value));
+    assert.ok(value >= 0);
+    assert.ok(value <= 4);
+  });
+
+  const invalid = computeWavefrontTerminalEnvironmentContributionReference(
+    config,
+    ray,
+    [Number.NaN, Number.POSITIVE_INFINITY, -1],
+    {
+      ...hit,
+      color: [Number.NaN, Number.POSITIVE_INFINITY, -1],
+      occlusion: Number.NaN,
+    }
+  );
+  assert.deepEqual(invalid.contribution, [0, 0, 0]);
 });
 
 test("wavefront compute samples material textures on the GPU at the resolved hit UV", () => {
