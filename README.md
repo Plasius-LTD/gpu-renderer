@@ -118,6 +118,12 @@ in dedicated runtime helpers so performance-facing integrations can consume
 stable frame stats without inheriting the renderer's shader and pipeline
 assembly internals.
 
+The production transport rollout remains gated by
+`renderer.transport.physicalEstimator`. With the flag enabled, deferred
+continuation vertices carry sanitized physical throughput segments instead of a
+heuristic material-response tint, while the older fallback path remains the
+rollback route during validation.
+
 ```js
 import {
   createWavefrontPathTracingComputeRenderer,

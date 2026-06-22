@@ -16,3 +16,4 @@
 - [ADR 0014: Wavefront Volume And Medium Transport For Authored Materials](./adr-0014-wavefront-volume-medium-transport.md)
 - [ADR 0015: Default Display-Quality Mesh Acceleration To CPU-Built BVH Upload](./adr-0015-display-quality-cpu-upload-bvh-default.md)
 - [ADR 0016: Mixed Direct-Light MIS For Wavefront Materials](./adr-0016-mixed-direct-light-mis-for-wavefront-materials.md)
+- [ADR 0017: Physical Throughput For Wavefront Continuations](./adr-0017-physical-throughput-for-wavefront-continuations.md)

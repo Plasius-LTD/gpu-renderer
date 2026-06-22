@@ -699,7 +699,7 @@ test("wavefront compute guides and gates environment lighting through portals", 
   assert.match(source, /gated_environment_radiance\(ray\.origin\.xyz, ray\.direction\.xyz\)/);
 });
 
-test("wavefront compute applies environment ambient on terminal surface collisions", () => {
+test("wavefront compute uses physical continuation throughput and bounded terminal residuals", () => {
   const source = readRendererSource();
 
   assert.match(source, /struct TerminationMetrics {/);
@@ -709,19 +709,30 @@ test("wavefront compute applies environment ambient on terminal surface collisio
   assert.match(source, /const TERMINAL_SOURCE_KIND_ENVIRONMENT = 2u;/);
   assert.match(source, /const TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH = 3u;/);
   assert.match(source, /const TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW = 4u;/);
+  assert.match(source, /const SCATTER_LOBE_DIFFUSE: u32 = 1u;/);
+  assert.match(source, /const SCATTER_LOBE_SPECULAR: u32 = 2u;/);
+  assert.match(source, /const SCATTER_LOBE_CLEARCOAT: u32 = 3u;/);
+  assert.match(source, /const SCATTER_LOBE_DELTA_REFLECTION: u32 = 4u;/);
+  assert.match(source, /const SCATTER_LOBE_DELTA_TRANSMISSION: u32 = 5u;/);
   assert.match(source, /fn terminal_surface_environment_source/);
   assert.match(source, /fn terminal_surface_environment_contribution/);
-  assert.match(source, /fn surface_path_response/);
-  assert.match(source, /fn bounded_path_response_luminance/);
-  assert.match(source, /fn stabilize_surface_path_response/);
+  assert.match(source, /fn sanitize_path_throughput_component/);
+  assert.match(source, /fn sanitize_path_throughput/);
+  assert.match(source, /fn record_deferred_path_throughput/);
+  assert.match(source, /fn surface_delta_reflection_throughput/);
+  assert.match(source, /fn surface_delta_transmission_throughput/);
+  assert.match(source, /fn surface_continuation_throughput/);
   assert.match(source, /fn sunlit_baseline_radiance/);
   assert.match(source, /let baseline = max\(config\.pathResolveSettings\.y, 0\.0\);/);
-  assert.match(source, /let daylightFloor = max\(config\.pathResolveSettings\.y, 0\.0\) \* 0\.08;/);
-  assert.match(source, /let hdriFloor = max\(config\.environmentMapSettings\.w, 0\.0\) \* 0\.02;/);
-  assert.match(
-    source,
-    /let response = stabilize_surface_path_response\(\s+ray,\s+hit,\s+surface_path_response\(hit\) \* segmentTransmittance\s+\);/
-  );
+  assert.match(source, /if \(value != value \|\| value <= 0\.0\) \{\s+return 0\.0;\s+\}/);
+  assert.match(source, /return min\(value, 65504\.0\);/);
+  assert.match(source, /return sanitize_path_throughput\(fresnel\);/);
+  assert.match(source, /return sanitize_path_throughput\(max\(vec3<f32>\(1\.0\) - fresnel, vec3<f32>\(0\.0\)\) \* transmissionTint\);/);
+  assert.match(source, /if \(\(scatter\.flags & RAY_FLAG_DELTA_SAMPLE\) != 0u\) \{/);
+  assert.match(source, /if \(scatter\.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION\) \{/);
+  assert.match(source, /let bsdf = evaluate_surface_bsdf\(hit, viewDirection, lightDirection\);/);
+  assert.match(source, /let nDotL = saturate\(dot\(normal, lightDirection\)\);/);
+  assert.match(source, /return sanitize_path_throughput\(bsdf \* \(nDotL \/ scatter\.pdf\)\);/);
   assert.match(source, /let surfaceColor = max\(hit\.color\.xyz, config\.ambientColor\.xyz\);/);
   assert.match(source, /let sunlitFloor = sunlit_baseline_radiance\(normal\);/);
   assert.match(source, /let glossiness = surface_glossiness\(hit\);/);
@@ -733,7 +744,9 @@ test("wavefront compute applies environment ambient on terminal surface collisio
   assert.match(source, /let specularEnvironment = reflectionEnvironment \* \(f0 \* brdfTerm\.x \+ vec3<f32>\(brdfTerm\.y\)\);/);
   assert.match(source, /let glossyEnvironment = max\(/);
   assert.match(source, /let environmentFloor = max\(ambientFloor, max\(sunlitFloor, glossyEnvironment \* environmentInfluence\)\);/);
-  assert.match(source, /record_deferred_path_response\(ray, response\);/);
+  assert.match(source, /let continuationThroughput = surface_continuation_throughput\(\s+hit,\s+continuationViewDirection,\s+continuationLightDirection,\s+scatter\s+\) \* segmentTransmittance;/);
+  assert.match(source, /if \(max_component\(continuationThroughput\) <= 0\.000001\) \{/);
+  assert.match(source, /record_deferred_path_throughput\(ray, continuationThroughput\);/);
   assert.match(
     source,
     /record_deferred_terminal_source\(\s*ray,\s*terminal_surface_environment_source\(ray, hit\),\s*TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH\s*\);/
@@ -865,7 +878,9 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
   assert.match(source, /fn resolve_deferred_path_radiance\(rayId: u32\) -> vec3<f32>/);
   assert.match(source, /let terminal = pathVertices\[path_vertex_index\(rayId, config\.maxDepth\)\];/);
   assert.match(source, /depth = depth - 1u;/);
-  assert.match(source, /radiance = radiance \* response\.xyz;/);
+  assert.match(source, /let throughput = pathVertices\[path_vertex_index\(rayId, depth\)\];/);
+  assert.match(source, /radiance = radiance \* throughput\.xyz;/);
+  assert.match(source, /let terminal = pathVertices\[path_vertex_index\(index, config\.maxDepth\)\];/);
   assert.match(source, /let resolved = resolve_deferred_path_radiance\(index\) \* sample_weight\(\);/);
   assert.match(
     source,

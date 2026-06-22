@@ -3465,6 +3465,11 @@ async function createRenderPipeline(device, descriptor) {
 const WAVEFRONT_COMPUTE_WGSL = `
 const RAY_FLAG_GUIDED_EMISSIVE: u32 = 1u;
 const RAY_FLAG_DELTA_SAMPLE: u32 = 2u;
+const SCATTER_LOBE_DIFFUSE: u32 = 1u;
+const SCATTER_LOBE_SPECULAR: u32 = 2u;
+const SCATTER_LOBE_CLEARCOAT: u32 = 3u;
+const SCATTER_LOBE_DELTA_REFLECTION: u32 = 4u;
+const SCATTER_LOBE_DELTA_TRANSMISSION: u32 = 5u;
 
 struct RayRecord {
   rayId: u32,
@@ -3580,7 +3585,7 @@ struct ScatterResult {
   pdf: f32,
   mediumRefId: u32,
   flags: u32,
-  pad0: u32,
+  lobeKind: u32,
 };
 
 struct MeshVertex {
@@ -3962,12 +3967,27 @@ fn clear_deferred_path(rayId: u32) {
   }
 }
 
-fn record_deferred_path_response(ray: RayRecord, response: vec3<f32>) {
+fn sanitize_path_throughput_component(value: f32) -> f32 {
+  if (value != value || value <= 0.0) {
+    return 0.0;
+  }
+  return min(value, 65504.0);
+}
+
+fn sanitize_path_throughput(value: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>(
+    sanitize_path_throughput_component(value.x),
+    sanitize_path_throughput_component(value.y),
+    sanitize_path_throughput_component(value.z)
+  );
+}
+
+fn record_deferred_path_throughput(ray: RayRecord, throughput: vec3<f32>) {
   if (!deferred_path_resolve_enabled() || ray.rayId >= config.tilePixelCount || ray.bounce >= config.maxDepth) {
     return;
   }
   pathVertices[path_vertex_index(ray.rayId, ray.bounce)] =
-    vec4<f32>(max(response, vec3<f32>(0.0)), 1.0);
+    vec4<f32>(sanitize_path_throughput(throughput), 1.0);
 }
 
 fn record_deferred_terminal_source(ray: RayRecord, sourceRadiance: vec3<f32>, sourceKind: u32) {
@@ -4501,48 +4521,41 @@ fn transmitted_medium_ref_id(ray: RayRecord, hit: HitRecord) -> u32 {
   return ray.mediumRefId;
 }
 
-fn surface_path_response(hit: HitRecord) -> vec3<f32> {
-  let color = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
-  let opacity = clamp(hit.material.z, 0.0, 1.0);
-  let occlusion = clamp(hit.occlusion, 0.0, 1.0);
-  let materialEnergy = select(0.68, 0.92, hit.materialKind == 1u || hit.materialKind == 2u);
-  let transparentEnergy = select(materialEnergy, 0.9, hit.hitType == 3u);
-  return mix(vec3<f32>(1.0), color, max(opacity, 0.18)) * transparentEnergy * mix(0.55, 1.0, occlusion);
+fn surface_delta_reflection_throughput(hit: HitRecord, viewDirection: vec3<f32>) -> vec3<f32> {
+  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
+  let fresnel = fresnel_schlick(saturate(dot(normal, viewDirection)), surface_specular_f0(hit, surfaceColor));
+  return sanitize_path_throughput(fresnel);
 }
 
-fn bounded_path_response_luminance(ray: RayRecord, hit: HitRecord) -> f32 {
-  let daylightFloor = max(config.pathResolveSettings.y, 0.0) * 0.08;
-  let hdriFloor = max(config.environmentMapSettings.w, 0.0) * 0.02;
-  let sceneFloor = max(daylightFloor, hdriFloor);
-  if (sceneFloor <= 0.000001) {
-    return 0.0;
-  }
-  let bounceRatio = select(
-    0.0,
-    f32(ray.bounce) / max(f32(config.maxDepth - 1u), 1.0),
-    config.maxDepth > 1u
-  );
-  let bounceScale = 1.0 - bounceRatio * 0.55;
-  let materialScale = select(1.0, 0.34, hit.materialKind == 1u || hit.materialKind == 2u);
-  let transparentScale = select(materialScale, 0.58, hit.hitType == 3u);
-  let opacityScale = mix(0.55, 1.0, clamp(hit.material.z, 0.0, 1.0));
-  return sceneFloor * bounceScale * transparentScale * opacityScale;
+fn surface_delta_transmission_throughput(hit: HitRecord, viewDirection: vec3<f32>) -> vec3<f32> {
+  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
+  let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
+  let fresnel = fresnel_schlick(saturate(dot(normal, viewDirection)), surface_specular_f0(hit, surfaceColor));
+  let transmissionTint = mix(vec3<f32>(1.0), surfaceColor, transmission);
+  return sanitize_path_throughput(max(vec3<f32>(1.0) - fresnel, vec3<f32>(0.0)) * transmissionTint);
 }
 
-fn stabilize_surface_path_response(ray: RayRecord, hit: HitRecord, response: vec3<f32>) -> vec3<f32> {
-  let minimumLuminance = bounded_path_response_luminance(ray, hit);
-  let responseLuminance = radiance_luminance(response);
-  if (minimumLuminance <= 0.000001 || responseLuminance >= minimumLuminance) {
-    return response;
+fn surface_continuation_throughput(
+  hit: HitRecord,
+  viewDirection: vec3<f32>,
+  lightDirection: vec3<f32>,
+  scatter: ScatterResult
+) -> vec3<f32> {
+  if ((scatter.flags & RAY_FLAG_DELTA_SAMPLE) != 0u) {
+    if (scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION) {
+      return surface_delta_transmission_throughput(hit, viewDirection);
+    }
+    return surface_delta_reflection_throughput(hit, viewDirection);
   }
-  let tintBase = max(response, max(hit.color.xyz * 0.65, config.ambientColor.xyz * 0.35));
-  let tint = tintBase / max(max_component(tintBase), 0.0001);
-  let lifted = select(
-    tint * minimumLuminance,
-    response * (minimumLuminance / max(responseLuminance, 0.0001)),
-    responseLuminance > 0.0001
-  );
-  return clamp(lifted, vec3<f32>(0.0), vec3<f32>(0.98));
+  if (scatter.pdf <= 0.000001) {
+    return vec3<f32>(0.0);
+  }
+  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let bsdf = evaluate_surface_bsdf(hit, viewDirection, lightDirection);
+  let nDotL = saturate(dot(normal, lightDirection));
+  return sanitize_path_throughput(bsdf * (nDotL / scatter.pdf));
 }
 
 fn sunlit_baseline_radiance(normal: vec3<f32>) -> vec3<f32> {
@@ -5698,7 +5711,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
       1.0,
       ray.mediumRefId,
       RAY_FLAG_DELTA_SAMPLE,
-      0u,
+      SCATTER_LOBE_DELTA_REFLECTION,
     );
   }
 
@@ -5720,7 +5733,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
         1.0,
         ray.mediumRefId,
         RAY_FLAG_DELTA_SAMPLE,
-        0u,
+        SCATTER_LOBE_DELTA_REFLECTION,
       );
     }
     return ScatterResult(
@@ -5728,7 +5741,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
       1.0,
       transmitted_medium_ref_id(ray, hit),
       RAY_FLAG_DELTA_SAMPLE,
-      0u,
+      SCATTER_LOBE_DELTA_TRANSMISSION,
     );
   }
 
@@ -5745,7 +5758,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
         guidedPdf,
         ray.mediumRefId,
         RAY_FLAG_GUIDED_EMISSIVE,
-        0u,
+        SCATTER_LOBE_DIFFUSE,
       );
     }
   }
@@ -5753,18 +5766,26 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
     let guidedDirection = sample_environment_portal_direction(hit, seed + 131u, normal);
     if (dot(normal, guidedDirection) > 0.000001) {
       let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
-      return ScatterResult(vec4<f32>(guidedDirection, 0.0), guidedPdf, ray.mediumRefId, 0u, 0u);
+      return ScatterResult(
+        vec4<f32>(guidedDirection, 0.0),
+        guidedPdf,
+        ray.mediumRefId,
+        0u,
+        SCATTER_LOBE_DIFFUSE
+      );
     }
   }
 
   let weights = surface_bsdf_sampling_weights(hit);
   let selector = random01(seed + 31u);
   var lightDirection = normal;
+  var lobeKind = SCATTER_LOBE_DIFFUSE;
   if (selector < weights.x) {
     lightDirection = cosine_sample_hemisphere(
       vec2<f32>(random01(seed + 37u), random01(seed + 41u)),
       normal
     );
+    lobeKind = SCATTER_LOBE_DIFFUSE;
   } else if (selector < weights.x + weights.y) {
     let halfVector = importance_sample_ggx(
       vec2<f32>(random01(seed + 47u), random01(seed + 53u)),
@@ -5772,6 +5793,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
       normal
     );
     lightDirection = safe_normalize(reflect(-viewDirection, halfVector), normal);
+    lobeKind = SCATTER_LOBE_SPECULAR;
   } else {
     let halfVector = importance_sample_ggx(
       vec2<f32>(random01(seed + 59u), random01(seed + 61u)),
@@ -5779,15 +5801,17 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
       normal
     );
     lightDirection = safe_normalize(reflect(-viewDirection, halfVector), normal);
+    lobeKind = SCATTER_LOBE_CLEARCOAT;
   }
   if (dot(normal, lightDirection) <= 0.000001) {
     lightDirection = cosine_sample_hemisphere(
       vec2<f32>(random01(seed + 67u), random01(seed + 71u)),
       normal
     );
+    lobeKind = SCATTER_LOBE_DIFFUSE;
   }
   let pdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, lightDirection), 0.000001);
-  return ScatterResult(vec4<f32>(lightDirection, 0.0), pdf, ray.mediumRefId, 0u, 0u);
+  return ScatterResult(vec4<f32>(lightDirection, 0.0), pdf, ray.mediumRefId, 0u, lobeKind);
 }
 
 @compute @workgroup_size(64)
@@ -5849,13 +5873,6 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  let response = stabilize_surface_path_response(
-    ray,
-    hit,
-    surface_path_response(hit) * segmentTransmittance
-  );
-  record_deferred_path_response(ray, response);
-
   let shouldEstimateDirectLight = surface_supports_direct_lighting(hit);
   if (shouldEstimateDirectLight) {
     let directLight = surface_direct_light_contribution(
@@ -5902,6 +5919,36 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   let seed = mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 11u);
   let scatter = scatter_direction(ray, hit, seed);
+  let continuationNormal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let continuationViewDirection = safe_normalize(-ray.direction.xyz, continuationNormal);
+  let continuationLightDirection = safe_normalize(scatter.direction.xyz, continuationNormal);
+  let continuationThroughput = surface_continuation_throughput(
+    hit,
+    continuationViewDirection,
+    continuationLightDirection,
+    scatter
+  ) * segmentTransmittance;
+  if (max_component(continuationThroughput) <= 0.000001) {
+    if (deferred_path_resolve_enabled()) {
+      record_deferred_terminal_source(
+        ray,
+        terminal_surface_environment_source(ray, hit),
+        TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH
+      );
+    } else {
+      let terminalEnvironment = terminal_surface_environment_contribution(
+        ray,
+        arrivingThroughput,
+        hit
+      );
+      let weightedContribution = terminalEnvironment * sample_weight();
+      record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH, weightedContribution);
+      accumulation[ray.rayId] =
+        accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
+    }
+    atomicAdd(&counters.terminatedCount, 1u);
+    return;
+  }
   let nextIndex = atomicAdd(&counters.nextCount, 1u);
   if (nextIndex >= config.tilePixelCount) {
     if (deferred_path_resolve_enabled()) {
@@ -5927,7 +5974,8 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
-  let throughput = ray.throughput.xyz * response;
+  record_deferred_path_throughput(ray, continuationThroughput);
+  let throughput = ray.throughput.xyz * continuationThroughput;
   nextQueue[nextIndex] = RayRecord(
     ray.rayId,
     ray.rayId,
@@ -5968,9 +6016,9 @@ fn resolve_deferred_path_radiance(rayId: u32) -> vec3<f32> {
       break;
     }
     depth = depth - 1u;
-    let response = pathVertices[path_vertex_index(rayId, depth)];
-    if (response.w > 0.0) {
-      radiance = radiance * response.xyz;
+    let throughput = pathVertices[path_vertex_index(rayId, depth)];
+    if (throughput.w > 0.0) {
+      radiance = radiance * throughput.xyz;
     }
   }
   return clamp_sample_radiance(radiance);
@@ -5987,6 +6035,7 @@ fn accumulateTerminalRadiance(@builtin(global_invocation_id) globalId: vec3<u32>
   let pixel = vec2<i32>(i32(config.tileX + localX), i32(config.tileY + localY));
   var radiance = max(accumulation[index].xyz, vec3<f32>(0.0));
   if (deferred_path_resolve_enabled()) {
+    let terminal = pathVertices[path_vertex_index(index, config.maxDepth)];
     let resolved = resolve_deferred_path_radiance(index) * sample_weight();
     record_termination_metrics(u32(terminal.w), resolved);
     radiance = clamp_sample_radiance(radiance + resolved);
