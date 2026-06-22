@@ -6197,7 +6197,8 @@ fn offset_origin(
   }
   let offsetNormal = safe_normalize(orientedGeometric + orientedShading, orientedGeometric);
   let positionScale = max(max(abs(position.x), abs(position.y)), abs(position.z));
-  let offsetDistance = max(0.00025, positionScale * 0.00025);
+  let positionAwareEpsilon = positionScale * 0.00000047683716;
+  let offsetDistance = clamp(max(0.00025, positionAwareEpsilon), 0.00025, 0.01);
   return position + offsetNormal * offsetDistance;
 }
 

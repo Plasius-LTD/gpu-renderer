@@ -707,6 +707,11 @@ test("wavefront compute offsets continuation and visibility rays with geometric-
   );
   assert.match(source, /let raySide = select\(-1\.0, 1\.0, dot\(rayDirection, geometric\) >= 0\.0\);/);
   assert.match(source, /let positionScale = max\(max\(abs\(position\.x\), abs\(position\.y\)\), abs\(position\.z\)\);/);
+  assert.match(source, /let positionAwareEpsilon = positionScale \* 0\.00000047683716;/);
+  assert.match(
+    source,
+    /let offsetDistance = clamp\(max\(0\.00025, positionAwareEpsilon\), 0\.00025, 0\.01\);/
+  );
   assert.match(
     source,
     /let radiance = direct_environment_radiance\(\s*offset_origin\(hit\.position\.xyz, hit\.geometricNormal\.xyz, hit\.shadingNormal\.xyz, lightDirection\),\s*lightDirection\s*\);/
