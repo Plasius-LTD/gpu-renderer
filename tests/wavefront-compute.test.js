@@ -410,6 +410,27 @@ test("wavefront compute config keeps 4K queues tile-bounded", () => {
   assert.ok(config.memory.hitBytes < 134_217_728);
 });
 
+test("wavefront compute config supports high quality reference depths", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 3840,
+    height: 2160,
+    tileSize: 128,
+    maxDepth: 20,
+  });
+  const clamped = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    maxDepth: 64,
+  });
+
+  assert.equal(config.maxDepth, 20);
+  assert.equal(
+    config.memory.pathVertexBytes,
+    128 * 128 * 21 * wavefrontPathTracingComputeLimits.pathVertexRecordBytes
+  );
+  assert.equal(clamped.maxDepth, 32);
+});
+
 test("wavefront compute compatibility exports expose the canonical mesh shader", () => {
   const shaderSource = createWavefrontPathTracingComputeShaderSource();
   const types = readRendererTypes();
@@ -2133,6 +2154,17 @@ serialWebGpuTest("wavefront renderFrame waits for submitted GPU work before repo
       frame.gpuWorkerJobs.completedPerSubmission,
       frame.gpuWorkerJobs.completedPerFrame / frame.commandSubmissions
     );
+    assert.equal(frame.deviceLossStatus, "not-detected");
+    assert.equal(frame.transportGuardrails.status, "pass");
+    assert.equal(
+      frame.transportGuardrails.current.jobsPerSubmission,
+      frame.gpuWorkerJobs.completedPerSubmission
+    );
+    assert.equal(
+      frame.transportGuardrails.current.commandSubmissions,
+      frame.commandSubmissions
+    );
+    assert.ok(frame.transportGuardrails.current.memory.totalBytes > 0);
 
     renderer.destroy();
   });
@@ -2194,6 +2226,8 @@ serialWebGpuTest("wavefront renderFrame awaits completed 8 spp work without timi
     assert.equal(device.queue.submittedWorkDoneCalls, 1);
     assert.equal(frame.gpuWorkerJobs.awaitedGpuCompletion, true);
     assert.ok(frame.gpuWorkerJobs.completedPerFrame > frame.commandSubmissions);
+    assert.equal(frame.transportGuardrails.status, "pass");
+    assert.ok(frame.transportGuardrails.current.jobsPerSubmission > 1);
 
     renderer.destroy();
   });

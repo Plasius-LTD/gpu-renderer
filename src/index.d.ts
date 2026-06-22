@@ -785,6 +785,7 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly accelerationBuilt: boolean;
   readonly accelerationBuildCount: number;
   readonly commandSubmissions: number;
+  readonly deviceLossStatus?: "not-detected" | "pending" | "not-exposed" | "lost";
   readonly gpuWorkerJobs: Readonly<{
     completedPerFrame: number;
     completedPerSecond: number | null;
@@ -793,6 +794,32 @@ export interface WavefrontPathTracingComputeFrameStats {
     indirectDispatchesCompleted: number;
     frameTimeMs: number;
     awaitedGpuCompletion: boolean;
+  }>;
+  readonly transportGuardrails?: Readonly<{
+    status: "pass" | "warn" | "fail";
+    thresholds: Readonly<{
+      maxPerJobRegressionRatio: number;
+    }>;
+    current: Readonly<{
+      jobsPerFrame: number;
+      jobsPerSecond: number | null;
+      jobsPerSubmission: number;
+      commandSubmissions: number;
+      frameTimeMs: number;
+      awaitedGpuCompletion: boolean;
+      maxFramePassesPerSubmission: number;
+      queueOverflow: number;
+      deviceLossStatus: "not-detected" | "pending" | "not-exposed" | "lost";
+      memory: Readonly<{
+        totalBytes: number;
+        breakdown: WavefrontPathTracingMemoryEstimate | null;
+      }>;
+    }>;
+    checks: readonly Readonly<{
+      id: string;
+      status: "pass" | "warn" | "fail";
+      details: string;
+    }>[];
   }>;
   readonly frameConfigSlots: number;
   readonly gpuParallelism: WavefrontGpuParallelismDiagnostics;

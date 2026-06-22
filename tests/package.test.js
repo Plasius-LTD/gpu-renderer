@@ -20,6 +20,7 @@ import {
   createGpuParallelismCounters,
   createGpuSubmissionBatcher,
   createGpuWorkerJobDiagnostics,
+  createWavefrontTransportGuardrailSummary,
   recordDirectDispatch,
   recordIndirectDispatch,
 } from "../src/wavefront-frame-runtime.js";
@@ -296,6 +297,100 @@ test("wavefront frame runtime tracks dispatch diagnostics without renderer state
   assert.equal(diagnostics.completedPerFrame, 2);
   assert.equal(diagnostics.completedPerSubmission, 1);
   assert.equal(diagnostics.completedPerSecond, 200);
+});
+
+test("wavefront transport guardrails summarize throughput memory and queue health", () => {
+  const guardrails = createWavefrontTransportGuardrailSummary({
+    commandSubmissions: 2,
+    maxFramePassesPerSubmission: 8,
+    queueOverflow: 0,
+    deviceLossStatus: "not-detected",
+    memory: {
+      queueBytes: 1024,
+      hitBytes: 2048,
+      configBytes: 128,
+    },
+    gpuWorkerJobs: {
+      completedPerFrame: 18,
+      completedPerSecond: 360,
+      completedPerSubmission: 9,
+      directDispatchesCompleted: 12,
+      indirectDispatchesCompleted: 6,
+      frameTimeMs: 50,
+      awaitedGpuCompletion: true,
+    },
+  });
+
+  assert.equal(guardrails.status, "pass");
+  assert.equal(guardrails.thresholds.maxPerJobRegressionRatio, 0.1);
+  assert.equal(guardrails.current.jobsPerFrame, 18);
+  assert.equal(guardrails.current.jobsPerSecond, 360);
+  assert.equal(guardrails.current.jobsPerSubmission, 9);
+  assert.equal(guardrails.current.commandSubmissions, 2);
+  assert.equal(guardrails.current.memory.totalBytes, 3200);
+  assert.equal(guardrails.current.deviceLossStatus, "not-detected");
+  assert.equal(guardrails.checks.length, 3);
+  assert.ok(guardrails.checks.every((check) => check.status === "pass"));
+  assert.match(
+    guardrails.checks.find((check) => check.id === "submission-batching").details,
+    /9\.00 jobs\/submission/
+  );
+});
+
+test("wavefront transport guardrails warn when queue overflow or pending completion hide stability risk", () => {
+  const guardrails = createWavefrontTransportGuardrailSummary({
+    commandSubmissions: 0,
+    maxFramePassesPerSubmission: 4,
+    queueOverflow: 3,
+    gpuWorkerJobs: {
+      completedPerFrame: 0,
+      completedPerSecond: null,
+      completedPerSubmission: 0,
+      directDispatchesCompleted: 0,
+      indirectDispatchesCompleted: 0,
+      frameTimeMs: 12,
+      awaitedGpuCompletion: false,
+    },
+  });
+
+  assert.equal(guardrails.status, "warn");
+  assert.equal(guardrails.current.deviceLossStatus, "pending");
+  assert.equal(guardrails.current.queueOverflow, 3);
+  assert.ok(guardrails.checks.some((check) => check.id === "queue-overflow" && check.status === "warn"));
+  assert.ok(
+    guardrails.checks.some((check) => check.id === "submission-batching" && check.status === "warn")
+  );
+});
+
+test("wavefront transport guardrails warn when submissions collapse to one job each", () => {
+  const guardrails = createWavefrontTransportGuardrailSummary({
+    commandSubmissions: 2,
+    maxFramePassesPerSubmission: 8,
+    queueOverflow: 0,
+    deviceLossStatus: "not-detected",
+    memory: {
+      queueBytes: 1024,
+    },
+    gpuWorkerJobs: {
+      completedPerFrame: 2,
+      completedPerSecond: 40,
+      completedPerSubmission: 1,
+      directDispatchesCompleted: 2,
+      indirectDispatchesCompleted: 0,
+      frameTimeMs: 50,
+      awaitedGpuCompletion: true,
+    },
+  });
+
+  assert.equal(guardrails.status, "warn");
+  assert.ok(
+    guardrails.checks.some(
+      (check) =>
+        check.id === "submission-batching" &&
+        check.status === "warn" &&
+        /despite a 8-pass ceiling/.test(check.details)
+    )
+  );
 });
 
 test("wavefront frame runtime batches submissions against a per-submit pass ceiling", () => {
