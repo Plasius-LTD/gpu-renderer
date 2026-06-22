@@ -225,7 +225,9 @@ reflection/refraction tree.
 `samplesPerPixel` controls how many GPU primary-ray samples are accumulated per
 screen pixel within a single render. This multiplies dispatch work but does not
 increase the tile queue memory footprint, so 720p/1080p/4K targets remain
-bounded by `tileSize`. When `denoise` is enabled the renderer writes raw
+bounded by `tileSize`. `maxDepth` is bounded at 32 for offline/reference
+renders, allowing 20-bounce quality checks while keeping path-vertex memory
+explicit and predictable. When `denoise` is enabled the renderer writes raw
 linear radiance to an `rgba16float` texture first, then runs a two-stage
 full-frame GPU denoise through an `rgba16float` scratch texture before final
 tone mapping into the presented `rgba8unorm` output. Filtering in linear
@@ -288,6 +290,15 @@ counts, and upper-bound indirect work estimates. WebGPU does not expose physical
 GPU core counts, so `physicalCoreCount` remains `null`; use
 `exposesMultiWorkgroupParallelism`, `largestDirectWorkgroupsPerDispatch`, and
 `largestEstimatedIndirectWorkgroupsPerDispatch` to confirm the renderer is
+issuing multi-workgroup GPU work. Awaited frame results also expose a
+`transportGuardrails` summary with jobs/frame, jobs/s, jobs/submission, command
+submissions, queue-overflow count, total tracked memory bytes, and device-loss
+status so validation harnesses can gate transport work without scraping ad hoc
+metrics from multiple fields. Treat any sustained >10% drop in jobs/submission
+or jobs/s versus the approved baseline as a release-validation failure unless a
+linked ticket explicitly approves the regression; `submission-batching` warns
+when the renderer falls back to roughly one GPU job per submission despite a
+higher pass ceiling.
 submitting work that can occupy more than one GPU execution unit. After each
 primary-ray or compaction pass, the GPU writes the active-ray workgroup count
 into the counter buffer and the encoder copies it into an indirect-dispatch

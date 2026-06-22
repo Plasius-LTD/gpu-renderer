@@ -23,6 +23,9 @@ All notable changes to this project will be documented in this file.
   - Added `gpuWorkerJobs` diagnostics to wavefront frame stats so callers can
     inspect completed compute-dispatch jobs per frame, per second, and per
     command submission alongside the existing GPU parallelism figures.
+  - Added `transportGuardrails` summaries to awaited wavefront frame stats so
+    validation harnesses can read throughput, submission, queue-overflow,
+    memory, and device-loss health from one structured result.
   - Added `gpuParallelism` diagnostics to wavefront frame stats and snapshots so
     consumers can inspect adapter compute limits, direct workgroups,
     indirect-dispatch estimates, and whether a frame exposes multi-workgroup GPU
@@ -67,6 +70,9 @@ All notable changes to this project will be documented in this file.
     contract used by the wavefront display-quality renderer.
 
 - **Fixed**
+  - Raised the bounded wavefront `maxDepth` ceiling to 32 so offline/reference
+    renders can request 20-bounce paths without being clamped by renderer
+    configuration.
   - Fixed release metadata preparation on protected `main` so repositories that
     only require pull-request mediation can fall back to a `github.token` PR
     path instead of failing immediately on missing `RELEASE_PREP_TOKEN`.
