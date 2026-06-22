@@ -192,6 +192,6 @@ fn record_deferred_terminal_source(ray: RayRecord, sourceRadiance: vec3<f32>, so
     return;
   }
   pathVertices[path_vertex_index(ray.rayId, config.maxDepth)] =
-    vec4<f32>(clamp_sample_radiance(sourceRadiance), f32(sourceKind));
+    vec4<f32>(sanitize_linear_radiance(sourceRadiance), f32(sourceKind));
 }
 `;

@@ -205,8 +205,8 @@ struct TerminationMetrics {
   ambientQueueOverflowCount: atomic<u32>,
   ambientResidualLuminanceScaled: atomic<u32>,
   totalTerminalLuminanceScaled: atomic<u32>,
-  _pad0: u32,
-  _pad1: u32,
+  invalidSampleCount: atomic<u32>,
+  legacyClampEquivalentCount: atomic<u32>,
 };
 
 const TERMINAL_SOURCE_KIND_EMISSIVE = 1u;

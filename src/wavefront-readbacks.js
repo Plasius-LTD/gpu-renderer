@@ -4,6 +4,8 @@ import {
   COUNTER_TERMINATION_AMBIENT_MAX_DEPTH_OFFSET,
   COUNTER_TERMINATION_EMISSIVE_OFFSET,
   COUNTER_TERMINATION_ENVIRONMENT_OFFSET,
+  COUNTER_TERMINATION_INVALID_SAMPLE_OFFSET,
+  COUNTER_TERMINATION_LEGACY_CLAMP_EQUIVALENT_OFFSET,
   COUNTER_TERMINATION_QUEUE_OVERFLOW_OFFSET,
   COUNTER_TERMINATION_TOTAL_LUMINANCE_OFFSET,
   EMPTY_TERMINATION_METRICS,
@@ -49,6 +51,9 @@ export async function readWavefrontTerminationMetrics({
   const environment = countersView[COUNTER_TERMINATION_ENVIRONMENT_OFFSET] ?? 0;
   const maxDepth = countersView[COUNTER_TERMINATION_AMBIENT_MAX_DEPTH_OFFSET] ?? 0;
   const queueOverflow = countersView[COUNTER_TERMINATION_QUEUE_OVERFLOW_OFFSET] ?? 0;
+  const invalidSamples = countersView[COUNTER_TERMINATION_INVALID_SAMPLE_OFFSET] ?? 0;
+  const legacyClampEquivalentSamples =
+    countersView[COUNTER_TERMINATION_LEGACY_CLAMP_EQUIVALENT_OFFSET] ?? 0;
   const ambientResidualLuminance =
     (countersView[COUNTER_TERMINATION_AMBIENT_LUMINANCE_OFFSET] ?? 0) /
     TERMINATION_LUMINANCE_SCALE;
@@ -69,6 +74,10 @@ export async function readWavefrontTerminationMetrics({
       totalLuminance,
       ambientResidualLuminance,
       ambientResidualShare,
+    }),
+    radianceDiagnostics: Object.freeze({
+      invalidSamples,
+      legacyClampEquivalentSamples,
     }),
   });
 }

@@ -360,11 +360,11 @@ function coerceWavefrontVec3(value, fallback) {
   ];
 }
 
-function clampWavefrontSampleRadiance(value) {
+function sanitizeWavefrontSampleRadiance(value) {
   return [
-    clamp(Number(value?.[0]) || 0, 0, 4),
-    clamp(Number(value?.[1]) || 0, 0, 4),
-    clamp(Number(value?.[2]) || 0, 0, 4),
+    sanitizeWavefrontThroughputComponent(value?.[0]),
+    sanitizeWavefrontThroughputComponent(value?.[1]),
+    sanitizeWavefrontThroughputComponent(value?.[2]),
   ];
 }
 
@@ -575,7 +575,7 @@ function sunlitBaselineRadianceReference(configInput, normal) {
   const skyFacing = 0.35 + clamp(normal[1] * 0.5 + 0.5, 0, 1) * 0.65;
   const directionalWeight = 0.38 + sunFacing * 0.62;
   const sunTint = maxVec3(asVec3(config.environmentLighting?.sunColor, DEFAULT_ENVIRONMENT_LIGHTING.sunColor), [0, 0, 0]);
-  return clampWavefrontSampleRadiance(
+  return sanitizeWavefrontSampleRadiance(
     sunTint.map((value) => value * baseline * skyFacing * directionalWeight * 0.04)
   );
 }
@@ -715,9 +715,9 @@ export function computeWavefrontTerminalEnvironmentContributionReference(
     maxVec3(sunlitFloor, scale(glossyEnvironment, environmentInfluence))
   );
   const materialFloor = hit.materialKind === 0 || hit.materialKind === 3 ? 1 : 0.7;
-  const source = clampWavefrontSampleRadiance(scale(environmentFloor, materialFloor));
+  const source = sanitizeWavefrontSampleRadiance(scale(environmentFloor, materialFloor));
   const occlusion = mixScalar(0.75, 1, clamp(hit.occlusion, 0, 1));
-  const contribution = clampWavefrontSampleRadiance(
+  const contribution = sanitizeWavefrontSampleRadiance(
     scale(
       multiplyVec3(
         multiplyVec3(sanitizeWavefrontThroughput(throughputInput), maxVec3(hit.color, ambientColor)),

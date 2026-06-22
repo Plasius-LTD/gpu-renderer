@@ -7,8 +7,37 @@ fn sample_weight() -> f32 {
   return max(config.projectionAndSampling.z, 0.000001);
 }
 
-fn clamp_sample_radiance(value: vec3<f32>) -> vec3<f32> {
-  return min(max(value, vec3<f32>(0.0)), vec3<f32>(4.0));
+fn sanitize_linear_radiance_component(value: f32) -> f32 {
+  let resolved = select(0.0, value, value == value);
+  return clamp(resolved, 0.0, 65504.0);
+}
+
+fn sanitize_linear_radiance(value: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>(
+    sanitize_linear_radiance_component(value.x),
+    sanitize_linear_radiance_component(value.y),
+    sanitize_linear_radiance_component(value.z)
+  );
+}
+
+fn radiance_sample_is_invalid(value: vec3<f32>) -> bool {
+  return
+    value.x != value.x || value.y != value.y || value.z != value.z ||
+    value.x < 0.0 || value.y < 0.0 || value.z < 0.0 ||
+    abs(value.x) > 65504.0 || abs(value.y) > 65504.0 || abs(value.z) > 65504.0;
+}
+
+fn radiance_sample_exceeds_legacy_clamp(value: vec3<f32>) -> bool {
+  return value.x > 4.0 || value.y > 4.0 || value.z > 4.0;
+}
+
+fn record_radiance_diagnostics(sample: vec3<f32>) {
+  if (radiance_sample_is_invalid(sample)) {
+    atomicAdd(&counters.termination.invalidSampleCount, 1u);
+  }
+  if (radiance_sample_exceeds_legacy_clamp(sample)) {
+    atomicAdd(&counters.termination.legacyClampEquivalentCount, 1u);
+  }
 }
 
 fn tone_map_radiance(value: vec3<f32>) -> vec3<f32> {
@@ -86,6 +115,8 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicStore(&counters.termination.ambientQueueOverflowCount, 0u);
     atomicStore(&counters.termination.ambientResidualLuminanceScaled, 0u);
     atomicStore(&counters.termination.totalTerminalLuminanceScaled, 0u);
+    atomicStore(&counters.termination.invalidSampleCount, 0u);
+    atomicStore(&counters.termination.legacyClampEquivalentCount, 0u);
     write_active_dispatch_args(config.tilePixelCount);
   }
   if (index >= config.tilePixelCount) {
@@ -242,8 +273,30 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
   );
 }
 
-fn offset_origin(position: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-  return position + normal * 0.0025;
+fn surface_shading_normal(hit: HitRecord) -> vec3<f32> {
+  let geometric = safe_normalize(hit.geometricNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  return repair_shading_normal(geometric, hit.shadingNormal.xyz);
+}
+
+fn offset_origin(
+  position: vec3<f32>,
+  geometricNormal: vec3<f32>,
+  shadingNormal: vec3<f32>,
+  rayDirection: vec3<f32>
+) -> vec3<f32> {
+  let geometric = safe_normalize(geometricNormal, vec3<f32>(0.0, 1.0, 0.0));
+  let shading = repair_shading_normal(geometric, shadingNormal);
+  let raySide = select(-1.0, 1.0, dot(rayDirection, geometric) >= 0.0);
+  let orientedGeometric = geometric * raySide;
+  var orientedShading = shading * raySide;
+  if (dot(orientedShading, orientedGeometric) <= 0.0) {
+    orientedShading = orientedGeometric;
+  }
+  let offsetNormal = safe_normalize(orientedGeometric + orientedShading, orientedGeometric);
+  let positionScale = max(max(abs(position.x), abs(position.y)), abs(position.z));
+  let positionAwareEpsilon = positionScale * 0.00000047683716;
+  let offsetDistance = clamp(max(0.00025, positionAwareEpsilon), 0.00025, 0.01);
+  return position + offsetNormal * offsetDistance;
 }
 
 fn random_unit_vector(seed: u32) -> vec3<f32> {
@@ -298,7 +351,7 @@ fn sample_environment_portal_direction(hit: HitRecord, seed: u32, fallback: vec3
 }
 
 fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult {
-  let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let normal = surface_shading_normal(hit);
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
@@ -435,8 +488,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         TERMINAL_SOURCE_KIND_EMISSIVE
       );
     } else {
-      contribution = clamp_sample_radiance(arrivingThroughput * sourceRadiance);
-      let weightedContribution = contribution * sample_weight();
+      let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(TERMINAL_SOURCE_KIND_EMISSIVE, weightedContribution);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
@@ -460,8 +514,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         TERMINAL_SOURCE_KIND_ENVIRONMENT
       );
     } else {
-      contribution = clamp_sample_radiance(arrivingThroughput * sourceRadiance);
-      let weightedContribution = contribution * sample_weight();
+      let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(TERMINAL_SOURCE_KIND_ENVIRONMENT, weightedContribution);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
@@ -488,8 +543,11 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       ),
       hit
     );
+    let rawDirectLight = directLight * sample_weight();
+    record_radiance_diagnostics(rawDirectLight);
+    let weightedDirectLight = sanitize_linear_radiance(rawDirectLight);
     accumulation[ray.rayId] =
-      accumulation[ray.rayId] + vec4<f32>(directLight * sample_weight(), 0.0);
+      accumulation[ray.rayId] + vec4<f32>(weightedDirectLight, 0.0);
   }
 
   if (ray.bounce + 1u >= config.maxDepth) {
@@ -505,7 +563,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         arrivingThroughput,
         hit
       );
-      let weightedContribution = terminalEnvironment * sample_weight();
+      let rawWeightedContribution = terminalEnvironment * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH, weightedContribution);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
@@ -516,7 +576,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   let seed = mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 11u);
   let scatter = scatter_direction(ray, hit, seed);
-  let continuationNormal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  let continuationNormal = surface_shading_normal(hit);
   let continuationViewDirection = safe_normalize(-ray.direction.xyz, continuationNormal);
   let continuationLightDirection = safe_normalize(scatter.direction.xyz, continuationNormal);
   let continuationThroughput = surface_continuation_throughput(
@@ -538,7 +598,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         arrivingThroughput,
         hit
       );
-      let weightedContribution = terminalEnvironment * sample_weight();
+      let rawWeightedContribution = terminalEnvironment * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH, weightedContribution);
       accumulation[ray.rayId] =
         accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
@@ -560,7 +622,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         arrivingThroughput,
         hit
       );
-      let weightedContribution = overflowEnvironment * sample_weight();
+      let rawWeightedContribution = overflowEnvironment * sample_weight();
+      record_radiance_diagnostics(rawWeightedContribution);
+      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(
         TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW,
         weightedContribution
@@ -582,7 +646,15 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     scatter.mediumRefId,
     scatter.flags,
     0u,
-    vec4<f32>(offset_origin(hit.position.xyz, hit.shadingNormal.xyz), 1.0),
+    vec4<f32>(
+      offset_origin(
+        hit.position.xyz,
+        hit.geometricNormal.xyz,
+        hit.shadingNormal.xyz,
+        scatter.direction.xyz
+      ),
+      1.0
+    ),
     scatter.direction,
     vec4<f32>(throughput, scatter.pdf)
   );
@@ -618,7 +690,7 @@ fn resolve_deferred_path_radiance(rayId: u32) -> vec3<f32> {
       radiance = radiance * throughput.xyz;
     }
   }
-  return clamp_sample_radiance(radiance);
+  return sanitize_linear_radiance(radiance);
 }
 
 @compute @workgroup_size(64)
@@ -634,14 +706,17 @@ fn accumulateTerminalRadiance(@builtin(global_invocation_id) globalId: vec3<u32>
   if (deferred_path_resolve_enabled()) {
     let terminal = pathVertices[path_vertex_index(index, config.maxDepth)];
     let resolved = resolve_deferred_path_radiance(index) * sample_weight();
-    record_termination_metrics(u32(terminal.w), resolved);
-    radiance = clamp_sample_radiance(radiance + resolved);
+    record_radiance_diagnostics(resolved);
+    let safeResolved = sanitize_linear_radiance(resolved);
+    record_termination_metrics(u32(terminal.w), safeResolved);
+    radiance = sanitize_linear_radiance(radiance + safeResolved);
     accumulation[index] = vec4<f32>(radiance, 1.0);
   }
 
-  textureStore(radianceImage, pixel, vec4<f32>(radiance, 1.0));
+  let linearOutput = sanitize_linear_radiance(radiance);
+  textureStore(radianceImage, pixel, vec4<f32>(linearOutput, 1.0));
   if (config.denoise == 0u) {
-    textureStore(outputImage, pixel, vec4<f32>(tone_map_radiance(radiance), 1.0));
+    textureStore(outputImage, pixel, vec4<f32>(tone_map_radiance(linearOutput), 1.0));
   }
 }
 

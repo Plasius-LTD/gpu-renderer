@@ -46,6 +46,8 @@ export const COUNTER_TERMINATION_AMBIENT_MAX_DEPTH_OFFSET = 10;
 export const COUNTER_TERMINATION_QUEUE_OVERFLOW_OFFSET = 11;
 export const COUNTER_TERMINATION_AMBIENT_LUMINANCE_OFFSET = 12;
 export const COUNTER_TERMINATION_TOTAL_LUMINANCE_OFFSET = 13;
+export const COUNTER_TERMINATION_INVALID_SAMPLE_OFFSET = 14;
+export const COUNTER_TERMINATION_LEGACY_CLAMP_EQUIVALENT_OFFSET = 15;
 export const TRACE_STORAGE_BUFFER_BINDINGS = 10;
 export const BRDF_LUT_UPLOAD_CACHE = new Map();
 export const HIT_TYPE_SURFACE = 0;
@@ -94,6 +96,10 @@ export const EMPTY_TERMINATION_METRICS = Object.freeze({
     totalLuminance: 0,
     ambientResidualLuminance: 0,
     ambientResidualShare: 0,
+  }),
+  radianceDiagnostics: Object.freeze({
+    invalidSamples: 0,
+    legacyClampEquivalentSamples: 0,
   }),
 });
 
