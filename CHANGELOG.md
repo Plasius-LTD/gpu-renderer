@@ -67,6 +67,9 @@ All notable changes to this project will be documented in this file.
     contract used by the wavefront display-quality renderer.
 
 - **Fixed**
+  - Fixed release metadata preparation on protected `main` so repositories that
+    only require pull-request mediation can fall back to a `github.token` PR
+    path instead of failing immediately on missing `RELEASE_PREP_TOKEN`.
   - Fixed deferred wavefront continuation to record sanitized physical
     throughput segments instead of heuristic path-response colours, with
     explicit delta-lobe tagging and bounded terminal fallback for invalid
