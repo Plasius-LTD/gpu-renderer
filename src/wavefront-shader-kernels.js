@@ -299,13 +299,6 @@ fn offset_origin(
   return position + offsetNormal * offsetDistance;
 }
 
-fn random_unit_vector(seed: u32) -> vec3<f32> {
-  let z = random01(seed) * 2.0 - 1.0;
-  let a = random01(seed + 11u) * 6.28318530718;
-  let r = sqrt(max(0.0, 1.0 - z * z));
-  return vec3<f32>(r * cos(a), r * sin(a), z);
-}
-
 fn schlick(cosine: f32, refractionRatio: f32) -> f32 {
   var r0 = (1.0 - refractionRatio) / (1.0 + refractionRatio);
   r0 = r0 * r0;
@@ -327,30 +320,63 @@ fn surface_supports_direct_lighting(hit: HitRecord) -> bool {
   return !(deltaMetal || refractive);
 }
 
-fn sample_emissive_triangle_direction(hit: HitRecord, seed: u32, fallback: vec3<f32>) -> vec3<f32> {
-  let lightSample = sample_emissive_triangle_light(hit, seed);
+fn sample_emissive_triangle_direction(
+  hit: HitRecord,
+  pixelId: u32,
+  sampleId: u32,
+  bounce: u32,
+  frameIndex: u32,
+  fallback: vec3<f32>
+) -> vec3<f32> {
+  let lightSample = sample_emissive_triangle_light(
+    hit,
+    pixelId,
+    sampleId,
+    bounce,
+    frameIndex,
+    SAMPLE_DIM_GUIDED_EMISSIVE_SELECTION,
+    SAMPLE_DIM_GUIDED_EMISSIVE_SURFACE
+  );
   if (lightSample.valid == 0u) {
     return fallback;
   }
   return safe_normalize(lightSample.direction.xyz, fallback);
 }
 
-fn sample_environment_portal_direction(hit: HitRecord, seed: u32, fallback: vec3<f32>) -> vec3<f32> {
+fn sample_environment_portal_direction(
+  hit: HitRecord,
+  pixelId: u32,
+  sampleId: u32,
+  bounce: u32,
+  frameIndex: u32,
+  fallback: vec3<f32>
+) -> vec3<f32> {
   if (config.environmentPortalCount == 0u || config.environmentPortalMode == 0u) {
     return fallback;
   }
   let portalSlot = min(
-    u32(random01(seed + 211u) * f32(config.environmentPortalCount)),
+    u32(
+      sample_dimension_1d(pixelId, sampleId, bounce, frameIndex, SAMPLE_DIM_GUIDED_PORTAL_SELECTION) *
+      f32(config.environmentPortalCount)
+    ),
     config.environmentPortalCount - 1u
   );
   let portal = environmentPortals[portalSlot];
-  let u = (random01(seed + 223u) * 2.0 - 1.0) * portal.tangent.w;
-  let v = (random01(seed + 227u) * 2.0 - 1.0) * portal.bitangent.w;
+  let portalUv = sample_dimension_2d(
+    pixelId,
+    sampleId,
+    bounce,
+    frameIndex,
+    SAMPLE_DIM_GUIDED_PORTAL_SURFACE,
+    config.samplesPerPixel
+  ) * 2.0 - vec2<f32>(1.0);
+  let u = portalUv.x * portal.tangent.w;
+  let v = portalUv.y * portal.bitangent.w;
   let portalTarget = portal.position.xyz + portal.tangent.xyz * u + portal.bitangent.xyz * v;
   return safe_normalize(portalTarget - hit.position.xyz, fallback);
 }
 
-fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult {
+fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
   let normal = surface_shading_normal(hit);
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
   let roughness = clamp(hit.material.x, 0.0, 1.0);
@@ -377,7 +403,14 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
       max(reflectChance, 1.0 - transmission),
       transmission > 0.001
     );
-    if (cannotRefract || random01(seed + 23u) < transmissionReflectChance) {
+    let transmissionSelector = sample_dimension_1d(
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      SAMPLE_DIM_TRANSMISSION_SELECTOR
+    );
+    if (cannotRefract || transmissionSelector < transmissionReflectChance) {
       return ScatterResult(
         vec4<f32>(reflect(ray.direction.xyz, normal), 0.0),
         1.0,
@@ -398,9 +431,22 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
   let guidedEmissiveAvailable = config.emissiveTriangleCount > 0u;
   let guidedPortalAvailable =
     config.environmentPortalCount > 0u && config.environmentPortalMode != 0u;
-  let guidedSelector = random01(seed + 17u);
+  let guidedSelector = sample_dimension_1d(
+    ray.sourcePixelId,
+    ray.sampleId,
+    ray.bounce,
+    config.frameIndex,
+    SAMPLE_DIM_GUIDED_LIGHT_SELECTOR
+  );
   if (guidedEmissiveAvailable && guidedSelector < 0.18) {
-    let guidedDirection = sample_emissive_triangle_direction(hit, seed + 101u, normal);
+    let guidedDirection = sample_emissive_triangle_direction(
+      hit,
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      normal
+    );
     if (dot(normal, guidedDirection) > 0.000001) {
       let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
       return ScatterResult(
@@ -413,7 +459,14 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
     }
   }
   if (guidedPortalAvailable && guidedSelector < 0.32) {
-    let guidedDirection = sample_environment_portal_direction(hit, seed + 131u, normal);
+    let guidedDirection = sample_environment_portal_direction(
+      hit,
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      normal
+    );
     if (dot(normal, guidedDirection) > 0.000001) {
       let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
       return ScatterResult(
@@ -427,26 +480,56 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
   }
 
   let weights = surface_bsdf_sampling_weights(hit);
-  let selector = random01(seed + 31u);
+  let selector = sample_dimension_1d(
+    ray.sourcePixelId,
+    ray.sampleId,
+    ray.bounce,
+    config.frameIndex,
+    SAMPLE_DIM_BSDF_LOBE_SELECTOR
+  );
   var lightDirection = normal;
   var lobeKind = SCATTER_LOBE_DIFFUSE;
   if (selector < weights.x) {
+    let diffuseSample = sample_dimension_2d(
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      SAMPLE_DIM_DIFFUSE_HEMISPHERE,
+      config.samplesPerPixel
+    );
     lightDirection = cosine_sample_hemisphere(
-      vec2<f32>(random01(seed + 37u), random01(seed + 41u)),
+      diffuseSample,
       normal
     );
     lobeKind = SCATTER_LOBE_DIFFUSE;
   } else if (selector < weights.x + weights.y) {
+    let specularSample = sample_dimension_2d(
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      SAMPLE_DIM_SPECULAR_HALF_VECTOR,
+      config.samplesPerPixel
+    );
     let halfVector = importance_sample_ggx(
-      vec2<f32>(random01(seed + 47u), random01(seed + 53u)),
+      specularSample,
       max(roughness, 0.02),
       normal
     );
     lightDirection = safe_normalize(reflect(-viewDirection, halfVector), normal);
     lobeKind = SCATTER_LOBE_SPECULAR;
   } else {
+    let clearcoatSample = sample_dimension_2d(
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      SAMPLE_DIM_CLEARCOAT_HALF_VECTOR,
+      config.samplesPerPixel
+    );
     let halfVector = importance_sample_ggx(
-      vec2<f32>(random01(seed + 59u), random01(seed + 61u)),
+      clearcoatSample,
       max(clamp(hit.materialExtension.x, 0.0, 1.0), 0.02),
       normal
     );
@@ -454,8 +537,16 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord, seed: u32) -> ScatterResult
     lobeKind = SCATTER_LOBE_CLEARCOAT;
   }
   if (dot(normal, lightDirection) <= 0.000001) {
+    let fallbackSample = sample_dimension_2d(
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      SAMPLE_DIM_FALLBACK_HEMISPHERE,
+      config.samplesPerPixel
+    );
     lightDirection = cosine_sample_hemisphere(
-      vec2<f32>(random01(seed + 67u), random01(seed + 71u)),
+      fallbackSample,
       normal
     );
     lobeKind = SCATTER_LOBE_DIFFUSE;
@@ -574,8 +665,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  let seed = mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 11u);
-  let scatter = scatter_direction(ray, hit, seed);
+  let scatter = scatter_direction(ray, hit);
   let continuationNormal = surface_shading_normal(hit);
   let continuationViewDirection = safe_normalize(-ray.direction.xyz, continuationNormal);
   let continuationLightDirection = safe_normalize(scatter.direction.xyz, continuationNormal);

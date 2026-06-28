@@ -35,8 +35,17 @@ import {
   estimateWavefrontDirectionalHemisphericalReflectance,
   validateWavefrontBsdfSample,
 } from "../src/wavefront-compute.js";
+import {
+  defaultHighSppDenoiseAcceptanceThresholds,
+  evaluateHighSppDenoiseAcceptance,
+} from "../src/wavefront-denoise-validation.js";
 import { dispatchWavefrontGpuAccelerationBuild } from "../src/wavefront-acceleration-builder.js";
 import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
+import {
+  listWavefrontSampleDimensions,
+  sampleWavefrontDimension2D,
+  WAVEFRONT_SAMPLE_DIMENSIONS,
+} from "../src/wavefront-sampling-dimensions.js";
 
 const gpuConstants = Object.freeze({
   buffer: Object.freeze({
@@ -754,6 +763,40 @@ test("wavefront compute denoise adapts filter cost and strength to spp", () => {
   assert.doesNotMatch(source, /getImageData|putImageData/);
 });
 
+test("wavefront sample dimensions stay unique and expose low-discrepancy helpers", () => {
+  const dimensions = listWavefrontSampleDimensions();
+  const uniqueDimensions = new Set(dimensions.map(({ dimension }) => dimension));
+  const source = readRendererSource();
+  const shaderSource = createWavefrontPathTracingComputeShaderSource();
+  const jitterA = sampleWavefrontDimension2D(
+    17,
+    0,
+    0,
+    777,
+    WAVEFRONT_SAMPLE_DIMENSIONS.cameraJitter,
+    32
+  );
+  const jitterB = sampleWavefrontDimension2D(
+    17,
+    1,
+    0,
+    777,
+    WAVEFRONT_SAMPLE_DIMENSIONS.cameraJitter,
+    32
+  );
+
+  assert.equal(uniqueDimensions.size, dimensions.length);
+  assert.ok(
+    dimensions.every(({ wgslName }) => shaderSource.includes(`const ${wgslName}: u32 =`))
+  );
+  assert.match(source, /fn radical_inverse_vdc\(bits: u32\) -> f32/);
+  assert.match(source, /fn sample_dimension_1d\(/);
+  assert.match(source, /fn sample_dimension_2d\(/);
+  assert.notDeepEqual(jitterA, jitterB);
+  assert.ok(jitterA.every((value) => value >= 0 && value < 1));
+  assert.ok(jitterB.every((value) => value >= 0 && value < 1));
+});
+
 test("wavefront compute guides active continuation rays toward emissive triangles", () => {
   const source = readRendererSource();
 
@@ -763,11 +806,19 @@ test("wavefront compute guides active continuation rays toward emissive triangle
   assert.match(source, /RAY_FLAG_GUIDED_EMISSIVE/);
   assert.match(source, /guidedLightWeight/);
   assert.match(source, /guidedEmissiveAvailable/);
-  assert.match(source, /sample_emissive_triangle_direction\(hit, seed \+ 101u, normal\)/);
+  assert.match(source, /SAMPLE_DIM_GUIDED_EMISSIVE_SELECTION/);
+  assert.match(source, /SAMPLE_DIM_GUIDED_EMISSIVE_SURFACE/);
+  assert.match(source, /sample_emissive_triangle_direction\(\s+hit,\s+ray\.sourcePixelId,/);
   assert.match(source, /RAY_FLAG_GUIDED_EMISSIVE/);
   assert.match(source, /\(pixelId \* 747796405u\) \^/);
-  assert.match(source, /mix_seed\(sourcePixelId, sampleId, 0u, config\.frameIndex, 1u\)/);
-  assert.match(source, /mix_seed\(ray\.sourcePixelId, ray\.sampleId, ray\.bounce, config\.frameIndex, 11u\)/);
+  assert.match(
+    source,
+    /sample_dimension_2d\(\s*sourcePixelId,\s*sampleId,\s*0u,\s*config\.frameIndex,\s*SAMPLE_DIM_CAMERA_JITTER,\s*config\.samplesPerPixel\s*\)/
+  );
+  assert.match(
+    source,
+    /sample_dimension_1d\(\s*ray\.sourcePixelId,\s*ray\.sampleId,\s*ray\.bounce,\s*config\.frameIndex,\s*SAMPLE_DIM_TRANSMISSION_SELECTOR/
+  );
   assert.match(source, /bvhNodes\[config\.bvhNodeCapacity \+ lightSlot\]/);
   assert.match(source, /nextIndex >= config\.tilePixelCount/);
   assert.doesNotMatch(source, /direct_key_lighting/);
@@ -788,8 +839,59 @@ test("wavefront compute guides and gates environment lighting through portals", 
   assert.match(source, /fn gated_environment_radiance/);
   assert.match(source, /fn sample_environment_portal_direction/);
   assert.match(source, /guidedPortalAvailable/);
-  assert.match(source, /sample_environment_portal_direction\(hit, seed \+ 131u, normal\)/);
+  assert.match(source, /SAMPLE_DIM_GUIDED_PORTAL_SELECTION/);
+  assert.match(source, /SAMPLE_DIM_GUIDED_PORTAL_SURFACE/);
+  assert.match(source, /sample_environment_portal_direction\(\s*hit,\s*ray\.sourcePixelId,/);
   assert.match(source, /gated_environment_radiance\(ray\.origin\.xyz, ray\.direction\.xyz\)/);
+});
+
+test("high-spp denoise acceptance keeps denoise-off structural and detail gates explicit", () => {
+  const passing = evaluateHighSppDenoiseAcceptance({
+    baselineDenoiseOff: { luminanceStdDev: 0.12 },
+    denoiseOff: {
+      structuralArtifactShare: 0,
+      invalidSampleShare: 0,
+      luminanceStdDev: 0.11,
+      detailContrast: { sheen: 0.96, chrome: 0.93, wood: 0.91 },
+    },
+    denoiseOn: {
+      structuralArtifactShare: 0,
+      detailContrast: { sheen: 0.9, chrome: 0.88, wood: 0.85 },
+    },
+  });
+  const masked = evaluateHighSppDenoiseAcceptance({
+    baselineDenoiseOff: { luminanceStdDev: 0.12 },
+    denoiseOff: {
+      structuralArtifactShare: 0.01,
+      invalidSampleShare: 0,
+      luminanceStdDev: 0.11,
+      detailContrast: { sheen: 0.96, chrome: 0.93, wood: 0.91 },
+    },
+    denoiseOn: {
+      structuralArtifactShare: 0,
+      detailContrast: { sheen: 0.9, chrome: 0.88, wood: 0.85 },
+    },
+  });
+  const blurred = evaluateHighSppDenoiseAcceptance({
+    baselineDenoiseOff: { luminanceStdDev: 0.12 },
+    denoiseOff: {
+      structuralArtifactShare: 0,
+      invalidSampleShare: 0,
+      luminanceStdDev: 0.11,
+      detailContrast: { sheen: 1, chrome: 1, wood: 1 },
+    },
+    denoiseOn: {
+      structuralArtifactShare: 0,
+      detailContrast: { sheen: 0.7, chrome: 0.68, wood: 0.66 },
+    },
+  });
+
+  assert.equal(defaultHighSppDenoiseAcceptanceThresholds.minDetailRetentionRatio, 0.92);
+  assert.equal(passing.pass, true);
+  assert.equal(masked.pass, false);
+  assert.ok(masked.failures.some((failure) => failure.includes("cannot mask")));
+  assert.equal(blurred.pass, false);
+  assert.ok(blurred.failures.some((failure) => failure.includes("detail retention")));
 });
 
 test("wavefront compute uses physical continuation throughput and bounded terminal residuals", () => {

@@ -713,12 +713,23 @@ fn scene_visibility_blocked(origin: vec3<f32>, direction: vec3<f32>, maxDistance
   return meshCandidate.hit == 1u && meshCandidate.distance < nearest;
 }
 
-fn sample_emissive_triangle_light(hit: HitRecord, seed: u32) -> DirectLightSample {
+fn sample_emissive_triangle_light(
+  hit: HitRecord,
+  pixelId: u32,
+  sampleId: u32,
+  bounce: u32,
+  frameIndex: u32,
+  selectionDimension: u32,
+  surfaceDimension: u32
+) -> DirectLightSample {
   if (config.emissiveTriangleCount == 0u) {
     return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
   }
   let lightSlot = min(
-    u32(random01(seed + 71u) * f32(config.emissiveTriangleCount)),
+    u32(
+      sample_dimension_1d(pixelId, sampleId, bounce, frameIndex, selectionDimension) *
+      f32(config.emissiveTriangleCount)
+    ),
     config.emissiveTriangleCount - 1u
   );
   let lightMetadata = bvhNodes[config.bvhNodeCapacity + lightSlot];
@@ -730,12 +741,18 @@ fn sample_emissive_triangle_light(hit: HitRecord, seed: u32) -> DirectLightSampl
   let lightTriangle = triangles[triangleIndex];
   let triangleArea = triangle_surface_area(lightTriangle);
   let lightNormal = triangle_surface_normal(lightTriangle);
-  let r1 = random01(seed + 101u);
-  let r2 = random01(seed + 193u);
-  let root = sqrt(r1);
+  let sampleUv = sample_dimension_2d(
+    pixelId,
+    sampleId,
+    bounce,
+    frameIndex,
+    surfaceDimension,
+    config.samplesPerPixel
+  );
+  let root = sqrt(sampleUv.x);
   let b0 = 1.0 - root;
-  let b1 = root * (1.0 - r2);
-  let b2 = root * r2;
+  let b1 = root * (1.0 - sampleUv.y);
+  let b2 = root * sampleUv.y;
   let lightPoint =
     lightTriangle.v0.xyz * b0 +
     lightTriangle.v1.xyz * b1 +
@@ -756,11 +773,25 @@ fn sample_emissive_triangle_light(hit: HitRecord, seed: u32) -> DirectLightSampl
 
 fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> DirectLightSample {
   let environmentSelectionProbability = select(1.0, 0.5, config.emissiveTriangleCount > 0u);
-  let selector = random01(mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 41u));
+  let selector = sample_dimension_1d(
+    ray.sourcePixelId,
+    ray.sampleId,
+    ray.bounce,
+    config.frameIndex,
+    SAMPLE_DIM_DIRECT_LIGHT_SELECTOR
+  );
   if (selector < environmentSelectionProbability) {
+    let environmentUv = sample_dimension_2d(
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      SAMPLE_DIM_DIRECT_ENVIRONMENT,
+      config.samplesPerPixel
+    );
     let environmentSample = sample_environment_importance(vec2<f32>(
       selector / max(environmentSelectionProbability, 0.000001),
-      random01(mix_seed(ray.sourcePixelId, ray.sampleId, ray.bounce, config.frameIndex, 43u))
+      environmentUv.y
     ));
     let lightDirection = safe_normalize(environmentSample.direction, normal);
     let radiance = direct_environment_radiance(
@@ -776,13 +807,15 @@ fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> Dir
       1u
     );
   }
-  let emissiveSample = sample_emissive_triangle_light(hit, mix_seed(
+  let emissiveSample = sample_emissive_triangle_light(
+    hit,
     ray.sourcePixelId,
     ray.sampleId,
     ray.bounce,
     config.frameIndex,
-    47u
-  ));
+    SAMPLE_DIM_EMISSIVE_LIGHT_SELECTION,
+    SAMPLE_DIM_EMISSIVE_LIGHT_SURFACE
+  );
   if (emissiveSample.valid == 0u) {
     return emissiveSample;
   }
