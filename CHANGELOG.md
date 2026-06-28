@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.19] - 2026-06-28
+
+- **Added**
   - Added a named wavefront sample-dimension registry plus low-discrepancy 2D
     sampling helpers for camera jitter, BSDF continuation, and direct/emissive
     light selection.
@@ -587,3 +601,4 @@ All notable changes to this project will be documented in this file.
 [0.2.16]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.16
 [0.2.17]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.17
 [0.2.18]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.18
+[0.2.19]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.19
