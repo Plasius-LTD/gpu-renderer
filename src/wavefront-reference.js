@@ -6,15 +6,17 @@ import {
   clamp,
   cross,
   dot,
-  mixSeed,
   normalize,
-  random01FromSeed,
   readFiniteNumber,
   readNonNegativeInteger,
   readPositiveInteger,
   scale,
   subtract,
 } from "./wavefront-core.js";
+import {
+  sampleWavefrontDimension2D,
+  WAVEFRONT_SAMPLE_DIMENSIONS,
+} from "./wavefront-sampling-dimensions.js";
 import {
   distributionGgx,
   geometrySmith,
@@ -120,8 +122,14 @@ export function createWavefrontReferenceRay(config, options = {}) {
   const pixelX = tile.x + localX;
   const pixelY = tile.y + localY;
   const sourcePixelId = pixelY * config.width + pixelX;
-  const jitterX = random01FromSeed(mixSeed(sourcePixelId, sampleIndex, 0, frameIndex, 1)) - 0.5;
-  const jitterY = random01FromSeed(mixSeed(sourcePixelId, sampleIndex, 0, frameIndex, 2)) - 0.5;
+  const [jitterX, jitterY] = sampleWavefrontDimension2D(
+    sourcePixelId,
+    sampleIndex,
+    0,
+    frameIndex,
+    WAVEFRONT_SAMPLE_DIMENSIONS.cameraJitter,
+    config.samplesPerPixel ?? 1
+  ).map((value) => value - 0.5);
   const ndcX = ((pixelX + 0.5 + jitterX * jitterScale) / config.width) * 2 - 1;
   const ndcY = 1 - ((pixelY + 0.5 + jitterY * jitterScale) / config.height) * 2;
   const viewX = ndcX * config.camera.tanHalfFovY * config.camera.aspect;

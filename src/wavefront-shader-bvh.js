@@ -259,8 +259,16 @@ fn make_ray(pixelIndex: u32) -> RayRecord {
   let py = config.tileY + localY;
   let sampleId = u32(config.projectionAndSampling.w);
   let sourcePixelId = py * config.canvasWidth + px;
-  let jitterX = random01(mix_seed(sourcePixelId, sampleId, 0u, config.frameIndex, 1u)) - 0.5;
-  let jitterY = random01(mix_seed(sourcePixelId, sampleId, 0u, config.frameIndex, 2u)) - 0.5;
+  let jitter = sample_dimension_2d(
+    sourcePixelId,
+    sampleId,
+    0u,
+    config.frameIndex,
+    SAMPLE_DIM_CAMERA_JITTER,
+    config.samplesPerPixel
+  ) - vec2<f32>(0.5);
+  let jitterX = jitter.x;
+  let jitterY = jitter.y;
   let ndcX = ((f32(px) + 0.5 + jitterX * 0.35) / f32(config.canvasWidth)) * 2.0 - 1.0;
   let ndcY = 1.0 - ((f32(py) + 0.5 + jitterY * 0.35) / f32(config.canvasHeight)) * 2.0;
   let viewX = ndcX * config.projectionAndSampling.x * config.projectionAndSampling.y;

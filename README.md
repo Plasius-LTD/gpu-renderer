@@ -234,7 +234,16 @@ linear radiance to an `rgba16float` texture first, then runs a two-stage
 full-frame GPU denoise through an `rgba16float` scratch texture before final
 tone mapping into the presented `rgba8unorm` output. Filtering in linear
 radiance space lets the denoise pass cross tile boundaries without compressing
-energy/detail before the final resolve. The renderer also stores compact
+energy/detail before the final resolve. High-SPP wavefront sampling now routes
+camera jitter, BSDF continuation, emissive-light selection, and environment
+selection through named sample dimensions in
+`src/wavefront-sampling-dimensions.js`, using low-discrepancy 2D pairs where
+they improve convergence without adding CPU-side sample tables. The companion
+`src/wavefront-denoise-validation.js` acceptance helper keeps denoise-off
+validation explicit with structural-artifact, invalid-sample, baseline-noise,
+and sheen/chrome/wood detail-retention thresholds so the
+`renderer.denoise.highSppIndependence` rollout can stay reviewable and
+rollbackable. The renderer also stores compact
 emissive-triangle metadata in the existing BVH buffer tail and uses it to guide
 diffuse continuation rays toward finite mesh light geometry. This is not a
 separate shadow/direct-light pass: the active ray still has to hit emissive

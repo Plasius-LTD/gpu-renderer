@@ -12,16 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added a named wavefront sample-dimension registry plus low-discrepancy 2D
+    sampling helpers for camera jitter, BSDF continuation, and direct/emissive
+    light selection.
+  - Added machine-checkable high-SPP denoise-independence thresholds for
+    structural artifacts, invalid samples, baseline noise, and sheen/chrome/wood
+    detail retention.
 
 - **Changed**
-  - (placeholder)
+  - Changed wavefront jitter/light sampling to use explicit sample-dimension
+    constants instead of ad hoc numeric offsets in shader code.
 
 - **Fixed**
-  - (placeholder)
-
-- **Security**
-  - (placeholder)
+  - Prevented denoise-on output from qualifying a high-SPP validation report
+    when the paired denoise-off result still contains structural artifacts.
 
 ## [0.2.18] - 2026-06-22
 
