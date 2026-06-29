@@ -194,7 +194,7 @@ struct FrameConfig {
   emissiveTriangleCount: u32,
   environmentPortalCount: u32,
   environmentPortalMode: u32,
-  _portalPad0: u32,
+  samplesPerPixel: u32,
   _portalPad1: u32,
   environmentMapSettings: vec4<f32>,
   pathResolveSettings: vec4<f32>,
