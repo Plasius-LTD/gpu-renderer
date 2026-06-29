@@ -797,6 +797,13 @@ test("wavefront sample dimensions stay unique and expose low-discrepancy helpers
   assert.ok(jitterB.every((value) => value >= 0 && value < 1));
 });
 
+test("wavefront shader source keeps shared low-discrepancy helpers single-defined", () => {
+  const shaderSource = createWavefrontPathTracingComputeShaderSource();
+  const radicalInverseMatches = shaderSource.match(/fn radical_inverse_vdc\(/g) ?? [];
+
+  assert.equal(radicalInverseMatches.length, 1);
+});
+
 test("wavefront compute guides active continuation rays toward emissive triangles", () => {
   const source = readRendererSource();
 
