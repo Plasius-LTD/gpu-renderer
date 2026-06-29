@@ -18,7 +18,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Removed a duplicate `radical_inverse_vdc` WGSL helper definition from the
+    assembled wavefront compute shader so stricter live-browser compilers do not
+    reject validation-scene startup before first frame.
 
 - **Security**
   - (placeholder)

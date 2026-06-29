@@ -97,16 +97,6 @@ fn direct_environment_radiance(origin: vec3<f32>, direction: vec3<f32>) -> vec3<
     select(vec3<f32>(1.0), portalScale, portalHit);
 }
 
-fn radical_inverse_vdc(bitsValue: u32) -> f32 {
-  var bits = bitsValue;
-  bits = (bits << 16u) | (bits >> 16u);
-  bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xaaaaaaaau) >> 1u);
-  bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xccccccccu) >> 2u);
-  bits = ((bits & 0x0f0f0f0fu) << 4u) | ((bits & 0xf0f0f0f0u) >> 4u);
-  bits = ((bits & 0x00ff00ffu) << 8u) | ((bits & 0xff00ff00u) >> 8u);
-  return f32(bits) * 2.3283064365386963e-10;
-}
-
 fn hammersley_2d(index: u32, count: u32) -> vec2<f32> {
   return vec2<f32>(f32(index) / max(f32(count), 1.0), radical_inverse_vdc(index));
 }
