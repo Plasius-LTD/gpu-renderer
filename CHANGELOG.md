@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.21] - 2026-06-29
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Added the missing `samplesPerPixel` field to the WGSL frame config and
     matching CPU uniform payload so live Product Studio wavefront shaders compile
     in browser runtimes that validate the assembled shader strictly.
@@ -621,3 +635,4 @@ All notable changes to this project will be documented in this file.
 [0.2.18]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.18
 [0.2.19]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.19
 [0.2.20]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.20
+[0.2.21]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.21
