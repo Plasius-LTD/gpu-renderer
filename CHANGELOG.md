@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.20] - 2026-06-29
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Removed a duplicate `radical_inverse_vdc` WGSL helper definition from the
     assembled wavefront compute shader so stricter live-browser compilers do not
     reject validation-scene startup before first frame.
@@ -604,3 +618,4 @@ All notable changes to this project will be documented in this file.
 [0.2.17]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.17
 [0.2.18]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.18
 [0.2.19]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.19
+[0.2.20]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.20
