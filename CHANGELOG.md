@@ -18,7 +18,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Added the missing `samplesPerPixel` field to the WGSL frame config and
+    matching CPU uniform payload so live Product Studio wavefront shaders compile
+    in browser runtimes that validate the assembled shader strictly.
 
 - **Security**
   - (placeholder)

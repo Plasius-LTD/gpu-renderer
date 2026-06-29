@@ -41,6 +41,7 @@ import {
 } from "../src/wavefront-denoise-validation.js";
 import { dispatchWavefrontGpuAccelerationBuild } from "../src/wavefront-acceleration-builder.js";
 import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
+import { createConfigPayload } from "../src/wavefront-packers.js";
 import {
   listWavefrontSampleDimensions,
   sampleWavefrontDimension2D,
@@ -506,6 +507,25 @@ test("wavefront compute config exposes bounded samples per pixel", () => {
       }),
     /maxFramePassesPerSubmission must be a positive integer/
   );
+});
+
+test("wavefront frame config exposes samples per pixel to WGSL", () => {
+  const shaderSource = createWavefrontPathTracingComputeShaderSource();
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    samplesPerPixel: 8,
+  });
+  const payload = createConfigPayload(
+    config,
+    { x: 0, y: 0, width: 64, height: 64 },
+    17
+  );
+  const payloadView = new DataView(payload);
+
+  assert.match(shaderSource, /samplesPerPixel: u32/);
+  assert.match(shaderSource, /config\.samplesPerPixel/);
+  assert.equal(payloadView.getUint32(264, true), 8);
 });
 
 test("wavefront reference helper generates deterministic primary rays from the camera contract", () => {
