@@ -303,6 +303,39 @@ test("createAnimatedSceneRenderer preserves camera defaults for undefined overri
   renderer.destroy();
 });
 
+test("createAnimatedSceneRenderer ignores stale animation ticks after destroy", () => {
+  let scheduledTick = null;
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 0], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 4000,
+        blend: { inMs: 0, outMs: 240 },
+      },
+    ],
+    requestAnimationFrame(callback) {
+      scheduledTick = callback;
+      return 91;
+    },
+  });
+
+  renderer.start();
+  assert.equal(typeof scheduledTick, "function");
+  renderer.destroy();
+  const destroyed = renderer.getSnapshot();
+
+  assert.equal(destroyed.frameState, "destroyed");
+  scheduledTick(1000);
+  assert.equal(renderer.getSnapshot().frameState, "destroyed");
+});
+
 test("createGpuRenderer emits frame lifecycle hooks with frame ids", async () => {
   const device = new FakeDevice();
   const gpu = new FakeGpu(new FakeAdapter(device));

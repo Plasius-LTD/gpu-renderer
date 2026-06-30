@@ -289,6 +289,9 @@ export function createAnimatedSceneRenderer(options = {}) {
   }
 
   function tick(timestamp) {
+    if (!running) {
+      return;
+    }
     renderOnce(timestamp);
     if (running && requestFrame) {
       frameHandle = requestFrame(tick);
