@@ -37,6 +37,13 @@ function durationFromBeats(beats) {
   return beats.reduce((total, beat) => total + Math.max(0, beat.durationMs ?? 0), 0);
 }
 
+function definedCameraOverrides(camera) {
+  if (!camera || typeof camera !== "object") {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(camera).filter(([, value]) => value !== undefined));
+}
+
 function resolveBeat(beats, loopTimeMs) {
   let cursor = 0;
   for (const beat of beats) {
@@ -209,7 +216,10 @@ export function createAnimatedSceneRenderer(options = {}) {
   const route = [...(options.route ?? options.animationAdventure?.route ?? [])];
   const beats = [...(options.beats ?? options.animationAdventure?.beats ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const props = [...(options.props ?? options.animationAdventure?.props ?? [])];
-  const camera = Object.freeze({ ...DEFAULT_CAMERA, ...(options.camera ?? options.animationAdventure?.camera ?? {}) });
+  const camera = Object.freeze({
+    ...DEFAULT_CAMERA,
+    ...definedCameraOverrides(options.camera ?? options.animationAdventure?.camera),
+  });
   const loopDurationMs = Math.max(durationFromBeats(beats), route.at(-1)?.arriveMs ?? 1, 1);
   const requestFrame = options.requestAnimationFrame ?? globalThis.requestAnimationFrame?.bind(globalThis);
   const cancelFrame = options.cancelAnimationFrame ?? globalThis.cancelAnimationFrame?.bind(globalThis);

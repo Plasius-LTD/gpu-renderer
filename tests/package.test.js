@@ -271,6 +271,38 @@ test("createAnimatedSceneRenderer advances route, blend, camera, and lifecycle",
   assert.equal(renderer.getSnapshot().frameState, "destroyed");
 });
 
+test("createAnimatedSceneRenderer preserves camera defaults for undefined overrides", () => {
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 0], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 4000,
+        blend: { inMs: 0, outMs: 240 },
+      },
+    ],
+    camera: {
+      cubicBezier: undefined,
+      lagMs: undefined,
+      lookAheadMs: undefined,
+      offset: [-1, 2.4, 5.5],
+    },
+  });
+
+  const snapshot = renderer.renderOnce(1200);
+
+  assert.equal(Number.isFinite(snapshot.cameraPosition[0]), true);
+  assert.equal(snapshot.cameraPosition[1], 2.4);
+  assert.equal(snapshot.cameraPosition[2], 5.5);
+  renderer.destroy();
+});
+
 test("createGpuRenderer emits frame lifecycle hooks with frame ids", async () => {
   const device = new FakeDevice();
   const gpu = new FakeGpu(new FakeAdapter(device));

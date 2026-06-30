@@ -126,38 +126,6 @@ and a lagged-follow camera rig, then exposes `start`, `resize`, `getSnapshot`,
 and `destroy` for host packages. It is implemented inside `gpu-renderer` and
 does not route animation playback through Three.js.
 
-## Model Tree Leaf Renderer
-
-`createModelTreeRenderer` provides a local model-tree demo harness for fast
-GPU Demo asset iteration. It renders a procedural branch hierarchy with dense
-close-up leaves, tunable density, wind, translucency, wetness/sheen, and
-quality tiers so model and material decisions can be reviewed before they are
-promoted into the public site catalog.
-
-```js
-import { createModelTreeRenderer } from "@plasius/gpu-renderer";
-
-const treeRenderer = createModelTreeRenderer({
-  canvas: document.querySelector("#tree-scene"),
-  quality: "closeup",
-  leafMaterial: {
-    density: 0.92,
-    wind: 0.22,
-    translucency: 0.7,
-    wetness: 0.28,
-    veinContrast: 0.62,
-  },
-});
-
-treeRenderer.resize(1280, 720, devicePixelRatio);
-treeRenderer.start();
-```
-
-The package demo at `demo/index.html` mounts this renderer and also starts an
-offscreen `createGpuRenderer` instance when WebGPU is available, giving the
-model-tree lab live renderer lifecycle telemetry while keeping the visible
-surface focused on the leaf material output.
-
 The production transport rollout remains gated by
 `renderer.transport.physicalEstimator`. With the flag enabled, deferred
 continuation vertices carry sanitized physical throughput segments instead of a
