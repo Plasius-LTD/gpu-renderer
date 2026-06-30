@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.22] - 2026-06-30
+
+- **Added**
   - Added a renderer-owned animated scene surface for adventure playback with scripted beats, route motion, blend snapshots, and bezier-lag camera follow.
   - Added a renderer-owned model-tree leaf material lab with procedural branches, close-up leaf rendering controls, quality tiers, and offscreen renderer telemetry for GPU Demo model iteration.
 
@@ -637,3 +651,4 @@ All notable changes to this project will be documented in this file.
 [0.2.19]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.19
 [0.2.20]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.20
 [0.2.21]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.21
+[0.2.22]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.22
