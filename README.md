@@ -118,6 +118,14 @@ in dedicated runtime helpers so performance-facing integrations can consume
 stable frame stats without inheriting the renderer's shader and pipeline
 assembly internals.
 
+## Animated Scene Renderer
+
+`createAnimatedSceneRenderer` provides the renderer-owned v1 surface for the
+GPU animation adventure demo. It accepts scripted beats, route points, props,
+and a lagged-follow camera rig, then exposes `start`, `resize`, `getSnapshot`,
+and `destroy` for host packages. It is implemented inside `gpu-renderer` and
+does not route animation playback through Three.js.
+
 The production transport rollout remains gated by
 `renderer.transport.physicalEstimator`. With the flag enabled, deferred
 continuation vertices carry sanitized physical throughput segments instead of a

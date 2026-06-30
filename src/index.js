@@ -1,4 +1,7 @@
 export {
+  createAnimatedSceneRenderer,
+} from "./animated-scene-renderer.js";
+export {
   createDefaultWavefrontSceneObjects,
   createWavefrontBvhBuildLevels,
   createWavefrontBvhSortStages,

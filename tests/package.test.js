@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   bindRendererToXrManager,
+  createAnimatedSceneRenderer,
   createGpuRenderer,
   createRendererDebugHooks,
   createWavefrontAdaptiveSamplingLevels,
@@ -124,6 +125,43 @@ function createFakeCanvas() {
   };
 }
 
+function createFakeCanvas2d() {
+  const calls = [];
+  const context = {
+    calls,
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 1,
+    lineCap: "butt",
+    clearRect: (...args) => calls.push(["clearRect", ...args]),
+    fillRect: (...args) => calls.push(["fillRect", ...args]),
+    beginPath: () => calls.push(["beginPath"]),
+    moveTo: (...args) => calls.push(["moveTo", ...args]),
+    lineTo: (...args) => calls.push(["lineTo", ...args]),
+    quadraticCurveTo: (...args) => calls.push(["quadraticCurveTo", ...args]),
+    arc: (...args) => calls.push(["arc", ...args]),
+    fill: () => calls.push(["fill"]),
+    stroke: () => calls.push(["stroke"]),
+    save: () => calls.push(["save"]),
+    restore: () => calls.push(["restore"]),
+    translate: (...args) => calls.push(["translate", ...args]),
+    rotate: (...args) => calls.push(["rotate", ...args]),
+  };
+
+  return {
+    width: 0,
+    height: 0,
+    style: {},
+    getContext(type) {
+      if (type !== "2d") {
+        return null;
+      }
+      return context;
+    },
+    context,
+  };
+}
+
 function createFakeDocument(canvasMap = {}) {
   return {
     querySelector(selector) {
@@ -166,6 +204,136 @@ test("createGpuRenderer renders and updates snapshot", async () => {
   assert.equal(snapshot.xrActive, false);
 
   renderer.destroy();
+});
+
+test("createAnimatedSceneRenderer advances route, blend, camera, and lifecycle", () => {
+  const canvas = createFakeCanvas2d();
+  let scheduled = null;
+  let canceled = null;
+  const renderer = createAnimatedSceneRenderer({
+    canvas,
+    requestAnimationFrame(callback) {
+      scheduled = callback;
+      return 44;
+    },
+    cancelAnimationFrame(handle) {
+      canceled = handle;
+    },
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 0], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "idle-at-gate",
+        order: 0,
+        clipId: "female-basic-locomotion-idle",
+        durationMs: 1000,
+        blend: { inMs: 0, outMs: 200 },
+      },
+      {
+        id: "walk-to-crops",
+        order: 1,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 3000,
+        blend: { inMs: 200, outMs: 240 },
+      },
+    ],
+    camera: {
+      mode: "lagged-follow",
+      cubicBezier: [0.22, 0.61, 0.36, 1],
+      lagMs: 240,
+      lookAheadMs: 320,
+      offset: [-1, 2.4, 5.5],
+    },
+    props: [
+      { kind: "crop-row", position: [2, 0, 1] },
+      { kind: "cart", position: [4, 0, 0] },
+    ],
+  });
+
+  renderer.resize(320, 180, 2);
+  renderer.start();
+  assert.equal(typeof scheduled, "function");
+
+  const first = renderer.renderOnce(0);
+  const second = renderer.renderOnce(1600);
+
+  assert.equal(first.activeClipId, "female-basic-locomotion-idle");
+  assert.equal(second.activeClipId, "female-basic-locomotion-walking");
+  assert.equal(second.characterPosition[0] > first.characterPosition[0], true);
+  assert.equal(second.cameraPosition[0] < second.characterPosition[0], true);
+  assert.equal(second.blendProgress > 0, true);
+  assert.equal(canvas.context.calls.some((call) => call[0] === "fillRect"), true);
+
+  renderer.destroy();
+  assert.equal(canceled, 44);
+  assert.equal(renderer.getSnapshot().frameState, "destroyed");
+});
+
+test("createAnimatedSceneRenderer preserves camera defaults for undefined overrides", () => {
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 0], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 4000,
+        blend: { inMs: 0, outMs: 240 },
+      },
+    ],
+    camera: {
+      cubicBezier: undefined,
+      lagMs: undefined,
+      lookAheadMs: undefined,
+      offset: [-1, 2.4, 5.5],
+    },
+  });
+
+  const snapshot = renderer.renderOnce(1200);
+
+  assert.equal(Number.isFinite(snapshot.cameraPosition[0]), true);
+  assert.equal(snapshot.cameraPosition[1], 2.4);
+  assert.equal(snapshot.cameraPosition[2], 5.5);
+  renderer.destroy();
+});
+
+test("createAnimatedSceneRenderer ignores stale animation ticks after destroy", () => {
+  let scheduledTick = null;
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 0], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 4000,
+        blend: { inMs: 0, outMs: 240 },
+      },
+    ],
+    requestAnimationFrame(callback) {
+      scheduledTick = callback;
+      return 91;
+    },
+  });
+
+  renderer.start();
+  assert.equal(typeof scheduledTick, "function");
+  renderer.destroy();
+  const destroyed = renderer.getSnapshot();
+
+  assert.equal(destroyed.frameState, "destroyed");
+  scheduledTick(1000);
+  assert.equal(renderer.getSnapshot().frameState, "destroyed");
 });
 
 test("createGpuRenderer emits frame lifecycle hooks with frame ids", async () => {
