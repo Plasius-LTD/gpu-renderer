@@ -1,4 +1,87 @@
 export type RendererColor = string | [number, number, number, number?];
+export type AnimatedSceneVector3 = readonly [number, number, number] | readonly number[];
+export type AnimatedScenePropKind =
+  | "crop-row"
+  | "fence-segment"
+  | "crate"
+  | "cart"
+  | "small-tree"
+  | "path-marker";
+
+export interface AnimatedScenePathPoint {
+  readonly id: string;
+  readonly position: AnimatedSceneVector3;
+  readonly arriveMs: number;
+}
+
+export interface AnimatedSceneBeat {
+  readonly id: string;
+  readonly order: number;
+  readonly clipId: string;
+  readonly durationMs: number;
+  readonly blend?: {
+    readonly inMs?: number;
+    readonly outMs?: number;
+  };
+}
+
+export interface AnimatedSceneCameraFollowRig {
+  readonly mode?: "lagged-follow";
+  readonly cubicBezier?: readonly [number, number, number, number] | readonly number[];
+  readonly lagMs?: number;
+  readonly lookAheadMs?: number;
+  readonly offset?: AnimatedSceneVector3;
+}
+
+export interface AnimatedSceneProp {
+  readonly id?: string;
+  readonly kind: AnimatedScenePropKind | string;
+  readonly position: AnimatedSceneVector3;
+}
+
+export interface CreateAnimatedSceneRendererOptions {
+  readonly canvas: string | HTMLCanvasElement | {
+    width: number;
+    height: number;
+    style?: Record<string, string>;
+    getContext(type: "2d"): CanvasRenderingContext2D | null;
+  };
+  readonly route?: readonly AnimatedScenePathPoint[];
+  readonly beats?: readonly AnimatedSceneBeat[];
+  readonly props?: readonly AnimatedSceneProp[];
+  readonly camera?: AnimatedSceneCameraFollowRig;
+  readonly animationAdventure?: {
+    readonly route?: readonly AnimatedScenePathPoint[];
+    readonly beats?: readonly AnimatedSceneBeat[];
+    readonly props?: readonly AnimatedSceneProp[];
+    readonly camera?: AnimatedSceneCameraFollowRig;
+  };
+  readonly requestAnimationFrame?: (callback: FrameRequestCallback) => number;
+  readonly cancelAnimationFrame?: (handle: number) => void;
+}
+
+export interface AnimatedSceneSnapshot {
+  readonly frame: number;
+  readonly running: boolean;
+  readonly activeClipId: string;
+  readonly activeBeatId: string;
+  readonly blendProgress: number;
+  readonly clipTimeMs: number;
+  readonly characterPosition: readonly [number, number, number];
+  readonly cameraPosition: readonly [number, number, number];
+  readonly frameState: "initialized" | "running" | "rendered-once" | "destroyed";
+}
+
+export interface AnimatedSceneRenderer {
+  start(): void;
+  resize(width: number, height: number, devicePixelRatio?: number): void;
+  renderOnce(timestamp?: number): AnimatedSceneSnapshot;
+  getSnapshot(): AnimatedSceneSnapshot;
+  destroy(): void;
+}
+
+export function createAnimatedSceneRenderer(options: CreateAnimatedSceneRendererOptions): AnimatedSceneRenderer;
+
 export type WavefrontSceneObjectKind = "sphere" | "box" | "aabb" | "bounds" | number;
 export type WavefrontMaterialKind =
   | "diffuse"

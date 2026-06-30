@@ -12,7 +12,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added a renderer-owned animated scene surface for adventure playback with scripted beats, route motion, blend snapshots, and bezier-lag camera follow.
+  - Added a renderer-owned model-tree leaf material lab with procedural branches, close-up leaf rendering controls, quality tiers, and offscreen renderer telemetry for GPU Demo model iteration.
 
 - **Changed**
   - (placeholder)
