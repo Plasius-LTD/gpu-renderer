@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.25] - 2026-07-01
+
+- **Added**
   - Added renderer-owned skinned GLB ingestion for Animation Adventure,
     including mesh/skin/clip parsing, Mixamo node-name retargeting, CPU
     skinning for the active clip, model-derived canvas drawing, and snapshot
@@ -691,3 +705,4 @@ All notable changes to this project will be documented in this file.
 [0.2.22]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.22
 [0.2.23]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.23
 [0.2.24]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.24
+[0.2.25]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.25
