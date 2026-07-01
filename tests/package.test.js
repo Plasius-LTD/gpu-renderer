@@ -140,6 +140,7 @@ function createFakeCanvas2d() {
     lineTo: (...args) => calls.push(["lineTo", ...args]),
     quadraticCurveTo: (...args) => calls.push(["quadraticCurveTo", ...args]),
     arc: (...args) => calls.push(["arc", ...args]),
+    closePath: () => calls.push(["closePath"]),
     fill: () => calls.push(["fill"]),
     stroke: () => calls.push(["stroke"]),
     save: () => calls.push(["save"]),
@@ -160,6 +161,130 @@ function createFakeCanvas2d() {
     },
     context,
   };
+}
+
+function align4(value) {
+  return (value + 3) & ~3;
+}
+
+function asArrayBuffer(buffer) {
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+}
+
+function makeChunk(byteLength, write) {
+  const buffer = Buffer.alloc(align4(byteLength));
+  write(buffer);
+  return buffer;
+}
+
+function createGlb(json, binary) {
+  const jsonText = JSON.stringify({
+    asset: { version: "2.0", generator: "gpu-renderer-test" },
+    buffers: [{ byteLength: binary.byteLength }],
+    ...json,
+  });
+  const jsonBuffer = Buffer.from(jsonText, "utf8");
+  const paddedJson = Buffer.concat([jsonBuffer, Buffer.alloc(align4(jsonBuffer.byteLength) - jsonBuffer.byteLength, 0x20)]);
+  const totalLength = 12 + 8 + paddedJson.byteLength + 8 + binary.byteLength;
+  const header = Buffer.alloc(12);
+  header.writeUInt32LE(0x46546c67, 0);
+  header.writeUInt32LE(2, 4);
+  header.writeUInt32LE(totalLength, 8);
+  const jsonHeader = Buffer.alloc(8);
+  jsonHeader.writeUInt32LE(paddedJson.byteLength, 0);
+  jsonHeader.writeUInt32LE(0x4e4f534a, 4);
+  const binHeader = Buffer.alloc(8);
+  binHeader.writeUInt32LE(binary.byteLength, 0);
+  binHeader.writeUInt32LE(0x004e4942, 4);
+  return asArrayBuffer(Buffer.concat([header, jsonHeader, paddedJson, binHeader, binary]));
+}
+
+function createSkinnedTriangleGlb() {
+  const chunks = [];
+  const push = (buffer) => {
+    const byteOffset = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+    chunks.push(buffer);
+    return { byteOffset, byteLength: buffer.byteLength };
+  };
+
+  const indicesView = push(makeChunk(6, (buffer) => {
+    [0, 1, 2].forEach((value, index) => buffer.writeUInt16LE(value, index * 2));
+  }));
+  const positionsView = push(makeChunk(36, (buffer) => {
+    [-0.4, 0, 0, 0.4, 0, 0, 0, 1.6, 0].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+  const jointsView = push(makeChunk(24, (buffer) => {
+    new Array(12).fill(0).forEach((value, index) => buffer.writeUInt16LE(value, index * 2));
+  }));
+  const weightsView = push(makeChunk(48, (buffer) => {
+    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+  const inverseBindView = push(makeChunk(64, (buffer) => {
+    [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+
+  const binary = Buffer.concat(chunks);
+  return createGlb({
+    scenes: [{ nodes: [0] }],
+    scene: 0,
+    nodes: [
+      { name: "RootNode", children: [1, 2] },
+      { name: "mixamorig:Hips", translation: [0, 0, 0] },
+      { name: "Peasant_girl", mesh: 0, skin: 0 },
+    ],
+    skins: [{ joints: [1], inverseBindMatrices: 4, skeleton: 1 }],
+    meshes: [{
+      name: "Peasant_girl",
+      primitives: [{
+        attributes: {
+          POSITION: 1,
+          JOINTS_0: 2,
+          WEIGHTS_0: 3,
+        },
+        indices: 0,
+        mode: 4,
+      }],
+    }],
+    bufferViews: [indicesView, positionsView, jointsView, weightsView, inverseBindView],
+    accessors: [
+      { bufferView: 0, componentType: 5123, count: 3, type: "SCALAR" },
+      { bufferView: 1, componentType: 5126, count: 3, type: "VEC3" },
+      { bufferView: 2, componentType: 5123, count: 3, type: "VEC4" },
+      { bufferView: 3, componentType: 5126, count: 3, type: "VEC4" },
+      { bufferView: 4, componentType: 5126, count: 1, type: "MAT4" },
+    ],
+  }, binary);
+}
+
+function createTranslationClipGlb() {
+  const chunks = [];
+  const push = (buffer) => {
+    const byteOffset = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+    chunks.push(buffer);
+    return { byteOffset, byteLength: buffer.byteLength };
+  };
+  const timeView = push(makeChunk(8, (buffer) => {
+    [0, 1].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+  const translationView = push(makeChunk(24, (buffer) => {
+    [0, 0, 0, 0.2, 0, 0].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+  const binary = Buffer.concat(chunks);
+  return createGlb({
+    scenes: [{ nodes: [0] }],
+    scene: 0,
+    nodes: [{ name: "mixamorig:Hips" }],
+    animations: [{
+      name: "walk",
+      samplers: [{ input: 0, output: 1, interpolation: "LINEAR" }],
+      channels: [{ sampler: 0, target: { node: 0, path: "translation" } }],
+    }],
+    bufferViews: [timeView, translationView],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 2, type: "SCALAR" },
+      { bufferView: 1, componentType: 5126, count: 2, type: "VEC3" },
+    ],
+  }, binary);
 }
 
 function createFakeDocument(canvasMap = {}) {
@@ -348,6 +473,56 @@ test("createAnimatedSceneRenderer grounds adventure props and visible character 
   assert.equal(Math.abs((anchors.get("soil")?.groundY ?? 0) - snapshot.characterGroundY) < 120, true);
   assert.equal(Math.abs((anchors.get("crate")?.groundY ?? 0) - snapshot.characterGroundY) < 120, true);
   assert.equal((anchors.get("tree")?.groundY ?? 0) > snapshot.characterGroundY, true);
+  renderer.destroy();
+});
+
+test("createAnimatedSceneRenderer renders a skinned GLB model when model and clip payloads are provided", () => {
+  const canvas = createFakeCanvas2d();
+  const renderer = createAnimatedSceneRenderer({
+    canvas,
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 1], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 4000,
+        blend: { inMs: 0, outMs: 240 },
+      },
+    ],
+    camera: {
+      mode: "lagged-follow",
+      cubicBezier: [0.22, 0.61, 0.36, 1],
+      lagMs: 240,
+      lookAheadMs: 320,
+      offset: [-1, 2.4, 5.5],
+    },
+    modelAsset: createSkinnedTriangleGlb(),
+    clipAssets: [
+      {
+        id: "female-basic-locomotion-walking",
+        asset: createTranslationClipGlb(),
+      },
+    ],
+  });
+
+  renderer.resize(640, 360, 1);
+  const snapshot = renderer.renderOnce(1800);
+
+  assert.equal(snapshot.modelLoaded, true);
+  assert.equal(snapshot.modelRenderable, true);
+  assert.equal(snapshot.fallbackProxyActive, false);
+  assert.equal(snapshot.skinnedVertexCount, 3);
+  assert.equal(snapshot.skinnedTriangleCount, 1);
+  assert.equal(snapshot.skinnedJointCount, 1);
+  assert.equal(snapshot.skinnedClipCount, 1);
+  assert.equal(snapshot.skinnedAnimatedNodeCount, 1);
+  assert.equal(snapshot.activeClipRenderable, true);
+  assert.equal(snapshot.characterVisible, true);
+  assert.equal(canvas.context.calls.some((call) => call[0] === "closePath"), true);
   renderer.destroy();
 });
 
