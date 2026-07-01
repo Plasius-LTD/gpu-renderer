@@ -124,7 +124,11 @@ assembly internals.
 GPU animation adventure demo. It accepts scripted beats, route points, props,
 and a lagged-follow camera rig, then exposes `start`, `resize`, `getSnapshot`,
 and `destroy` for host packages. It is implemented inside `gpu-renderer` and
-does not route animation playback through Three.js.
+does not route animation playback through Three.js. The v1 canvas renderer
+draws a grounded Peasant Girl proxy plus deterministic farm props while the
+skinned GLB renderer path is built out; snapshots expose `characterVisible`,
+`characterGroundY`, and `propGroundAnchors` so hosts can catch scene grounding
+regressions.
 
 The production transport rollout remains gated by
 `renderer.transport.physicalEstimator`. With the flag enabled, deferred

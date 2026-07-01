@@ -69,6 +69,15 @@ export interface AnimatedSceneSnapshot {
   readonly clipTimeMs: number;
   readonly characterPosition: readonly [number, number, number];
   readonly cameraPosition: readonly [number, number, number];
+  readonly characterGroundY: number;
+  readonly characterVisible: boolean;
+  readonly propGroundAnchors: readonly {
+    readonly id: string;
+    readonly kind: string;
+    readonly groundY: number;
+    readonly depth: number;
+    readonly visible: boolean;
+  }[];
   readonly frameState: "initialized" | "running" | "rendered-once" | "destroyed";
 }
 
