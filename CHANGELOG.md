@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.24] - 2026-07-01
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Fixed Animation Adventure canvas projection so farm props and the visible
     Peasant Girl proxy stay grounded on the route plane, with improved crop
     soil, tree, cart, crate, and character drawing plus snapshot diagnostics for
@@ -673,3 +687,4 @@ All notable changes to this project will be documented in this file.
 [0.2.21]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.21
 [0.2.22]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.22
 [0.2.23]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.23
+[0.2.24]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.24
