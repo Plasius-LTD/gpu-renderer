@@ -18,7 +18,10 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Fixed Animation Adventure canvas projection so farm props and the visible
+    Peasant Girl proxy stay grounded on the route plane, with improved crop
+    soil, tree, cart, crate, and character drawing plus snapshot diagnostics for
+    character visibility and prop ground anchors under task `#108`.
 
 - **Security**
   - (placeholder)

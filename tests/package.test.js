@@ -264,6 +264,10 @@ test("createAnimatedSceneRenderer advances route, blend, camera, and lifecycle",
   assert.equal(second.characterPosition[0] > first.characterPosition[0], true);
   assert.equal(second.cameraPosition[0] < second.characterPosition[0], true);
   assert.equal(second.blendProgress > 0, true);
+  assert.equal(second.characterVisible, true);
+  assert.equal(second.characterGroundY > 0, true);
+  assert.equal(second.propGroundAnchors.length, 2);
+  assert.equal(second.propGroundAnchors.every((anchor) => anchor.visible), true);
   assert.equal(canvas.context.calls.some((call) => call[0] === "fillRect"), true);
 
   renderer.destroy();
@@ -300,6 +304,50 @@ test("createAnimatedSceneRenderer preserves camera defaults for undefined overri
   assert.equal(Number.isFinite(snapshot.cameraPosition[0]), true);
   assert.equal(snapshot.cameraPosition[1], 2.4);
   assert.equal(snapshot.cameraPosition[2], 5.5);
+  renderer.destroy();
+});
+
+test("createAnimatedSceneRenderer grounds adventure props and visible character on the same scene plane", () => {
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 1], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 4000,
+        blend: { inMs: 0, outMs: 240 },
+      },
+    ],
+    camera: {
+      mode: "lagged-follow",
+      cubicBezier: [0.22, 0.61, 0.36, 1],
+      lagMs: 240,
+      lookAheadMs: 320,
+      offset: [-1, 2.4, 5.5],
+    },
+    props: [
+      { id: "soil", kind: "crop-row", position: [2.5, 0, 0.8] },
+      { id: "tree", kind: "small-tree", position: [1.5, 0, 2.2] },
+      { id: "crate", kind: "crate", position: [4.4, 0, 0.4] },
+    ],
+  });
+
+  renderer.resize(640, 360, 1);
+  const snapshot = renderer.renderOnce(1800);
+  const anchors = new Map(snapshot.propGroundAnchors.map((anchor) => [anchor.id, anchor]));
+
+  assert.equal(snapshot.characterVisible, true);
+  assert.equal(anchors.get("soil")?.visible, true);
+  assert.equal(anchors.get("tree")?.visible, true);
+  assert.equal(anchors.get("crate")?.visible, true);
+  assert.equal(Math.abs((anchors.get("soil")?.groundY ?? 0) - snapshot.characterGroundY) < 120, true);
+  assert.equal(Math.abs((anchors.get("crate")?.groundY ?? 0) - snapshot.characterGroundY) < 120, true);
+  assert.equal((anchors.get("tree")?.groundY ?? 0) > snapshot.characterGroundY, true);
   renderer.destroy();
 });
 

@@ -28,6 +28,10 @@ function lerp3(a, b, t) {
   ];
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function bezierY([, y1, , y2], t) {
   const u = 1 - t;
   return 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t;
@@ -94,22 +98,40 @@ function resolveCanvas(canvas) {
 
 function project(position, cameraPosition, width, height) {
   const x = position[0] - cameraPosition[0];
-  const z = position[2] - cameraPosition[2];
-  const scale = Math.max(24, 90 / Math.max(1, Math.abs(z) * 0.25 + 1));
-  return [
-    width * 0.5 + x * scale,
-    height * 0.62 + z * scale * 0.45 - position[1] * scale,
+  const depth = Math.max(0.2, cameraPosition[2] - (position[2] ?? 0));
+  const scale = clamp(34 + 150 / (depth + 1.2), 34, 104);
+  const groundY = height * 0.82 - depth * height * 0.045 - (position[1] ?? 0) * scale;
+  return {
+    x: width * 0.5 + x * scale,
+    y: groundY,
+    groundY,
     scale,
-  ];
+    depth,
+    visible: groundY > -height * 0.2 && groundY < height * 1.18,
+  };
+}
+
+function propIdentity(prop, index) {
+  return prop.id ?? `${prop.kind}-${index}`;
+}
+
+function drawGroundShadow(ctx, scale) {
+  ctx.fillStyle = "rgba(44, 38, 28, 0.18)";
+  ctx.fillRect(-scale * 0.36, -scale * 0.035, scale * 0.72, scale * 0.07);
 }
 
 function drawProp(ctx, prop, cameraPosition, width, height) {
-  const [x, y, scale] = project(prop.position, cameraPosition, width, height);
+  const projected = project(prop.position, cameraPosition, width, height);
+  const { x, y, scale } = projected;
   ctx.save();
   ctx.translate(x, y);
   ctx.lineWidth = Math.max(1, scale * 0.04);
 
   if (prop.kind === "crop-row") {
+    ctx.fillStyle = "#8b633f";
+    ctx.fillRect(-scale * 1.05, -scale * 0.08, scale * 2.1, scale * 0.16);
+    ctx.fillStyle = "#6f4a30";
+    ctx.fillRect(-scale * 0.92, -scale * 0.035, scale * 1.84, scale * 0.07);
     ctx.strokeStyle = "#4f6f32";
     ctx.beginPath();
     ctx.moveTo(-scale * 0.8, 0);
@@ -130,59 +152,101 @@ function drawProp(ctx, prop, cameraPosition, width, height) {
     ctx.lineTo(scale * 0.35, scale * 0.1);
     ctx.stroke();
   } else if (prop.kind === "cart") {
+    drawGroundShadow(ctx, scale);
     ctx.fillStyle = "#7b5238";
-    ctx.fillRect(-scale * 0.45, -scale * 0.28, scale * 0.9, scale * 0.32);
+    ctx.fillRect(-scale * 0.52, -scale * 0.38, scale * 1.04, scale * 0.36);
+    ctx.fillStyle = "#a4774c";
+    ctx.fillRect(-scale * 0.44, -scale * 0.32, scale * 0.88, scale * 0.08);
     ctx.fillStyle = "#25201c";
     ctx.beginPath();
-    ctx.arc(-scale * 0.27, scale * 0.1, scale * 0.1, 0, Math.PI * 2);
-    ctx.arc(scale * 0.27, scale * 0.1, scale * 0.1, 0, Math.PI * 2);
+    ctx.arc(-scale * 0.32, scale * 0.02, scale * 0.1, 0, Math.PI * 2);
+    ctx.arc(scale * 0.32, scale * 0.02, scale * 0.1, 0, Math.PI * 2);
     ctx.fill();
   } else if (prop.kind === "small-tree") {
+    drawGroundShadow(ctx, scale);
     ctx.fillStyle = "#5b3b24";
-    ctx.fillRect(-scale * 0.05, -scale * 0.45, scale * 0.1, scale * 0.45);
-    ctx.fillStyle = "#3f7a3d";
+    ctx.fillRect(-scale * 0.07, -scale * 0.56, scale * 0.14, scale * 0.56);
+    ctx.fillStyle = "#2f6d3b";
     ctx.beginPath();
-    ctx.arc(0, -scale * 0.58, scale * 0.24, 0, Math.PI * 2);
+    ctx.arc(-scale * 0.16, -scale * 0.72, scale * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#3f8746";
+    ctx.beginPath();
+    ctx.arc(scale * 0.13, -scale * 0.76, scale * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#4f9a50";
+    ctx.beginPath();
+    ctx.arc(0, -scale * 0.98, scale * 0.26, 0, Math.PI * 2);
     ctx.fill();
   } else {
+    drawGroundShadow(ctx, scale);
     ctx.fillStyle = prop.kind === "crate" ? "#9a6a3d" : "#d0c39f";
-    ctx.fillRect(-scale * 0.18, -scale * 0.18, scale * 0.36, scale * 0.36);
+    ctx.fillRect(-scale * 0.2, -scale * 0.32, scale * 0.4, scale * 0.32);
+    if (prop.kind === "crate") {
+      ctx.strokeStyle = "#6e4829";
+      ctx.beginPath();
+      ctx.moveTo(-scale * 0.2, -scale * 0.16);
+      ctx.lineTo(scale * 0.2, -scale * 0.16);
+      ctx.moveTo(0, -scale * 0.32);
+      ctx.lineTo(0, 0);
+      ctx.stroke();
+    }
   }
 
   ctx.restore();
+  return projected;
 }
 
 function drawCharacter(ctx, characterPosition, cameraPosition, width, height, gaitPhase) {
-  const [x, y, scale] = project(characterPosition, cameraPosition, width, height);
+  const projected = project(characterPosition, cameraPosition, width, height);
+  const { x, y, scale } = projected;
   const stride = Math.sin(gaitPhase * Math.PI * 2);
   ctx.save();
   ctx.translate(x, y);
   ctx.lineWidth = Math.max(2, scale * 0.05);
   ctx.lineCap = "round";
-  ctx.strokeStyle = "#34251f";
-  ctx.fillStyle = "#9b5f48";
 
-  ctx.beginPath();
-  ctx.arc(0, -scale * 1.15, scale * 0.18, 0, Math.PI * 2);
-  ctx.fill();
+  drawGroundShadow(ctx, scale);
 
-  ctx.strokeStyle = "#57413a";
+  ctx.strokeStyle = "#4c2f25";
   ctx.beginPath();
-  ctx.moveTo(0, -scale * 0.95);
-  ctx.lineTo(0, -scale * 0.45);
-  ctx.moveTo(0, -scale * 0.82);
-  ctx.lineTo(-scale * 0.25, -scale * (0.58 + stride * 0.08));
-  ctx.moveTo(0, -scale * 0.82);
-  ctx.lineTo(scale * 0.25, -scale * (0.58 - stride * 0.08));
-  ctx.moveTo(0, -scale * 0.45);
-  ctx.lineTo(-scale * 0.18, -scale * (0.05 - stride * 0.12));
-  ctx.moveTo(0, -scale * 0.45);
-  ctx.lineTo(scale * 0.18, -scale * (0.05 + stride * 0.12));
+  ctx.moveTo(-scale * 0.12, -scale * 0.34);
+  ctx.lineTo(-scale * (0.18 + stride * 0.04), -scale * 0.02);
+  ctx.moveTo(scale * 0.12, -scale * 0.34);
+  ctx.lineTo(scale * (0.18 - stride * 0.04), -scale * 0.02);
   ctx.stroke();
 
-  ctx.fillStyle = "#496b8f";
-  ctx.fillRect(-scale * 0.17, -scale * 0.9, scale * 0.34, scale * 0.42);
+  ctx.fillStyle = "#6f8f62";
+  ctx.beginPath();
+  ctx.moveTo(-scale * 0.3, -scale * 0.86);
+  ctx.lineTo(scale * 0.3, -scale * 0.86);
+  ctx.lineTo(scale * 0.42, -scale * 0.24);
+  ctx.lineTo(-scale * 0.42, -scale * 0.24);
+  ctx.lineTo(-scale * 0.3, -scale * 0.86);
+  ctx.fill();
+
+  ctx.fillStyle = "#d8b18c";
+  ctx.beginPath();
+  ctx.arc(0, -scale * 1.16, scale * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#5a3a2b";
+  ctx.fillRect(-scale * 0.2, -scale * 1.28, scale * 0.4, scale * 0.16);
+  ctx.fillRect(-scale * 0.23, -scale * 1.14, scale * 0.1, scale * 0.28);
+  ctx.fillRect(scale * 0.13, -scale * 1.14, scale * 0.1, scale * 0.28);
+
+  ctx.strokeStyle = "#6b4935";
+  ctx.beginPath();
+  ctx.moveTo(-scale * 0.24, -scale * 0.76);
+  ctx.lineTo(-scale * (0.46 + stride * 0.04), -scale * (0.5 + stride * 0.06));
+  ctx.moveTo(scale * 0.24, -scale * 0.76);
+  ctx.lineTo(scale * (0.46 - stride * 0.04), -scale * (0.5 - stride * 0.06));
+  ctx.stroke();
+
+  ctx.fillStyle = "#d6c09a";
+  ctx.fillRect(-scale * 0.16, -scale * 0.86, scale * 0.32, scale * 0.18);
   ctx.restore();
+  return projected;
 }
 
 function renderScene(canvas, ctx, snapshot, props) {
@@ -200,10 +264,31 @@ function renderScene(canvas, ctx, snapshot, props) {
   ctx.quadraticCurveTo(width * 0.53, height * 0.58, width * 0.62, 0);
   ctx.stroke();
 
-  for (const prop of props) {
-    drawProp(ctx, prop, snapshot.cameraPosition, width, height);
+  const projectedProps = props
+    .map((prop, index) => ({
+      prop,
+      id: propIdentity(prop, index),
+      projected: project(prop.position, snapshot.cameraPosition, width, height),
+    }))
+    .sort((a, b) => b.projected.depth - a.projected.depth);
+
+  const propGroundAnchors = [];
+  for (const { prop, id } of projectedProps) {
+    const projected = drawProp(ctx, prop, snapshot.cameraPosition, width, height);
+    propGroundAnchors.push({
+      id,
+      kind: prop.kind,
+      groundY: projected.groundY,
+      depth: projected.depth,
+      visible: projected.visible,
+    });
   }
-  drawCharacter(ctx, snapshot.characterPosition, snapshot.cameraPosition, width, height, snapshot.clipTimeMs / 900);
+  const characterProjection = drawCharacter(ctx, snapshot.characterPosition, snapshot.cameraPosition, width, height, snapshot.clipTimeMs / 900);
+  return {
+    characterGroundY: characterProjection.groundY,
+    characterVisible: characterProjection.visible,
+    propGroundAnchors,
+  };
 }
 
 export function createAnimatedSceneRenderer(options = {}) {
@@ -244,6 +329,9 @@ export function createAnimatedSceneRenderer(options = {}) {
     clipTimeMs: 0,
     characterPosition: route[0]?.position ? [...route[0].position] : [0, 0, 0],
     cameraPosition: [...cameraPosition],
+    characterGroundY: 0,
+    characterVisible: false,
+    propGroundAnchors: [],
     frameState: "initialized",
   };
 
@@ -281,10 +369,17 @@ export function createAnimatedSceneRenderer(options = {}) {
       clipTimeMs: beatTimeMs,
       characterPosition,
       cameraPosition: [...cameraPosition],
+      characterGroundY: 0,
+      characterVisible: false,
+      propGroundAnchors: [],
       frameState: running ? "running" : "rendered-once",
     };
 
-    renderScene(canvas, ctx, snapshot, props);
+    const visibility = renderScene(canvas, ctx, snapshot, props);
+    snapshot = {
+      ...snapshot,
+      ...visibility,
+    };
     return snapshot;
   }
 
@@ -319,7 +414,11 @@ export function createAnimatedSceneRenderer(options = {}) {
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
       }
-      renderScene(canvas, ctx, snapshot, props);
+      const visibility = renderScene(canvas, ctx, snapshot, props);
+      snapshot = {
+        ...snapshot,
+        ...visibility,
+      };
     },
     renderOnce,
     getSnapshot() {
@@ -327,6 +426,7 @@ export function createAnimatedSceneRenderer(options = {}) {
         ...snapshot,
         characterPosition: [...snapshot.characterPosition],
         cameraPosition: [...snapshot.cameraPosition],
+        propGroundAnchors: snapshot.propGroundAnchors.map((anchor) => ({ ...anchor })),
       };
     },
     destroy() {
