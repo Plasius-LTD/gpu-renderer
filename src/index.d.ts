@@ -39,6 +39,11 @@ export interface AnimatedSceneProp {
   readonly position: AnimatedSceneVector3;
 }
 
+export interface AnimatedSceneClipAsset {
+  readonly id: string;
+  readonly asset?: ArrayBuffer | null;
+}
+
 export interface CreateAnimatedSceneRendererOptions {
   readonly canvas: string | HTMLCanvasElement | {
     width: number;
@@ -50,11 +55,15 @@ export interface CreateAnimatedSceneRendererOptions {
   readonly beats?: readonly AnimatedSceneBeat[];
   readonly props?: readonly AnimatedSceneProp[];
   readonly camera?: AnimatedSceneCameraFollowRig;
+  readonly modelAsset?: ArrayBuffer | null;
+  readonly clipAssets?: readonly AnimatedSceneClipAsset[];
   readonly animationAdventure?: {
     readonly route?: readonly AnimatedScenePathPoint[];
     readonly beats?: readonly AnimatedSceneBeat[];
     readonly props?: readonly AnimatedSceneProp[];
     readonly camera?: AnimatedSceneCameraFollowRig;
+    readonly modelAsset?: ArrayBuffer | null;
+    readonly clipAssets?: readonly AnimatedSceneClipAsset[];
   };
   readonly requestAnimationFrame?: (callback: FrameRequestCallback) => number;
   readonly cancelAnimationFrame?: (handle: number) => void;
@@ -71,6 +80,15 @@ export interface AnimatedSceneSnapshot {
   readonly cameraPosition: readonly [number, number, number];
   readonly characterGroundY: number;
   readonly characterVisible: boolean;
+  readonly modelLoaded: boolean;
+  readonly modelRenderable: boolean;
+  readonly fallbackProxyActive: boolean;
+  readonly skinnedVertexCount: number;
+  readonly skinnedTriangleCount: number;
+  readonly skinnedJointCount: number;
+  readonly skinnedAnimatedNodeCount: number;
+  readonly skinnedClipCount: number;
+  readonly activeClipRenderable: boolean;
   readonly propGroundAnchors: readonly {
     readonly id: string;
     readonly kind: string;

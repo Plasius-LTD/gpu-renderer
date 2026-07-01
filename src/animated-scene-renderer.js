@@ -1,3 +1,5 @@
+import { createAnimatedGltfModel } from "./animated-gltf-model.js";
+
 const DEFAULT_CAMERA = Object.freeze({
   mode: "lagged-follow",
   cubicBezier: [0.22, 0.61, 0.36, 1],
@@ -249,7 +251,84 @@ function drawCharacter(ctx, characterPosition, cameraPosition, width, height, ga
   return projected;
 }
 
-function renderScene(canvas, ctx, snapshot, props) {
+function pointForModelVertex(vertex, projection, sample) {
+  const bounds = sample.bounds;
+  const height = Math.max(0.1, bounds.size[1] || sample.bindBounds.size[1] || 1);
+  const modelScale = projection.scale * 1.3 / height;
+  const centerX = (bounds.min[0] + bounds.max[0]) * 0.5;
+  const centerZ = (bounds.min[2] + bounds.max[2]) * 0.5;
+  return [
+    projection.x + (vertex[0] - centerX) * modelScale,
+    projection.groundY - (vertex[1] - bounds.min[1]) * modelScale + (vertex[2] - centerZ) * modelScale * 0.16,
+  ];
+}
+
+function modelFillForHeight(vertex, sample) {
+  const height = Math.max(0.1, sample.bounds.size[1] || 1);
+  const t = (vertex[1] - sample.bounds.min[1]) / height;
+  if (t > 0.82) {
+    return "#6d4a36";
+  }
+  if (t > 0.58) {
+    return "#d7b28f";
+  }
+  if (t > 0.25) {
+    return "#6f8f62";
+  }
+  return "#5e4636";
+}
+
+function drawSkinnedGltfCharacter(ctx, model, snapshot, width, height) {
+  const projection = project(snapshot.characterPosition, snapshot.cameraPosition, width, height);
+  const sample = model.sample(snapshot.activeClipId, snapshot.clipTimeMs);
+  const maxTriangles = 1500;
+  const triangleCount = Math.floor(sample.indices.length / 3);
+  const stride = Math.max(1, Math.ceil(triangleCount / maxTriangles));
+  const triangles = [];
+  for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex += stride) {
+    const base = triangleIndex * 3;
+    const a = sample.vertices[sample.indices[base]];
+    const b = sample.vertices[sample.indices[base + 1]];
+    const c = sample.vertices[sample.indices[base + 2]];
+    if (!a || !b || !c) {
+      continue;
+    }
+    triangles.push({
+      a,
+      b,
+      c,
+      depth: (a[2] + b[2] + c[2]) / 3,
+      fill: modelFillForHeight(a, sample),
+    });
+  }
+  triangles.sort((left, right) => left.depth - right.depth);
+
+  ctx.save();
+  drawGroundShadow(ctx, projection.scale);
+  ctx.lineWidth = Math.max(0.7, projection.scale * 0.012);
+  ctx.strokeStyle = "rgba(58, 43, 34, 0.22)";
+  for (const triangle of triangles) {
+    const [ax, ay] = pointForModelVertex(triangle.a, projection, sample);
+    const [bx, by] = pointForModelVertex(triangle.b, projection, sample);
+    const [cx, cy] = pointForModelVertex(triangle.c, projection, sample);
+    ctx.fillStyle = triangle.fill;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.lineTo(cx, cy);
+    ctx.closePath?.();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  return {
+    projection,
+    sample,
+  };
+}
+
+function renderScene(canvas, ctx, snapshot, props, characterModel) {
   const width = canvas.width || 1;
   const height = canvas.height || 1;
   ctx.clearRect(0, 0, width, height);
@@ -283,12 +362,56 @@ function renderScene(canvas, ctx, snapshot, props) {
       visible: projected.visible,
     });
   }
-  const characterProjection = drawCharacter(ctx, snapshot.characterPosition, snapshot.cameraPosition, width, height, snapshot.clipTimeMs / 900);
+  let characterProjection;
+  let modelRenderable = false;
+  let fallbackProxyActive = true;
+  let skinnedVertexCount = 0;
+  let skinnedTriangleCount = 0;
+  let skinnedJointCount = 0;
+  let skinnedAnimatedNodeCount = 0;
+  let skinnedClipCount = 0;
+  let activeClipRenderable = false;
+
+  if (characterModel) {
+    const drawn = drawSkinnedGltfCharacter(ctx, characterModel, snapshot, width, height);
+    characterProjection = drawn.projection;
+    modelRenderable = true;
+    fallbackProxyActive = false;
+    skinnedVertexCount = characterModel.vertexCount;
+    skinnedTriangleCount = characterModel.triangleCount;
+    skinnedJointCount = characterModel.jointCount;
+    skinnedAnimatedNodeCount = characterModel.animatedNodeCount;
+    skinnedClipCount = characterModel.clipCount;
+    activeClipRenderable = drawn.sample.activeClipRenderable;
+  } else {
+    characterProjection = drawCharacter(ctx, snapshot.characterPosition, snapshot.cameraPosition, width, height, snapshot.clipTimeMs / 900);
+  }
+
   return {
     characterGroundY: characterProjection.groundY,
     characterVisible: characterProjection.visible,
+    modelLoaded: Boolean(characterModel),
+    modelRenderable,
+    fallbackProxyActive,
+    skinnedVertexCount,
+    skinnedTriangleCount,
+    skinnedJointCount,
+    skinnedAnimatedNodeCount,
+    skinnedClipCount,
+    activeClipRenderable,
     propGroundAnchors,
   };
+}
+
+function resolveCharacterModel(options) {
+  try {
+    return createAnimatedGltfModel(
+      options.modelAsset ?? options.animationAdventure?.modelAsset,
+      options.clipAssets ?? options.animationAdventure?.clipAssets ?? [],
+    );
+  } catch {
+    return null;
+  }
 }
 
 export function createAnimatedSceneRenderer(options = {}) {
@@ -301,6 +424,7 @@ export function createAnimatedSceneRenderer(options = {}) {
   const route = [...(options.route ?? options.animationAdventure?.route ?? [])];
   const beats = [...(options.beats ?? options.animationAdventure?.beats ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const props = [...(options.props ?? options.animationAdventure?.props ?? [])];
+  const characterModel = resolveCharacterModel(options);
   const camera = Object.freeze({
     ...DEFAULT_CAMERA,
     ...definedCameraOverrides(options.camera ?? options.animationAdventure?.camera),
@@ -331,6 +455,15 @@ export function createAnimatedSceneRenderer(options = {}) {
     cameraPosition: [...cameraPosition],
     characterGroundY: 0,
     characterVisible: false,
+    modelLoaded: Boolean(characterModel),
+    modelRenderable: false,
+    fallbackProxyActive: true,
+    skinnedVertexCount: characterModel?.vertexCount ?? 0,
+    skinnedTriangleCount: characterModel?.triangleCount ?? 0,
+    skinnedJointCount: characterModel?.jointCount ?? 0,
+    skinnedAnimatedNodeCount: characterModel?.animatedNodeCount ?? 0,
+    skinnedClipCount: characterModel?.clipCount ?? 0,
+    activeClipRenderable: false,
     propGroundAnchors: [],
     frameState: "initialized",
   };
@@ -371,11 +504,20 @@ export function createAnimatedSceneRenderer(options = {}) {
       cameraPosition: [...cameraPosition],
       characterGroundY: 0,
       characterVisible: false,
+      modelLoaded: Boolean(characterModel),
+      modelRenderable: false,
+      fallbackProxyActive: true,
+      skinnedVertexCount: characterModel?.vertexCount ?? 0,
+      skinnedTriangleCount: characterModel?.triangleCount ?? 0,
+      skinnedJointCount: characterModel?.jointCount ?? 0,
+      skinnedAnimatedNodeCount: characterModel?.animatedNodeCount ?? 0,
+      skinnedClipCount: characterModel?.clipCount ?? 0,
+      activeClipRenderable: false,
       propGroundAnchors: [],
       frameState: running ? "running" : "rendered-once",
     };
 
-    const visibility = renderScene(canvas, ctx, snapshot, props);
+    const visibility = renderScene(canvas, ctx, snapshot, props, characterModel);
     snapshot = {
       ...snapshot,
       ...visibility,
@@ -414,7 +556,7 @@ export function createAnimatedSceneRenderer(options = {}) {
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
       }
-      const visibility = renderScene(canvas, ctx, snapshot, props);
+      const visibility = renderScene(canvas, ctx, snapshot, props, characterModel);
       snapshot = {
         ...snapshot,
         ...visibility,

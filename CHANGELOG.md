@@ -12,7 +12,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added renderer-owned skinned GLB ingestion for Animation Adventure,
+    including mesh/skin/clip parsing, Mixamo node-name retargeting, CPU
+    skinning for the active clip, model-derived canvas drawing, and snapshot
+    renderability diagnostics under task `#114`.
 
 - **Changed**
   - (placeholder)
