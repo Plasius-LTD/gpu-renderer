@@ -15,6 +15,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.23] - 2026-07-01
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Updated runtime GPU dependencies to `@plasius/gpu-shared` `^1.0.2` and
     `@plasius/gpu-xr` `^0.1.16` so downstream GPU Demo consumers do not pull
     stale shared runtime packages transitively.
@@ -655,3 +669,4 @@ All notable changes to this project will be documented in this file.
 [0.2.20]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.20
 [0.2.21]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.21
 [0.2.22]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.22
+[0.2.23]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.23
