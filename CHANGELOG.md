@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - Updated runtime GPU dependencies to `@plasius/gpu-shared` `^1.0.2` and
+    `@plasius/gpu-xr` `^0.1.16` so downstream GPU Demo consumers do not pull
+    stale shared runtime packages transitively.
   - (placeholder)
 
 - **Fixed**
