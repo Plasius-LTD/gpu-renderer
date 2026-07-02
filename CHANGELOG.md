@@ -12,10 +12,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added a renderer-owned animated scene surface for adventure playback with scripted beats, route motion, blend snapshots, and bezier-lag camera follow.
+  - Added animated camera mode integration with `@plasius/gpu-camera`,
+    including editor, spectator, third-person, and first-person view snapshots
+    plus head-look intent state.
+  - Added a renderer-owned model-tree leaf material lab with procedural branches, close-up leaf rendering controls, quality tiers, and offscreen renderer telemetry for GPU Demo model iteration.
 
 - **Changed**
-  - (placeholder)
+  - Updated renderer dependencies to consume the `@plasius/gpu-shared` v1 line
+    and the next `@plasius/gpu-camera` camera-rig release.
 
 - **Fixed**
   - (placeholder)
@@ -26,10 +31,13 @@ All notable changes to this project will be documented in this file.
 ## [0.2.26] - 2026-07-02
 
 - **Added**
-  - (placeholder)
+  - Added animated camera mode integration with `@plasius/gpu-camera`,
+    including editor, spectator, third-person, and first-person view snapshots
+    plus head-look intent state.
 
 - **Changed**
-  - (placeholder)
+  - Added `@plasius/gpu-camera` as a runtime dependency for shared animated
+    character camera rig resolution.
 
 - **Fixed**
   - Fixed Animation Adventure skinned GLB canvas drawing so Peasant Girl renders

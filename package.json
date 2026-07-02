@@ -49,6 +49,7 @@
   "author": "Plasius LTD <development@plasius.co.uk>",
   "license": "Apache-2.0",
   "dependencies": {
+    "@plasius/gpu-camera": "^0.1.17",
     "@plasius/gpu-shared": "^1.0.2",
     "@plasius/gpu-xr": "^0.1.16"
   },

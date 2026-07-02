@@ -18,3 +18,4 @@
 - [ADR 0016: Mixed Direct-Light MIS For Wavefront Materials](./adr-0016-mixed-direct-light-mis-for-wavefront-materials.md)
 - [ADR 0017: Physical Throughput For Wavefront Continuations](./adr-0017-physical-throughput-for-wavefront-continuations.md)
 - [ADR 0018: Purpose-Specific Renderer Module Boundaries](./adr-0018-purpose-specific-renderer-module-boundaries.md)
+- [ADR 0020: Animated Camera Rig Integration](./adr-0020-animated-camera-rig-integration.md)
