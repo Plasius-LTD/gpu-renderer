@@ -478,6 +478,143 @@ test("createAnimatedSceneRenderer advances route, blend, camera, and lifecycle",
   assert.equal(renderer.getSnapshot().frameState, "destroyed");
 });
 
+test("createAnimatedSceneRenderer holds stationary action beats at their route anchor", () => {
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [3, 0, 0], arriveMs: 3000 },
+      { id: "ditch", position: [6, 0, 0], arriveMs: 8000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 3000,
+        pathPointId: "crop-row",
+        movementRequirement: { type: "travel", distance: 3, speedRange: [0.9, 1.1], loop: "repeat" },
+      },
+      {
+        id: "dig-and-plant",
+        order: 1,
+        clipId: "farming-dig-and-plant-seeds",
+        durationMs: 2000,
+        pathPointId: "crop-row",
+        movementRequirement: { type: "stationary", maxDrift: 0.05 },
+      },
+      {
+        id: "jump-ditch",
+        order: 2,
+        clipId: "female-basic-locomotion-jump",
+        durationMs: 1200,
+        pathPointId: "ditch",
+        movementRequirement: { type: "jump", distance: 3, verticalArc: [0.1, 1.2] },
+      },
+    ],
+    clipAssets: [
+      {
+        id: "female-basic-locomotion-walking",
+        movementProfile: {
+          motionMode: "calibrated-in-place",
+          durationMs: 1000,
+          strideLength: 1,
+          expectedSpeed: 1,
+          worldDisplacementAllowed: true,
+          footSlideTolerance: 0.02,
+        },
+      },
+      {
+        id: "farming-dig-and-plant-seeds",
+        movementProfile: {
+          motionMode: "stationary",
+          durationMs: 2000,
+          rootTranslationDistance: 0,
+          expectedSpeed: 0,
+          worldDisplacementAllowed: false,
+        },
+      },
+      {
+        id: "female-basic-locomotion-jump",
+        movementProfile: {
+          motionMode: "root-authored",
+          durationMs: 1200,
+          rootTranslationDistance: 3,
+          expectedSpeed: 2.5,
+          worldDisplacementAllowed: true,
+        },
+      },
+    ],
+  });
+
+  renderer.renderOnce(0);
+  const walking = renderer.renderOnce(1500);
+  const action = renderer.renderOnce(4000);
+  const jumping = renderer.renderOnce(5400);
+
+  assert.equal(walking.activeMovementMode, "travel");
+  assert.equal(walking.characterPosition[0] > 0 && walking.characterPosition[0] < 3, true);
+  assert.equal(action.activeMovementMode, "stationary");
+  assert.equal(Number(action.characterPosition[0].toFixed(3)), 3);
+  assert.equal(action.movementValidation.status, "passed");
+  assert.equal(jumping.activeMovementMode, "jump");
+  assert.equal(jumping.characterPosition[0] > 3, true);
+
+  renderer.destroy();
+});
+
+test("createAnimatedSceneRenderer keeps legacy idle clips stationary before travel", () => {
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 0], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "idle-at-gate",
+        order: 0,
+        clipId: "female-basic-locomotion-idle",
+        durationMs: 1000,
+      },
+      {
+        id: "walk-to-crops",
+        order: 1,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 3000,
+      },
+    ],
+  });
+
+  renderer.renderOnce(0);
+  const idle = renderer.renderOnce(500);
+  const walking = renderer.renderOnce(1500);
+
+  assert.equal(idle.activeMovementMode, "stationary");
+  assert.deepEqual(idle.characterPosition, [0, 0, 0]);
+  assert.equal(walking.activeMovementMode, "travel");
+  assert.equal(walking.characterPosition[0] > 0, true);
+
+  renderer.destroy();
+});
+
+test("createAnimatedSceneRenderer preserves the route start without scripted beats", () => {
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [5, 0, -2], arriveMs: 0 },
+      { id: "crop-row", position: [8, 0, -2], arriveMs: 3000 },
+    ],
+  });
+
+  const snapshot = renderer.renderOnce(0);
+
+  assert.deepEqual(snapshot.characterPosition, [5, 0, -2]);
+  assert.equal(snapshot.cameraPosition[0] > 0, true);
+
+  renderer.destroy();
+});
+
 test("createAnimatedSceneRenderer resolves third-person camera constraints and head look", () => {
   const canvas = createFakeCanvas2d();
   const renderer = createAnimatedSceneRenderer({

@@ -17,8 +17,22 @@ export interface AnimatedScenePathPoint {
 export interface AnimatedSceneBeat {
   readonly id: string;
   readonly order: number;
+  readonly kind?: string;
   readonly clipId: string;
   readonly durationMs: number;
+  readonly pathPointId?: string;
+  readonly rootMotion?: "prefer-root-motion" | "route-driven" | "in-place" | string;
+  readonly validatedDurationMs?: number;
+  readonly movementRequirement?: {
+    readonly type: "stationary" | "travel" | "jump" | "root-authored";
+    readonly distance?: number;
+    readonly maxDrift?: number;
+    readonly speedRange?: readonly [number, number] | readonly number[];
+    readonly directionToleranceDegrees?: number;
+    readonly verticalArc?: readonly [number, number] | readonly number[];
+    readonly loop?: "once" | "repeat" | "hold";
+    readonly validatedDurationMs?: number;
+  };
   readonly blend?: {
     readonly inMs?: number;
     readonly outMs?: number;
@@ -60,6 +74,16 @@ export interface AnimatedSceneProp {
 export interface AnimatedSceneClipAsset {
   readonly id: string;
   readonly asset?: ArrayBuffer | null;
+  readonly movementProfile?: {
+    readonly motionMode?: "stationary" | "calibrated-in-place" | "root-authored" | "jump" | "modifier" | "invalid" | string;
+    readonly durationMs?: number;
+    readonly rootTranslationDistance?: number;
+    readonly strideLength?: number;
+    readonly strideLengthMeters?: number;
+    readonly expectedSpeed?: number;
+    readonly worldDisplacementAllowed?: boolean;
+    readonly footSlideTolerance?: number;
+  } | null;
 }
 
 export interface CreateAnimatedSceneRendererOptions {
@@ -92,6 +116,7 @@ export interface AnimatedSceneSnapshot {
   readonly running: boolean;
   readonly activeClipId: string;
   readonly activeBeatId: string;
+  readonly activeMovementMode: "stationary" | "travel" | "jump" | "root-authored" | string;
   readonly blendProgress: number;
   readonly clipTimeMs: number;
   readonly characterPosition: readonly [number, number, number];
@@ -128,6 +153,19 @@ export interface AnimatedSceneSnapshot {
     readonly depth: number;
     readonly visible: boolean;
   }[];
+  readonly movementValidation: {
+    readonly status: "passed" | "warning" | "failed";
+    readonly warnings: readonly string[];
+    readonly activeBeatId: string;
+    readonly activeClipId: string;
+    readonly motionMode: string;
+    readonly rootMotionSource: string;
+    readonly expectedSpeed: number;
+    readonly actualSpeed: number;
+    readonly movementDistance: number;
+    readonly loopCount: number;
+    readonly footSlideWarning?: string | null;
+  };
   readonly frameState: "initialized" | "running" | "rendered-once" | "destroyed";
 }
 
