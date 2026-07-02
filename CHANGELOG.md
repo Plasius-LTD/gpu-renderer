@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.26] - 2026-07-02
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Fixed Animation Adventure skinned GLB canvas drawing so Peasant Girl renders
     as a filled mesh instead of a sparse stroked/wireframe triangle subset under
     task `#117`.
@@ -708,3 +722,4 @@ All notable changes to this project will be documented in this file.
 [0.2.23]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.23
 [0.2.24]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.24
 [0.2.25]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.25
+[0.2.26]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.26
