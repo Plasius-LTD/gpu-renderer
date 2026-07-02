@@ -563,6 +563,58 @@ test("createAnimatedSceneRenderer holds stationary action beats at their route a
   renderer.destroy();
 });
 
+test("createAnimatedSceneRenderer keeps legacy idle clips stationary before travel", () => {
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 0], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "idle-at-gate",
+        order: 0,
+        clipId: "female-basic-locomotion-idle",
+        durationMs: 1000,
+      },
+      {
+        id: "walk-to-crops",
+        order: 1,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 3000,
+      },
+    ],
+  });
+
+  renderer.renderOnce(0);
+  const idle = renderer.renderOnce(500);
+  const walking = renderer.renderOnce(1500);
+
+  assert.equal(idle.activeMovementMode, "stationary");
+  assert.deepEqual(idle.characterPosition, [0, 0, 0]);
+  assert.equal(walking.activeMovementMode, "travel");
+  assert.equal(walking.characterPosition[0] > 0, true);
+
+  renderer.destroy();
+});
+
+test("createAnimatedSceneRenderer preserves the route start without scripted beats", () => {
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [
+      { id: "gate", position: [5, 0, -2], arriveMs: 0 },
+      { id: "crop-row", position: [8, 0, -2], arriveMs: 3000 },
+    ],
+  });
+
+  const snapshot = renderer.renderOnce(0);
+
+  assert.deepEqual(snapshot.characterPosition, [5, 0, -2]);
+  assert.equal(snapshot.cameraPosition[0] > 0, true);
+
+  renderer.destroy();
+});
+
 test("createAnimatedSceneRenderer resolves third-person camera constraints and head look", () => {
   const canvas = createFakeCanvas2d();
   const renderer = createAnimatedSceneRenderer({

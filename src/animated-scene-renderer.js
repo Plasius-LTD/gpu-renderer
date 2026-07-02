@@ -148,8 +148,12 @@ function movementRequirementType(requirement, beat) {
   if (beat?.kind === "action" || beat?.kind === "idle") {
     return "stationary";
   }
-  if (/(walk|run|jump|climb|crawl|locomotion)/iu.test(String(beat?.clipId ?? ""))) {
-    return String(beat?.clipId ?? "").toLowerCase().includes("jump") ? "jump" : "travel";
+  const clipId = String(beat?.clipId ?? "").toLowerCase();
+  if (/(idle|gesture|dig|plant|water|pick|serve|swing|fire|block|hoe)/iu.test(clipId)) {
+    return "stationary";
+  }
+  if (/(walk|run|jump|climb|crawl|locomotion)/iu.test(clipId)) {
+    return clipId.includes("jump") ? "jump" : "travel";
   }
   return beat?.pathPointId ? "travel" : "stationary";
 }
@@ -742,15 +746,18 @@ export function createAnimatedSceneRenderer(options = {}) {
     frame += 1;
 
     const timelineEntry = resolveTimelineBeat(beatTimeline, loopTimeMs);
-    const beat = timelineEntry?.beat ?? resolveBeat(beats, loopTimeMs).beat;
-    const beatTimeMs = timelineEntry ? loopTimeMs - timelineEntry.startMs : resolveBeat(beats, loopTimeMs).beatTimeMs;
-    const durationMs = timelineEntry?.durationMs ?? resolveBeat(beats, loopTimeMs).durationMs;
+    const fallbackBeat = resolveBeat(beats, loopTimeMs);
+    const beat = timelineEntry?.beat ?? fallbackBeat.beat;
+    const beatTimeMs = timelineEntry ? loopTimeMs - timelineEntry.startMs : fallbackBeat.beatTimeMs;
+    const durationMs = timelineEntry?.durationMs ?? fallbackBeat.durationMs;
     const blend = beat?.blend ?? { inMs: 0, outMs: 0 };
     const blendIn = blend.inMs > 0 ? clamp01(beatTimeMs / blend.inMs) : 1;
     const blendOut = blend.outMs > 0 ? clamp01((durationMs - beatTimeMs) / blend.outMs) : 1;
     const blendProgress = clamp01(Math.min(blendIn, blendOut));
-    const characterPosition = resolveTimelinePosition(timelineEntry, beatTimeMs);
-    const characterForward = resolveTimelineForward(timelineEntry);
+    const characterPosition = timelineEntry
+      ? resolveTimelinePosition(timelineEntry, beatTimeMs)
+      : resolveRoutePosition(route, loopTimeMs);
+    const characterForward = timelineEntry ? resolveTimelineForward(timelineEntry) : resolveRouteForward(route, loopTimeMs);
     const headAnchor =
       camera.headBoneAvailable === false
         ? undefined
@@ -759,11 +766,11 @@ export function createAnimatedSceneRenderer(options = {}) {
             characterPosition[1] + (camera.headHeight ?? 1.65),
             characterPosition[2],
           ];
-    const lookAheadEntry = resolveTimelineBeat(beatTimeline, (loopTimeMs + camera.lookAheadMs) % loopDurationMs);
-    const lookAheadPosition = resolveTimelinePosition(
-      lookAheadEntry,
-      lookAheadEntry ? ((loopTimeMs + camera.lookAheadMs) % loopDurationMs) - lookAheadEntry.startMs : beatTimeMs,
-    );
+    const lookAheadTimeMs = (loopTimeMs + camera.lookAheadMs) % loopDurationMs;
+    const lookAheadEntry = resolveTimelineBeat(beatTimeline, lookAheadTimeMs);
+    const lookAheadPosition = lookAheadEntry
+      ? resolveTimelinePosition(lookAheadEntry, lookAheadTimeMs - lookAheadEntry.startMs)
+      : resolveRoutePosition(route, lookAheadTimeMs);
     const desiredCamera = [
       lookAheadPosition[0] + (camera.offset?.[0] ?? 0),
       lookAheadPosition[1] + (camera.offset?.[1] ?? 0),
