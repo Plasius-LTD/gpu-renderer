@@ -18,7 +18,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Fixed Animation Adventure skinned GLB canvas drawing so Peasant Girl renders
+    as a filled mesh instead of a sparse stroked/wireframe triangle subset under
+    task `#117`.
 
 - **Security**
   - (placeholder)

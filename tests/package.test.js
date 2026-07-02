@@ -256,6 +256,81 @@ function createSkinnedTriangleGlb() {
   }, binary);
 }
 
+function createDenseSkinnedFanGlb(triangleCount = 1800) {
+  const chunks = [];
+  const push = (buffer) => {
+    const byteOffset = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+    chunks.push(buffer);
+    return { byteOffset, byteLength: buffer.byteLength };
+  };
+  const vertexCount = triangleCount * 3;
+
+  const indicesView = push(makeChunk(vertexCount * 2, (buffer) => {
+    for (let index = 0; index < vertexCount; index += 1) {
+      buffer.writeUInt16LE(index, index * 2);
+    }
+  }));
+  const positionsView = push(makeChunk(vertexCount * 3 * 4, (buffer) => {
+    for (let triangle = 0; triangle < triangleCount; triangle += 1) {
+      const row = Math.floor(triangle / 60);
+      const column = triangle % 60;
+      const baseX = -0.45 + column * 0.015;
+      const baseY = row * 0.018;
+      const base = triangle * 9;
+      [baseX, baseY, 0, baseX + 0.012, baseY, 0.01, baseX + 0.006, baseY + 0.016, -0.01]
+        .forEach((value, index) => buffer.writeFloatLE(value, (base + index) * 4));
+    }
+  }));
+  const jointsView = push(makeChunk(vertexCount * 4 * 2, (buffer) => {
+    for (let index = 0; index < vertexCount * 4; index += 1) {
+      buffer.writeUInt16LE(0, index * 2);
+    }
+  }));
+  const weightsView = push(makeChunk(vertexCount * 4 * 4, (buffer) => {
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      buffer.writeFloatLE(1, vertex * 16);
+      buffer.writeFloatLE(0, vertex * 16 + 4);
+      buffer.writeFloatLE(0, vertex * 16 + 8);
+      buffer.writeFloatLE(0, vertex * 16 + 12);
+    }
+  }));
+  const inverseBindView = push(makeChunk(64, (buffer) => {
+    [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+
+  const binary = Buffer.concat(chunks);
+  return createGlb({
+    scenes: [{ nodes: [0] }],
+    scene: 0,
+    nodes: [
+      { name: "RootNode", children: [1, 2] },
+      { name: "mixamorig:Hips", translation: [0, 0, 0] },
+      { name: "Peasant_girl", mesh: 0, skin: 0 },
+    ],
+    skins: [{ joints: [1], inverseBindMatrices: 4, skeleton: 1 }],
+    meshes: [{
+      name: "Peasant_girl",
+      primitives: [{
+        attributes: {
+          POSITION: 1,
+          JOINTS_0: 2,
+          WEIGHTS_0: 3,
+        },
+        indices: 0,
+        mode: 4,
+      }],
+    }],
+    bufferViews: [indicesView, positionsView, jointsView, weightsView, inverseBindView],
+    accessors: [
+      { bufferView: 0, componentType: 5123, count: vertexCount, type: "SCALAR" },
+      { bufferView: 1, componentType: 5126, count: vertexCount, type: "VEC3" },
+      { bufferView: 2, componentType: 5123, count: vertexCount, type: "VEC4" },
+      { bufferView: 3, componentType: 5126, count: vertexCount, type: "VEC4" },
+      { bufferView: 4, componentType: 5126, count: 1, type: "MAT4" },
+    ],
+  }, binary);
+}
+
 function createTranslationClipGlb() {
   const chunks = [];
   const push = (buffer) => {
@@ -523,6 +598,52 @@ test("createAnimatedSceneRenderer renders a skinned GLB model when model and cli
   assert.equal(snapshot.activeClipRenderable, true);
   assert.equal(snapshot.characterVisible, true);
   assert.equal(canvas.context.calls.some((call) => call[0] === "closePath"), true);
+  renderer.destroy();
+});
+
+test("createAnimatedSceneRenderer fills dense skinned GLB triangles without wireframe decimation", () => {
+  const canvas = createFakeCanvas2d();
+  const triangleCount = 1800;
+  const renderer = createAnimatedSceneRenderer({
+    canvas,
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 1], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 4000,
+        blend: { inMs: 0, outMs: 240 },
+      },
+    ],
+    camera: {
+      mode: "lagged-follow",
+      cubicBezier: [0.22, 0.61, 0.36, 1],
+      lagMs: 240,
+      lookAheadMs: 320,
+      offset: [-1, 2.4, 5.5],
+    },
+    modelAsset: createDenseSkinnedFanGlb(triangleCount),
+    clipAssets: [
+      {
+        id: "female-basic-locomotion-walking",
+        asset: createTranslationClipGlb(),
+      },
+    ],
+  });
+
+  renderer.resize(640, 360, 1);
+  const snapshot = renderer.renderOnce(1800);
+  const closePathCalls = canvas.context.calls.filter((call) => call[0] === "closePath").length;
+  const strokeCalls = canvas.context.calls.filter((call) => call[0] === "stroke").length;
+
+  assert.equal(snapshot.modelRenderable, true);
+  assert.equal(snapshot.skinnedTriangleCount, triangleCount);
+  assert.equal(closePathCalls >= triangleCount, true);
+  assert.equal(strokeCalls <= 2, true);
   renderer.destroy();
 });
 

@@ -281,7 +281,7 @@ function modelFillForHeight(vertex, sample) {
 function drawSkinnedGltfCharacter(ctx, model, snapshot, width, height) {
   const projection = project(snapshot.characterPosition, snapshot.cameraPosition, width, height);
   const sample = model.sample(snapshot.activeClipId, snapshot.clipTimeMs);
-  const maxTriangles = 1500;
+  const maxTriangles = 12000;
   const triangleCount = Math.floor(sample.indices.length / 3);
   const stride = Math.max(1, Math.ceil(triangleCount / maxTriangles));
   const triangles = [];
@@ -305,8 +305,6 @@ function drawSkinnedGltfCharacter(ctx, model, snapshot, width, height) {
 
   ctx.save();
   drawGroundShadow(ctx, projection.scale);
-  ctx.lineWidth = Math.max(0.7, projection.scale * 0.012);
-  ctx.strokeStyle = "rgba(58, 43, 34, 0.22)";
   for (const triangle of triangles) {
     const [ax, ay] = pointForModelVertex(triangle.a, projection, sample);
     const [bx, by] = pointForModelVertex(triangle.b, projection, sample);
@@ -318,7 +316,6 @@ function drawSkinnedGltfCharacter(ctx, model, snapshot, width, height) {
     ctx.lineTo(cx, cy);
     ctx.closePath?.();
     ctx.fill();
-    ctx.stroke();
   }
   ctx.restore();
 
