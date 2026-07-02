@@ -70,6 +70,18 @@ fn record_termination_metrics(kind: u32, radiance: vec3<f32>) {
   if (kind == TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW) {
     atomicAdd(&counters.termination.ambientQueueOverflowCount, 1u);
     atomicAdd(&counters.termination.ambientResidualLuminanceScaled, scaledLuminance);
+    return;
+  }
+  if (kind == TERMINAL_SOURCE_KIND_ABSORPTION_NULL) {
+    atomicAdd(&counters.termination.absorptionNullCount, 1u);
+    return;
+  }
+  if (kind == TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE) {
+    atomicAdd(&counters.termination.russianRouletteCount, 1u);
+    return;
+  }
+  if (kind == TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT) {
+    atomicAdd(&counters.termination.strictMaxDepthCount, 1u);
   }
 }
 
@@ -117,6 +129,10 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicStore(&counters.termination.totalTerminalLuminanceScaled, 0u);
     atomicStore(&counters.termination.invalidSampleCount, 0u);
     atomicStore(&counters.termination.legacyClampEquivalentCount, 0u);
+    atomicStore(&counters.termination.absorptionNullCount, 0u);
+    atomicStore(&counters.termination.russianRouletteCount, 0u);
+    atomicStore(&counters.termination.strictMaxDepthCount, 0u);
+    atomicStore(&counters.termination.strictPad0, 0u);
     write_active_dispatch_args(config.tilePixelCount);
   }
   if (index >= config.tilePixelCount) {
@@ -634,7 +650,23 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       ),
       hit
     );
-    let rawDirectLight = directLight * sample_weight();
+    let sunLight = surface_procedural_sun_contribution(
+      RayRecord(
+        ray.rayId,
+        ray.parentRayId,
+        ray.sourcePixelId,
+        ray.sampleId,
+        ray.bounce,
+        ray.mediumRefId,
+        ray.flags,
+        0u,
+        ray.origin,
+        ray.direction,
+        vec4<f32>(arrivingThroughput, ray.throughput.w)
+      ),
+      hit
+    );
+    let rawDirectLight = (directLight + sunLight) * sample_weight();
     record_radiance_diagnostics(rawDirectLight);
     let weightedDirectLight = sanitize_linear_radiance(rawDirectLight);
     accumulation[ray.rayId] =
@@ -643,11 +675,19 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   if (ray.bounce + 1u >= config.maxDepth) {
     if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(
-        ray,
-        terminal_surface_environment_source(ray, hit),
-        TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH
-      );
+      if (strict_physical_low_spp_lighting_enabled()) {
+        record_deferred_terminal_source(
+          ray,
+          vec3<f32>(0.0),
+          TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT
+        );
+      } else {
+        record_deferred_terminal_source(
+          ray,
+          terminal_surface_environment_source(ray, hit),
+          TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH
+        );
+      }
     } else {
       let terminalEnvironment = terminal_surface_environment_contribution(
         ray,
@@ -669,7 +709,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let continuationNormal = surface_shading_normal(hit);
   let continuationViewDirection = safe_normalize(-ray.direction.xyz, continuationNormal);
   let continuationLightDirection = safe_normalize(scatter.direction.xyz, continuationNormal);
-  let continuationThroughput = surface_continuation_throughput(
+  var continuationThroughput = surface_continuation_throughput(
     hit,
     continuationViewDirection,
     continuationLightDirection,
@@ -677,11 +717,19 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   ) * segmentTransmittance;
   if (max_component(continuationThroughput) <= 0.000001) {
     if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(
-        ray,
-        terminal_surface_environment_source(ray, hit),
-        TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH
-      );
+      if (strict_physical_low_spp_lighting_enabled()) {
+        record_deferred_terminal_source(
+          ray,
+          vec3<f32>(0.0),
+          TERMINAL_SOURCE_KIND_ABSORPTION_NULL
+        );
+      } else {
+        record_deferred_terminal_source(
+          ray,
+          terminal_surface_environment_source(ray, hit),
+          TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH
+        );
+      }
     } else {
       let terminalEnvironment = terminal_surface_environment_contribution(
         ray,
@@ -698,14 +746,46 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
+  if (strict_physical_low_spp_lighting_enabled() && ray.bounce >= 2u) {
+    let survivalProbability = clamp(max_component(continuationThroughput), 0.05, 0.95);
+    let roulette = sample_dimension_1d(
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      SAMPLE_DIM_RUSSIAN_ROULETTE
+    );
+    if (roulette > survivalProbability) {
+      if (deferred_path_resolve_enabled()) {
+        record_deferred_terminal_source(
+          ray,
+          vec3<f32>(0.0),
+          TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE
+        );
+      } else {
+        record_termination_metrics(TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE, vec3<f32>(0.0));
+      }
+      atomicAdd(&counters.terminatedCount, 1u);
+      return;
+    }
+    continuationThroughput = continuationThroughput / survivalProbability;
+  }
   let nextIndex = atomicAdd(&counters.nextCount, 1u);
   if (nextIndex >= config.tilePixelCount) {
     if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(
-        ray,
-        terminal_surface_environment_source(ray, hit),
-        TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW
-      );
+      if (strict_physical_low_spp_lighting_enabled()) {
+        record_deferred_terminal_source(
+          ray,
+          vec3<f32>(0.0),
+          TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW
+        );
+      } else {
+        record_deferred_terminal_source(
+          ray,
+          terminal_surface_environment_source(ray, hit),
+          TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW
+        );
+      }
     } else {
       let overflowEnvironment = terminal_surface_environment_contribution(
         ray,

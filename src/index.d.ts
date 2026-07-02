@@ -698,6 +698,7 @@ export interface WavefrontPathTracingComputeConfig {
   readonly environmentPortalMode: 0 | 1 | 2;
   readonly environmentMap: WavefrontEnvironmentMapInput;
   readonly deferredPathResolve: boolean;
+  readonly strictPhysicalLowSppLighting: boolean;
   readonly triangleCount: number;
   readonly triangleCapacity: number;
   readonly bvhNodeCount: number;
@@ -722,6 +723,15 @@ export interface WavefrontPathTracingComputeConfig {
   readonly denoise: boolean;
   readonly frameIndex: number;
   readonly memory: WavefrontPathTracingMemoryEstimate;
+}
+
+export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
+  readonly renderer?: {
+    readonly transport?: {
+      readonly strictPhysicalLowSppLighting?: boolean;
+    };
+  };
 }
 
 export interface WavefrontEnvironmentLightingInput {
@@ -852,6 +862,8 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly environmentLighting?: WavefrontEnvironmentLightingInput;
   readonly displayQuality?: boolean;
   readonly denoise?: boolean;
+  readonly strictPhysicalLowSppLighting?: boolean;
+  readonly featureFlags?: WavefrontRendererFeatureFlags;
   readonly frameIndex?: number;
 }
 
@@ -899,6 +911,7 @@ export interface WavefrontPathTracingComputeRenderer {
     mediumCount: number;
     environmentMap: WavefrontEnvironmentMapSnapshot;
     deferredPathResolve: boolean;
+    strictPhysicalLowSppLighting: boolean;
     bvhNodeCount: number;
     displayQuality: boolean;
     accelerationBuildMode: WavefrontAccelerationBuildMode;
@@ -934,6 +947,7 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly mediumCount: number;
   readonly environmentMap: WavefrontEnvironmentMapSnapshot;
   readonly deferredPathResolve: boolean;
+  readonly strictPhysicalLowSppLighting: boolean;
   readonly bvhNodeCount: number;
   readonly displayQuality: boolean;
   readonly accelerationBuildMode: WavefrontAccelerationBuildMode;
@@ -1000,6 +1014,9 @@ export interface WavefrontPathTracingComputeFrameStats {
     environment: number;
     ambientFallback: number;
     maxDepth: number;
+    absorptionNull: number;
+    russianRoulette: number;
+    strictMaxDepth: number;
   }>;
   readonly terminalRadiance?: Readonly<{
     totalLuminance: number;
@@ -1161,7 +1178,7 @@ export const wavefrontPathTracingComputeLimits: Readonly<{
   environmentPortalRecordBytes: 96;
   accumulationRecordBytes: 16;
   pathVertexRecordBytes: 16;
-  counterRecordBytes: 32;
+  counterRecordBytes: 80;
   indirectDispatchRecordBytes: 12;
 }>;
 export const wavefrontSceneObjectKinds: Readonly<{

@@ -13,6 +13,7 @@ const sampleDimensionEntries = Object.freeze([
   ["specularHalfVector", 23],
   ["clearcoatHalfVector", 24],
   ["fallbackHemisphere", 25],
+  ["russianRoulette", 26],
   ["emissiveLightSelection", 31],
   ["emissiveLightSurface", 32],
   ["directLightSelector", 41],

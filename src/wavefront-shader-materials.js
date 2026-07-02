@@ -143,6 +143,10 @@ fn deferred_path_resolve_enabled() -> bool {
   return config.pathResolveSettings.x > 0.5;
 }
 
+fn strict_physical_low_spp_lighting_enabled() -> bool {
+  return config.pathResolveSettings.z > 0.5;
+}
+
 fn path_vertex_count_per_ray() -> u32 {
   return config.maxDepth + 1u;
 }

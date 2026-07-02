@@ -115,6 +115,7 @@ export function createWavefrontFrameStats({
       mediumCount: config.mediumCount,
       environmentMap: createEnvironmentMapSnapshot(config.environmentMap),
       deferredPathResolve: config.deferredPathResolve,
+      strictPhysicalLowSppLighting: config.strictPhysicalLowSppLighting,
       bvhNodeCount: config.bvhNodeCount,
       displayQuality: config.displayQuality,
       accelerationBuildMode: config.accelerationBuildMode,

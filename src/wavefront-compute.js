@@ -150,6 +150,23 @@ import {
   wavefrontPathTracingComputeLimits,
   wavefrontSceneObjectKinds,
 } from "./wavefront-core.js";
+
+function triangleAreaForLightSampling(triangle) {
+  if (!triangle) {
+    return 1;
+  }
+  const edge1 = subtract(triangle.v1, triangle.v0);
+  const edge2 = subtract(triangle.v2, triangle.v0);
+  return Math.max(Math.hypot(...cross(edge1, edge2)) * 0.5, 0.000001);
+}
+
+function emissiveTriangleWeight(triangle) {
+  if (!triangle) {
+    return 1;
+  }
+  return triangleAreaForLightSampling(triangle) * Math.max(emissionPower(triangle.emission), 0.000001);
+}
+
 export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   assertAnalyticDisplayQualityPolicy(options);
   const constants = getGpuUsageConstants();
@@ -321,8 +338,18 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     Math.max(1, config.bvhNodeCapacity + config.emissiveTriangleCapacity)
   );
   const packedBvhNodeUints = new Uint32Array(packedBvhNodes.buffer);
+  const packedBvhNodeFloats = new Float32Array(packedBvhNodes.buffer);
+  const emissiveWeights = config.emissiveTriangleIndices.indices.map((triangleIndex) =>
+    emissiveTriangleWeight(config.meshAcceleration.triangles[triangleIndex])
+  );
+  const totalEmissiveWeight = emissiveWeights.reduce((total, weight) => total + weight, 0);
+  let cumulativeEmissiveWeight = 0;
   config.emissiveTriangleIndices.indices.forEach((triangleIndex, index) => {
     const nodeOffset = (config.bvhNodeCapacity + index) * (BVH_NODE_RECORD_BYTES / 4);
+    cumulativeEmissiveWeight += emissiveWeights[index] ?? 0;
+    packedBvhNodeFloats[nodeOffset] = cumulativeEmissiveWeight;
+    packedBvhNodeFloats[nodeOffset + 1] = emissiveWeights[index] ?? 0;
+    packedBvhNodeFloats[nodeOffset + 2] = totalEmissiveWeight;
     packedBvhNodeUints[nodeOffset + 8] = triangleIndex;
   });
   device.queue.writeBuffer(triangleBuffer, 0, packedTriangles.buffer);
@@ -857,6 +884,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       environmentMap: {
         ...config.environmentMap,
       },
+      strictPhysicalLowSppLighting: config.strictPhysicalLowSppLighting,
       frameIndex: config.frameIndex,
       ...overrides,
     });

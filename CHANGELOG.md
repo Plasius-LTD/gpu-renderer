@@ -12,13 +12,21 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added the boolean `renderer.transport.strictPhysicalLowSppLighting` rollout
+    path, including direct/nested feature-flag input support and frame stats for
+    strict physical low-SPP lighting validation.
+  - Added strict physical termination diagnostics for absorption/null
+    throughput, Russian roulette, and strict max-depth termination.
 
 - **Changed**
-  - (placeholder)
+  - Changed strict low-SPP wavefront lighting to sample procedural sunlight as a
+    shadow-tested directional source, procedural sky over the visible
+    hemisphere, and emissive triangles by area-weighted emission power with
+    matching MIS PDFs.
 
 - **Fixed**
-  - (placeholder)
+  - Prevented strict physical low-SPP renders from using terminal ambient rescue
+    for max-depth, null-throughput, or queue-overflow termination.
 
 - **Security**
   - (placeholder)
