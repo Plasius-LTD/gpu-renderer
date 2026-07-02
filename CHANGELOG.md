@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.29] - 2026-07-02
+
+- **Added**
   - Added Animation Adventure movement diagnostics to animated scene snapshots,
     including active movement mode, expected/actual speed, movement distance,
     root-motion source, loop count, and foot-slide warnings.
@@ -773,3 +787,4 @@ All notable changes to this project will be documented in this file.
 [0.2.26]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.26
 [0.2.27]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.27
 [0.2.28]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.28
+[0.2.29]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.29
