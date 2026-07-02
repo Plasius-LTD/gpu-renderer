@@ -12,10 +12,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added Animation Adventure movement diagnostics to animated scene snapshots,
+    including active movement mode, expected/actual speed, movement distance,
+    root-motion source, loop count, and foot-slide warnings.
 
 - **Changed**
-  - (placeholder)
+  - Changed animated scene character motion to resolve from beat-scoped
+    movement requirements so stationary action beats hold their route anchor
+    instead of being dragged along later route segments.
 
 - **Fixed**
   - (placeholder)

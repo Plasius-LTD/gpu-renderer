@@ -130,6 +130,161 @@ function resolveRouteForward(route, timeMs) {
   ]);
 }
 
+function distance3(a = [0, 0, 0], b = [0, 0, 0]) {
+  return Math.hypot(
+    (b[0] ?? 0) - (a[0] ?? 0),
+    (b[1] ?? 0) - (a[1] ?? 0),
+    (b[2] ?? 0) - (a[2] ?? 0),
+  );
+}
+
+function movementRequirementType(requirement, beat) {
+  if (requirement?.type) {
+    return requirement.type;
+  }
+  if (beat?.kind === "locomotion") {
+    return beat?.rootMotion === "in-place" ? "stationary" : "travel";
+  }
+  if (beat?.kind === "action" || beat?.kind === "idle") {
+    return "stationary";
+  }
+  if (/(walk|run|jump|climb|crawl|locomotion)/iu.test(String(beat?.clipId ?? ""))) {
+    return String(beat?.clipId ?? "").toLowerCase().includes("jump") ? "jump" : "travel";
+  }
+  return beat?.pathPointId ? "travel" : "stationary";
+}
+
+function movementDistancePerLoop(profile = {}) {
+  profile ??= {};
+  const rootDistance = Number(profile.rootTranslationDistance ?? profile.rootTranslation?.distance ?? 0);
+  if (Number.isFinite(rootDistance) && rootDistance > 0) {
+    return rootDistance;
+  }
+  const strideLength = Number(profile.strideLength ?? profile.strideLengthMeters ?? 0);
+  if (Number.isFinite(strideLength) && strideLength > 0) {
+    return strideLength;
+  }
+  return 0;
+}
+
+function clipDurationMs(profile = {}, fallbackMs = 1) {
+  profile ??= {};
+  const duration = Number(profile.durationMs ?? 0);
+  return Number.isFinite(duration) && duration > 0 ? duration : Math.max(1, fallbackMs);
+}
+
+function profileAllowsDisplacement(profile = {}, movementType) {
+  profile ??= {};
+  if (movementType === "stationary") {
+    return profile.worldDisplacementAllowed !== true;
+  }
+  return profile.worldDisplacementAllowed === true
+    || profile.motionMode === "root-authored"
+    || profile.motionMode === "calibrated-in-place"
+    || profile.motionMode === "jump";
+}
+
+function resolveClipProfiles(clipAssets = []) {
+  return new Map(clipAssets.map((clip) => [clip.id, clip.movementProfile ?? clip.profile ?? null]));
+}
+
+function buildBeatTimeline(beats, route, clipProfiles) {
+  const routePoints = new Map(route.map((point) => [point.id, point]));
+  let cursorMs = 0;
+  let routeCursor = 0;
+  let currentPosition = route[0]?.position ? [...route[0].position] : [0, 0, 0];
+  return beats.map((beat) => {
+    const requirement = beat.movementRequirement ?? beat.movement ?? null;
+    const movementType = movementRequirementType(requirement, beat);
+    const movesThroughWorld = movementType === "travel" || movementType === "jump" || movementType === "root-authored";
+    const explicitTargetPoint = beat.pathPointId ? routePoints.get(beat.pathPointId) : null;
+    const inferredTargetPoint = movesThroughWorld ? route[Math.min(route.length - 1, routeCursor + 1)] : null;
+    const targetPoint = explicitTargetPoint ?? inferredTargetPoint ?? null;
+    const targetPosition = targetPoint?.position ? [...targetPoint.position] : [...currentPosition];
+    const startPosition = [...currentPosition];
+    const endPosition = movesThroughWorld ? targetPosition : [...currentPosition];
+    const segmentDistance = Number(requirement?.distance ?? distance3(startPosition, endPosition));
+    const profile = clipProfiles.get(beat.clipId) ?? null;
+    const distancePerLoop = movementDistancePerLoop(profile);
+    const loopCount = movesThroughWorld && distancePerLoop > 0
+      ? Math.max(1, Math.ceil(segmentDistance / distancePerLoop))
+      : 1;
+    const derivedDurationMs = movesThroughWorld && distancePerLoop > 0
+      ? loopCount * clipDurationMs(profile, beat.durationMs)
+      : Math.max(1, beat.durationMs ?? 1);
+    const durationMs = Math.max(1, beat.validatedDurationMs ?? requirement?.validatedDurationMs ?? derivedDurationMs);
+    const expectedSpeed = Number(profile?.expectedSpeed ?? (durationMs > 0 ? segmentDistance / (durationMs / 1000) : 0));
+    const actualSpeed = durationMs > 0 ? segmentDistance / (durationMs / 1000) : 0;
+    const warnings = [];
+
+    if (movesThroughWorld && !profileAllowsDisplacement(profile, movementType)) {
+      warnings.push(`clip '${beat.clipId}' does not allow ${movementType} displacement`);
+    }
+    if (movesThroughWorld && distancePerLoop <= 0 && profile?.motionMode !== "root-authored") {
+      warnings.push(`clip '${beat.clipId}' has no root or calibrated stride distance`);
+    }
+    if (movementType === "stationary" && profile?.worldDisplacementAllowed === true) {
+      warnings.push(`stationary beat '${beat.id}' uses a displacement-capable clip`);
+    }
+
+    const entry = {
+      beat,
+      startMs: cursorMs,
+      endMs: cursorMs + durationMs,
+      durationMs,
+      startPosition,
+      endPosition,
+      movementType,
+      movementProfile: profile,
+      movementDistance: segmentDistance,
+      distancePerLoop,
+      loopCount,
+      expectedSpeed,
+      actualSpeed,
+      footSlideWarning: Number(profile?.footSlideTolerance ?? 0) < 0 ? "invalid-foot-slide-tolerance" : null,
+      warnings,
+    };
+
+    cursorMs = entry.endMs;
+    currentPosition = [...endPosition];
+    if (targetPoint) {
+      const nextRouteIndex = route.findIndex((point) => point.id === targetPoint.id);
+      if (nextRouteIndex >= 0) {
+        routeCursor = nextRouteIndex;
+      }
+    }
+    return entry;
+  });
+}
+
+function resolveTimelineBeat(timeline, loopTimeMs) {
+  if (!timeline.length) {
+    return null;
+  }
+  return timeline.find((entry) => loopTimeMs < entry.endMs) ?? timeline.at(-1);
+}
+
+function resolveTimelinePosition(entry, beatTimeMs) {
+  if (!entry) {
+    return [0, 0, 0];
+  }
+  if (entry.movementType !== "travel" && entry.movementType !== "jump" && entry.movementType !== "root-authored") {
+    return [...entry.startPosition];
+  }
+  return lerp3(entry.startPosition, entry.endPosition, clamp01(beatTimeMs / Math.max(1, entry.durationMs)));
+}
+
+function resolveTimelineForward(entry) {
+  if (!entry) {
+    return [0, 0, -1];
+  }
+  return normalize3([
+    (entry.endPosition[0] ?? 0) - (entry.startPosition[0] ?? 0),
+    (entry.endPosition[1] ?? 0) - (entry.startPosition[1] ?? 0),
+    (entry.endPosition[2] ?? 0) - (entry.startPosition[2] ?? 0),
+  ]);
+}
+
 function resolveCameraViewMode(camera) {
   if (camera?.mode === "lagged-follow") {
     return camera.viewMode ?? "spectator";
@@ -491,12 +646,16 @@ export function createAnimatedSceneRenderer(options = {}) {
   const route = [...(options.route ?? options.animationAdventure?.route ?? [])];
   const beats = [...(options.beats ?? options.animationAdventure?.beats ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const props = [...(options.props ?? options.animationAdventure?.props ?? [])];
+  const clipAssets = options.clipAssets ?? options.animationAdventure?.clipAssets ?? [];
+  const clipProfiles = resolveClipProfiles(clipAssets);
+  const beatTimeline = buildBeatTimeline(beats, route, clipProfiles);
   const characterModel = resolveCharacterModel(options);
   let camera = {
     ...DEFAULT_CAMERA,
     ...definedCameraOverrides(options.camera ?? options.animationAdventure?.camera),
   };
-  const loopDurationMs = Math.max(durationFromBeats(beats), route.at(-1)?.arriveMs ?? 1, 1);
+  const loopDurationMs = Math.max(beatTimeline.at(-1)?.endMs ?? durationFromBeats(beats), 1);
+  const movementWarnings = beatTimeline.flatMap((entry) => entry.warnings);
   const requestFrame = options.requestAnimationFrame ?? globalThis.requestAnimationFrame?.bind(globalThis);
   const cancelFrame = options.cancelAnimationFrame ?? globalThis.cancelAnimationFrame?.bind(globalThis);
   let frameHandle;
@@ -535,6 +694,7 @@ export function createAnimatedSceneRenderer(options = {}) {
     running,
     activeClipId: beats[0]?.clipId ?? "",
     activeBeatId: beats[0]?.id ?? "",
+    activeMovementMode: beatTimeline[0]?.movementType ?? "stationary",
     blendProgress: 0,
     clipTimeMs: 0,
     characterPosition: route[0]?.position ? [...route[0].position] : [0, 0, 0],
@@ -555,6 +715,19 @@ export function createAnimatedSceneRenderer(options = {}) {
     skinnedClipCount: characterModel?.clipCount ?? 0,
     activeClipRenderable: false,
     propGroundAnchors: [],
+    movementValidation: {
+      status: movementWarnings.length ? "warning" : "passed",
+      warnings: movementWarnings,
+      activeBeatId: beats[0]?.id ?? "",
+      activeClipId: beats[0]?.clipId ?? "",
+      motionMode: beatTimeline[0]?.movementType ?? "stationary",
+      rootMotionSource: beatTimeline[0]?.movementProfile?.motionMode ?? "none",
+      expectedSpeed: beatTimeline[0]?.expectedSpeed ?? 0,
+      actualSpeed: beatTimeline[0]?.actualSpeed ?? 0,
+      movementDistance: beatTimeline[0]?.movementDistance ?? 0,
+      loopCount: beatTimeline[0]?.loopCount ?? 1,
+      footSlideWarning: beatTimeline[0]?.footSlideWarning ?? null,
+    },
     frameState: "initialized",
   };
 
@@ -568,13 +741,16 @@ export function createAnimatedSceneRenderer(options = {}) {
     lastTimestamp = timestamp;
     frame += 1;
 
-    const { beat, beatTimeMs, durationMs } = resolveBeat(beats, loopTimeMs);
+    const timelineEntry = resolveTimelineBeat(beatTimeline, loopTimeMs);
+    const beat = timelineEntry?.beat ?? resolveBeat(beats, loopTimeMs).beat;
+    const beatTimeMs = timelineEntry ? loopTimeMs - timelineEntry.startMs : resolveBeat(beats, loopTimeMs).beatTimeMs;
+    const durationMs = timelineEntry?.durationMs ?? resolveBeat(beats, loopTimeMs).durationMs;
     const blend = beat?.blend ?? { inMs: 0, outMs: 0 };
     const blendIn = blend.inMs > 0 ? clamp01(beatTimeMs / blend.inMs) : 1;
     const blendOut = blend.outMs > 0 ? clamp01((durationMs - beatTimeMs) / blend.outMs) : 1;
     const blendProgress = clamp01(Math.min(blendIn, blendOut));
-    const characterPosition = resolveRoutePosition(route, loopTimeMs);
-    const characterForward = resolveRouteForward(route, loopTimeMs);
+    const characterPosition = resolveTimelinePosition(timelineEntry, beatTimeMs);
+    const characterForward = resolveTimelineForward(timelineEntry);
     const headAnchor =
       camera.headBoneAvailable === false
         ? undefined
@@ -583,7 +759,11 @@ export function createAnimatedSceneRenderer(options = {}) {
             characterPosition[1] + (camera.headHeight ?? 1.65),
             characterPosition[2],
           ];
-    const lookAheadPosition = resolveRoutePosition(route, loopTimeMs + camera.lookAheadMs);
+    const lookAheadEntry = resolveTimelineBeat(beatTimeline, (loopTimeMs + camera.lookAheadMs) % loopDurationMs);
+    const lookAheadPosition = resolveTimelinePosition(
+      lookAheadEntry,
+      lookAheadEntry ? ((loopTimeMs + camera.lookAheadMs) % loopDurationMs) - lookAheadEntry.startMs : beatTimeMs,
+    );
     const desiredCamera = [
       lookAheadPosition[0] + (camera.offset?.[0] ?? 0),
       lookAheadPosition[1] + (camera.offset?.[1] ?? 0),
@@ -637,6 +817,7 @@ export function createAnimatedSceneRenderer(options = {}) {
       running,
       activeClipId: beat?.clipId ?? "",
       activeBeatId: beat?.id ?? "",
+      activeMovementMode: timelineEntry?.movementType ?? "stationary",
       blendProgress,
       clipTimeMs: beatTimeMs,
       characterPosition,
@@ -657,6 +838,19 @@ export function createAnimatedSceneRenderer(options = {}) {
       skinnedClipCount: characterModel?.clipCount ?? 0,
       activeClipRenderable: false,
       propGroundAnchors: [],
+      movementValidation: {
+        status: movementWarnings.length ? "warning" : "passed",
+        warnings: [...movementWarnings],
+        activeBeatId: beat?.id ?? "",
+        activeClipId: beat?.clipId ?? "",
+        motionMode: timelineEntry?.movementType ?? "stationary",
+        rootMotionSource: timelineEntry?.movementProfile?.motionMode ?? "none",
+        expectedSpeed: timelineEntry?.expectedSpeed ?? 0,
+        actualSpeed: timelineEntry?.actualSpeed ?? 0,
+        movementDistance: timelineEntry?.movementDistance ?? 0,
+        loopCount: timelineEntry?.loopCount ?? 1,
+        footSlideWarning: timelineEntry?.footSlideWarning ?? null,
+      },
       frameState: running ? "running" : "rendered-once",
     };
 
@@ -719,6 +913,10 @@ export function createAnimatedSceneRenderer(options = {}) {
         headLook: {
           ...snapshot.headLook,
           target: [...snapshot.headLook.target],
+        },
+        movementValidation: {
+          ...snapshot.movementValidation,
+          warnings: [...(snapshot.movementValidation?.warnings ?? [])],
         },
         propGroundAnchors: snapshot.propGroundAnchors.map((anchor) => ({ ...anchor })),
       };

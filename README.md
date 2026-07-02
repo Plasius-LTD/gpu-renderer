@@ -139,6 +139,12 @@ adventure canvas. Snapshots expose `modelRenderable`, `fallbackProxyActive`,
 `cameraViewMode`, `cameraTransform`, `targetDistance`, `headLook`,
 `characterVisible`, `characterGroundY`, and `propGroundAnchors` so hosts can
 catch camera, scene grounding, and model-renderability regressions.
+When hosts provide beat `movementRequirement` fields and clip
+`movementProfile` metadata, character displacement is resolved per beat:
+travel/jump beats move between route anchors, while stationary action beats
+hold their current anchor unless the profile explicitly allows authored root
+translation. Snapshots expose movement validation diagnostics so hosts can
+detect mismatched animation motion before accepting playback.
 
 The production transport rollout remains gated by
 `renderer.transport.physicalEstimator`. With the flag enabled, deferred
