@@ -1,11 +1,21 @@
+import { resolveCameraRigFrame } from "@plasius/gpu-camera";
 import { createAnimatedGltfModel } from "./animated-gltf-model.js";
 
 const DEFAULT_CAMERA = Object.freeze({
   mode: "lagged-follow",
+  viewMode: "spectator",
   cubicBezier: [0.22, 0.61, 0.36, 1],
   lagMs: 240,
   lookAheadMs: 320,
   offset: [0, 2.4, 5.5],
+  constraints: Object.freeze({
+    maxDistance: 10,
+    firstPersonHeadOffset: 0.05,
+  }),
+  headLook: Object.freeze({
+    enabled: true,
+    returnMs: 240,
+  }),
 });
 
 function nowMs() {
@@ -28,6 +38,22 @@ function lerp3(a, b, t) {
     lerp(a[1] ?? 0, b[1] ?? 0, t),
     lerp(a[2] ?? 0, b[2] ?? 0, t),
   ];
+}
+
+function normalize3(value, fallback = [0, 0, -1]) {
+  if (!Array.isArray(value) || value.length < 3) {
+    return [...fallback];
+  }
+  const vector = [
+    Number.isFinite(Number(value[0])) ? Number(value[0]) : fallback[0],
+    Number.isFinite(Number(value[1])) ? Number(value[1]) : fallback[1],
+    Number.isFinite(Number(value[2])) ? Number(value[2]) : fallback[2],
+  ];
+  const length = Math.hypot(vector[0], vector[1], vector[2]);
+  if (length <= 1e-6) {
+    return [...fallback];
+  }
+  return [vector[0] / length, vector[1] / length, vector[2] / length];
 }
 
 function clamp(value, min, max) {
@@ -82,6 +108,33 @@ function resolveRoutePosition(route, timeMs) {
   }
 
   return [...route.at(-1).position];
+}
+
+function resolveRouteForward(route, timeMs) {
+  if (route.length < 2) {
+    return [0, 0, -1];
+  }
+  let previous = route[0];
+  let next = route[1];
+  for (let index = 1; index < route.length; index += 1) {
+    next = route[index];
+    if (timeMs <= (next.arriveMs ?? 0)) {
+      previous = route[index - 1];
+      break;
+    }
+  }
+  return normalize3([
+    (next.position?.[0] ?? 0) - (previous.position?.[0] ?? 0),
+    (next.position?.[1] ?? 0) - (previous.position?.[1] ?? 0),
+    (next.position?.[2] ?? 0) - (previous.position?.[2] ?? 0),
+  ]);
+}
+
+function resolveCameraViewMode(camera) {
+  if (camera?.mode === "lagged-follow") {
+    return camera.viewMode ?? "spectator";
+  }
+  return camera?.viewMode ?? camera?.mode ?? "spectator";
 }
 
 function resolveCanvas(canvas) {
@@ -199,10 +252,11 @@ function drawProp(ctx, prop, cameraPosition, width, height) {
   return projected;
 }
 
-function drawCharacter(ctx, characterPosition, cameraPosition, width, height, gaitPhase) {
+function drawCharacter(ctx, characterPosition, cameraPosition, width, height, gaitPhase, headLook) {
   const projected = project(characterPosition, cameraPosition, width, height);
   const { x, y, scale } = projected;
   const stride = Math.sin(gaitPhase * Math.PI * 2);
+  const headYaw = (headLook?.yaw ?? 0) * (headLook?.weight ?? 0);
   ctx.save();
   ctx.translate(x, y);
   ctx.lineWidth = Math.max(2, scale * 0.05);
@@ -236,6 +290,14 @@ function drawCharacter(ctx, characterPosition, cameraPosition, width, height, ga
   ctx.fillRect(-scale * 0.2, -scale * 1.28, scale * 0.4, scale * 0.16);
   ctx.fillRect(-scale * 0.23, -scale * 1.14, scale * 0.1, scale * 0.28);
   ctx.fillRect(scale * 0.13, -scale * 1.14, scale * 0.1, scale * 0.28);
+  if (headLook?.status === "active" || headLook?.status === "returning") {
+    ctx.strokeStyle = "rgba(255, 246, 210, 0.74)";
+    ctx.lineWidth = Math.max(1, scale * 0.025);
+    ctx.beginPath();
+    ctx.moveTo(0, -scale * 1.16);
+    ctx.lineTo(Math.sin(headYaw) * scale * 0.32, -scale * 1.16 - scale * 0.08);
+    ctx.stroke();
+  }
 
   ctx.strokeStyle = "#6b4935";
   ctx.beginPath();
@@ -381,7 +443,15 @@ function renderScene(canvas, ctx, snapshot, props, characterModel) {
     skinnedClipCount = characterModel.clipCount;
     activeClipRenderable = drawn.sample.activeClipRenderable;
   } else {
-    characterProjection = drawCharacter(ctx, snapshot.characterPosition, snapshot.cameraPosition, width, height, snapshot.clipTimeMs / 900);
+    characterProjection = drawCharacter(
+      ctx,
+      snapshot.characterPosition,
+      snapshot.cameraPosition,
+      width,
+      height,
+      snapshot.clipTimeMs / 900,
+      snapshot.headLook,
+    );
   }
 
   return {
@@ -422,10 +492,10 @@ export function createAnimatedSceneRenderer(options = {}) {
   const beats = [...(options.beats ?? options.animationAdventure?.beats ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const props = [...(options.props ?? options.animationAdventure?.props ?? [])];
   const characterModel = resolveCharacterModel(options);
-  const camera = Object.freeze({
+  let camera = {
     ...DEFAULT_CAMERA,
     ...definedCameraOverrides(options.camera ?? options.animationAdventure?.camera),
-  });
+  };
   const loopDurationMs = Math.max(durationFromBeats(beats), route.at(-1)?.arriveMs ?? 1, 1);
   const requestFrame = options.requestAnimationFrame ?? globalThis.requestAnimationFrame?.bind(globalThis);
   const cancelFrame = options.cancelAnimationFrame ?? globalThis.cancelAnimationFrame?.bind(globalThis);
@@ -434,6 +504,9 @@ export function createAnimatedSceneRenderer(options = {}) {
   let frame = 0;
   let startedAtMs;
   let lastTimestamp;
+  let pendingCameraControl = null;
+  let activeCameraControl = false;
+  let headLookWeight = 0;
   let cameraPosition = route[0]
     ? [
         route[0].position[0] + (camera.offset?.[0] ?? 0),
@@ -441,6 +514,22 @@ export function createAnimatedSceneRenderer(options = {}) {
         route[0].position[2] + (camera.offset?.[2] ?? 0),
       ]
     : [0, 2.4, 5.5];
+  let cameraRigFrame = resolveCameraRigFrame({
+    viewMode: "editor",
+    anchors: {
+      target: route[0]?.position ? [...route[0].position] : [0, 0, 0],
+      head: route[0]?.position ? [route[0].position[0], route[0].position[1] + 1.65, route[0].position[2]] : [0, 1.65, 0],
+      forward: [0, 0, -1],
+    },
+    camera: {
+      id: "animation-adventure",
+      transform: {
+        position: [...cameraPosition],
+        target: route[0]?.position ? [...route[0].position] : [0, 0, 0],
+      },
+    },
+    constraints: camera.constraints,
+  });
   let snapshot = {
     frame,
     running,
@@ -450,6 +539,10 @@ export function createAnimatedSceneRenderer(options = {}) {
     clipTimeMs: 0,
     characterPosition: route[0]?.position ? [...route[0].position] : [0, 0, 0],
     cameraPosition: [...cameraPosition],
+    cameraViewMode: resolveCameraViewMode(camera),
+    cameraTransform: cameraRigFrame.transform,
+    targetDistance: cameraRigFrame.targetDistance,
+    headLook: cameraRigFrame.headLook,
     characterGroundY: 0,
     characterVisible: false,
     modelLoaded: Boolean(characterModel),
@@ -481,6 +574,15 @@ export function createAnimatedSceneRenderer(options = {}) {
     const blendOut = blend.outMs > 0 ? clamp01((durationMs - beatTimeMs) / blend.outMs) : 1;
     const blendProgress = clamp01(Math.min(blendIn, blendOut));
     const characterPosition = resolveRoutePosition(route, loopTimeMs);
+    const characterForward = resolveRouteForward(route, loopTimeMs);
+    const headAnchor =
+      camera.headBoneAvailable === false
+        ? undefined
+        : [
+            characterPosition[0],
+            characterPosition[1] + (camera.headHeight ?? 1.65),
+            characterPosition[2],
+          ];
     const lookAheadPosition = resolveRoutePosition(route, loopTimeMs + camera.lookAheadMs);
     const desiredCamera = [
       lookAheadPosition[0] + (camera.offset?.[0] ?? 0),
@@ -489,6 +591,46 @@ export function createAnimatedSceneRenderer(options = {}) {
     ];
     const smoothing = bezierY(camera.cubicBezier, clamp01(frameTimeMs / Math.max(1, camera.lagMs)));
     cameraPosition = lerp3(cameraPosition, desiredCamera, smoothing);
+    const cameraViewMode = resolveCameraViewMode(camera);
+    const rigViewMode = cameraViewMode === "spectator" ? "editor" : cameraViewMode;
+    cameraRigFrame = resolveCameraRigFrame({
+      viewMode: rigViewMode,
+      anchors: {
+        target: characterPosition,
+        ...(headAnchor ? { head: headAnchor } : {}),
+        forward: characterForward,
+      },
+      camera: {
+        id: "animation-adventure",
+        transform: {
+          position: [...cameraPosition],
+          target: lookAheadPosition,
+        },
+      },
+      constraints: camera.constraints,
+      control: pendingCameraControl,
+      activeControl: activeCameraControl,
+    });
+
+    if (activeCameraControl && cameraRigFrame.headLook.status === "active") {
+      headLookWeight = cameraRigFrame.headLook.weight;
+    } else {
+      const returnMs = Math.max(1, camera.headLook?.returnMs ?? DEFAULT_CAMERA.headLook.returnMs);
+      headLookWeight = lerp(headLookWeight, 0, clamp01(frameTimeMs / returnMs));
+    }
+    const headLook = {
+      ...cameraRigFrame.headLook,
+      status:
+        cameraRigFrame.headLook.status === "unavailable"
+          ? "unavailable"
+          : headLookWeight > 0.001 && !activeCameraControl
+            ? "returning"
+            : cameraRigFrame.headLook.status,
+      weight: headLookWeight,
+    };
+    cameraPosition = [...cameraRigFrame.transform.position];
+    pendingCameraControl = null;
+    activeCameraControl = false;
 
     snapshot = {
       frame,
@@ -499,6 +641,10 @@ export function createAnimatedSceneRenderer(options = {}) {
       clipTimeMs: beatTimeMs,
       characterPosition,
       cameraPosition: [...cameraPosition],
+      cameraViewMode,
+      cameraTransform: cameraRigFrame.transform,
+      targetDistance: cameraRigFrame.targetDistance,
+      headLook,
       characterGroundY: 0,
       characterVisible: false,
       modelLoaded: Boolean(characterModel),
@@ -565,8 +711,35 @@ export function createAnimatedSceneRenderer(options = {}) {
         ...snapshot,
         characterPosition: [...snapshot.characterPosition],
         cameraPosition: [...snapshot.cameraPosition],
+        cameraTransform: {
+          position: [...snapshot.cameraTransform.position],
+          target: [...snapshot.cameraTransform.target],
+          up: [...snapshot.cameraTransform.up],
+        },
+        headLook: {
+          ...snapshot.headLook,
+          target: [...snapshot.headLook.target],
+        },
         propGroundAnchors: snapshot.propGroundAnchors.map((anchor) => ({ ...anchor })),
       };
+    },
+    setCamera(nextCamera = {}) {
+      camera = { ...camera, ...nextCamera };
+      snapshot = {
+        ...snapshot,
+        cameraViewMode: resolveCameraViewMode(camera),
+      };
+    },
+    setCameraViewMode(viewMode) {
+      camera = { ...camera, viewMode };
+      snapshot = {
+        ...snapshot,
+        cameraViewMode: resolveCameraViewMode(camera),
+      };
+    },
+    applyCameraControl(control, options = {}) {
+      pendingCameraControl = control;
+      activeCameraControl = options.activeControl !== false;
     },
     destroy() {
       running = false;

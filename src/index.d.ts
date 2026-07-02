@@ -26,11 +26,29 @@ export interface AnimatedSceneBeat {
 }
 
 export interface AnimatedSceneCameraFollowRig {
-  readonly mode?: "lagged-follow";
+  readonly mode?: "lagged-follow" | "editor" | "spectator" | "third-person" | "first-person";
+  readonly viewMode?: "editor" | "spectator" | "third-person" | "first-person";
   readonly cubicBezier?: readonly [number, number, number, number] | readonly number[];
   readonly lagMs?: number;
   readonly lookAheadMs?: number;
   readonly offset?: AnimatedSceneVector3;
+  readonly constraints?: {
+    readonly minDistance?: number;
+    readonly maxDistance?: number;
+    readonly minPolarAngle?: number;
+    readonly maxPolarAngle?: number;
+    readonly firstPersonHeadOffset?: number;
+    readonly headLookMaxYaw?: number;
+    readonly headLookMaxPitch?: number;
+    readonly headLookWeight?: number;
+  };
+  readonly headLook?: {
+    readonly enabled?: boolean;
+    readonly activeOnly?: boolean;
+    readonly returnMs?: number;
+  };
+  readonly headBoneAvailable?: boolean;
+  readonly headHeight?: number;
 }
 
 export interface AnimatedSceneProp {
@@ -78,6 +96,20 @@ export interface AnimatedSceneSnapshot {
   readonly clipTimeMs: number;
   readonly characterPosition: readonly [number, number, number];
   readonly cameraPosition: readonly [number, number, number];
+  readonly cameraViewMode: "editor" | "spectator" | "third-person" | "first-person";
+  readonly cameraTransform: {
+    readonly position: readonly [number, number, number];
+    readonly target: readonly [number, number, number];
+    readonly up: readonly [number, number, number];
+  };
+  readonly targetDistance: number;
+  readonly headLook: {
+    readonly status: "inactive" | "active" | "returning" | "unavailable";
+    readonly yaw: number;
+    readonly pitch: number;
+    readonly weight: number;
+    readonly target: readonly [number, number, number];
+  };
   readonly characterGroundY: number;
   readonly characterVisible: boolean;
   readonly modelLoaded: boolean;
@@ -104,6 +136,21 @@ export interface AnimatedSceneRenderer {
   resize(width: number, height: number, devicePixelRatio?: number): void;
   renderOnce(timestamp?: number): AnimatedSceneSnapshot;
   getSnapshot(): AnimatedSceneSnapshot;
+  setCamera(nextCamera?: Partial<AnimatedSceneCameraFollowRig>): void;
+  setCameraViewMode(viewMode: "editor" | "spectator" | "third-person" | "first-person"): void;
+  applyCameraControl(
+    control: {
+      readonly type?: "orbit" | "truck" | "pan" | "dolly" | "look";
+      readonly deltaAzimuth?: number;
+      readonly deltaPolar?: number;
+      readonly deltaX?: number;
+      readonly deltaY?: number;
+      readonly deltaYaw?: number;
+      readonly deltaPitch?: number;
+      readonly distance?: number;
+    },
+    options?: { readonly activeControl?: boolean },
+  ): void;
   destroy(): void;
 }
 

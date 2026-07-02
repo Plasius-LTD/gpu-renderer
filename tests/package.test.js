@@ -463,6 +463,9 @@ test("createAnimatedSceneRenderer advances route, blend, camera, and lifecycle",
   assert.equal(second.activeClipId, "female-basic-locomotion-walking");
   assert.equal(second.characterPosition[0] > first.characterPosition[0], true);
   assert.equal(second.cameraPosition[0] < second.characterPosition[0], true);
+  assert.equal(second.cameraViewMode, "spectator");
+  assert.equal(Array.isArray(second.cameraTransform.position), true);
+  assert.equal(second.headLook.status, "inactive");
   assert.equal(second.blendProgress > 0, true);
   assert.equal(second.characterVisible, true);
   assert.equal(second.characterGroundY > 0, true);
@@ -473,6 +476,86 @@ test("createAnimatedSceneRenderer advances route, blend, camera, and lifecycle",
   renderer.destroy();
   assert.equal(canceled, 44);
   assert.equal(renderer.getSnapshot().frameState, "destroyed");
+});
+
+test("createAnimatedSceneRenderer resolves third-person camera constraints and head look", () => {
+  const canvas = createFakeCanvas2d();
+  const renderer = createAnimatedSceneRenderer({
+    canvas,
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [4, 0, 0], arriveMs: 4000 },
+    ],
+    beats: [
+      {
+        id: "walk",
+        order: 0,
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 1000,
+      },
+    ],
+    camera: {
+      viewMode: "third-person",
+      offset: [0, 3, 30],
+      constraints: {
+        maxDistance: 10,
+      },
+    },
+  });
+
+  renderer.applyCameraControl({ type: "orbit", deltaAzimuth: 0.25 }, { activeControl: true });
+  const frame = renderer.renderOnce(100);
+
+  assert.equal(frame.cameraViewMode, "third-person");
+  assert.equal(Math.round(frame.targetDistance), 10);
+  assert.equal(frame.headLook.status, "active");
+  assert.equal(frame.headLook.weight > 0, true);
+});
+
+test("createAnimatedSceneRenderer resolves first-person from the head anchor", () => {
+  const canvas = createFakeCanvas2d();
+  const renderer = createAnimatedSceneRenderer({
+    canvas,
+    route: [{ id: "gate", position: [2, 0, 3], arriveMs: 0 }],
+    beats: [
+      {
+        id: "idle",
+        order: 0,
+        clipId: "female-basic-locomotion-idle",
+        durationMs: 1000,
+      },
+    ],
+    camera: {
+      viewMode: "first-person",
+      constraints: {
+        firstPersonHeadOffset: 0.05,
+      },
+    },
+  });
+
+  const frame = renderer.renderOnce(100);
+
+  assert.equal(frame.cameraViewMode, "first-person");
+  assert.deepEqual(frame.cameraTransform.position.map((value) => Number(value.toFixed(2))), [2, 1.65, 2.95]);
+});
+
+test("createAnimatedSceneRenderer fails soft when a head bone is unavailable", () => {
+  const canvas = createFakeCanvas2d();
+  const renderer = createAnimatedSceneRenderer({
+    canvas,
+    route: [{ id: "gate", position: [0, 0, 0], arriveMs: 0 }],
+    beats: [],
+    camera: {
+      viewMode: "third-person",
+      headBoneAvailable: false,
+    },
+  });
+
+  renderer.applyCameraControl({ type: "look", deltaYaw: 0.4 }, { activeControl: true });
+  const frame = renderer.renderOnce(100);
+
+  assert.equal(frame.headLook.status, "unavailable");
+  assert.equal(frame.headLook.weight, 0);
 });
 
 test("createAnimatedSceneRenderer preserves camera defaults for undefined overrides", () => {
