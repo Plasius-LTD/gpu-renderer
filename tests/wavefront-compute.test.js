@@ -528,6 +528,44 @@ test("wavefront frame config exposes samples per pixel to WGSL", () => {
   assert.equal(payloadView.getUint32(264, true), 8);
 });
 
+test("wavefront config packs the strict physical low-spp lighting flag", () => {
+  const directConfig = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    strictPhysicalLowSppLighting: true,
+  });
+  const dottedConfig = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    featureFlags: {
+      "renderer.transport.strictPhysicalLowSppLighting": true,
+    },
+  });
+  const nestedConfig = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    featureFlags: {
+      renderer: {
+        transport: {
+          strictPhysicalLowSppLighting: true,
+        },
+      },
+    },
+  });
+  const payload = createConfigPayload(
+    directConfig,
+    { x: 0, y: 0, width: 64, height: 64 },
+    17
+  );
+  const payloadView = new DataView(payload);
+
+  assert.equal(createWavefrontPathTracingComputeConfig({ width: 640, height: 360 }).strictPhysicalLowSppLighting, false);
+  assert.equal(directConfig.strictPhysicalLowSppLighting, true);
+  assert.equal(dottedConfig.strictPhysicalLowSppLighting, true);
+  assert.equal(nestedConfig.strictPhysicalLowSppLighting, true);
+  assert.equal(payloadView.getFloat32(296, true), 1);
+});
+
 test("wavefront reference helper generates deterministic primary rays from the camera contract", () => {
   const config = createWavefrontPathTracingComputeConfig({
     width: 1,
@@ -750,7 +788,7 @@ test("wavefront compute offsets continuation and visibility rays with geometric-
   );
   assert.match(
     source,
-    /let radiance = direct_environment_radiance\(\s*offset_origin\(hit\.position\.xyz, hit\.geometricNormal\.xyz, hit\.shadingNormal\.xyz, lightDirection\),\s*lightDirection\s*\);/
+    /radiance = direct_environment_radiance\(\s*offset_origin\(hit\.position\.xyz, hit\.geometricNormal\.xyz, hit\.shadingNormal\.xyz, lightDirection\),\s*lightDirection\s*\);/
   );
   assert.match(
     source,
@@ -921,7 +959,7 @@ test("high-spp denoise acceptance keeps denoise-off structural and detail gates 
   assert.ok(blurred.failures.some((failure) => failure.includes("detail retention")));
 });
 
-test("wavefront compute uses physical continuation throughput and bounded terminal residuals", () => {
+test("wavefront compute uses physical continuation throughput with strict physical termination", () => {
   const source = readRendererSource();
 
   assert.match(source, /struct TerminationMetrics {/);
@@ -931,6 +969,9 @@ test("wavefront compute uses physical continuation throughput and bounded termin
   assert.match(source, /const TERMINAL_SOURCE_KIND_ENVIRONMENT = 2u;/);
   assert.match(source, /const TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH = 3u;/);
   assert.match(source, /const TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW = 4u;/);
+  assert.match(source, /const TERMINAL_SOURCE_KIND_ABSORPTION_NULL = 5u;/);
+  assert.match(source, /const TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE = 6u;/);
+  assert.match(source, /const TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT = 7u;/);
   assert.match(source, /const SCATTER_LOBE_DIFFUSE: u32 = 1u;/);
   assert.match(source, /const SCATTER_LOBE_SPECULAR: u32 = 2u;/);
   assert.match(source, /const SCATTER_LOBE_CLEARCOAT: u32 = 3u;/);
@@ -938,6 +979,8 @@ test("wavefront compute uses physical continuation throughput and bounded termin
   assert.match(source, /const SCATTER_LOBE_DELTA_TRANSMISSION: u32 = 5u;/);
   assert.match(source, /fn terminal_surface_environment_source/);
   assert.match(source, /fn terminal_surface_environment_contribution/);
+  assert.match(source, /fn strict_physical_low_spp_lighting_enabled\(\) -> bool/);
+  assert.match(source, /return config\.pathResolveSettings\.z > 0\.5;/);
   assert.match(source, /fn sanitize_path_throughput_component/);
   assert.match(source, /fn sanitize_path_throughput/);
   assert.match(source, /fn record_deferred_path_throughput/);
@@ -966,9 +1009,25 @@ test("wavefront compute uses physical continuation throughput and bounded termin
   assert.match(source, /let specularEnvironment = reflectionEnvironment \* \(f0 \* brdfTerm\.x \+ vec3<f32>\(brdfTerm\.y\)\);/);
   assert.match(source, /let glossyEnvironment = max\(/);
   assert.match(source, /let environmentFloor = max\(ambientFloor, max\(sunlitFloor, glossyEnvironment \* environmentInfluence\)\);/);
-  assert.match(source, /let continuationThroughput = surface_continuation_throughput\(\s+hit,\s+continuationViewDirection,\s+continuationLightDirection,\s+scatter\s+\) \* segmentTransmittance;/);
+  assert.match(source, /var continuationThroughput = surface_continuation_throughput\(\s+hit,\s+continuationViewDirection,\s+continuationLightDirection,\s+scatter\s+\) \* segmentTransmittance;/);
   assert.match(source, /if \(max_component\(continuationThroughput\) <= 0\.000001\) \{/);
   assert.match(source, /record_deferred_path_throughput\(ray, continuationThroughput\);/);
+  assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) && ray\.bounce >= 2u/);
+  assert.match(source, /let survivalProbability = clamp\(max_component\(continuationThroughput\), 0\.05, 0\.95\);/);
+  assert.match(source, /SAMPLE_DIM_RUSSIAN_ROULETTE/);
+  assert.match(source, /continuationThroughput = continuationThroughput \/ survivalProbability;/);
+  assert.match(
+    source,
+    /record_deferred_terminal_source\(\s*ray,\s*vec3<f32>\(0\.0\),\s*TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT\s*\);/
+  );
+  assert.match(
+    source,
+    /record_deferred_terminal_source\(\s*ray,\s*vec3<f32>\(0\.0\),\s*TERMINAL_SOURCE_KIND_ABSORPTION_NULL\s*\);/
+  );
+  assert.match(
+    source,
+    /record_deferred_terminal_source\(\s*ray,\s*vec3<f32>\(0\.0\),\s*TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE\s*\);/
+  );
   assert.match(
     source,
     /record_deferred_terminal_source\(\s*ray,\s*terminal_surface_environment_source\(ray, hit\),\s*TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH\s*\);/
@@ -996,10 +1055,17 @@ test("wavefront compute samples all-material direct light with MIS before random
   const source = readRendererSource();
 
   assert.match(source, /fn direct_environment_radiance/);
+  assert.match(source, /fn procedural_sky_radiance/);
+  assert.match(source, /fn uniform_hemisphere_pdf\(\) -> f32/);
+  assert.match(source, /fn sample_uniform_hemisphere_direction\(sample: vec2<f32>, normal: vec3<f32>\) -> vec3<f32>/);
   assert.match(source, /fn sample_environment_importance/);
   assert.match(source, /struct DirectLightSample/);
   assert.match(source, /fn sample_emissive_triangle_light/);
   assert.match(source, /fn sample_direct_light/);
+  assert.match(source, /fn surface_procedural_sun_contribution/);
+  assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) && !environment_importance_sampling_enabled\(\)/);
+  assert.match(source, /radiance = procedural_sky_radiance\(lightDirection\);/);
+  assert.match(source, /pdf = uniform_hemisphere_pdf\(\);/);
   assert.match(source, /fn surface_supports_direct_lighting/);
   assert.match(source, /u32\(config\.environmentMapMeta\.x\)/);
   assert.match(source, /u32\(config\.environmentMapMeta\.y\)/);
@@ -1032,7 +1098,11 @@ test("wavefront compute samples all-material direct light with MIS before random
   );
   assert.match(
     source,
-    /let rawDirectLight = directLight \* sample_weight\(\);/
+    /let sunLight = surface_procedural_sun_contribution\(\s+RayRecord\(/
+  );
+  assert.match(
+    source,
+    /let rawDirectLight = \(directLight \+ sunLight\) \* sample_weight\(\);/
   );
   assert.match(
     source,
@@ -1051,11 +1121,20 @@ test("wavefront compute samples all-material direct light with MIS before random
 test("wavefront compute converts emissive area PDFs to solid-angle MIS measures", () => {
   const source = readRendererSource();
 
+  assert.match(source, /function emissiveTriangleWeight\(triangle\)/);
+  assert.match(source, /triangleAreaForLightSampling\(triangle\) \* Math\.max\(emissionPower\(triangle\.emission\), 0\.000001\)/);
+  assert.match(source, /const emissiveWeights = config\.emissiveTriangleIndices\.indices\.map/);
+  assert.match(source, /packedBvhNodeFloats\[nodeOffset\] = cumulativeEmissiveWeight;/);
+  assert.match(source, /packedBvhNodeFloats\[nodeOffset \+ 1\] = emissiveWeights\[index\] \?\? 0;/);
+  assert.match(source, /packedBvhNodeFloats\[nodeOffset \+ 2\] = totalEmissiveWeight;/);
   assert.match(source, /fn triangle_surface_area\(triangle: TriangleRecord\) -> f32/);
   assert.match(source, /fn solid_angle_pdf_from_area_pdf\(/);
   assert.match(source, /let geometry = max\(dot\(lightNormal, -lightDirection\), 0\.0\);/);
   assert.match(source, /return areaPdf \* distanceSquared \/ max\(geometry, 0\.000001\);/);
-  assert.match(source, /let areaPdf = 1\.0 \/ max\(triangleArea \* f32\(config\.emissiveTriangleCount\), 0\.000001\);/);
+  assert.match(source, /let targetWeight = selector \* totalWeight;/);
+  assert.match(source, /targetWeight <= candidateMetadata\.boundsMin\.x/);
+  assert.match(source, /selectionProbability = triangleWeight \/ totalWeight;/);
+  assert.match(source, /let areaPdf = selectionProbability \/ max\(triangleArea, 0\.000001\);/);
   assert.match(
     source,
     /let lightPdf = solid_angle_pdf_from_area_pdf\(areaPdf, hit\.position\.xyz, lightPoint, lightNormal\);/
@@ -1259,7 +1338,7 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
   assert.match(source, /let resolved = resolve_deferred_path_radiance\(index\) \* sample_weight\(\);/);
   assert.match(
     source,
-    /let rawDirectLight = directLight \* sample_weight\(\);/
+    /let rawDirectLight = \(directLight \+ sunLight\) \* sample_weight\(\);/
   );
   assert.match(source, /if \(config\.deferredPathResolve\) \{/);
   assert.match(source, /createGpuSubmissionBatcher\(\{/);
@@ -2399,6 +2478,9 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
       environment: 0,
       ambientFallback: 0,
       maxDepth: 0,
+      absorptionNull: 0,
+      russianRoulette: 0,
+      strictMaxDepth: 0,
     });
     assert.deepEqual(compatibilityFrame.terminalRadiance, {
       totalLuminance: 0,
@@ -2445,7 +2527,9 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
       device.copyBufferToBufferCalls.every(
         (call) =>
           (call.sourceOffset === 16 && call.destinationOffset === 0 && call.size === 12) ||
-          (call.sourceOffset === 0 && call.destinationOffset === 0 && call.size === 64)
+          (call.sourceOffset === 0 &&
+            call.destinationOffset === 0 &&
+            call.size === wavefrontPathTracingComputeLimits.counterRecordBytes)
       ),
       true
     );

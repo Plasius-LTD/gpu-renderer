@@ -3,6 +3,8 @@ import { WAVEFRONT_SAMPLE_DIMENSIONS_WGSL } from "./wavefront-sampling-dimension
 export const WAVEFRONT_SHADER_LAYOUT_WGSL = `
 const RAY_FLAG_GUIDED_EMISSIVE: u32 = 1u;
 const RAY_FLAG_DELTA_SAMPLE: u32 = 2u;
+const DIRECT_LIGHT_FLAG_DELTA: u32 = 1u;
+const DIRECT_LIGHT_FLAG_PHYSICAL_SUN: u32 = 2u;
 const SCATTER_LOBE_DIFFUSE: u32 = 1u;
 const SCATTER_LOBE_SPECULAR: u32 = 2u;
 const SCATTER_LOBE_CLEARCOAT: u32 = 3u;
@@ -210,12 +212,19 @@ struct TerminationMetrics {
   totalTerminalLuminanceScaled: atomic<u32>,
   invalidSampleCount: atomic<u32>,
   legacyClampEquivalentCount: atomic<u32>,
+  absorptionNullCount: atomic<u32>,
+  russianRouletteCount: atomic<u32>,
+  strictMaxDepthCount: atomic<u32>,
+  strictPad0: atomic<u32>,
 };
 
 const TERMINAL_SOURCE_KIND_EMISSIVE = 1u;
 const TERMINAL_SOURCE_KIND_ENVIRONMENT = 2u;
 const TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH = 3u;
 const TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW = 4u;
+const TERMINAL_SOURCE_KIND_ABSORPTION_NULL = 5u;
+const TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE = 6u;
+const TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT = 7u;
 const TERMINATION_LUMINANCE_SCALE = 1000000.0;
 
 struct Counters {

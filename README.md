@@ -145,6 +145,15 @@ The production transport rollout remains gated by
 continuation vertices carry sanitized physical throughput segments instead of a
 heuristic material-response tint, while the older fallback path remains the
 rollback route during validation.
+Low-SPP physical lighting hardening is separately controlled by the boolean
+`renderer.transport.strictPhysicalLowSppLighting` flag, passed either as
+`strictPhysicalLowSppLighting: true` or through `featureFlags`. When enabled,
+the renderer disables terminal ambient rescue for max-depth/null-throughput
+termination, samples procedural sunlight as an explicit shadow-tested
+directional source, samples procedural sky over the visible hemisphere, and
+selects emissive triangles by area-weighted emission power with matching MIS
+PDFs. Use `denoise: false` when validating this strict path so remaining
+variance is measured in the transport rather than hidden by filtering.
 
 ```js
 import {
@@ -303,6 +312,9 @@ The same stats also expose `radianceDiagnostics.invalidSamples` and
 `radianceDiagnostics.legacyClampEquivalentSamples`, so hardening scenes can
 measure NaN/Inf cleanup and legacy-4.0-equivalent fireflies without
 re-introducing a hidden estimator clamp.
+When `strictPhysicalLowSppLighting` is enabled, termination stats also separate
+`absorptionNull`, `russianRoulette`, and `strictMaxDepth` so validation can
+distinguish physically explainable dark samples from legacy ambient fallback.
 For static mesh scenes, the GPU acceleration build is submitted once and then
 reused by subsequent frames. Per-frame tracing writes one dynamic uniform slot
 per tile/sample or post-process pass and batches tile tracing, tile output,

@@ -13,21 +13,26 @@ fn environment_map_radiance(direction: vec3<f32>) -> vec3<f32> {
   return texel * max(config.environmentMapSettings.y, 0.0);
 }
 
-fn procedural_environment_radiance(direction: vec3<f32>) -> vec3<f32> {
+fn procedural_sky_radiance(direction: vec3<f32>) -> vec3<f32> {
   let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
   let upFactor = saturate(rayDirection.y * 0.5 + 0.5);
+  return (
+    config.environmentHorizonColor.xyz * (1.0 - upFactor) +
+    config.environmentZenithColor.xyz * upFactor
+  ) * max(config.environmentSunDirectionIntensity.w, 0.0001);
+}
+
+fn procedural_environment_radiance(direction: vec3<f32>) -> vec3<f32> {
+  let rayDirection = safe_normalize(direction, vec3<f32>(0.0, 1.0, 0.0));
   let sunDirection = safe_normalize(
     config.environmentSunDirectionIntensity.xyz,
     vec3<f32>(0.0, 1.0, 0.0)
   );
   let sunGlow = pow(saturate(dot(rayDirection, sunDirection)), 192.0);
-  let gradient =
-    config.environmentHorizonColor.xyz * (1.0 - upFactor) +
-    config.environmentZenithColor.xyz * upFactor;
   return (
-    gradient +
-    config.environmentSunColor.xyz * sunGlow
-  ) * max(config.environmentSunDirectionIntensity.w, 0.0001);
+    procedural_sky_radiance(rayDirection) +
+    config.environmentSunColor.xyz * sunGlow * max(config.environmentSunDirectionIntensity.w, 0.0001)
+  );
 }
 
 fn base_environment_radiance(direction: vec3<f32>) -> vec3<f32> {
@@ -181,11 +186,22 @@ fn uniform_sphere_pdf() -> f32 {
   return 1.0 / (4.0 * 3.14159265359);
 }
 
+fn uniform_hemisphere_pdf() -> f32 {
+  return 1.0 / (2.0 * 3.14159265359);
+}
+
 fn sample_uniform_sphere_direction(sample: vec2<f32>) -> vec3<f32> {
   let z = 1.0 - 2.0 * sample.y;
   let radial = sqrt(max(1.0 - z * z, 0.0));
   let phi = sample.x * 6.28318530718;
   return vec3<f32>(cos(phi) * radial, z, sin(phi) * radial);
+}
+
+fn sample_uniform_hemisphere_direction(sample: vec2<f32>, normal: vec3<f32>) -> vec3<f32> {
+  let z = sample.y;
+  let radial = sqrt(max(1.0 - z * z, 0.0));
+  let phi = sample.x * 6.28318530718;
+  return local_to_world(vec3<f32>(cos(phi) * radial, sin(phi) * radial, z), normal);
 }
 
 fn environment_sampling_texel(x: u32, y: u32) -> vec4<f32> {
@@ -715,13 +731,26 @@ fn sample_emissive_triangle_light(
   if (config.emissiveTriangleCount == 0u) {
     return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
   }
-  let lightSlot = min(
-    u32(
-      sample_dimension_1d(pixelId, sampleId, bounce, frameIndex, selectionDimension) *
-      f32(config.emissiveTriangleCount)
-    ),
+  let selector =
+    sample_dimension_1d(pixelId, sampleId, bounce, frameIndex, selectionDimension);
+  var lightSlot = min(
+    u32(selector * f32(config.emissiveTriangleCount)),
     config.emissiveTriangleCount - 1u
   );
+  if (strict_physical_low_spp_lighting_enabled()) {
+    let firstMetadata = bvhNodes[config.bvhNodeCapacity];
+    let totalWeight = max(firstMetadata.boundsMin.z, 0.0);
+    if (totalWeight > 0.000001) {
+      let targetWeight = selector * totalWeight;
+      for (var candidateSlot = 0u; candidateSlot < config.emissiveTriangleCount; candidateSlot = candidateSlot + 1u) {
+        let candidateMetadata = bvhNodes[config.bvhNodeCapacity + candidateSlot];
+        if (targetWeight <= candidateMetadata.boundsMin.x) {
+          lightSlot = candidateSlot;
+          break;
+        }
+      }
+    }
+  }
   let lightMetadata = bvhNodes[config.bvhNodeCapacity + lightSlot];
   let triangleIndex = lightMetadata.childOrFirst;
   if (triangleIndex >= config.triangleCount) {
@@ -749,7 +778,15 @@ fn sample_emissive_triangle_light(
     lightTriangle.v2.xyz * b2;
   let lightDirection = safe_normalize(lightPoint - hit.position.xyz, lightNormal);
   let traceDistance = max(distance(lightPoint, hit.position.xyz) - 0.01, 0.01);
-  let areaPdf = 1.0 / max(triangleArea * f32(config.emissiveTriangleCount), 0.000001);
+  var selectionProbability = 1.0 / max(f32(config.emissiveTriangleCount), 1.0);
+  if (strict_physical_low_spp_lighting_enabled()) {
+    let totalWeight = max(lightMetadata.boundsMin.z, 0.0);
+    let triangleWeight = max(lightMetadata.boundsMin.y, 0.0);
+    if (totalWeight > 0.000001 && triangleWeight > 0.000001) {
+      selectionProbability = triangleWeight / totalWeight;
+    }
+  }
+  let areaPdf = selectionProbability / max(triangleArea, 0.000001);
   let lightPdf = solid_angle_pdf_from_area_pdf(areaPdf, hit.position.xyz, lightPoint, lightNormal);
   if (lightPdf <= 0.000001) {
     return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
@@ -779,19 +816,29 @@ fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> Dir
       SAMPLE_DIM_DIRECT_ENVIRONMENT,
       config.samplesPerPixel
     );
-    let environmentSample = sample_environment_importance(vec2<f32>(
-      selector / max(environmentSelectionProbability, 0.000001),
-      environmentUv.y
-    ));
-    let lightDirection = safe_normalize(environmentSample.direction, normal);
-    let radiance = direct_environment_radiance(
-      offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection),
-      lightDirection
-    );
+    var lightDirection = normal;
+    var radiance = vec3<f32>(0.0);
+    var pdf = 0.0;
+    if (strict_physical_low_spp_lighting_enabled() && !environment_importance_sampling_enabled()) {
+      lightDirection = sample_uniform_hemisphere_direction(environmentUv, normal);
+      radiance = procedural_sky_radiance(lightDirection);
+      pdf = uniform_hemisphere_pdf();
+    } else {
+      let environmentSample = sample_environment_importance(vec2<f32>(
+        selector / max(environmentSelectionProbability, 0.000001),
+        environmentUv.y
+      ));
+      lightDirection = safe_normalize(environmentSample.direction, normal);
+      radiance = direct_environment_radiance(
+        offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection),
+        lightDirection
+      );
+      pdf = environmentSample.pdf;
+    }
     return DirectLightSample(
       vec4<f32>(lightDirection, 0.0),
       vec4<f32>(radiance, 0.0),
-      environmentSample.pdf * environmentSelectionProbability,
+      pdf * environmentSelectionProbability,
       1000000.0,
       0u,
       1u
@@ -848,12 +895,40 @@ fn surface_direct_light_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32
   }
   let bsdfPdf = evaluate_surface_bsdf_pdf(hit, viewDirection, lightDirection);
   let misWeight = power_heuristic(lightSample.pdf, bsdfPdf);
-  let contribution =
+  let contribution = select(
     ray.throughput.xyz *
-    bsdf *
-    incidentRadiance *
-    (nDotL * misWeight / max(lightSample.pdf, 0.000001));
+      bsdf *
+      incidentRadiance *
+      (nDotL * misWeight / max(lightSample.pdf, 0.000001)),
+    ray.throughput.xyz * bsdf * incidentRadiance * nDotL,
+    (lightSample.flags & DIRECT_LIGHT_FLAG_DELTA) != 0u
+  );
   return sanitize_linear_radiance(contribution);
+}
+
+fn surface_procedural_sun_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+  if (!strict_physical_low_spp_lighting_enabled() || environment_map_enabled()) {
+    return vec3<f32>(0.0);
+  }
+  let normal = surface_shading_normal(hit);
+  let viewDirection = safe_normalize(-ray.direction.xyz, normal);
+  let lightDirection = safe_normalize(
+    config.environmentSunDirectionIntensity.xyz,
+    vec3<f32>(0.0, 1.0, 0.0)
+  );
+  let nDotL = saturate(dot(normal, lightDirection));
+  if (nDotL <= 0.000001) {
+    return vec3<f32>(0.0);
+  }
+  let origin = offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection);
+  if (scene_visibility_blocked(origin, lightDirection, 1000000.0)) {
+    return vec3<f32>(0.0);
+  }
+  let incidentRadiance =
+    max(config.environmentSunColor.xyz, vec3<f32>(0.0)) *
+    max(config.environmentSunDirectionIntensity.w, 0.0001);
+  let bsdf = evaluate_surface_bsdf(hit, viewDirection, lightDirection);
+  return sanitize_linear_radiance(ray.throughput.xyz * bsdf * incidentRadiance * nDotL);
 }
 
 `;

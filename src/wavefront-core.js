@@ -38,7 +38,7 @@ export const GPU_MAX_SUBMITTED_WORK_DEADLINE_MS = 180_000;
 export const CONFIG_BUFFER_BYTES = 320;
 export const COUNTER_DISPATCH_ARGS_OFFSET = 16;
 export const INDIRECT_DISPATCH_ARGS_BYTES = 12;
-export const COUNTER_BUFFER_BYTES = 64;
+export const COUNTER_BUFFER_BYTES = 80;
 export const TERMINATION_LUMINANCE_SCALE = 1_000_000;
 export const COUNTER_TERMINATION_EMISSIVE_OFFSET = 8;
 export const COUNTER_TERMINATION_ENVIRONMENT_OFFSET = 9;
@@ -48,6 +48,9 @@ export const COUNTER_TERMINATION_AMBIENT_LUMINANCE_OFFSET = 12;
 export const COUNTER_TERMINATION_TOTAL_LUMINANCE_OFFSET = 13;
 export const COUNTER_TERMINATION_INVALID_SAMPLE_OFFSET = 14;
 export const COUNTER_TERMINATION_LEGACY_CLAMP_EQUIVALENT_OFFSET = 15;
+export const COUNTER_TERMINATION_ABSORPTION_NULL_OFFSET = 16;
+export const COUNTER_TERMINATION_RUSSIAN_ROULETTE_OFFSET = 17;
+export const COUNTER_TERMINATION_MAX_DEPTH_STRICT_OFFSET = 18;
 export const TRACE_STORAGE_BUFFER_BINDINGS = 10;
 export const BRDF_LUT_UPLOAD_CACHE = new Map();
 export const HIT_TYPE_SURFACE = 0;
@@ -56,6 +59,9 @@ export const TERMINAL_SOURCE_KIND_EMISSIVE = 1;
 export const TERMINAL_SOURCE_KIND_ENVIRONMENT = 2;
 export const TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH = 3;
 export const TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW = 4;
+export const TERMINAL_SOURCE_KIND_ABSORPTION_NULL = 5;
+export const TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE = 6;
+export const TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT = 7;
 export const MATERIAL_DIFFUSE = 0;
 export const MATERIAL_METAL = 1;
 export const MATERIAL_DIELECTRIC = 2;
@@ -90,6 +96,9 @@ export const EMPTY_TERMINATION_METRICS = Object.freeze({
     environment: 0,
     ambientFallback: 0,
     maxDepth: 0,
+    absorptionNull: 0,
+    russianRoulette: 0,
+    strictMaxDepth: 0,
   }),
   queueOverflow: 0,
   terminalRadiance: Object.freeze({
@@ -280,6 +289,15 @@ export function resolveDeferredPathResolve(options = {}) {
     options.pathResolve?.deferred ??
     true;
   return value !== false;
+}
+
+export function resolveStrictPhysicalLowSppLighting(options = {}) {
+  const value =
+    options.strictPhysicalLowSppLighting ??
+    options.featureFlags?.["renderer.transport.strictPhysicalLowSppLighting"] ??
+    options.featureFlags?.renderer?.transport?.strictPhysicalLowSppLighting ??
+    false;
+  return value === true;
 }
 
 export function emissionPower(emission) {

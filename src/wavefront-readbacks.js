@@ -1,12 +1,15 @@
 import {
   COUNTER_BUFFER_BYTES,
+  COUNTER_TERMINATION_ABSORPTION_NULL_OFFSET,
   COUNTER_TERMINATION_AMBIENT_LUMINANCE_OFFSET,
   COUNTER_TERMINATION_AMBIENT_MAX_DEPTH_OFFSET,
   COUNTER_TERMINATION_EMISSIVE_OFFSET,
   COUNTER_TERMINATION_ENVIRONMENT_OFFSET,
   COUNTER_TERMINATION_INVALID_SAMPLE_OFFSET,
   COUNTER_TERMINATION_LEGACY_CLAMP_EQUIVALENT_OFFSET,
+  COUNTER_TERMINATION_MAX_DEPTH_STRICT_OFFSET,
   COUNTER_TERMINATION_QUEUE_OVERFLOW_OFFSET,
+  COUNTER_TERMINATION_RUSSIAN_ROULETTE_OFFSET,
   COUNTER_TERMINATION_TOTAL_LUMINANCE_OFFSET,
   EMPTY_TERMINATION_METRICS,
   GPU_READBACK_COMPLETION_TIMEOUT_MS,
@@ -54,6 +57,9 @@ export async function readWavefrontTerminationMetrics({
   const invalidSamples = countersView[COUNTER_TERMINATION_INVALID_SAMPLE_OFFSET] ?? 0;
   const legacyClampEquivalentSamples =
     countersView[COUNTER_TERMINATION_LEGACY_CLAMP_EQUIVALENT_OFFSET] ?? 0;
+  const absorptionNull = countersView[COUNTER_TERMINATION_ABSORPTION_NULL_OFFSET] ?? 0;
+  const russianRoulette = countersView[COUNTER_TERMINATION_RUSSIAN_ROULETTE_OFFSET] ?? 0;
+  const strictMaxDepth = countersView[COUNTER_TERMINATION_MAX_DEPTH_STRICT_OFFSET] ?? 0;
   const ambientResidualLuminance =
     (countersView[COUNTER_TERMINATION_AMBIENT_LUMINANCE_OFFSET] ?? 0) /
     TERMINATION_LUMINANCE_SCALE;
@@ -68,6 +74,9 @@ export async function readWavefrontTerminationMetrics({
       environment,
       ambientFallback: maxDepth + queueOverflow,
       maxDepth,
+      absorptionNull,
+      russianRoulette,
+      strictMaxDepth,
     }),
     queueOverflow,
     terminalRadiance: Object.freeze({
