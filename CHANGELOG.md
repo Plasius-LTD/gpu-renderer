@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.27] - 2026-07-02
+
+- **Added**
   - Added a renderer-owned animated scene surface for adventure playback with scripted beats, route motion, blend snapshots, and bezier-lag camera follow.
   - Added animated camera mode integration with `@plasius/gpu-camera`,
     including editor, spectator, third-person, and first-person view snapshots
@@ -731,3 +745,4 @@ All notable changes to this project will be documented in this file.
 [0.2.24]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.24
 [0.2.25]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.25
 [0.2.26]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.26
+[0.2.27]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.27
