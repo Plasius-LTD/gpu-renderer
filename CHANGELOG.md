@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.28] - 2026-07-02
+
+- **Added**
   - Added the boolean `renderer.transport.strictPhysicalLowSppLighting` rollout
     path, including direct/nested feature-flag input support and frame stats for
     strict physical low-SPP lighting validation.
@@ -754,3 +768,4 @@ All notable changes to this project will be documented in this file.
 [0.2.25]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.25
 [0.2.26]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.26
 [0.2.27]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.27
+[0.2.28]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.28
