@@ -1019,6 +1019,55 @@ test("createProfessionalAnimatedSceneRenderer uses WebGPU diagnostics and reject
   renderer.destroy();
 });
 
+test("createProfessionalAnimatedSceneRenderer advances travel by repeated root-motion loops", async () => {
+  const device = new FakeDevice();
+  const renderer = await createProfessionalAnimatedSceneRenderer({
+    canvas: createFakeCanvas(),
+    navigator: { gpu: new FakeGpu(new FakeAdapter(device)) },
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [3, 0, 0], arriveMs: 3000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        kind: "locomotion",
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 3000,
+        movementRequirement: { kind: "travel", distanceMeters: 3 },
+      },
+    ],
+    modelAsset: createTexturedSkinnedTriangleGlb(),
+    clipAssets: [
+      {
+        id: "female-basic-locomotion-walking",
+        asset: createTranslationClipGlb(),
+        movementProfile: {
+          motionMode: "root-authored",
+          durationMs: 1000,
+          rootTranslationDistance: 1,
+          expectedSpeed: 1,
+          loopable: true,
+          worldDisplacementAllowed: true,
+          footSlideTolerance: 0.02,
+        },
+      },
+    ],
+  });
+
+  const start = renderer.renderOnce(0);
+  const halfway = renderer.renderOnce(1500);
+  const end = renderer.renderOnce(2999);
+
+  assert.equal(start.characterPosition[0], 0);
+  assert.equal(Number(halfway.characterPosition[0].toFixed(2)), 1.5);
+  assert.equal(Number(end.characterPosition[0].toFixed(2)), 3);
+  assert.equal(end.movementValidation.movementDistance, 3);
+
+  renderer.destroy();
+});
+
 test("createProfessionalAnimatedSceneRenderer fails closed for untextured or calibrated movement assets", async () => {
   const device = new FakeDevice();
   await assert.rejects(

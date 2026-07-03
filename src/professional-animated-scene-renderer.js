@@ -121,6 +121,57 @@ function buildRouteSegments(route) {
   });
 }
 
+function positiveNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : 0;
+}
+
+function movementRequirementDistance(requirement) {
+  return positiveNumber(
+    requirement?.distance
+      ?? requirement?.distanceMeters
+      ?? requirement?.rootTranslationDistance
+      ?? 0,
+  );
+}
+
+function resolveRootMotionTravelDistance({ beat, kind, profile, segment, durationMs, elapsedMs }) {
+  const rootDistance = positiveNumber(profile?.rootTranslationDistance);
+  if (rootDistance <= 0) {
+    return { travelled: 0, movementDistance: 0 };
+  }
+
+  const requestedDistance = movementRequirementDistance(beat.movementRequirement);
+  const segmentDistance = positiveNumber(segment?.distance);
+  const capDistance = positiveNumber(requestedDistance || segmentDistance) || rootDistance;
+  const maxDistance = segmentDistance > 0
+    ? Math.min(capDistance, segmentDistance)
+    : capDistance;
+
+  if (kind === "jump") {
+    const progress = clamp01(elapsedMs / Math.max(1, durationMs));
+    const movementDistance = Math.min(rootDistance, maxDistance);
+    return {
+      travelled: movementDistance * progress,
+      movementDistance,
+    };
+  }
+
+  const profileDurationMs = positiveNumber(profile?.durationMs);
+  const loopedDistance = profileDurationMs > 0 && profile?.loopable !== false
+    ? rootDistance * (elapsedMs / profileDurationMs)
+    : rootDistance * clamp01(elapsedMs / Math.max(1, durationMs));
+  const fullDistance = profileDurationMs > 0 && profile?.loopable !== false
+    ? rootDistance * (durationMs / profileDurationMs)
+    : rootDistance;
+  const movementDistance = Math.min(fullDistance, maxDistance);
+
+  return {
+    travelled: Math.min(loopedDistance, movementDistance),
+    movementDistance,
+  };
+}
+
 function resolveRootMotionPosition({ route, beats, clipAssets, loopTimeMs }) {
   const profiles = clipProfileById(clipAssets);
   const segments = buildRouteSegments(route);
@@ -133,13 +184,19 @@ function resolveRootMotionPosition({ route, beats, clipAssets, loopTimeMs }) {
     const profile = profiles.get(beat.clipId);
     const kind = movementRequirementKind(beat.movementRequirement, beat);
     const moves = kind === "travel" || kind === "jump" || kind === "root-authored";
-    const distance = moves ? Number(profile?.rootTranslationDistance ?? 0) : 0;
     const active = loopTimeMs >= cursorMs && loopTimeMs < cursorMs + durationMs;
-    const progress = active ? clamp01((loopTimeMs - cursorMs) / durationMs) : 1;
-    if (moves && distance > 0) {
+    const elapsedMs = active ? Math.max(0, loopTimeMs - cursorMs) : durationMs;
+    if (moves) {
       const segment = segments[Math.min(segmentIndex, Math.max(0, segments.length - 1))];
       if (segment) {
-        const travelled = Math.min(distance * progress, segment.distance);
+        const { travelled, movementDistance } = resolveRootMotionTravelDistance({
+          beat,
+          kind,
+          profile,
+          segment,
+          durationMs,
+          elapsedMs,
+        });
         const nextPosition = add3(position, scale3(segment.direction, travelled));
         if (active) {
           return {
@@ -148,10 +205,10 @@ function resolveRootMotionPosition({ route, beats, clipAssets, loopTimeMs }) {
             activeBeat: beat,
             activeProfile: profile,
             activeMovementMode: kind,
-            movementDistance: distance,
+            movementDistance,
           };
         }
-        position = add3(position, scale3(segment.direction, Math.min(distance, segment.distance)));
+        position = nextPosition;
         if (length3(sub3(position, segment.end)) < 0.05) {
           segmentIndex += 1;
           position = [...segment.end];

@@ -153,7 +153,9 @@ and root-authored movement profiles for travel beats. It rejects the legacy
 2D proxy path instead of silently falling back, renders through WebGPU, and
 exposes `renderMode: "webgpu-pbr"`, texture counts, normal-map readiness,
 root-motion policy, character position, camera position, and active clip
-diagnostics for host validation. The current surface establishes the WebGPU
+diagnostics for host validation. Repeated travel beats accumulate root-motion
+distance from the clip duration and loop count, capped by the declared movement
+requirement and route segment. The current surface establishes the WebGPU
 lifecycle and validation boundary for the PBR animation path; shader-level
 textured character and environment drawing builds on this boundary.
 
