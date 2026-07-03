@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.31] - 2026-07-03
+
+- **Added**
   - Added `renderer.transport.sourceStableDirectLighting.enabled` as a strict
     physical Product Studio transport flag for source-stable direct-light
     validation.
@@ -813,3 +827,4 @@ All notable changes to this project will be documented in this file.
 [0.2.28]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.28
 [0.2.29]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.29
 [0.2.30]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.30
+[0.2.31]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.31
