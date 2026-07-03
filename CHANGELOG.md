@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.33] - 2026-07-03
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Fixed professional Animation Adventure travel so repeated locomotion clips
     advance by accumulated root-motion distance instead of a single unlooped
     root translation.
@@ -850,3 +864,4 @@ All notable changes to this project will be documented in this file.
 [0.2.30]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.30
 [0.2.31]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.31
 [0.2.32]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.32
+[0.2.33]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.33
