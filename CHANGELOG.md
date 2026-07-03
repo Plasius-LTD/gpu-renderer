@@ -16,6 +16,21 @@ All notable changes to this project will be documented in this file.
     Animation Adventure surface with textured skinned GLB diagnostics,
     root-motion-required movement validation, cinematic follow camera state,
     and no 2D proxy fallback.
+
+- **Changed**
+  - Expanded animated GLB parsing to report UVs, normals, material/texture
+    counts, diffuse and normal texture availability, missing texture buffers,
+    and per-clip root translation distance.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.31] - 2026-07-03
+
+- **Added**
   - Added `renderer.transport.sourceStableDirectLighting.enabled` as a strict
     physical Product Studio transport flag for source-stable direct-light
     validation.
@@ -23,9 +38,6 @@ All notable changes to this project will be documented in this file.
     Product Studio validation captures.
 
 - **Changed**
-  - Expanded animated GLB parsing to report UVs, normals, material/texture
-    counts, diffuse and normal texture availability, missing texture buffers,
-    and per-clip root translation distance.
   - Changed source-stable direct lighting to reuse deterministic direct-light
     evaluation while removing direct-light sample dependence on adjacent pixel
     ids and frame-index shimmer.
@@ -820,3 +832,4 @@ All notable changes to this project will be documented in this file.
 [0.2.28]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.28
 [0.2.29]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.29
 [0.2.30]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.30
+[0.2.31]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.31
