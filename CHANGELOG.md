@@ -18,7 +18,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Fixed professional Animation Adventure travel so repeated locomotion clips
+    advance by accumulated root-motion distance instead of a single unlooped
+    root translation.
 
 - **Security**
   - (placeholder)
