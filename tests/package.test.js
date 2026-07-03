@@ -4,6 +4,7 @@ import {
   bindRendererToXrManager,
   createAnimatedSceneRenderer,
   createGpuRenderer,
+  createProfessionalAnimatedSceneRenderer,
   createRendererDebugHooks,
   createWavefrontAdaptiveSamplingLevels,
   defaultRendererWorkerProfile,
@@ -252,6 +253,90 @@ function createSkinnedTriangleGlb() {
       { bufferView: 2, componentType: 5123, count: 3, type: "VEC4" },
       { bufferView: 3, componentType: 5126, count: 3, type: "VEC4" },
       { bufferView: 4, componentType: 5126, count: 1, type: "MAT4" },
+    ],
+  }, binary);
+}
+
+function createTexturedSkinnedTriangleGlb() {
+  const chunks = [];
+  const push = (buffer) => {
+    const byteOffset = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+    chunks.push(buffer);
+    return { byteOffset, byteLength: buffer.byteLength };
+  };
+
+  const indicesView = push(makeChunk(6, (buffer) => {
+    [0, 1, 2].forEach((value, index) => buffer.writeUInt16LE(value, index * 2));
+  }));
+  const positionsView = push(makeChunk(36, (buffer) => {
+    [-0.4, 0, 0, 0.4, 0, 0, 0, 1.6, 0].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+  const normalsView = push(makeChunk(36, (buffer) => {
+    [0, 0, 1, 0, 0, 1, 0, 0, 1].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+  const uvView = push(makeChunk(24, (buffer) => {
+    [0, 0, 1, 0, 0.5, 1].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+  const jointsView = push(makeChunk(24, (buffer) => {
+    new Array(12).fill(0).forEach((value, index) => buffer.writeUInt16LE(value, index * 2));
+  }));
+  const weightsView = push(makeChunk(48, (buffer) => {
+    [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+  const inverseBindView = push(makeChunk(64, (buffer) => {
+    [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1].forEach((value, index) => buffer.writeFloatLE(value, index * 4));
+  }));
+  const diffuseView = push(makeChunk(8, (buffer) => {
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]).copy(buffer);
+  }));
+  const normalTextureView = push(makeChunk(8, (buffer) => {
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 5, 6, 7, 8]).copy(buffer);
+  }));
+
+  const binary = Buffer.concat(chunks);
+  return createGlb({
+    scenes: [{ nodes: [0] }],
+    scene: 0,
+    nodes: [
+      { name: "RootNode", children: [1, 2] },
+      { name: "mixamorig:Hips", translation: [0, 0, 0] },
+      { name: "Peasant_girl", mesh: 0, skin: 0 },
+    ],
+    skins: [{ joints: [1], inverseBindMatrices: 6, skeleton: 1 }],
+    materials: [{
+      name: "Peasant_Girl",
+      pbrMetallicRoughness: { baseColorTexture: { index: 0 } },
+      normalTexture: { index: 1 },
+    }],
+    textures: [{ source: 0 }, { source: 1 }],
+    images: [
+      { name: "Peasant_Girl_diffuse.png", mimeType: "image/png", bufferView: 7 },
+      { name: "Peasant_Girl_normal.png", mimeType: "image/png", bufferView: 8 },
+    ],
+    meshes: [{
+      name: "Peasant_girl",
+      primitives: [{
+        attributes: {
+          POSITION: 1,
+          NORMAL: 2,
+          TEXCOORD_0: 3,
+          JOINTS_0: 4,
+          WEIGHTS_0: 5,
+        },
+        indices: 0,
+        material: 0,
+        mode: 4,
+      }],
+    }],
+    bufferViews: [indicesView, positionsView, normalsView, uvView, jointsView, weightsView, inverseBindView, diffuseView, normalTextureView],
+    accessors: [
+      { bufferView: 0, componentType: 5123, count: 3, type: "SCALAR" },
+      { bufferView: 1, componentType: 5126, count: 3, type: "VEC3" },
+      { bufferView: 2, componentType: 5126, count: 3, type: "VEC3" },
+      { bufferView: 3, componentType: 5126, count: 3, type: "VEC2" },
+      { bufferView: 4, componentType: 5123, count: 3, type: "VEC4" },
+      { bufferView: 5, componentType: 5126, count: 3, type: "VEC4" },
+      { bufferView: 6, componentType: 5126, count: 1, type: "MAT4" },
     ],
   }, binary);
 }
@@ -865,6 +950,112 @@ test("createAnimatedSceneRenderer fills dense skinned GLB triangles without wire
   assert.equal(closePathCalls >= triangleCount, true);
   assert.equal(strokeCalls <= 2, true);
   renderer.destroy();
+});
+
+test("createProfessionalAnimatedSceneRenderer uses WebGPU diagnostics and rejects the 2D proxy path", async () => {
+  const device = new FakeDevice();
+  const canvas = createFakeCanvas();
+  const renderer = await createProfessionalAnimatedSceneRenderer({
+    canvas,
+    navigator: { gpu: new FakeGpu(new FakeAdapter(device)) },
+    route: [
+      { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+      { id: "crop-row", position: [2, 0, 0], arriveMs: 1000 },
+    ],
+    beats: [
+      {
+        id: "walk-to-crops",
+        order: 0,
+        kind: "locomotion",
+        clipId: "female-basic-locomotion-walking",
+        durationMs: 1000,
+        movementRequirement: { kind: "travel", distanceMeters: 0.2 },
+      },
+    ],
+    camera: {
+      mode: "cinematic-follow",
+      shoulderOffset: [-0.9, 2.2, 4.8],
+      velocityLookAheadMs: 420,
+      yawSmoothingMs: 180,
+      pitchSmoothingMs: 240,
+      deadZoneRadius: 0.4,
+      maxLagDistance: 2.8,
+    },
+    modelAsset: createTexturedSkinnedTriangleGlb(),
+    clipAssets: [
+      {
+        id: "female-basic-locomotion-walking",
+        asset: createTranslationClipGlb(),
+        movementProfile: {
+          motionMode: "root-authored",
+          durationMs: 1000,
+          rootTranslationDistance: 0.2,
+          expectedSpeed: 0.2,
+          worldDisplacementAllowed: true,
+          footSlideTolerance: 0.02,
+        },
+      },
+    ],
+  });
+
+  renderer.resize(320, 180, 1);
+  const first = renderer.renderOnce(0);
+  const second = renderer.renderOnce(500);
+
+  assert.equal(first.renderMode, "webgpu-pbr");
+  assert.equal(first.webGpuActive, true);
+  assert.equal(first.texturedSkinnedRenderingActive, true);
+  assert.equal(first.pbrMaterialActive, true);
+  assert.equal(first.fallbackProxyActive, false);
+  assert.equal(first.textureCount, 2);
+  assert.equal(first.normalTextureActive, true);
+  assert.equal(first.skinnedJointCount, 1);
+  assert.equal(first.movementValidation.status, "passed");
+  assert.equal(first.movementValidation.rootMotionPolicy, "root-motion-required");
+  assert.equal(first.movementValidation.rootMotionSource, "root-authored");
+  assert.equal(second.characterPosition[0] > first.characterPosition[0], true);
+  assert.equal(device.encoderCount >= 2, true);
+
+  renderer.destroy();
+});
+
+test("createProfessionalAnimatedSceneRenderer fails closed for untextured or calibrated movement assets", async () => {
+  const device = new FakeDevice();
+  await assert.rejects(
+    () => createProfessionalAnimatedSceneRenderer({
+      canvas: createFakeCanvas(),
+      navigator: { gpu: new FakeGpu(new FakeAdapter(device)) },
+      route: [
+        { id: "gate", position: [0, 0, 0], arriveMs: 0 },
+        { id: "crop-row", position: [2, 0, 0], arriveMs: 1000 },
+      ],
+      beats: [
+        {
+          id: "walk-to-crops",
+          order: 0,
+          kind: "locomotion",
+          clipId: "female-basic-locomotion-walking",
+          durationMs: 1000,
+          movementRequirement: { kind: "travel", distanceMeters: 1 },
+        },
+      ],
+      modelAsset: createSkinnedTriangleGlb(),
+      clipAssets: [
+        {
+          id: "female-basic-locomotion-walking",
+          asset: createTranslationClipGlb(),
+          movementProfile: {
+            motionMode: "calibrated-in-place",
+            durationMs: 1000,
+            rootTranslationDistance: 0,
+            strideLength: 1,
+            worldDisplacementAllowed: true,
+          },
+        },
+      ],
+    }),
+    /requires UVs, normals, skinning, diffuse texture, normal texture.+without authored root motion/su,
+  );
 });
 
 test("createAnimatedSceneRenderer ignores stale animation ticks after destroy", () => {
