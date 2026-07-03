@@ -181,12 +181,20 @@ physical transport report as requested but no-op effectively when
 - `renderer.transport.strictZeroOverflow.enabled`
 - `renderer.transport.deferLowSppRussianRoulette.enabled`
 - `renderer.transport.deterministicDirectLighting.enabled`
+- `renderer.transport.sourceStableDirectLighting.enabled`
 - `renderer.environment.productStudioImportance.enabled`
 - `renderer.diagnostics.productTransportTelemetry.enabled`
 
 Renderer config, frame stats, and snapshots expose both the structured
 `transportExperiments` state and the packed `transportExperimentFlags` bitfield
 so Product Studio diagnostics can record the exact active set for each render.
+`renderer.transport.sourceStableDirectLighting.enabled` is intended for
+denoise-off Product Studio validation: in strict physical mode it enables the
+deterministic direct-light path and removes direct-light sample dependence on
+adjacent pixel ids and frame index so low-SPP source routing is stable without
+adding ambient fill.
+Set `presentationOutput: "linear"` for linear presented validation captures, or
+omit it to keep the default tone-mapped presentation.
 
 ```js
 import {

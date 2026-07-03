@@ -16,11 +16,19 @@ All notable changes to this project will be documented in this file.
     Animation Adventure surface with textured skinned GLB diagnostics,
     root-motion-required movement validation, cinematic follow camera state,
     and no 2D proxy fallback.
+  - Added `renderer.transport.sourceStableDirectLighting.enabled` as a strict
+    physical Product Studio transport flag for source-stable direct-light
+    validation.
+  - Added `presentationOutput: "tone-mapped" | "linear"` for denoise-off
+    Product Studio validation captures.
 
 - **Changed**
   - Expanded animated GLB parsing to report UVs, normals, material/texture
     counts, diffuse and normal texture availability, missing texture buffers,
     and per-clip root translation distance.
+  - Changed source-stable direct lighting to reuse deterministic direct-light
+    evaluation while removing direct-light sample dependence on adjacent pixel
+    ids and frame-index shimmer.
 
 - **Fixed**
   - (placeholder)

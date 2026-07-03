@@ -45,6 +45,11 @@ fn tone_map_radiance(value: vec3<f32>) -> vec3<f32> {
   return pow(clamp(mapped, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
 }
 
+fn present_radiance(value: vec3<f32>) -> vec3<f32> {
+  let linearOutput = clamp(sanitize_linear_radiance(value), vec3<f32>(0.0), vec3<f32>(1.0));
+  return select(tone_map_radiance(value), linearOutput, config.pathResolveSettings.w > 0.5);
+}
+
 fn scaled_termination_luminance(radiance: vec3<f32>) -> u32 {
   let averageLuminance =
     radiance_luminance(max(radiance, vec3<f32>(0.0))) / max(f32(config.tilePixelCount), 1.0);
@@ -898,7 +903,7 @@ fn accumulateTerminalRadiance(@builtin(global_invocation_id) globalId: vec3<u32>
   let linearOutput = sanitize_linear_radiance(radiance);
   textureStore(radianceImage, pixel, vec4<f32>(linearOutput, 1.0));
   if (config.denoise == 0u) {
-    textureStore(outputImage, pixel, vec4<f32>(tone_map_radiance(linearOutput), 1.0));
+    textureStore(outputImage, pixel, vec4<f32>(present_radiance(linearOutput), 1.0));
   }
 }
 
@@ -984,6 +989,6 @@ fn resolveDenoisedOutputImage(@builtin(global_invocation_id) globalId: vec3<u32>
   let outlier = saturate(length(denoise_range_space(center) - denoise_range_space(filtered)) * 2.2);
   let blend = min(0.18, strength * (0.42 + outlier * 0.08));
   let radiance = min(mix(center, filtered, blend), vec3<f32>(16.0));
-  textureStore(denoisedOutputImage, pixel, vec4<f32>(tone_map_radiance(radiance), 1.0));
+  textureStore(denoisedOutputImage, pixel, vec4<f32>(present_radiance(radiance), 1.0));
 }
 `;

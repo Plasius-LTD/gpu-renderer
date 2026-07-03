@@ -806,7 +806,16 @@ fn direct_light_sample_frame_index() -> u32 {
   return select(
     config.frameIndex,
     0u,
-    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING)
+    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING) ||
+      transport_experiment_enabled(TRANSPORT_EXPERIMENT_SOURCE_STABLE_DIRECT_LIGHTING)
+  );
+}
+
+fn direct_light_sample_pixel_id(ray: RayRecord) -> u32 {
+  return select(
+    ray.sourcePixelId,
+    0u,
+    transport_experiment_enabled(TRANSPORT_EXPERIMENT_SOURCE_STABLE_DIRECT_LIGHTING)
   );
 }
 
@@ -818,7 +827,7 @@ fn sample_environment_direct_light(
   environmentSelectionProbability: f32
 ) -> DirectLightSample {
   let environmentUv = sample_dimension_2d(
-    ray.sourcePixelId,
+    direct_light_sample_pixel_id(ray),
     ray.sampleId,
     ray.bounce,
     direct_light_sample_frame_index(),
@@ -867,7 +876,7 @@ fn sample_emissive_direct_light(
 ) -> DirectLightSample {
   let emissiveSample = sample_emissive_triangle_light(
     hit,
-    ray.sourcePixelId,
+    direct_light_sample_pixel_id(ray),
     ray.sampleId,
     ray.bounce,
     direct_light_sample_frame_index(),
@@ -890,7 +899,7 @@ fn sample_emissive_direct_light(
 fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> DirectLightSample {
   let environmentSelectionProbability = select(1.0, 0.5, config.emissiveTriangleCount > 0u);
   let selector = sample_dimension_1d(
-    ray.sourcePixelId,
+    direct_light_sample_pixel_id(ray),
     ray.sampleId,
     ray.bounce,
     direct_light_sample_frame_index(),
