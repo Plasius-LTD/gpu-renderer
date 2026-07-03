@@ -15,6 +15,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.34] - 2026-07-03
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Changed emissive light metadata upload to resolve stable triangle ids back
     to the BVH-ordered triangle buffer before writing GPU light records.
 
@@ -872,3 +886,4 @@ All notable changes to this project will be documented in this file.
 [0.2.31]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.31
 [0.2.32]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.32
 [0.2.33]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.33
+[0.2.34]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.34
