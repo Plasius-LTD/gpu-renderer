@@ -116,6 +116,8 @@ export function createWavefrontFrameStats({
       environmentMap: createEnvironmentMapSnapshot(config.environmentMap),
       deferredPathResolve: config.deferredPathResolve,
       strictPhysicalLowSppLighting: config.strictPhysicalLowSppLighting,
+      transportExperiments: config.transportExperiments,
+      transportExperimentFlags: config.transportExperimentFlags,
       bvhNodeCount: config.bvhNodeCount,
       displayQuality: config.displayQuality,
       accelerationBuildMode: config.accelerationBuildMode,

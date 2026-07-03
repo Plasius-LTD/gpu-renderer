@@ -566,6 +566,51 @@ test("wavefront config packs the strict physical low-spp lighting flag", () => {
   assert.equal(payloadView.getFloat32(296, true), 1);
 });
 
+test("wavefront config packs composable transport experiment flags", () => {
+  const baseline = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+  });
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    strictPhysicalLowSppLighting: true,
+    featureFlags: {
+      enabled: {
+        "renderer.transport.stableSampleRouting.enabled": true,
+        "renderer.transport.strictZeroOverflow.enabled": true,
+        "renderer.transport.deferLowSppRussianRoulette.enabled": true,
+        "renderer.transport.deterministicDirectLighting.enabled": true,
+        "renderer.environment.productStudioImportance.enabled": true,
+        "renderer.diagnostics.productTransportTelemetry.enabled": true,
+      },
+    },
+  });
+  const strictOffConfig = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    featureFlags: {
+      enabled: {
+        "renderer.transport.strictZeroOverflow.enabled": true,
+        "renderer.transport.deferLowSppRussianRoulette.enabled": true,
+        "renderer.transport.deterministicDirectLighting.enabled": true,
+      },
+    },
+  });
+  const payload = createConfigPayload(config, { x: 0, y: 0, width: 64, height: 64 }, 17);
+  const payloadView = new DataView(payload);
+
+  assert.equal(baseline.transportExperimentFlags, 0);
+  assert.equal(config.transportExperiments.requested.strictZeroOverflow, true);
+  assert.equal(config.transportExperiments.effective.strictZeroOverflow, true);
+  assert.equal(config.transportExperiments.effective.productTransportTelemetry, true);
+  assert.equal(config.transportExperimentFlags, 63);
+  assert.equal(payloadView.getUint32(268, true), 63);
+  assert.equal(strictOffConfig.transportExperiments.requested.strictZeroOverflow, true);
+  assert.equal(strictOffConfig.transportExperiments.effective.strictZeroOverflow, false);
+  assert.equal(strictOffConfig.transportExperiments.effective.deterministicDirectLighting, false);
+});
+
 test("wavefront reference helper generates deterministic primary rays from the camera contract", () => {
   const config = createWavefrontPathTracingComputeConfig({
     width: 1,
@@ -848,6 +893,8 @@ test("wavefront sample dimensions stay unique and expose low-discrepancy helpers
     dimensions.every(({ wgslName }) => shaderSource.includes(`const ${wgslName}: u32 =`))
   );
   assert.match(source, /fn radical_inverse_vdc\(bits: u32\) -> f32/);
+  assert.match(source, /fn sample_frame_index\(frameIndex: u32\) -> u32/);
+  assert.match(source, /TRANSPORT_EXPERIMENT_STABLE_SAMPLE_ROUTING/);
   assert.match(source, /fn sample_dimension_1d\(/);
   assert.match(source, /fn sample_dimension_2d\(/);
   assert.notDeepEqual(jitterA, jitterB);
@@ -1012,7 +1059,9 @@ test("wavefront compute uses physical continuation throughput with strict physic
   assert.match(source, /var continuationThroughput = surface_continuation_throughput\(\s+hit,\s+continuationViewDirection,\s+continuationLightDirection,\s+scatter\s+\) \* segmentTransmittance;/);
   assert.match(source, /if \(max_component\(continuationThroughput\) <= 0\.000001\) \{/);
   assert.match(source, /record_deferred_path_throughput\(ray, continuationThroughput\);/);
-  assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) && ray\.bounce >= 2u/);
+  assert.match(source, /TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE/);
+  assert.match(source, /let rouletteStartBounce = select\(/);
+  assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) && ray\.bounce >= rouletteStartBounce/);
   assert.match(source, /let survivalProbability = clamp\(max_component\(continuationThroughput\), 0\.05, 0\.95\);/);
   assert.match(source, /SAMPLE_DIM_RUSSIAN_ROULETTE/);
   assert.match(source, /continuationThroughput = continuationThroughput \/ survivalProbability;/);
@@ -1041,13 +1090,11 @@ test("wavefront compute uses physical continuation throughput with strict physic
     source,
     /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(weightedContribution, 1\.0\);/
   );
+  assert.match(source, /TRANSPORT_EXPERIMENT_STRICT_ZERO_OVERFLOW/);
+  assert.match(source, /var rawWeightedContribution = vec3<f32>\(0\.0\);/);
   assert.match(
     source,
-    /let overflowEnvironment = terminal_surface_environment_contribution\(\s+ray,\s+arrivingThroughput,\s+hit\s+\);/
-  );
-  assert.match(
-    source,
-    /record_deferred_terminal_source\(\s*ray,\s*terminal_surface_environment_source\(ray, hit\),\s*TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW\s*\);/
+    /record_deferred_terminal_source\(\s*ray,\s*vec3<f32>\(0\.0\),\s*TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW\s*\);/
   );
 });
 
@@ -1057,14 +1104,20 @@ test("wavefront compute samples all-material direct light with MIS before random
   assert.match(source, /fn direct_environment_radiance/);
   assert.match(source, /fn procedural_sky_radiance/);
   assert.match(source, /fn uniform_hemisphere_pdf\(\) -> f32/);
+  assert.match(source, /fn cosine_hemisphere_pdf\(normal: vec3<f32>, direction: vec3<f32>\) -> f32/);
   assert.match(source, /fn sample_uniform_hemisphere_direction\(sample: vec2<f32>, normal: vec3<f32>\) -> vec3<f32>/);
   assert.match(source, /fn sample_environment_importance/);
   assert.match(source, /struct DirectLightSample/);
   assert.match(source, /fn sample_emissive_triangle_light/);
+  assert.match(source, /fn sample_environment_direct_light/);
+  assert.match(source, /fn sample_emissive_direct_light/);
   assert.match(source, /fn sample_direct_light/);
+  assert.match(source, /fn direct_light_sample_contribution/);
   assert.match(source, /fn surface_procedural_sun_contribution/);
   assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) && !environment_importance_sampling_enabled\(\)/);
   assert.match(source, /radiance = procedural_sky_radiance\(lightDirection\);/);
+  assert.match(source, /TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE/);
+  assert.match(source, /pdf = cosine_hemisphere_pdf\(normal, lightDirection\);/);
   assert.match(source, /pdf = uniform_hemisphere_pdf\(\);/);
   assert.match(source, /fn surface_supports_direct_lighting/);
   assert.match(source, /u32\(config\.environmentMapMeta\.x\)/);
@@ -1076,7 +1129,10 @@ test("wavefront compute samples all-material direct light with MIS before random
   assert.match(source, /fn visibility_test_ray/);
   assert.match(source, /fn scene_visibility_blocked/);
   assert.match(source, /fn surface_direct_light_contribution/);
-  assert.match(source, /let lightSample = sample_direct_light\(hit, ray, normal\);/);
+  assert.match(source, /TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING/);
+  assert.match(source, /let environmentLight = sample_environment_direct_light\(hit, ray, normal, 0\.5, 1\.0\);/);
+  assert.match(source, /let emissiveLight = sample_emissive_direct_light\(hit, ray, 0\.0\);/);
+  assert.match(source, /return direct_light_sample_contribution\(ray, hit, sample_direct_light\(hit, ray, normal\)\);/);
   assert.match(source, /if \(scene_visibility_blocked\(origin, lightDirection, lightSample\.maxDistance\)\) \{/);
   assert.match(source, /let incidentRadiance = lightSample\.radiance\.xyz;/);
   assert.match(source, /let bsdf = evaluate_surface_bsdf\(hit, viewDirection, lightDirection\);/);

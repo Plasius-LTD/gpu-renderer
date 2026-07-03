@@ -12,10 +12,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added composable strict low-SPP transport experiment flags for stable
+    sample routing, strict zero overflow, deferred low-SPP Russian roulette,
+    deterministic direct lighting, Product Studio environment importance, and
+    product transport telemetry.
 
 - **Changed**
-  - (placeholder)
+  - Changed wavefront renderer config, frame stats, and snapshots to expose the
+    requested/effective transport experiment set and packed shader bitfield.
 
 - **Fixed**
   - (placeholder)
