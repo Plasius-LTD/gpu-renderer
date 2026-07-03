@@ -802,6 +802,68 @@ fn sample_emissive_triangle_light(
   return DirectLightSample(vec4<f32>(lightDirection, 0.0), vec4<f32>(radiance, 0.0), lightPdf, traceDistance, 0u, 1u);
 }
 
+fn emissive_direct_class_probability() -> f32 {
+  if (config.emissiveTriangleCount == 0u) {
+    return 0.0;
+  }
+  if (
+    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING) ||
+    transport_experiment_enabled(TRANSPORT_EXPERIMENT_SOURCE_STABLE_DIRECT_LIGHTING)
+  ) {
+    return 1.0;
+  }
+  return select(1.0, 0.5, config.emissiveTriangleCount > 0u);
+}
+
+fn terminal_emissive_light_pdf(ray: RayRecord, hit: HitRecord) -> f32 {
+  if (config.emissiveTriangleCount == 0u) {
+    return 0.0;
+  }
+
+  var lightSlot = 0xffffffffu;
+  var triangleIndex = 0xffffffffu;
+  for (var candidateSlot = 0u; candidateSlot < config.emissiveTriangleCount; candidateSlot = candidateSlot + 1u) {
+    let candidateMetadata = bvhNodes[config.bvhNodeCapacity + candidateSlot];
+    let candidateTriangleIndex = candidateMetadata.childOrFirst;
+    if (candidateTriangleIndex >= config.triangleCount) {
+      continue;
+    }
+    let candidateTriangle = triangles[candidateTriangleIndex];
+    if (candidateTriangle.triangleId == hit.primitiveId) {
+      lightSlot = candidateSlot;
+      triangleIndex = candidateTriangleIndex;
+      break;
+    }
+  }
+
+  if (lightSlot == 0xffffffffu || triangleIndex == 0xffffffffu) {
+    return 0.0;
+  }
+
+  let lightMetadata = bvhNodes[config.bvhNodeCapacity + lightSlot];
+  let lightTriangle = triangles[triangleIndex];
+  let triangleArea = triangle_surface_area(lightTriangle);
+  let lightNormal = triangle_surface_normal(lightTriangle);
+  var selectionProbability =
+    emissive_direct_class_probability() /
+    max(f32(config.emissiveTriangleCount), 1.0);
+  if (strict_physical_low_spp_lighting_enabled()) {
+    let totalWeight = max(lightMetadata.boundsMin.z, 0.0);
+    let triangleWeight = max(lightMetadata.boundsMin.y, 0.0);
+    if (totalWeight > 0.000001 && triangleWeight > 0.000001) {
+      selectionProbability = emissive_direct_class_probability() * triangleWeight / totalWeight;
+    }
+  }
+
+  let areaPdf = selectionProbability / max(triangleArea, 0.000001);
+  return solid_angle_pdf_from_area_pdf(
+    areaPdf,
+    ray.origin.xyz,
+    hit.position.xyz,
+    lightNormal
+  );
+}
+
 fn direct_light_sample_frame_index() -> u32 {
   return select(
     config.frameIndex,
@@ -897,7 +959,8 @@ fn sample_emissive_direct_light(
 }
 
 fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> DirectLightSample {
-  let environmentSelectionProbability = select(1.0, 0.5, config.emissiveTriangleCount > 0u);
+  let environmentSelectionProbability =
+    1.0 - emissive_direct_class_probability();
   let selector = sample_dimension_1d(
     direct_light_sample_pixel_id(ray),
     ray.sampleId,

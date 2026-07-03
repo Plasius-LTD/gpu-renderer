@@ -592,7 +592,14 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   if (hit.hitType == 1u) {
     let guidedLightWeight = select(1.0, 0.24, (ray.flags & RAY_FLAG_GUIDED_EMISSIVE) != 0u);
-    let sourceRadiance = max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight;
+    var sourceRadiance = max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight;
+    if ((ray.flags & RAY_FLAG_DELTA_SAMPLE) == 0u) {
+      let bsdfPdf = max(ray.throughput.w, 0.000001);
+      let lightPdf = terminal_emissive_light_pdf(ray, hit);
+      if (lightPdf > 0.000001) {
+        sourceRadiance = sourceRadiance * power_heuristic(bsdfPdf, lightPdf);
+      }
+    }
     if (deferred_path_resolve_enabled()) {
       record_deferred_terminal_source(
         ray,

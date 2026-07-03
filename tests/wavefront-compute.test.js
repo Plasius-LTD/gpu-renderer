@@ -1211,7 +1211,10 @@ test("wavefront compute converts emissive area PDFs to solid-angle MIS measures"
 
   assert.match(source, /function emissiveTriangleWeight\(triangle\)/);
   assert.match(source, /triangleAreaForLightSampling\(triangle\) \* Math\.max\(emissionPower\(triangle\.emission\), 0\.000001\)/);
-  assert.match(source, /const emissiveWeights = config\.emissiveTriangleIndices\.indices\.map/);
+  assert.match(source, /function resolveOrderedEmissiveTriangleIndices\(config\)/);
+  assert.match(source, /const triangleIndexById = new Map/);
+  assert.match(source, /const orderedEmissiveTriangleIndices = resolveOrderedEmissiveTriangleIndices\(config\);/);
+  assert.match(source, /const emissiveWeights = orderedEmissiveTriangleIndices\.map/);
   assert.match(source, /packedBvhNodeFloats\[nodeOffset\] = cumulativeEmissiveWeight;/);
   assert.match(source, /packedBvhNodeFloats\[nodeOffset \+ 1\] = emissiveWeights\[index\] \?\? 0;/);
   assert.match(source, /packedBvhNodeFloats\[nodeOffset \+ 2\] = totalEmissiveWeight;/);
@@ -1227,8 +1230,23 @@ test("wavefront compute converts emissive area PDFs to solid-angle MIS measures"
     source,
     /let lightPdf = solid_angle_pdf_from_area_pdf\(areaPdf, hit\.position\.xyz, lightPoint, lightNormal\);/
   );
-  assert.match(source, /let environmentSelectionProbability = select\(1\.0, 0\.5, config\.emissiveTriangleCount > 0u\);/);
+  assert.match(source, /fn emissive_direct_class_probability\(\) -> f32/);
+  assert.match(source, /return select\(1\.0, 0\.5, config\.emissiveTriangleCount > 0u\);/);
+  assert.match(source, /let environmentSelectionProbability =\s+1\.0 - emissive_direct_class_probability\(\);/);
   assert.match(source, /return DirectLightSample\(vec4<f32>\(lightDirection, 0\.0\), vec4<f32>\(radiance, 0\.0\), lightPdf, traceDistance, 0u, 1u\);/);
+});
+
+test("wavefront compute MIS-weights terminal emissive continuation hits", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /fn terminal_emissive_light_pdf\(ray: RayRecord, hit: HitRecord\) -> f32/);
+  assert.match(source, /candidateTriangle\.triangleId == hit\.primitiveId/);
+  assert.match(source, /selectionProbability = emissive_direct_class_probability\(\) \* triangleWeight \/ totalWeight;/);
+  assert.match(source, /ray\.origin\.xyz,\s+hit\.position\.xyz,\s+lightNormal/);
+  assert.match(
+    source,
+    /let lightPdf = terminal_emissive_light_pdf\(ray, hit\);\s+if \(lightPdf > 0\.000001\) \{\s+sourceRadiance = sourceRadiance \* power_heuristic\(bsdfPdf, lightPdf\);/s
+  );
 });
 
 test("wavefront BSDF numeric helpers flag PDF mismatches and invalid MIS measures", () => {
