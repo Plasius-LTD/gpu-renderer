@@ -167,6 +167,15 @@ function emissiveTriangleWeight(triangle) {
   return triangleAreaForLightSampling(triangle) * Math.max(emissionPower(triangle.emission), 0.000001);
 }
 
+function resolveOrderedEmissiveTriangleIndices(config) {
+  const triangleIndexById = new Map(
+    config.meshAcceleration.triangles.map((triangle, index) => [triangle.triangleId, index])
+  );
+  return config.emissiveTriangleIndices.indices
+    .map((triangleId) => triangleIndexById.get(triangleId))
+    .filter((triangleIndex) => Number.isInteger(triangleIndex));
+}
+
 export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   assertAnalyticDisplayQualityPolicy(options);
   const constants = getGpuUsageConstants();
@@ -339,12 +348,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   );
   const packedBvhNodeUints = new Uint32Array(packedBvhNodes.buffer);
   const packedBvhNodeFloats = new Float32Array(packedBvhNodes.buffer);
-  const emissiveWeights = config.emissiveTriangleIndices.indices.map((triangleIndex) =>
+  const orderedEmissiveTriangleIndices = resolveOrderedEmissiveTriangleIndices(config);
+  const emissiveWeights = orderedEmissiveTriangleIndices.map((triangleIndex) =>
     emissiveTriangleWeight(config.meshAcceleration.triangles[triangleIndex])
   );
   const totalEmissiveWeight = emissiveWeights.reduce((total, weight) => total + weight, 0);
   let cumulativeEmissiveWeight = 0;
-  config.emissiveTriangleIndices.indices.forEach((triangleIndex, index) => {
+  orderedEmissiveTriangleIndices.forEach((triangleIndex, index) => {
     const nodeOffset = (config.bvhNodeCapacity + index) * (BVH_NODE_RECORD_BYTES / 4);
     cumulativeEmissiveWeight += emissiveWeights[index] ?? 0;
     packedBvhNodeFloats[nodeOffset] = cumulativeEmissiveWeight;

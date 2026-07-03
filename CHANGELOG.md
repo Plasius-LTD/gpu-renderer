@@ -15,10 +15,13 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
-  - (placeholder)
+  - Changed emissive light metadata upload to resolve stable triangle ids back
+    to the BVH-ordered triangle buffer before writing GPU light records.
 
 - **Fixed**
-  - (placeholder)
+  - Fixed multi-bounce source-stable renders so terminal emissive continuation
+    hits are MIS-weighted against direct emissive sampling instead of adding
+    full softbox radiance as sparse stippled pixels.
 
 - **Security**
   - (placeholder)
@@ -71,9 +74,13 @@ All notable changes to this project will be documented in this file.
   - Changed source-stable direct lighting to reuse deterministic direct-light
     evaluation while removing direct-light sample dependence on adjacent pixel
     ids and frame-index shimmer.
+  - Changed emissive light metadata upload to resolve stable triangle ids back
+    to the BVH-ordered triangle buffer before writing GPU light records.
 
 - **Fixed**
-  - (placeholder)
+  - Fixed multi-bounce source-stable renders so terminal emissive continuation
+    hits are MIS-weighted against direct emissive sampling instead of adding
+    full softbox radiance as sparse stippled pixels.
 
 - **Security**
   - (placeholder)

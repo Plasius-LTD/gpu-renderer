@@ -194,7 +194,10 @@ so Product Studio diagnostics can record the exact active set for each render.
 denoise-off Product Studio validation: in strict physical mode it enables the
 deterministic direct-light path and removes direct-light sample dependence on
 adjacent pixel ids and frame index so low-SPP source routing is stable without
-adding ambient fill.
+adding ambient fill. Multi-bounce continuation rays that terminate on emissive
+geometry are MIS-weighted against that direct emissive estimator, so rare
+softbox hits remain physically valid without adding full unbalanced source
+radiance as isolated stippled pixels.
 Set `presentationOutput: "linear"` for linear presented validation captures, or
 omit it to keep the default tone-mapped presentation.
 
