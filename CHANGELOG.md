@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.32] - 2026-07-03
+
+- **Added**
   - Added `createProfessionalAnimatedSceneRenderer`, a fail-closed WebGPU
     Animation Adventure surface with textured skinned GLB diagnostics,
     root-motion-required movement validation, cinematic follow camera state,
@@ -833,3 +847,4 @@ All notable changes to this project will be documented in this file.
 [0.2.29]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.29
 [0.2.30]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.30
 [0.2.31]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.31
+[0.2.32]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.32
