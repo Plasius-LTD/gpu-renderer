@@ -746,7 +746,13 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
-  if (strict_physical_low_spp_lighting_enabled() && ray.bounce >= 2u) {
+  let rouletteStartBounce = select(
+    2u,
+    6u,
+    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE) &&
+      config.samplesPerPixel <= 8u
+  );
+  if (strict_physical_low_spp_lighting_enabled() && ray.bounce >= rouletteStartBounce) {
     let survivalProbability = clamp(max_component(continuationThroughput), 0.05, 0.95);
     let roulette = sample_dimension_1d(
       ray.sourcePixelId,
@@ -787,12 +793,18 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         );
       }
     } else {
-      let overflowEnvironment = terminal_surface_environment_contribution(
-        ray,
-        arrivingThroughput,
-        hit
-      );
-      let rawWeightedContribution = overflowEnvironment * sample_weight();
+      var rawWeightedContribution = vec3<f32>(0.0);
+      if (
+        !strict_physical_low_spp_lighting_enabled() ||
+        !transport_experiment_enabled(TRANSPORT_EXPERIMENT_STRICT_ZERO_OVERFLOW)
+      ) {
+        let overflowEnvironment = terminal_surface_environment_contribution(
+          ray,
+          arrivingThroughput,
+          hit
+        );
+        rawWeightedContribution = overflowEnvironment * sample_weight();
+      }
       record_radiance_diagnostics(rawWeightedContribution);
       let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
       record_termination_metrics(

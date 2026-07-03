@@ -190,6 +190,10 @@ fn uniform_hemisphere_pdf() -> f32 {
   return 1.0 / (2.0 * 3.14159265359);
 }
 
+fn cosine_hemisphere_pdf(normal: vec3<f32>, direction: vec3<f32>) -> f32 {
+  return saturate(dot(normal, direction)) / 3.14159265359;
+}
+
 fn sample_uniform_sphere_direction(sample: vec2<f32>) -> vec3<f32> {
   let z = 1.0 - 2.0 * sample.y;
   let radial = sqrt(max(1.0 - z * z, 0.0));
@@ -798,58 +802,75 @@ fn sample_emissive_triangle_light(
   return DirectLightSample(vec4<f32>(lightDirection, 0.0), vec4<f32>(radiance, 0.0), lightPdf, traceDistance, 0u, 1u);
 }
 
-fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> DirectLightSample {
-  let environmentSelectionProbability = select(1.0, 0.5, config.emissiveTriangleCount > 0u);
-  let selector = sample_dimension_1d(
+fn direct_light_sample_frame_index() -> u32 {
+  return select(
+    config.frameIndex,
+    0u,
+    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING)
+  );
+}
+
+fn sample_environment_direct_light(
+  hit: HitRecord,
+  ray: RayRecord,
+  normal: vec3<f32>,
+  selector: f32,
+  environmentSelectionProbability: f32
+) -> DirectLightSample {
+  let environmentUv = sample_dimension_2d(
     ray.sourcePixelId,
     ray.sampleId,
     ray.bounce,
-    config.frameIndex,
-    SAMPLE_DIM_DIRECT_LIGHT_SELECTOR
+    direct_light_sample_frame_index(),
+    SAMPLE_DIM_DIRECT_ENVIRONMENT,
+    config.samplesPerPixel
   );
-  if (selector < environmentSelectionProbability) {
-    let environmentUv = sample_dimension_2d(
-      ray.sourcePixelId,
-      ray.sampleId,
-      ray.bounce,
-      config.frameIndex,
-      SAMPLE_DIM_DIRECT_ENVIRONMENT,
-      config.samplesPerPixel
-    );
-    var lightDirection = normal;
-    var radiance = vec3<f32>(0.0);
-    var pdf = 0.0;
-    if (strict_physical_low_spp_lighting_enabled() && !environment_importance_sampling_enabled()) {
+  var lightDirection = normal;
+  var radiance = vec3<f32>(0.0);
+  var pdf = 0.0;
+  if (strict_physical_low_spp_lighting_enabled() && !environment_importance_sampling_enabled()) {
+    if (transport_experiment_enabled(TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE)) {
+      lightDirection = cosine_sample_hemisphere(environmentUv, normal);
+      radiance = procedural_sky_radiance(lightDirection);
+      pdf = cosine_hemisphere_pdf(normal, lightDirection);
+    } else {
       lightDirection = sample_uniform_hemisphere_direction(environmentUv, normal);
       radiance = procedural_sky_radiance(lightDirection);
       pdf = uniform_hemisphere_pdf();
-    } else {
-      let environmentSample = sample_environment_importance(vec2<f32>(
-        selector / max(environmentSelectionProbability, 0.000001),
-        environmentUv.y
-      ));
-      lightDirection = safe_normalize(environmentSample.direction, normal);
-      radiance = direct_environment_radiance(
-        offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection),
-        lightDirection
-      );
-      pdf = environmentSample.pdf;
     }
-    return DirectLightSample(
-      vec4<f32>(lightDirection, 0.0),
-      vec4<f32>(radiance, 0.0),
-      pdf * environmentSelectionProbability,
-      1000000.0,
-      0u,
-      1u
+  } else {
+    let environmentSample = sample_environment_importance(vec2<f32>(
+      selector / max(environmentSelectionProbability, 0.000001),
+      environmentUv.y
+    ));
+    lightDirection = safe_normalize(environmentSample.direction, normal);
+    radiance = direct_environment_radiance(
+      offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection),
+      lightDirection
     );
+    pdf = environmentSample.pdf;
   }
+  return DirectLightSample(
+    vec4<f32>(lightDirection, 0.0),
+    vec4<f32>(radiance, 0.0),
+    pdf * environmentSelectionProbability,
+    1000000.0,
+    0u,
+    1u
+  );
+}
+
+fn sample_emissive_direct_light(
+  hit: HitRecord,
+  ray: RayRecord,
+  environmentSelectionProbability: f32
+) -> DirectLightSample {
   let emissiveSample = sample_emissive_triangle_light(
     hit,
     ray.sourcePixelId,
     ray.sampleId,
     ray.bounce,
-    config.frameIndex,
+    direct_light_sample_frame_index(),
     SAMPLE_DIM_EMISSIVE_LIGHT_SELECTION,
     SAMPLE_DIM_EMISSIVE_LIGHT_SURFACE
   );
@@ -866,10 +887,24 @@ fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> Dir
   );
 }
 
-fn surface_direct_light_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> DirectLightSample {
+  let environmentSelectionProbability = select(1.0, 0.5, config.emissiveTriangleCount > 0u);
+  let selector = sample_dimension_1d(
+    ray.sourcePixelId,
+    ray.sampleId,
+    ray.bounce,
+    direct_light_sample_frame_index(),
+    SAMPLE_DIM_DIRECT_LIGHT_SELECTOR
+  );
+  if (selector < environmentSelectionProbability) {
+    return sample_environment_direct_light(hit, ray, normal, selector, environmentSelectionProbability);
+  }
+  return sample_emissive_direct_light(hit, ray, environmentSelectionProbability);
+}
+
+fn direct_light_sample_contribution(ray: RayRecord, hit: HitRecord, lightSample: DirectLightSample) -> vec3<f32> {
   let normal = surface_shading_normal(hit);
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
-  let lightSample = sample_direct_light(hit, ray, normal);
   if (lightSample.valid == 0u) {
     return vec3<f32>(0.0);
   }
@@ -904,6 +939,19 @@ fn surface_direct_light_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32
     (lightSample.flags & DIRECT_LIGHT_FLAG_DELTA) != 0u
   );
   return sanitize_linear_radiance(contribution);
+}
+
+fn surface_direct_light_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+  let normal = surface_shading_normal(hit);
+  if (transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING)) {
+    let environmentLight = sample_environment_direct_light(hit, ray, normal, 0.5, 1.0);
+    let emissiveLight = sample_emissive_direct_light(hit, ray, 0.0);
+    return sanitize_linear_radiance(
+      direct_light_sample_contribution(ray, hit, environmentLight) +
+      direct_light_sample_contribution(ray, hit, emissiveLight)
+    );
+  }
+  return direct_light_sample_contribution(ray, hit, sample_direct_light(hit, ray, normal));
 }
 
 fn surface_procedural_sun_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {

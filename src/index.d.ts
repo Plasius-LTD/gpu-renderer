@@ -737,6 +737,8 @@ export interface WavefrontPathTracingComputeConfig {
   readonly environmentMap: WavefrontEnvironmentMapInput;
   readonly deferredPathResolve: boolean;
   readonly strictPhysicalLowSppLighting: boolean;
+  readonly transportExperiments: WavefrontTransportExperimentState;
+  readonly transportExperimentFlags: number;
   readonly triangleCount: number;
   readonly triangleCapacity: number;
   readonly bvhNodeCount: number;
@@ -765,11 +767,60 @@ export interface WavefrontPathTracingComputeConfig {
 
 export interface WavefrontRendererFeatureFlags {
   readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
+  readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
+  readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
+  readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
+  readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+  readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
+  readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
+  readonly enabled?: {
+    readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
+    readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
+    readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
+    readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
+    readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+    readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
+    readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
+  };
+  readonly flags?: {
+    readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
+    readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
+    readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
+    readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
+    readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+    readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
+    readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
+  };
   readonly renderer?: {
     readonly transport?: {
       readonly strictPhysicalLowSppLighting?: boolean;
+      readonly stableSampleRouting?: boolean;
+      readonly strictZeroOverflow?: boolean;
+      readonly deferLowSppRussianRoulette?: boolean;
+      readonly deterministicDirectLighting?: boolean;
+    };
+    readonly environment?: {
+      readonly productStudioImportance?: boolean;
+    };
+    readonly diagnostics?: {
+      readonly productTransportTelemetry?: boolean;
     };
   };
+}
+
+export interface WavefrontTransportExperimentFlags {
+  readonly stableSampleRouting: boolean;
+  readonly strictZeroOverflow: boolean;
+  readonly deferLowSppRussianRoulette: boolean;
+  readonly deterministicDirectLighting: boolean;
+  readonly productStudioImportance: boolean;
+  readonly productTransportTelemetry: boolean;
+}
+
+export interface WavefrontTransportExperimentState {
+  readonly requested: WavefrontTransportExperimentFlags;
+  readonly effective: WavefrontTransportExperimentFlags;
+  readonly bitmask: number;
 }
 
 export interface WavefrontEnvironmentLightingInput {
@@ -901,6 +952,12 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly displayQuality?: boolean;
   readonly denoise?: boolean;
   readonly strictPhysicalLowSppLighting?: boolean;
+  readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
+  readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
+  readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
+  readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+  readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
+  readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly featureFlags?: WavefrontRendererFeatureFlags;
   readonly frameIndex?: number;
 }
@@ -950,6 +1007,8 @@ export interface WavefrontPathTracingComputeRenderer {
     environmentMap: WavefrontEnvironmentMapSnapshot;
     deferredPathResolve: boolean;
     strictPhysicalLowSppLighting: boolean;
+    transportExperiments: WavefrontTransportExperimentState;
+    transportExperimentFlags: number;
     bvhNodeCount: number;
     displayQuality: boolean;
     accelerationBuildMode: WavefrontAccelerationBuildMode;
@@ -986,6 +1045,8 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly environmentMap: WavefrontEnvironmentMapSnapshot;
   readonly deferredPathResolve: boolean;
   readonly strictPhysicalLowSppLighting: boolean;
+  readonly transportExperiments: WavefrontTransportExperimentState;
+  readonly transportExperimentFlags: number;
   readonly bvhNodeCount: number;
   readonly displayQuality: boolean;
   readonly accelerationBuildMode: WavefrontAccelerationBuildMode;

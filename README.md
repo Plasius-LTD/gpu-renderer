@@ -160,6 +160,22 @@ directional source, samples procedural sky over the visible hemisphere, and
 selects emissive triangles by area-weighted emission power with matching MIS
 PDFs. Use `denoise: false` when validating this strict path so remaining
 variance is measured in the transport rather than hidden by filtering.
+Strict validation can also enable the Product Studio transport experiment
+matrix through independent boolean feature flags. The flags are composable:
+none, one, several, or all may be requested at once. Flags that depend on strict
+physical transport report as requested but no-op effectively when
+`renderer.transport.strictPhysicalLowSppLighting` is disabled.
+
+- `renderer.transport.stableSampleRouting.enabled`
+- `renderer.transport.strictZeroOverflow.enabled`
+- `renderer.transport.deferLowSppRussianRoulette.enabled`
+- `renderer.transport.deterministicDirectLighting.enabled`
+- `renderer.environment.productStudioImportance.enabled`
+- `renderer.diagnostics.productTransportTelemetry.enabled`
+
+Renderer config, frame stats, and snapshots expose both the structured
+`transportExperiments` state and the packed `transportExperimentFlags` bitfield
+so Product Studio diagnostics can record the exact active set for each render.
 
 ```js
 import {

@@ -201,7 +201,7 @@ export function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
   data.setUint32(256, config.environmentPortalCount ?? 0, true);
   data.setUint32(260, config.environmentPortalMode ?? 0, true);
   data.setUint32(264, config.samplesPerPixel, true);
-  data.setUint32(268, 0, true);
+  data.setUint32(268, config.transportExperimentFlags ?? 0, true);
   writeVec4(floatView, 272, [
     config.environmentMap.enabled ? 1 : 0,
     config.environmentMap.intensity,

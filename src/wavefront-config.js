@@ -47,6 +47,7 @@ import {
   resolveDeferredPathResolve,
   resolveEnvironmentMap,
   resolveStrictPhysicalLowSppLighting,
+  resolveTransportExperiments,
   scale,
   subtract,
 } from "./wavefront-core.js";
@@ -457,6 +458,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   );
   const deferredPathResolve = resolveDeferredPathResolve(options);
   const strictPhysicalLowSppLighting = resolveStrictPhysicalLowSppLighting(options);
+  const transportExperiments = resolveTransportExperiments(options, strictPhysicalLowSppLighting);
 
   return Object.freeze({
     mode: rendererWavefrontComputeMode,
@@ -498,6 +500,8 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     environmentMap,
     deferredPathResolve,
     strictPhysicalLowSppLighting,
+    transportExperiments,
+    transportExperimentFlags: transportExperiments.bitmask,
     displayQuality: options.displayQuality === true,
     requiresMeshBvhForDisplayQuality: true,
     denoise: options.denoise !== false,

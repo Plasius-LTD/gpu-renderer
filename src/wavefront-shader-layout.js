@@ -197,7 +197,7 @@ struct FrameConfig {
   environmentPortalCount: u32,
   environmentPortalMode: u32,
   samplesPerPixel: u32,
-  _portalPad1: u32,
+  transportExperimentFlags: u32,
   environmentMapSettings: vec4<f32>,
   pathResolveSettings: vec4<f32>,
   environmentMapMeta: vec4<f32>,
@@ -226,6 +226,12 @@ const TERMINAL_SOURCE_KIND_ABSORPTION_NULL = 5u;
 const TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE = 6u;
 const TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT = 7u;
 const TERMINATION_LUMINANCE_SCALE = 1000000.0;
+const TRANSPORT_EXPERIMENT_STABLE_SAMPLE_ROUTING = 1u;
+const TRANSPORT_EXPERIMENT_STRICT_ZERO_OVERFLOW = 2u;
+const TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE = 4u;
+const TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING = 8u;
+const TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE = 16u;
+const TRANSPORT_EXPERIMENT_PRODUCT_TRANSPORT_TELEMETRY = 32u;
 
 struct Counters {
   activeCount: atomic<u32>,
@@ -326,6 +332,14 @@ fn random01(seed: u32) -> f32 {
   return f32(hash_u32(seed) & 0x00ffffffu) / 16777215.0;
 }
 
+fn transport_experiment_enabled(bit: u32) -> bool {
+  return (config.transportExperimentFlags & bit) != 0u;
+}
+
+fn sample_frame_index(frameIndex: u32) -> u32 {
+  return select(frameIndex, 0u, transport_experiment_enabled(TRANSPORT_EXPERIMENT_STABLE_SAMPLE_ROUTING));
+}
+
 fn radical_inverse_vdc(bits: u32) -> f32 {
   var value = bits;
   value = (value << 16u) | (value >> 16u);
@@ -343,7 +357,7 @@ fn sample_dimension_1d(
   frameIndex: u32,
   dimension: u32
 ) -> f32 {
-  return random01(mix_seed(pixelId, sampleId, bounce, frameIndex, dimension));
+  return random01(mix_seed(pixelId, sampleId, bounce, sample_frame_index(frameIndex), dimension));
 }
 
 fn sample_dimension_2d(
@@ -356,7 +370,7 @@ fn sample_dimension_2d(
 ) -> vec2<f32> {
   let strata = max(strataCount, 1u);
   let jitter = sample_dimension_1d(pixelId, sampleId, bounce, frameIndex, dimension);
-  let scramble = hash_u32(mix_seed(pixelId, sampleId, bounce, frameIndex, dimension));
+  let scramble = hash_u32(mix_seed(pixelId, sampleId, bounce, sample_frame_index(frameIndex), dimension));
   let stratified = fract((f32(sampleId % strata) + jitter) / f32(strata));
   let lowDiscrepancy = fract(radical_inverse_vdc(sampleId ^ scramble) + jitter);
   return vec2<f32>(stratified, lowDiscrepancy);

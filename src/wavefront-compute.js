@@ -885,6 +885,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         ...config.environmentMap,
       },
       strictPhysicalLowSppLighting: config.strictPhysicalLowSppLighting,
+      featureFlags: options.featureFlags,
       frameIndex: config.frameIndex,
       ...overrides,
     });
@@ -935,6 +936,9 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       mediumCount: config.mediumCount,
       environmentMap: createEnvironmentMapSnapshot(config.environmentMap),
       deferredPathResolve: config.deferredPathResolve,
+      strictPhysicalLowSppLighting: config.strictPhysicalLowSppLighting,
+      transportExperiments: config.transportExperiments,
+      transportExperimentFlags: config.transportExperimentFlags,
       bvhNodeCount: config.bvhNodeCount,
       displayQuality: config.displayQuality,
       accelerationBuildMode: config.accelerationBuildMode,

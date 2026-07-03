@@ -295,9 +295,83 @@ export function resolveStrictPhysicalLowSppLighting(options = {}) {
   const value =
     options.strictPhysicalLowSppLighting ??
     options.featureFlags?.["renderer.transport.strictPhysicalLowSppLighting"] ??
+    options.featureFlags?.enabled?.["renderer.transport.strictPhysicalLowSppLighting"] ??
+    options.featureFlags?.flags?.["renderer.transport.strictPhysicalLowSppLighting"] ??
     options.featureFlags?.renderer?.transport?.strictPhysicalLowSppLighting ??
     false;
   return value === true;
+}
+
+function readBooleanFeatureFlag(options, dottedName, nestedReader) {
+  const value =
+    options[dottedName] ??
+    options.featureFlags?.[dottedName] ??
+    options.featureFlags?.enabled?.[dottedName] ??
+    options.featureFlags?.flags?.[dottedName] ??
+    nestedReader?.(options.featureFlags) ??
+    false;
+  return value === true;
+}
+
+export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
+  stableSampleRouting: 1 << 0,
+  strictZeroOverflow: 1 << 1,
+  deferLowSppRussianRoulette: 1 << 2,
+  deterministicDirectLighting: 1 << 3,
+  productStudioImportance: 1 << 4,
+  productTransportTelemetry: 1 << 5,
+});
+
+export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
+  const requested = Object.freeze({
+    stableSampleRouting: readBooleanFeatureFlag(
+      options,
+      "renderer.transport.stableSampleRouting.enabled",
+      (flags) => flags?.renderer?.transport?.stableSampleRouting
+    ),
+    strictZeroOverflow: readBooleanFeatureFlag(
+      options,
+      "renderer.transport.strictZeroOverflow.enabled",
+      (flags) => flags?.renderer?.transport?.strictZeroOverflow
+    ),
+    deferLowSppRussianRoulette: readBooleanFeatureFlag(
+      options,
+      "renderer.transport.deferLowSppRussianRoulette.enabled",
+      (flags) => flags?.renderer?.transport?.deferLowSppRussianRoulette
+    ),
+    deterministicDirectLighting: readBooleanFeatureFlag(
+      options,
+      "renderer.transport.deterministicDirectLighting.enabled",
+      (flags) => flags?.renderer?.transport?.deterministicDirectLighting
+    ),
+    productStudioImportance: readBooleanFeatureFlag(
+      options,
+      "renderer.environment.productStudioImportance.enabled",
+      (flags) => flags?.renderer?.environment?.productStudioImportance
+    ),
+    productTransportTelemetry: readBooleanFeatureFlag(
+      options,
+      "renderer.diagnostics.productTransportTelemetry.enabled",
+      (flags) => flags?.renderer?.diagnostics?.productTransportTelemetry
+    ),
+  });
+  const effective = Object.freeze({
+    stableSampleRouting: requested.stableSampleRouting,
+    strictZeroOverflow: requested.strictZeroOverflow && strictPhysicalLowSppLighting,
+    deferLowSppRussianRoulette:
+      requested.deferLowSppRussianRoulette && strictPhysicalLowSppLighting,
+    deterministicDirectLighting:
+      requested.deterministicDirectLighting && strictPhysicalLowSppLighting,
+    productStudioImportance: requested.productStudioImportance,
+    productTransportTelemetry: requested.productTransportTelemetry,
+  });
+  let bitmask = 0;
+  for (const [key, bit] of Object.entries(WAVEFRONT_TRANSPORT_EXPERIMENT_BITS)) {
+    if (effective[key]) {
+      bitmask |= bit;
+    }
+  }
+  return Object.freeze({ requested, effective, bitmask: bitmask >>> 0 });
 }
 
 export function emissionPower(emission) {
