@@ -2,6 +2,9 @@ export {
   createAnimatedSceneRenderer,
 } from "./animated-scene-renderer.js";
 export {
+  createProfessionalAnimatedSceneRenderer,
+} from "./professional-animated-scene-renderer.js";
+export {
   createDefaultWavefrontSceneObjects,
   createWavefrontBvhBuildLevels,
   createWavefrontBvhSortStages,

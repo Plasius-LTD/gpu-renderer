@@ -180,6 +180,50 @@ function readMatrices(document, accessorIndex) {
   return readAccessor(document, accessorIndex).map((matrix) => Array.from(matrix));
 }
 
+function textureImage(document, textureIndex) {
+  if (typeof textureIndex !== "number") {
+    return null;
+  }
+  const texture = document.json.textures?.[textureIndex];
+  return typeof texture?.source === "number" ? document.json.images?.[texture.source] ?? null : null;
+}
+
+function imageHasBuffer(document, image) {
+  if (!image) {
+    return false;
+  }
+  if (typeof image.uri === "string" && image.uri.trim().length > 0) {
+    return true;
+  }
+  return typeof image.bufferView === "number" && Boolean(document.json.bufferViews?.[image.bufferView]);
+}
+
+function extractMaterialTextureMetadata(document, primitive) {
+  const material = document.json.materials?.[primitive?.material];
+  const baseColorTextureIndex = material?.pbrMetallicRoughness?.baseColorTexture?.index;
+  const normalTextureIndex = material?.normalTexture?.index;
+  const missingTextureReferences = [];
+  if (typeof baseColorTextureIndex === "number" && !imageHasBuffer(document, textureImage(document, baseColorTextureIndex))) {
+    missingTextureReferences.push("baseColorTexture");
+  }
+  if (typeof normalTextureIndex === "number" && !imageHasBuffer(document, textureImage(document, normalTextureIndex))) {
+    missingTextureReferences.push("normalTexture");
+  }
+
+  return Object.freeze({
+    materialCount: document.json.materials?.length ?? 0,
+    textureCount: document.json.textures?.length ?? 0,
+    imageCount: document.json.images?.length ?? 0,
+    embeddedImageCount: (document.json.images ?? []).filter((image) => typeof image.bufferView === "number").length,
+    baseColorTextureCount: typeof baseColorTextureIndex === "number" ? 1 : 0,
+    normalTextureCount: typeof normalTextureIndex === "number" ? 1 : 0,
+    hasBaseColorTexture: typeof baseColorTextureIndex === "number",
+    hasNormalTexture: typeof normalTextureIndex === "number",
+    missingTextureReferences: Object.freeze(missingTextureReferences),
+    materialName: material?.name ?? "",
+  });
+}
+
 function nodeLocalMatrix(node, override = {}) {
   if (node.matrix && !override.translation && !override.rotation && !override.scale) {
     return [...node.matrix];
@@ -270,6 +314,31 @@ function sampleChannel(channel, sampler, document, timeSeconds) {
     : lerpArray(startValue, endValue, t);
 }
 
+function rootTranslationDistance(clipPayload) {
+  if (!clipPayload) {
+    return 0;
+  }
+  let distance = 0;
+  for (const channel of clipPayload.animation.channels ?? []) {
+    if (channel.target?.path !== "translation") {
+      continue;
+    }
+    const nodeName = clipPayload.document.json.nodes?.[channel.target.node]?.name ?? "";
+    if (!/(^|:)Hips$/u.test(nodeName) && nodeName !== "mixamorigHips") {
+      continue;
+    }
+    const sampler = clipPayload.animation.samplers?.[channel.sampler];
+    const output = sampler ? readAccessor(clipPayload.document, sampler.output) : [];
+    if (output.length < 2) {
+      continue;
+    }
+    const start = Array.isArray(output[0]) ? output[0] : [0, 0, 0];
+    const end = Array.isArray(output.at(-1)) ? output.at(-1) : start;
+    distance = Math.max(distance, Math.hypot((end[0] ?? 0) - (start[0] ?? 0), (end[2] ?? 0) - (start[2] ?? 0)));
+  }
+  return distance;
+}
+
 function createClipPayload(clipRef) {
   const document = parseGlb(clipRef?.asset);
   const animation = document?.json.animations?.[0];
@@ -337,6 +406,12 @@ export function createAnimatedGltfModel(modelAsset, clipRefs = []) {
   }
 
   const positions = readAccessor(document, primitive.attributes.POSITION);
+  const normals = primitive.attributes.NORMAL === undefined
+    ? []
+    : readAccessor(document, primitive.attributes.NORMAL);
+  const texcoords = primitive.attributes.TEXCOORD_0 === undefined
+    ? []
+    : readAccessor(document, primitive.attributes.TEXCOORD_0);
   const joints = primitive.attributes.JOINTS_0 === undefined
     ? positions.map(() => [0, 0, 0, 0])
     : readAccessor(document, primitive.attributes.JOINTS_0);
@@ -360,6 +435,8 @@ export function createAnimatedGltfModel(modelAsset, clipRefs = []) {
     worldMatrices: bindWorldMatrices,
   });
   const bounds = deriveBounds(bindVertices);
+  const materialTextureMetadata = extractMaterialTextureMetadata(document, primitive);
+  const clipRootMotionDistances = new Map(clips.map((clip) => [clip.id, rootTranslationDistance(clip)]));
 
   return {
     name: mesh.name ?? meshNode.name ?? "skinned-gltf-model",
@@ -368,6 +445,20 @@ export function createAnimatedGltfModel(modelAsset, clipRefs = []) {
     jointCount: skin.joints.length,
     animatedNodeCount: new Set(clips.flatMap((clip) => [...clip.nodeNames])).size,
     clipCount: clips.length,
+    materialTextureMetadata,
+    textureCount: materialTextureMetadata.textureCount,
+    materialCount: materialTextureMetadata.materialCount,
+    hasBaseColorTexture: materialTextureMetadata.hasBaseColorTexture,
+    hasNormalTexture: materialTextureMetadata.hasNormalTexture,
+    hasUv: texcoords.length === positions.length,
+    hasNormals: normals.length === positions.length,
+    professionalRenderable:
+      materialTextureMetadata.hasBaseColorTexture
+      && materialTextureMetadata.hasNormalTexture
+      && materialTextureMetadata.missingTextureReferences.length === 0
+      && texcoords.length === positions.length
+      && normals.length === positions.length
+      && skin.joints.length > 0,
     clips,
     sample(activeClipId, clipTimeMs) {
       const clip = clips.find((candidate) => candidate.id === activeClipId) ?? clips[0] ?? null;
@@ -388,6 +479,7 @@ export function createAnimatedGltfModel(modelAsset, clipRefs = []) {
         bindBounds: bounds,
         activeClipRenderable: Boolean(clip),
         activeClipDurationSeconds: clip?.durationSeconds ?? 0,
+        activeClipRootTranslationDistance: clipRootMotionDistances.get(clip?.id) ?? 0,
       };
     },
   };

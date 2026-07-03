@@ -12,10 +12,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added `createProfessionalAnimatedSceneRenderer`, a fail-closed WebGPU
+    Animation Adventure surface with textured skinned GLB diagnostics,
+    root-motion-required movement validation, cinematic follow camera state,
+    and no 2D proxy fallback.
 
 - **Changed**
-  - (placeholder)
+  - Expanded animated GLB parsing to report UVs, normals, material/texture
+    counts, diffuse and normal texture availability, missing texture buffers,
+    and per-clip root translation distance.
 
 - **Fixed**
   - (placeholder)

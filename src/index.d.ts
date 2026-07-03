@@ -111,6 +111,18 @@ export interface CreateAnimatedSceneRendererOptions {
   readonly cancelAnimationFrame?: (handle: number) => void;
 }
 
+export interface CreateProfessionalAnimatedSceneRendererOptions extends Omit<CreateAnimatedSceneRendererOptions, "canvas"> {
+  readonly canvas: string | HTMLCanvasElement | {
+    width: number;
+    height: number;
+    style?: Record<string, string>;
+    getContext(type: "webgpu"): GPUCanvasContext | null;
+  };
+  readonly navigator?: Navigator;
+  readonly document?: Document;
+  readonly clearColor?: RendererColor;
+}
+
 export interface AnimatedSceneSnapshot {
   readonly frame: number;
   readonly running: boolean;
@@ -169,6 +181,22 @@ export interface AnimatedSceneSnapshot {
   readonly frameState: "initialized" | "running" | "rendered-once" | "destroyed";
 }
 
+export interface ProfessionalAnimatedSceneSnapshot extends Omit<AnimatedSceneSnapshot, "cameraViewMode" | "headLook" | "targetDistance" | "characterGroundY" | "characterVisible" | "propGroundAnchors"> {
+  readonly renderMode: "webgpu-pbr";
+  readonly webGpuActive: boolean;
+  readonly texturedSkinnedRenderingActive: boolean;
+  readonly pbrMaterialActive: boolean;
+  readonly shadowPassActive: boolean;
+  readonly textureCount: number;
+  readonly materialCount: number;
+  readonly normalTextureActive: boolean;
+  readonly cameraViewMode: "cinematic-follow";
+  readonly movementValidation: AnimatedSceneSnapshot["movementValidation"] & {
+    readonly rootMotionPolicy: "root-motion-required";
+    readonly rootTranslationDistance?: number;
+  };
+}
+
 export interface AnimatedSceneRenderer {
   start(): void;
   resize(width: number, height: number, devicePixelRatio?: number): void;
@@ -193,6 +221,16 @@ export interface AnimatedSceneRenderer {
 }
 
 export function createAnimatedSceneRenderer(options: CreateAnimatedSceneRendererOptions): AnimatedSceneRenderer;
+
+export function createProfessionalAnimatedSceneRenderer(
+  options: CreateProfessionalAnimatedSceneRendererOptions,
+): Promise<{
+  start(): void;
+  resize(width: number, height: number, devicePixelRatio?: number): void;
+  renderOnce(timestamp?: number): ProfessionalAnimatedSceneSnapshot;
+  getSnapshot(): ProfessionalAnimatedSceneSnapshot;
+  destroy(): void;
+}>;
 
 export type WavefrontSceneObjectKind = "sphere" | "box" | "aabb" | "bounds" | number;
 export type WavefrontMaterialKind =
