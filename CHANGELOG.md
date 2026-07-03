@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.30] - 2026-07-03
+
+- **Added**
   - Added composable strict low-SPP transport experiment flags for stable
     sample routing, strict zero overflow, deferred low-SPP Russian roulette,
     deterministic direct lighting, Product Studio environment importance, and
@@ -792,3 +806,4 @@ All notable changes to this project will be documented in this file.
 [0.2.27]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.27
 [0.2.28]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.28
 [0.2.29]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.29
+[0.2.30]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.30
