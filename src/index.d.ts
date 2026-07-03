@@ -771,6 +771,7 @@ export interface WavefrontRendererFeatureFlags {
   readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
   readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
   readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+  readonly "renderer.transport.sourceStableDirectLighting.enabled"?: boolean;
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly enabled?: {
@@ -779,6 +780,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
     readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
     readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+    readonly "renderer.transport.sourceStableDirectLighting.enabled"?: boolean;
     readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
@@ -788,6 +790,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
     readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
     readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+    readonly "renderer.transport.sourceStableDirectLighting.enabled"?: boolean;
     readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
@@ -798,6 +801,7 @@ export interface WavefrontRendererFeatureFlags {
       readonly strictZeroOverflow?: boolean;
       readonly deferLowSppRussianRoulette?: boolean;
       readonly deterministicDirectLighting?: boolean;
+      readonly sourceStableDirectLighting?: boolean | { readonly enabled?: boolean };
     };
     readonly environment?: {
       readonly productStudioImportance?: boolean;
@@ -815,6 +819,7 @@ export interface WavefrontTransportExperimentFlags {
   readonly deterministicDirectLighting: boolean;
   readonly productStudioImportance: boolean;
   readonly productTransportTelemetry: boolean;
+  readonly sourceStableDirectLighting: boolean;
 }
 
 export interface WavefrontTransportExperimentState {
@@ -951,11 +956,13 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly environmentLighting?: WavefrontEnvironmentLightingInput;
   readonly displayQuality?: boolean;
   readonly denoise?: boolean;
+  readonly presentationOutput?: "tone-mapped" | "linear";
   readonly strictPhysicalLowSppLighting?: boolean;
   readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
   readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
   readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
   readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+  readonly "renderer.transport.sourceStableDirectLighting.enabled"?: boolean;
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly featureFlags?: WavefrontRendererFeatureFlags;

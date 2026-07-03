@@ -32,6 +32,12 @@ When enabled, the wavefront path tracer:
 - selects emissive triangles by area-weighted emission power, with PDFs that
   match the sampled distribution before MIS.
 
+Strict Product Studio validation can additionally enable
+`renderer.transport.sourceStableDirectLighting.enabled`. That flag uses the
+deterministic direct-light estimator and removes direct-light sample dependence
+on adjacent pixel ids and frame index, reducing source-routing stipple without
+adding terminal fill or ambient rescue.
+
 When disabled, existing stabilized behavior remains the rollback path.
 
 ## Consequences
@@ -49,4 +55,5 @@ When disabled, existing stabilized behavior remains the rollback path.
   procedural sun/sky sampling, power-weighted emissive selection, and corrected
   emissive PDFs.
 - Existing Eames/Product Studio benchmark scenes should be validated with
-  `denoise: false` at SPP 1, 4, 8, and 20 before enabling strict mode broadly.
+  `denoise: false` at SPP 1, 4, 8, 20, 32, 64, 128, and 256 before enabling
+  strict/source-stable mode broadly.

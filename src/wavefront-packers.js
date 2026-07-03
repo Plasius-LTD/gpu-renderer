@@ -212,7 +212,7 @@ export function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
     config.deferredPathResolve ? 1 : 0,
     config.environmentLighting.sunlitBaseline,
     config.strictPhysicalLowSppLighting ? 1 : 0,
-    0,
+    config.presentationOutput === "linear" ? 1 : 0,
   ]);
   writeVec4(floatView, 304, [
     config.environmentMap.width ?? 1,

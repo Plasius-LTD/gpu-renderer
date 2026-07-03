@@ -48,6 +48,7 @@ import {
   resolveEnvironmentMap,
   resolveStrictPhysicalLowSppLighting,
   resolveTransportExperiments,
+  resolveWavefrontPresentationOutput,
   scale,
   subtract,
 } from "./wavefront-core.js";
@@ -502,6 +503,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     strictPhysicalLowSppLighting,
     transportExperiments,
     transportExperimentFlags: transportExperiments.bitmask,
+    presentationOutput: resolveWavefrontPresentationOutput(options.presentationOutput),
     displayQuality: options.displayQuality === true,
     requiresMeshBvhForDisplayQuality: true,
     denoise: options.denoise !== false,

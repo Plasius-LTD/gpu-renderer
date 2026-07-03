@@ -12,10 +12,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added `renderer.transport.sourceStableDirectLighting.enabled` as a strict
+    physical Product Studio transport flag for source-stable direct-light
+    validation.
+  - Added `presentationOutput: "tone-mapped" | "linear"` for denoise-off
+    Product Studio validation captures.
 
 - **Changed**
-  - (placeholder)
+  - Changed source-stable direct lighting to reuse deterministic direct-light
+    evaluation while removing direct-light sample dependence on adjacent pixel
+    ids and frame-index shimmer.
 
 - **Fixed**
   - (placeholder)
