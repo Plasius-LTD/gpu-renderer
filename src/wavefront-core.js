@@ -168,6 +168,16 @@ export function readNonNegativeInteger(name, value, fallback) {
   return numeric;
 }
 
+export function resolveWavefrontPresentationOutput(value) {
+  if (value === undefined || value === null || value === "tone-mapped") {
+    return "tone-mapped";
+  }
+  if (value === "linear") {
+    return "linear";
+  }
+  throw new Error("presentationOutput must be 'tone-mapped' or 'linear'.");
+}
+
 export function readFiniteNumber(name, value, fallback) {
   if (value === undefined || value === null) {
     return fallback;
@@ -320,6 +330,7 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   deterministicDirectLighting: 1 << 3,
   productStudioImportance: 1 << 4,
   productTransportTelemetry: 1 << 5,
+  sourceStableDirectLighting: 1 << 6,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
@@ -344,6 +355,12 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
       "renderer.transport.deterministicDirectLighting.enabled",
       (flags) => flags?.renderer?.transport?.deterministicDirectLighting
     ),
+    sourceStableDirectLighting: readBooleanFeatureFlag(
+      options,
+      "renderer.transport.sourceStableDirectLighting.enabled",
+      (flags) => flags?.renderer?.transport?.sourceStableDirectLighting?.enabled
+        ?? flags?.renderer?.transport?.sourceStableDirectLighting
+    ),
     productStudioImportance: readBooleanFeatureFlag(
       options,
       "renderer.environment.productStudioImportance.enabled",
@@ -361,9 +378,12 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
     deferLowSppRussianRoulette:
       requested.deferLowSppRussianRoulette && strictPhysicalLowSppLighting,
     deterministicDirectLighting:
-      requested.deterministicDirectLighting && strictPhysicalLowSppLighting,
+      (requested.deterministicDirectLighting || requested.sourceStableDirectLighting)
+        && strictPhysicalLowSppLighting,
     productStudioImportance: requested.productStudioImportance,
     productTransportTelemetry: requested.productTransportTelemetry,
+    sourceStableDirectLighting:
+      requested.sourceStableDirectLighting && strictPhysicalLowSppLighting,
   });
   let bitmask = 0;
   for (const [key, bit] of Object.entries(WAVEFRONT_TRANSPORT_EXPERIMENT_BITS)) {

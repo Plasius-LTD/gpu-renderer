@@ -581,6 +581,7 @@ test("wavefront config packs composable transport experiment flags", () => {
         "renderer.transport.strictZeroOverflow.enabled": true,
         "renderer.transport.deferLowSppRussianRoulette.enabled": true,
         "renderer.transport.deterministicDirectLighting.enabled": true,
+        "renderer.transport.sourceStableDirectLighting.enabled": true,
         "renderer.environment.productStudioImportance.enabled": true,
         "renderer.diagnostics.productTransportTelemetry.enabled": true,
       },
@@ -594,6 +595,7 @@ test("wavefront config packs composable transport experiment flags", () => {
         "renderer.transport.strictZeroOverflow.enabled": true,
         "renderer.transport.deferLowSppRussianRoulette.enabled": true,
         "renderer.transport.deterministicDirectLighting.enabled": true,
+        "renderer.transport.sourceStableDirectLighting.enabled": true,
       },
     },
   });
@@ -603,12 +605,34 @@ test("wavefront config packs composable transport experiment flags", () => {
   assert.equal(baseline.transportExperimentFlags, 0);
   assert.equal(config.transportExperiments.requested.strictZeroOverflow, true);
   assert.equal(config.transportExperiments.effective.strictZeroOverflow, true);
+  assert.equal(config.transportExperiments.requested.sourceStableDirectLighting, true);
+  assert.equal(config.transportExperiments.effective.sourceStableDirectLighting, true);
   assert.equal(config.transportExperiments.effective.productTransportTelemetry, true);
-  assert.equal(config.transportExperimentFlags, 63);
-  assert.equal(payloadView.getUint32(268, true), 63);
+  assert.equal(config.presentationOutput, "tone-mapped");
+  assert.equal(config.transportExperimentFlags, 127);
+  assert.equal(payloadView.getUint32(268, true), 127);
+  assert.equal(new Float32Array(payload, 288, 4)[3], 0);
   assert.equal(strictOffConfig.transportExperiments.requested.strictZeroOverflow, true);
+  assert.equal(strictOffConfig.transportExperiments.requested.sourceStableDirectLighting, true);
   assert.equal(strictOffConfig.transportExperiments.effective.strictZeroOverflow, false);
   assert.equal(strictOffConfig.transportExperiments.effective.deterministicDirectLighting, false);
+  assert.equal(strictOffConfig.transportExperiments.effective.sourceStableDirectLighting, false);
+});
+
+test("wavefront config packs linear presentation output without changing the default", () => {
+  const config = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    presentationOutput: "linear",
+  });
+  const payload = createConfigPayload(config, { x: 0, y: 0, width: 64, height: 64 }, 0);
+
+  assert.equal(config.presentationOutput, "linear");
+  assert.equal(new Float32Array(payload, 288, 4)[3], 1);
+  assert.throws(
+    () => createWavefrontPathTracingComputeConfig({ presentationOutput: "raw" }),
+    /presentationOutput must be 'tone-mapped' or 'linear'/
+  );
 });
 
 test("wavefront reference helper generates deterministic primary rays from the camera contract", () => {
@@ -863,6 +887,10 @@ test("wavefront compute denoise adapts filter cost and strength to spp", () => {
   assert.match(source, /const useTwoPassDenoise = renderedSamplesPerPixel < 4;/);
   assert.match(source, /const denoisePassCount = renderedSamplesPerPixel < 4 \? 2 : 1;/);
   assert.match(source, /tone_map_radiance/);
+  assert.match(source, /fn present_radiance/);
+  assert.match(source, /config\.pathResolveSettings\.w > 0\.5/);
+  assert.match(source, /present_radiance\(linearOutput\)/);
+  assert.match(source, /present_radiance\(radiance\)/);
   assert.doesNotMatch(source, /getImageData|putImageData/);
 });
 
@@ -1114,6 +1142,10 @@ test("wavefront compute samples all-material direct light with MIS before random
   assert.match(source, /fn sample_direct_light/);
   assert.match(source, /fn direct_light_sample_contribution/);
   assert.match(source, /fn surface_procedural_sun_contribution/);
+  assert.match(source, /TRANSPORT_EXPERIMENT_SOURCE_STABLE_DIRECT_LIGHTING/);
+  assert.match(source, /fn direct_light_sample_pixel_id\(ray: RayRecord\) -> u32/);
+  assert.match(source, /select\(\s+ray\.sourcePixelId,\s+0u,\s+transport_experiment_enabled\(TRANSPORT_EXPERIMENT_SOURCE_STABLE_DIRECT_LIGHTING\)\s+\)/);
+  assert.match(source, /direct_light_sample_pixel_id\(ray\)/);
   assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) && !environment_importance_sampling_enabled\(\)/);
   assert.match(source, /radiance = procedural_sky_radiance\(lightDirection\);/);
   assert.match(source, /TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE/);
