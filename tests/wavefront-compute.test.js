@@ -1278,6 +1278,11 @@ test("wavefront compute isolates deterministic low-SPP indirect transport", () =
   assert.match(source, /let probeDirection = cosine_sample_hemisphere\(sample, normal\);/);
   assert.match(source, /let probeHit = resolve_indirect_probe_hit\(probeRay\);/);
   assert.match(source, /deterministic_low_spp_probe_direct_radiance\(probeRay, probeHit\)/);
+  assert.match(source, /let hasIndirectBounceBudget = ray\.bounce \+ 1u < config\.maxDepth;/);
+  assert.match(
+    source,
+    /deterministic_low_spp_indirect_enabled\(\) &&\s+shouldEstimateDirectLight &&\s+hasIndirectBounceBudget/s
+  );
   assert.match(source, /record_transport_contribution\(TRANSPORT_BUCKET_CACHED_INDIRECT, weightedCachedIndirect\);/);
   assert.match(source, /TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO/);
   assert.match(source, /deterministicResidualZeroCount: atomic<u32>/);

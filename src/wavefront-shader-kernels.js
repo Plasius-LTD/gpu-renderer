@@ -973,7 +973,12 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       accumulation[ray.rayId] + vec4<f32>(weightedDirectLight, 0.0);
   }
 
-  if (deterministic_low_spp_indirect_enabled() && shouldEstimateDirectLight) {
+  let hasIndirectBounceBudget = ray.bounce + 1u < config.maxDepth;
+  if (
+    deterministic_low_spp_indirect_enabled() &&
+    shouldEstimateDirectLight &&
+    hasIndirectBounceBudget
+  ) {
     let cachedIndirect = deterministic_low_spp_cached_indirect(
       ray,
       hit,
