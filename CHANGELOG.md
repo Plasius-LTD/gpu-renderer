@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.36] - 2026-07-09
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Fixed deterministic cached-indirect transport so enabling
     `renderer.transport.deterministicLowSppIndirect.enabled` no longer switches
     from deterministic indirect lighting at 1-4 SPP to stochastic residual
@@ -912,3 +926,4 @@ All notable changes to this project will be documented in this file.
 [0.2.33]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.33
 [0.2.34]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.34
 [0.2.35]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.35
+[0.2.36]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.36
