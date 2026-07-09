@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.35] - 2026-07-09
+
+- **Added**
   - Added `renderer.transport.deterministicLowSppIndirect.enabled` as a
     strict-mode Product Studio transport flag for deterministic low-SPP indirect
     radiance evaluation.
@@ -895,3 +909,4 @@ All notable changes to this project will be documented in this file.
 [0.2.32]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.32
 [0.2.33]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.33
 [0.2.34]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.34
+[0.2.35]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.35
