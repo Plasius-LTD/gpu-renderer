@@ -1272,7 +1272,14 @@ test("wavefront compute isolates deterministic low-SPP indirect transport", () =
 
   assert.match(source, /TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT = 128u/);
   assert.match(source, /fn deterministic_low_spp_indirect_enabled\(\) -> bool/);
-  assert.match(source, /config\.samplesPerPixel <= 4u/);
+  const deterministicIndirectPredicate = source.match(
+    /fn deterministic_low_spp_indirect_enabled\(\) -> bool \{[\s\S]*?\n\}/
+  )?.[0] ?? "";
+  assert.match(
+    deterministicIndirectPredicate,
+    /transport_experiment_enabled\(TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT\)/
+  );
+  assert.doesNotMatch(deterministicIndirectPredicate, /samplesPerPixel/);
   assert.match(source, /fn deterministic_low_spp_cached_indirect\(ray: RayRecord, hit: HitRecord, segmentTransmittance: vec3<f32>\) -> vec3<f32>/);
   assert.match(source, /let sample = hammersley_2d\(probeIndex, probeCount\);/);
   assert.match(source, /let probeDirection = cosine_sample_hemisphere\(sample, normal\);/);
