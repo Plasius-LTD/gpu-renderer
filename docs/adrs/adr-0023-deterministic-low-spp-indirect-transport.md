@@ -21,9 +21,10 @@ raster scene fallback.
 ## Decision
 
 Add `renderer.transport.deterministicLowSppIndirect.enabled` as a strict-mode
-transport experiment. When enabled at very low SPP, the wavefront resolver
+transport experiment. When enabled, the wavefront resolver consistently
 replaces the first stochastic residual indirect continuation with a deterministic
-surface radiance probe cache. The cache:
+surface radiance probe cache instead of changing indirect estimators at specific
+SPP thresholds. The cache:
 
 - derives samples from stable surface position, normal, and fixed
   low-discrepancy directions rather than frame index;
@@ -42,8 +43,10 @@ stable when the new flag is used alone.
 ## Consequences
 
 Low-SPP Product Studio output becomes coherent and repeatable without requiring
-denoise. Remaining variation is split into explicit buckets so stipple can be
-attributed to residual Monte Carlo paths instead of hidden presentation effects.
+denoise, and 1 SPP, 4 SPP, 8 SPP, and higher SPP renders keep the same
+transport mode when the flag is enabled. Remaining variation is split into
+explicit buckets so stipple can be attributed to residual Monte Carlo paths
+instead of hidden presentation effects.
 
 The cache is a biased low-SPP transport approximation, not an exact global
 illumination solve. The acceptance criterion is deterministic, auditable

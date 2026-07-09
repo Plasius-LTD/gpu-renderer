@@ -761,8 +761,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
 fn deterministic_low_spp_indirect_enabled() -> bool {
   return
     strict_physical_low_spp_lighting_enabled() &&
-    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT) &&
-    config.samplesPerPixel <= 4u;
+    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT);
 }
 
 fn deterministic_low_spp_probe_count() -> u32 {

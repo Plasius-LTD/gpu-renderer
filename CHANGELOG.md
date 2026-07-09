@@ -18,7 +18,10 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Fixed deterministic cached-indirect transport so enabling
+    `renderer.transport.deterministicLowSppIndirect.enabled` no longer switches
+    from deterministic indirect lighting at 1-4 SPP to stochastic residual
+    continuation at 8 SPP and above.
 
 - **Security**
   - (placeholder)
@@ -35,9 +38,8 @@ All notable changes to this project will be documented in this file.
 
 - **Changed**
   - Changed deterministic low-SPP indirect mode to suppress the first stochastic
-    residual continuation at SPP 4 and below, replacing it with auditable
-    deterministic radiance probes that use physical visibility and direct-light
-    evaluation.
+    residual continuation, replacing it with auditable deterministic radiance
+    probes that use physical visibility and direct-light evaluation.
 
 - **Fixed**
   - (placeholder)
