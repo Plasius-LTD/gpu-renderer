@@ -56,9 +56,42 @@ fn scaled_termination_luminance(radiance: vec3<f32>) -> u32 {
   return u32(min(4294967295.0, round(averageLuminance * TERMINATION_LUMINANCE_SCALE)));
 }
 
+fn record_transport_contribution(kind: u32, radiance: vec3<f32>) {
+  let scaledLuminance = scaled_termination_luminance(radiance);
+  if (kind == TRANSPORT_BUCKET_DIRECT_EXPLICIT) {
+    atomicAdd(&counters.termination.transportDirectExplicitLuminanceScaled, scaledLuminance);
+    return;
+  }
+  if (kind == TRANSPORT_BUCKET_CACHED_INDIRECT) {
+    atomicAdd(&counters.termination.transportCachedIndirectLuminanceScaled, scaledLuminance);
+    return;
+  }
+  if (kind == TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL) {
+    atomicAdd(&counters.termination.transportResidualLuminanceScaled, scaledLuminance);
+  }
+}
+
+fn record_transport_checksum(pixelIndex: u32, radiance: vec3<f32>) {
+  let scaledLuminance = scaled_termination_luminance(radiance);
+  let weighted = (pixelIndex + 1u) * 2654435761u + (scaledLuminance + 1u) * 2246822519u;
+  atomicAdd(&counters.termination.transportChecksum, weighted);
+}
+
 fn record_termination_metrics(kind: u32, radiance: vec3<f32>) {
   let scaledLuminance = scaled_termination_luminance(radiance);
   atomicAdd(&counters.termination.totalTerminalLuminanceScaled, scaledLuminance);
+  if (
+    max_component(radiance) <= 0.000001 &&
+    (
+      kind == TERMINAL_SOURCE_KIND_ABSORPTION_NULL ||
+      kind == TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE ||
+      kind == TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT ||
+      kind == TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW ||
+      kind == TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO
+    )
+  ) {
+    atomicAdd(&counters.termination.transportZeroTerminationCount, 1u);
+  }
   if (kind == TERMINAL_SOURCE_KIND_EMISSIVE) {
     atomicAdd(&counters.termination.emissiveCount, 1u);
     return;
@@ -87,6 +120,11 @@ fn record_termination_metrics(kind: u32, radiance: vec3<f32>) {
   }
   if (kind == TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT) {
     atomicAdd(&counters.termination.strictMaxDepthCount, 1u);
+    return;
+  }
+  if (kind == TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO) {
+    atomicAdd(&counters.termination.deterministicResidualZeroCount, 1u);
+    return;
   }
 }
 
@@ -137,7 +175,15 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicStore(&counters.termination.absorptionNullCount, 0u);
     atomicStore(&counters.termination.russianRouletteCount, 0u);
     atomicStore(&counters.termination.strictMaxDepthCount, 0u);
-    atomicStore(&counters.termination.strictPad0, 0u);
+    atomicStore(&counters.termination.deterministicResidualZeroCount, 0u);
+    atomicStore(&counters.termination.transportDirectExplicitLuminanceScaled, 0u);
+    atomicStore(&counters.termination.transportCachedIndirectLuminanceScaled, 0u);
+    atomicStore(&counters.termination.transportResidualLuminanceScaled, 0u);
+    atomicStore(&counters.termination.transportZeroTerminationCount, 0u);
+    atomicStore(&counters.termination.transportChecksum, 0u);
+    atomicStore(&counters.termination.transportPad0, 0u);
+    atomicStore(&counters.termination.transportPad1, 0u);
+    atomicStore(&counters.termination.transportPad2, 0u);
     write_active_dispatch_args(config.tilePixelCount);
   }
   if (index >= config.tilePixelCount) {
@@ -297,6 +343,142 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
 fn surface_shading_normal(hit: HitRecord) -> vec3<f32> {
   let geometric = safe_normalize(hit.geometricNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
   return repair_shading_normal(geometric, hit.shadingNormal.xyz);
+}
+
+fn resolve_indirect_probe_hit(ray: RayRecord) -> HitRecord {
+  var nearest = 1000000.0;
+  var hitObject = SceneObject(
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(1.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 0.0, 0.08),
+    vec4<f32>(0.08, 1.0, 0.0, 0.0),
+    vec4<f32>(1.0, 1.0, 1.0, 1.0)
+  );
+  var candidate = no_candidate();
+  var hitTriangle = TriangleRecord(
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(0.0, 1.0, 0.0, 0.0),
+    vec4<f32>(0.0, 1.0, 0.0, 0.0),
+    vec4<f32>(0.0, 1.0, 0.0, 0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(1.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 0.0, 0.08),
+    vec4<f32>(0.08, 1.0, 0.0, 0.0),
+    vec4<f32>(1.0, 1.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 1.0, 1.0),
+    vec4<f32>(1.0, 1.0, 1.0, 0.0)
+  );
+
+  for (var objectIndex = 0u; objectIndex < config.sceneObjectCount; objectIndex = objectIndex + 1u) {
+    let object = sceneObjects[objectIndex];
+    var current = no_candidate();
+    if (object.kind == 1u) {
+      current = intersect_sphere(ray, object);
+    } else if (object.kind == 2u) {
+      current = intersect_box(ray, object);
+    }
+    if (current.hit == 1u && current.distance < nearest) {
+      nearest = current.distance;
+      hitObject = object;
+      candidate = current;
+    }
+  }
+
+  let meshCandidate = intersect_bvh(ray, nearest);
+  if (meshCandidate.hit == 1u && meshCandidate.distance < nearest) {
+    nearest = meshCandidate.distance;
+    candidate = meshCandidate;
+    hitTriangle = triangles[meshCandidate.triangleIndex];
+  }
+
+  if (candidate.hit == 0u) {
+    return make_miss(ray);
+  }
+
+  let position = ray.origin.xyz + ray.direction.xyz * candidate.distance;
+  let fromMesh = candidate.triangleIndex != 0xffffffffu;
+  let hitMaterialKind = select(hitObject.materialKind, hitTriangle.materialKind, fromMesh);
+  let hitObjectId = select(hitObject.objectId, hitTriangle.meshId, fromMesh);
+  let meshSurface = sample_surface_material(
+    hitTriangle,
+    candidate.uv,
+    candidate.geometricNormal,
+    candidate.shadingNormal
+  );
+  let hitColor = select(hitObject.color, meshSurface.color, fromMesh);
+  let hitEmission = select(hitObject.emission, meshSurface.emission, fromMesh);
+  let hitMaterial = select(hitObject.material, meshSurface.material, fromMesh);
+  let hitMaterialResponse = select(hitObject.materialResponse, meshSurface.materialResponse, fromMesh);
+  let hitMaterialExtension = select(hitObject.materialExtension, meshSurface.materialExtension, fromMesh);
+  let hitSpecularColor = select(hitObject.specularColor, meshSurface.specularColor, fromMesh);
+  let hitShadingNormal = select(candidate.shadingNormal, meshSurface.shadingNormal, fromMesh);
+  let hitPrimitiveId = select(candidate.primitiveId, hitTriangle.triangleId, fromMesh);
+  let hitMaterialRefId = select(candidate.materialRefId, hitTriangle.materialRefId, fromMesh);
+  let hitMediumRefId = select(candidate.mediumRefId, hitTriangle.mediumRefId, fromMesh);
+  let hitMaterialSlot = select(0u, hitTriangle.materialSlot, fromMesh);
+  let hitOcclusion = select(1.0, meshSurface.occlusion, fromMesh);
+  var hitType = 0u;
+  if (hitMaterialKind == 4u || emission_power(hitEmission) > 0.0001) {
+    hitType = 1u;
+  } else if (hitMaterialKind == 3u || hitMaterial.z < 0.999 || hitMaterialExtension.z > 0.001) {
+    hitType = 3u;
+  }
+  return HitRecord(
+    ray.rayId,
+    ray.sourcePixelId,
+    hitType,
+    hitObjectId,
+    hitMaterialKind,
+    candidate.frontFace,
+    hitPrimitiveId,
+    hitMaterialRefId,
+    hitMediumRefId,
+    hitMaterialSlot,
+    0u,
+    0u,
+    candidate.distance,
+    hitOcclusion,
+    vec2<f32>(0.0),
+    vec4<f32>(position, 1.0),
+    vec4<f32>(candidate.geometricNormal, 0.0),
+    vec4<f32>(hitShadingNormal, 0.0),
+    vec4<f32>(candidate.barycentric, 0.0),
+    vec4<f32>(candidate.uv, 0.0, 0.0),
+    hitColor,
+    hitEmission,
+    hitMaterial,
+    hitMaterialResponse,
+    hitMaterialExtension,
+    hitSpecularColor
+  );
 }
 
 fn offset_origin(
@@ -576,6 +758,111 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
   return ScatterResult(vec4<f32>(lightDirection, 0.0), pdf, ray.mediumRefId, 0u, lobeKind);
 }
 
+fn deterministic_low_spp_indirect_enabled() -> bool {
+  return
+    strict_physical_low_spp_lighting_enabled() &&
+    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT) &&
+    config.samplesPerPixel <= 4u;
+}
+
+fn deterministic_low_spp_probe_count() -> u32 {
+  return 2u;
+}
+
+fn deterministic_low_spp_probe_direct_radiance(probeRay: RayRecord, probeHit: HitRecord) -> vec3<f32> {
+  if (probeHit.hitType == 1u) {
+    var sourceRadiance = max(probeHit.emission.xyz, probeHit.color.xyz);
+    if ((probeRay.flags & RAY_FLAG_DELTA_SAMPLE) == 0u) {
+      let bsdfPdf = max(probeRay.throughput.w, 0.000001);
+      let lightPdf = terminal_emissive_light_pdf(probeRay, probeHit);
+      if (lightPdf > 0.000001) {
+        sourceRadiance = sourceRadiance * power_heuristic(bsdfPdf, lightPdf);
+      }
+    }
+    return sourceRadiance;
+  }
+  if (probeHit.hitType == 2u) {
+    var sourceRadiance = probeHit.color.xyz;
+    if ((probeRay.flags & RAY_FLAG_DELTA_SAMPLE) == 0u) {
+      let bsdfPdf = max(probeRay.throughput.w, 0.000001);
+      let lightPdf = environment_direction_pdf(probeRay.direction.xyz);
+      sourceRadiance = sourceRadiance * power_heuristic(bsdfPdf, lightPdf);
+    }
+    return sourceRadiance;
+  }
+  if (!surface_supports_direct_lighting(probeHit)) {
+    return vec3<f32>(0.0);
+  }
+  let directRay = RayRecord(
+    probeRay.rayId,
+    probeRay.parentRayId,
+    probeRay.sourcePixelId,
+    probeRay.sampleId,
+    probeRay.bounce,
+    probeRay.mediumRefId,
+    probeRay.flags,
+    0u,
+    probeRay.origin,
+    probeRay.direction,
+    vec4<f32>(1.0, 1.0, 1.0, probeRay.throughput.w)
+  );
+  return sanitize_linear_radiance(
+    surface_direct_light_contribution(directRay, probeHit) +
+    surface_procedural_sun_contribution(directRay, probeHit)
+  );
+}
+
+fn deterministic_low_spp_cached_indirect(ray: RayRecord, hit: HitRecord, segmentTransmittance: vec3<f32>) -> vec3<f32> {
+  if (!deterministic_low_spp_indirect_enabled() || !surface_supports_direct_lighting(hit)) {
+    return vec3<f32>(0.0);
+  }
+  let normal = surface_shading_normal(hit);
+  let viewDirection = safe_normalize(-ray.direction.xyz, normal);
+  let probeCount = deterministic_low_spp_probe_count();
+  var radiance = vec3<f32>(0.0);
+  for (var probeIndex = 0u; probeIndex < probeCount; probeIndex = probeIndex + 1u) {
+    let sample = hammersley_2d(probeIndex, probeCount);
+    let probeDirection = cosine_sample_hemisphere(sample, normal);
+    let probePdf = max(cosine_hemisphere_pdf(normal, probeDirection), 0.000001);
+    let scatter = ScatterResult(
+      vec4<f32>(probeDirection, 0.0),
+      probePdf,
+      ray.mediumRefId,
+      0u,
+      SCATTER_LOBE_DIFFUSE
+    );
+    let continuationThroughput =
+      surface_continuation_throughput(hit, viewDirection, probeDirection, scatter) *
+      segmentTransmittance;
+    if (max_component(continuationThroughput) <= 0.000001) {
+      continue;
+    }
+    let probeOrigin = offset_origin(
+      hit.position.xyz,
+      hit.geometricNormal.xyz,
+      hit.shadingNormal.xyz,
+      probeDirection
+    );
+    let probeRay = RayRecord(
+      ray.rayId,
+      ray.rayId,
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce + 1u,
+      scatter.mediumRefId,
+      0u,
+      0u,
+      vec4<f32>(probeOrigin, 1.0),
+      vec4<f32>(probeDirection, 0.0),
+      vec4<f32>(1.0, 1.0, 1.0, probePdf)
+    );
+    let probeHit = resolve_indirect_probe_hit(probeRay);
+    let incoming = deterministic_low_spp_probe_direct_radiance(probeRay, probeHit);
+    radiance = radiance + ray.throughput.xyz * continuationThroughput * incoming;
+  }
+  return sanitize_linear_radiance(radiance / max(f32(probeCount), 1.0));
+}
+
 @compute @workgroup_size(64)
 fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let index = globalId.x;
@@ -681,8 +968,42 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     let rawDirectLight = (directLight + sunLight) * sample_weight();
     record_radiance_diagnostics(rawDirectLight);
     let weightedDirectLight = sanitize_linear_radiance(rawDirectLight);
+    record_transport_contribution(TRANSPORT_BUCKET_DIRECT_EXPLICIT, weightedDirectLight);
     accumulation[ray.rayId] =
       accumulation[ray.rayId] + vec4<f32>(weightedDirectLight, 0.0);
+  }
+
+  let hasIndirectBounceBudget = ray.bounce + 1u < config.maxDepth;
+  if (
+    deterministic_low_spp_indirect_enabled() &&
+    shouldEstimateDirectLight &&
+    hasIndirectBounceBudget
+  ) {
+    let cachedIndirect = deterministic_low_spp_cached_indirect(
+      ray,
+      hit,
+      segmentTransmittance
+    );
+    let rawCachedIndirect = cachedIndirect * sample_weight();
+    record_radiance_diagnostics(rawCachedIndirect);
+    let weightedCachedIndirect = sanitize_linear_radiance(rawCachedIndirect);
+    record_transport_contribution(TRANSPORT_BUCKET_CACHED_INDIRECT, weightedCachedIndirect);
+    accumulation[ray.rayId] =
+      accumulation[ray.rayId] + vec4<f32>(weightedCachedIndirect, 0.0);
+    if (deferred_path_resolve_enabled()) {
+      record_deferred_terminal_source(
+        ray,
+        vec3<f32>(0.0),
+        TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO
+      );
+    } else {
+      record_termination_metrics(
+        TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO,
+        vec3<f32>(0.0)
+      );
+    }
+    atomicAdd(&counters.terminatedCount, 1u);
+    return;
   }
 
   if (ray.bounce + 1u >= config.maxDepth) {
@@ -902,12 +1223,14 @@ fn accumulateTerminalRadiance(@builtin(global_invocation_id) globalId: vec3<u32>
     let resolved = resolve_deferred_path_radiance(index) * sample_weight();
     record_radiance_diagnostics(resolved);
     let safeResolved = sanitize_linear_radiance(resolved);
+    record_transport_contribution(TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL, safeResolved);
     record_termination_metrics(u32(terminal.w), safeResolved);
     radiance = sanitize_linear_radiance(radiance + safeResolved);
     accumulation[index] = vec4<f32>(radiance, 1.0);
   }
 
   let linearOutput = sanitize_linear_radiance(radiance);
+  record_transport_checksum(index, linearOutput);
   textureStore(radianceImage, pixel, vec4<f32>(linearOutput, 1.0));
   if (config.denoise == 0u) {
     textureStore(outputImage, pixel, vec4<f32>(present_radiance(linearOutput), 1.0));

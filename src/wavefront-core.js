@@ -38,7 +38,7 @@ export const GPU_MAX_SUBMITTED_WORK_DEADLINE_MS = 180_000;
 export const CONFIG_BUFFER_BYTES = 320;
 export const COUNTER_DISPATCH_ARGS_OFFSET = 16;
 export const INDIRECT_DISPATCH_ARGS_BYTES = 12;
-export const COUNTER_BUFFER_BYTES = 80;
+export const COUNTER_BUFFER_BYTES = 128;
 export const TERMINATION_LUMINANCE_SCALE = 1_000_000;
 export const COUNTER_TERMINATION_EMISSIVE_OFFSET = 8;
 export const COUNTER_TERMINATION_ENVIRONMENT_OFFSET = 9;
@@ -51,6 +51,12 @@ export const COUNTER_TERMINATION_LEGACY_CLAMP_EQUIVALENT_OFFSET = 15;
 export const COUNTER_TERMINATION_ABSORPTION_NULL_OFFSET = 16;
 export const COUNTER_TERMINATION_RUSSIAN_ROULETTE_OFFSET = 17;
 export const COUNTER_TERMINATION_MAX_DEPTH_STRICT_OFFSET = 18;
+export const COUNTER_TERMINATION_DETERMINISTIC_RESIDUAL_ZERO_OFFSET = 19;
+export const COUNTER_TRANSPORT_DIRECT_LUMINANCE_OFFSET = 20;
+export const COUNTER_TRANSPORT_CACHED_INDIRECT_LUMINANCE_OFFSET = 21;
+export const COUNTER_TRANSPORT_RESIDUAL_LUMINANCE_OFFSET = 22;
+export const COUNTER_TRANSPORT_ZERO_TERMINATION_OFFSET = 23;
+export const COUNTER_TRANSPORT_CHECKSUM_OFFSET = 24;
 export const TRACE_STORAGE_BUFFER_BINDINGS = 10;
 export const BRDF_LUT_UPLOAD_CACHE = new Map();
 export const HIT_TYPE_SURFACE = 0;
@@ -62,6 +68,7 @@ export const TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW = 4;
 export const TERMINAL_SOURCE_KIND_ABSORPTION_NULL = 5;
 export const TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE = 6;
 export const TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT = 7;
+export const TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO = 8;
 export const MATERIAL_DIFFUSE = 0;
 export const MATERIAL_METAL = 1;
 export const MATERIAL_DIELECTRIC = 2;
@@ -99,6 +106,7 @@ export const EMPTY_TERMINATION_METRICS = Object.freeze({
     absorptionNull: 0,
     russianRoulette: 0,
     strictMaxDepth: 0,
+    deterministicResidualZero: 0,
   }),
   queueOverflow: 0,
   terminalRadiance: Object.freeze({
@@ -109,6 +117,13 @@ export const EMPTY_TERMINATION_METRICS = Object.freeze({
   radianceDiagnostics: Object.freeze({
     invalidSamples: 0,
     legacyClampEquivalentSamples: 0,
+  }),
+  transportContributions: Object.freeze({
+    directExplicitLuminance: 0,
+    cachedIndirectLuminance: 0,
+    stochasticResidualLuminance: 0,
+    zeroTerminationCount: 0,
+    deterministicChecksum: 0,
   }),
 });
 
@@ -331,6 +346,7 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   productStudioImportance: 1 << 4,
   productTransportTelemetry: 1 << 5,
   sourceStableDirectLighting: 1 << 6,
+  deterministicLowSppIndirect: 1 << 7,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
@@ -361,6 +377,12 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
       (flags) => flags?.renderer?.transport?.sourceStableDirectLighting?.enabled
         ?? flags?.renderer?.transport?.sourceStableDirectLighting
     ),
+    deterministicLowSppIndirect: readBooleanFeatureFlag(
+      options,
+      "renderer.transport.deterministicLowSppIndirect.enabled",
+      (flags) => flags?.renderer?.transport?.deterministicLowSppIndirect?.enabled
+        ?? flags?.renderer?.transport?.deterministicLowSppIndirect
+    ),
     productStudioImportance: readBooleanFeatureFlag(
       options,
       "renderer.environment.productStudioImportance.enabled",
@@ -378,12 +400,18 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
     deferLowSppRussianRoulette:
       requested.deferLowSppRussianRoulette && strictPhysicalLowSppLighting,
     deterministicDirectLighting:
-      (requested.deterministicDirectLighting || requested.sourceStableDirectLighting)
+      (
+        requested.deterministicDirectLighting
+        || requested.sourceStableDirectLighting
+        || requested.deterministicLowSppIndirect
+      )
         && strictPhysicalLowSppLighting,
     productStudioImportance: requested.productStudioImportance,
     productTransportTelemetry: requested.productTransportTelemetry,
     sourceStableDirectLighting:
       requested.sourceStableDirectLighting && strictPhysicalLowSppLighting,
+    deterministicLowSppIndirect:
+      requested.deterministicLowSppIndirect && strictPhysicalLowSppLighting,
   });
   let bitmask = 0;
   for (const [key, bit] of Object.entries(WAVEFRONT_TRANSPORT_EXPERIMENT_BITS)) {

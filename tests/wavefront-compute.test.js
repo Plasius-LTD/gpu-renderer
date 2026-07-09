@@ -582,6 +582,7 @@ test("wavefront config packs composable transport experiment flags", () => {
         "renderer.transport.deferLowSppRussianRoulette.enabled": true,
         "renderer.transport.deterministicDirectLighting.enabled": true,
         "renderer.transport.sourceStableDirectLighting.enabled": true,
+        "renderer.transport.deterministicLowSppIndirect.enabled": true,
         "renderer.environment.productStudioImportance.enabled": true,
         "renderer.diagnostics.productTransportTelemetry.enabled": true,
       },
@@ -596,6 +597,17 @@ test("wavefront config packs composable transport experiment flags", () => {
         "renderer.transport.deferLowSppRussianRoulette.enabled": true,
         "renderer.transport.deterministicDirectLighting.enabled": true,
         "renderer.transport.sourceStableDirectLighting.enabled": true,
+        "renderer.transport.deterministicLowSppIndirect.enabled": true,
+      },
+    },
+  });
+  const deterministicIndirectConfig = createWavefrontPathTracingComputeConfig({
+    width: 640,
+    height: 360,
+    strictPhysicalLowSppLighting: true,
+    featureFlags: {
+      enabled: {
+        "renderer.transport.deterministicLowSppIndirect.enabled": true,
       },
     },
   });
@@ -607,16 +619,22 @@ test("wavefront config packs composable transport experiment flags", () => {
   assert.equal(config.transportExperiments.effective.strictZeroOverflow, true);
   assert.equal(config.transportExperiments.requested.sourceStableDirectLighting, true);
   assert.equal(config.transportExperiments.effective.sourceStableDirectLighting, true);
+  assert.equal(config.transportExperiments.requested.deterministicLowSppIndirect, true);
+  assert.equal(config.transportExperiments.effective.deterministicLowSppIndirect, true);
   assert.equal(config.transportExperiments.effective.productTransportTelemetry, true);
   assert.equal(config.presentationOutput, "tone-mapped");
-  assert.equal(config.transportExperimentFlags, 127);
-  assert.equal(payloadView.getUint32(268, true), 127);
+  assert.equal(config.transportExperimentFlags, 255);
+  assert.equal(payloadView.getUint32(268, true), 255);
   assert.equal(new Float32Array(payload, 288, 4)[3], 0);
   assert.equal(strictOffConfig.transportExperiments.requested.strictZeroOverflow, true);
   assert.equal(strictOffConfig.transportExperiments.requested.sourceStableDirectLighting, true);
   assert.equal(strictOffConfig.transportExperiments.effective.strictZeroOverflow, false);
   assert.equal(strictOffConfig.transportExperiments.effective.deterministicDirectLighting, false);
   assert.equal(strictOffConfig.transportExperiments.effective.sourceStableDirectLighting, false);
+  assert.equal(strictOffConfig.transportExperiments.effective.deterministicLowSppIndirect, false);
+  assert.equal(deterministicIndirectConfig.transportExperiments.requested.deterministicDirectLighting, false);
+  assert.equal(deterministicIndirectConfig.transportExperiments.effective.deterministicDirectLighting, true);
+  assert.equal(deterministicIndirectConfig.transportExperiments.effective.deterministicLowSppIndirect, true);
 });
 
 test("wavefront config packs linear presentation output without changing the default", () => {
@@ -1249,6 +1267,30 @@ test("wavefront compute MIS-weights terminal emissive continuation hits", () => 
   );
 });
 
+test("wavefront compute isolates deterministic low-SPP indirect transport", () => {
+  const source = readRendererSource();
+
+  assert.match(source, /TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT = 128u/);
+  assert.match(source, /fn deterministic_low_spp_indirect_enabled\(\) -> bool/);
+  assert.match(source, /config\.samplesPerPixel <= 4u/);
+  assert.match(source, /fn deterministic_low_spp_cached_indirect\(ray: RayRecord, hit: HitRecord, segmentTransmittance: vec3<f32>\) -> vec3<f32>/);
+  assert.match(source, /let sample = hammersley_2d\(probeIndex, probeCount\);/);
+  assert.match(source, /let probeDirection = cosine_sample_hemisphere\(sample, normal\);/);
+  assert.match(source, /let probeHit = resolve_indirect_probe_hit\(probeRay\);/);
+  assert.match(source, /deterministic_low_spp_probe_direct_radiance\(probeRay, probeHit\)/);
+  assert.match(source, /let hasIndirectBounceBudget = ray\.bounce \+ 1u < config\.maxDepth;/);
+  assert.match(
+    source,
+    /deterministic_low_spp_indirect_enabled\(\) &&\s+shouldEstimateDirectLight &&\s+hasIndirectBounceBudget/s
+  );
+  assert.match(source, /record_transport_contribution\(TRANSPORT_BUCKET_CACHED_INDIRECT, weightedCachedIndirect\);/);
+  assert.match(source, /TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO/);
+  assert.match(source, /deterministicResidualZeroCount: atomic<u32>/);
+  assert.match(source, /atomicAdd\(&counters\.termination\.deterministicResidualZeroCount, 1u\);/);
+  assert.match(source, /record_transport_contribution\(TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL, safeResolved\);/);
+  assert.match(source, /record_transport_checksum\(index, linearOutput\);/);
+});
+
 test("wavefront BSDF numeric helpers flag PDF mismatches and invalid MIS measures", () => {
   const hit = {
     color: [0.78, 0.66, 0.52],
@@ -1465,6 +1507,9 @@ test("wavefront compute records radiance diagnostics instead of silently applyin
   assert.match(types, /readonly radianceDiagnostics\?: Readonly<\{/);
   assert.match(types, /invalidSamples: number;/);
   assert.match(types, /legacyClampEquivalentSamples: number;/);
+  assert.match(types, /readonly transportContributions\?: Readonly<\{/);
+  assert.match(types, /cachedIndirectLuminance: number;/);
+  assert.match(types, /deterministicChecksum: number;/);
 });
 
 test("wavefront compute exposes medium-table contracts and Beer-Lambert transport hooks", () => {
@@ -2587,6 +2632,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
       absorptionNull: 0,
       russianRoulette: 0,
       strictMaxDepth: 0,
+      deterministicResidualZero: 0,
     });
     assert.deepEqual(compatibilityFrame.terminalRadiance, {
       totalLuminance: 0,

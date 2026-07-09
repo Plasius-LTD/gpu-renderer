@@ -12,10 +12,18 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added `renderer.transport.deterministicLowSppIndirect.enabled` as a
+    strict-mode Product Studio transport flag for deterministic low-SPP indirect
+    radiance evaluation.
+  - Added transport contribution diagnostics for direct explicit light, cached
+    indirect light, stochastic residual light, zero terminations, and a
+    deterministic checksum.
 
 - **Changed**
-  - (placeholder)
+  - Changed deterministic low-SPP indirect mode to suppress the first stochastic
+    residual continuation at SPP 4 and below, replacing it with auditable
+    deterministic radiance probes that use physical visibility and direct-light
+    evaluation.
 
 - **Fixed**
   - (placeholder)

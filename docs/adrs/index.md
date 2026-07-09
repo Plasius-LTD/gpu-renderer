@@ -22,3 +22,4 @@
 - [ADR 0020: Animated Camera Rig Integration](./adr-0020-animated-camera-rig-integration.md)
 - [ADR 0021: Strict Physical Low-SPP Lighting](./adr-0021-strict-physical-low-spp-lighting.md)
 - [ADR 0022: Professional Animation WebGPU Surface](./adr-0022-professional-animation-webgpu-surface.md)
+- [ADR 0023: Deterministic Low-SPP Indirect Transport](./adr-0023-deterministic-low-spp-indirect-transport.md)

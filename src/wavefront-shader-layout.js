@@ -215,7 +215,15 @@ struct TerminationMetrics {
   absorptionNullCount: atomic<u32>,
   russianRouletteCount: atomic<u32>,
   strictMaxDepthCount: atomic<u32>,
-  strictPad0: atomic<u32>,
+  deterministicResidualZeroCount: atomic<u32>,
+  transportDirectExplicitLuminanceScaled: atomic<u32>,
+  transportCachedIndirectLuminanceScaled: atomic<u32>,
+  transportResidualLuminanceScaled: atomic<u32>,
+  transportZeroTerminationCount: atomic<u32>,
+  transportChecksum: atomic<u32>,
+  transportPad0: atomic<u32>,
+  transportPad1: atomic<u32>,
+  transportPad2: atomic<u32>,
 };
 
 const TERMINAL_SOURCE_KIND_EMISSIVE = 1u;
@@ -225,7 +233,11 @@ const TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW = 4u;
 const TERMINAL_SOURCE_KIND_ABSORPTION_NULL = 5u;
 const TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE = 6u;
 const TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT = 7u;
+const TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO = 8u;
 const TERMINATION_LUMINANCE_SCALE = 1000000.0;
+const TRANSPORT_BUCKET_DIRECT_EXPLICIT = 1u;
+const TRANSPORT_BUCKET_CACHED_INDIRECT = 2u;
+const TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL = 3u;
 const TRANSPORT_EXPERIMENT_STABLE_SAMPLE_ROUTING = 1u;
 const TRANSPORT_EXPERIMENT_STRICT_ZERO_OVERFLOW = 2u;
 const TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE = 4u;
@@ -233,6 +245,7 @@ const TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING = 8u;
 const TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE = 16u;
 const TRANSPORT_EXPERIMENT_PRODUCT_TRANSPORT_TELEMETRY = 32u;
 const TRANSPORT_EXPERIMENT_SOURCE_STABLE_DIRECT_LIGHTING = 64u;
+const TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT = 128u;
 
 struct Counters {
   activeCount: atomic<u32>,
