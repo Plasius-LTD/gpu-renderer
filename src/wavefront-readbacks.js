@@ -5,12 +5,18 @@ import {
   COUNTER_TERMINATION_AMBIENT_MAX_DEPTH_OFFSET,
   COUNTER_TERMINATION_EMISSIVE_OFFSET,
   COUNTER_TERMINATION_ENVIRONMENT_OFFSET,
+  COUNTER_TERMINATION_DETERMINISTIC_RESIDUAL_ZERO_OFFSET,
   COUNTER_TERMINATION_INVALID_SAMPLE_OFFSET,
   COUNTER_TERMINATION_LEGACY_CLAMP_EQUIVALENT_OFFSET,
   COUNTER_TERMINATION_MAX_DEPTH_STRICT_OFFSET,
   COUNTER_TERMINATION_QUEUE_OVERFLOW_OFFSET,
   COUNTER_TERMINATION_RUSSIAN_ROULETTE_OFFSET,
   COUNTER_TERMINATION_TOTAL_LUMINANCE_OFFSET,
+  COUNTER_TRANSPORT_CACHED_INDIRECT_LUMINANCE_OFFSET,
+  COUNTER_TRANSPORT_CHECKSUM_OFFSET,
+  COUNTER_TRANSPORT_DIRECT_LUMINANCE_OFFSET,
+  COUNTER_TRANSPORT_RESIDUAL_LUMINANCE_OFFSET,
+  COUNTER_TRANSPORT_ZERO_TERMINATION_OFFSET,
   EMPTY_TERMINATION_METRICS,
   GPU_READBACK_COMPLETION_TIMEOUT_MS,
   TERMINATION_LUMINANCE_SCALE,
@@ -60,6 +66,19 @@ export async function readWavefrontTerminationMetrics({
   const absorptionNull = countersView[COUNTER_TERMINATION_ABSORPTION_NULL_OFFSET] ?? 0;
   const russianRoulette = countersView[COUNTER_TERMINATION_RUSSIAN_ROULETTE_OFFSET] ?? 0;
   const strictMaxDepth = countersView[COUNTER_TERMINATION_MAX_DEPTH_STRICT_OFFSET] ?? 0;
+  const deterministicResidualZero =
+    countersView[COUNTER_TERMINATION_DETERMINISTIC_RESIDUAL_ZERO_OFFSET] ?? 0;
+  const directExplicitLuminance =
+    (countersView[COUNTER_TRANSPORT_DIRECT_LUMINANCE_OFFSET] ?? 0) /
+    TERMINATION_LUMINANCE_SCALE;
+  const cachedIndirectLuminance =
+    (countersView[COUNTER_TRANSPORT_CACHED_INDIRECT_LUMINANCE_OFFSET] ?? 0) /
+    TERMINATION_LUMINANCE_SCALE;
+  const stochasticResidualLuminance =
+    (countersView[COUNTER_TRANSPORT_RESIDUAL_LUMINANCE_OFFSET] ?? 0) /
+    TERMINATION_LUMINANCE_SCALE;
+  const zeroTerminationCount = countersView[COUNTER_TRANSPORT_ZERO_TERMINATION_OFFSET] ?? 0;
+  const deterministicChecksum = countersView[COUNTER_TRANSPORT_CHECKSUM_OFFSET] ?? 0;
   const ambientResidualLuminance =
     (countersView[COUNTER_TERMINATION_AMBIENT_LUMINANCE_OFFSET] ?? 0) /
     TERMINATION_LUMINANCE_SCALE;
@@ -77,6 +96,7 @@ export async function readWavefrontTerminationMetrics({
       absorptionNull,
       russianRoulette,
       strictMaxDepth,
+      deterministicResidualZero,
     }),
     queueOverflow,
     terminalRadiance: Object.freeze({
@@ -87,6 +107,13 @@ export async function readWavefrontTerminationMetrics({
     radianceDiagnostics: Object.freeze({
       invalidSamples,
       legacyClampEquivalentSamples,
+    }),
+    transportContributions: Object.freeze({
+      directExplicitLuminance,
+      cachedIndirectLuminance,
+      stochasticResidualLuminance,
+      zeroTerminationCount,
+      deterministicChecksum,
     }),
   });
 }

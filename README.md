@@ -184,6 +184,7 @@ physical transport report as requested but no-op effectively when
 - `renderer.transport.deferLowSppRussianRoulette.enabled`
 - `renderer.transport.deterministicDirectLighting.enabled`
 - `renderer.transport.sourceStableDirectLighting.enabled`
+- `renderer.transport.deterministicLowSppIndirect.enabled`
 - `renderer.environment.productStudioImportance.enabled`
 - `renderer.diagnostics.productTransportTelemetry.enabled`
 
@@ -198,6 +199,16 @@ adding ambient fill. Multi-bounce continuation rays that terminate on emissive
 geometry are MIS-weighted against that direct emissive estimator, so rare
 softbox hits remain physically valid without adding full unbalanced source
 radiance as isolated stippled pixels.
+`renderer.transport.deterministicLowSppIndirect.enabled` is also strict-mode
+only. For very low SPP it replaces the first stochastic indirect continuation
+with a deterministic surface-radiance probe cache keyed from stable surface
+state. The cache stores physical radiance from visible explicit lights,
+environment, and emissive geometry, reports it as
+`transportContributions.cachedIndirectLuminance`, and reports the suppressed
+residual continuation as a zero termination. This is not vertex
+brightness/contrast lighting, denoise, ambient fill, or a raster fallback; it is
+a bounded transport source that should converge toward the stochastic residual
+as SPP increases.
 Set `presentationOutput: "linear"` for linear presented validation captures, or
 omit it to keep the default tone-mapped presentation.
 

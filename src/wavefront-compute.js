@@ -871,6 +871,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       termination: terminationMetrics.termination,
       terminalRadiance: terminationMetrics.terminalRadiance,
       radianceDiagnostics: terminationMetrics.radianceDiagnostics,
+      transportContributions: terminationMetrics.transportContributions,
       queueOverflow: terminationMetrics.queueOverflow,
     });
     return Object.freeze({
