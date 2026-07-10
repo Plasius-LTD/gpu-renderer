@@ -50,16 +50,16 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@plasius/gpu-camera": "^0.1.17",
-    "@plasius/gpu-shared": "^1.0.2",
+    "@plasius/gpu-shared": "^1.0.12",
     "@plasius/gpu-xr": "^0.1.16"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "c8": "^11.0.0",
-    "eslint": "^10.3.0",
-    "globals": "^17.6.0",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
     "tsup": "^8.5.1",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "repository": {
     "type": "git",

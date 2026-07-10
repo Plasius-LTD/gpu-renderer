@@ -15,6 +15,10 @@ This package is intended to replace Three.js-dependent render orchestration with
 an explicit WebGPU-first runtime that can be consumed from React, vanilla, or
 worker-driven app surfaces.
 
+The package targets Node.js 24, consumes the stable `@plasius/gpu-shared` 1.x
+runtime line (`^1.0.12`), and validates its development tooling against the
+current ESLint 10 and TypeScript 7 baselines.
+
 Apache-2.0. ESM + CJS builds.
 
 ## Install
