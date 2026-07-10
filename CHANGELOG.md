@@ -12,16 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Existing renderer contract coverage continues to verify the public shared
+    runtime and package export surfaces.
 
 - **Changed**
-  - (placeholder)
+  - Updated `@plasius/gpu-shared` to the stable 1.x line (`^1.0.12`).
+  - Refreshed ESLint, globals, and TypeScript development baselines; TypeScript
+    7 is now the package development baseline.
 
 - **Fixed**
-  - (placeholder)
+  - Regenerated `package-lock.json` from the refreshed manifests and documented
+    the Node.js 24/runtime compatibility baseline.
 
 - **Security**
-  - (placeholder)
+  - Runtime dependency audit remains clear of high-severity vulnerabilities.
 
 ## [0.2.38] - 2026-07-10
 
