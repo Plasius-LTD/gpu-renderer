@@ -12,10 +12,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added bounded nested-medium stacks, Beer-Lambert segment attenuation,
+    reflected/transmitted branch bookkeeping, and bounded spectral dispersion
+    helpers for wavefront transport.
+  - Added normalization and atlas retention for authored `KHR_materials_*`
+    factors and extension textures.
 
 - **Changed**
-  - (placeholder)
+  - Changed GPU ray and triangle records to carry medium-stack state and
+    texture-backed material-extension records.
 
 - **Fixed**
   - (placeholder)

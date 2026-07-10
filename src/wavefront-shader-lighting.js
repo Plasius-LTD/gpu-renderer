@@ -519,20 +519,95 @@ fn medium_transmittance(mediumRefId: u32, distance: f32) -> vec3<f32> {
   );
 }
 
-fn transmitted_medium_ref_id(ray: RayRecord, hit: HitRecord) -> u32 {
-  if (!medium_valid(hit.mediumRefId)) {
+const MAX_MEDIUM_STACK_DEPTH: u32 = 4u;
+
+fn medium_stack_current_id(ray: RayRecord) -> u32 {
+  if (ray.mediumStackDepth == 0u) {
     return ray.mediumRefId;
+  }
+  if (ray.mediumStackDepth == 1u) {
+    return ray.mediumStack.x;
+  }
+  if (ray.mediumStackDepth == 2u) {
+    return ray.mediumStack.y;
+  }
+  if (ray.mediumStackDepth == 3u) {
+    return ray.mediumStack.z;
+  }
+  return ray.mediumStack.w;
+}
+
+fn transitioned_medium_stack(ray: RayRecord, hit: HitRecord) -> vec4<u32> {
+  var stack = ray.mediumStack;
+  var depth = min(ray.mediumStackDepth, MAX_MEDIUM_STACK_DEPTH);
+  let mediumId = hit.mediumRefId;
+  if (!medium_valid(mediumId)) {
+    return stack;
   }
   if (hit.frontFace == 1u) {
-    if (ray.mediumRefId == 0u || ray.mediumRefId == hit.mediumRefId) {
-      return hit.mediumRefId;
+    if (depth == 0u) {
+      stack.x = mediumId;
+    } else if (depth == 1u) {
+      stack.y = mediumId;
+    } else if (depth == 2u) {
+      stack.z = mediumId;
+    } else if (depth == 3u) {
+      stack.w = mediumId;
+    } else {
+      stack = vec4<u32>(stack.y, stack.z, stack.w, mediumId);
     }
-    return ray.mediumRefId;
+    return stack;
   }
-  if (ray.mediumRefId == hit.mediumRefId) {
-    return 0u;
+  if (depth == 4u && stack.w == mediumId) {
+    return vec4<u32>(stack.x, stack.y, stack.z, 0u);
   }
-  return ray.mediumRefId;
+  if (depth >= 3u && stack.z == mediumId) {
+    return vec4<u32>(stack.x, stack.y, stack.w, 0u);
+  }
+  if (depth >= 2u && stack.y == mediumId) {
+    return vec4<u32>(stack.x, stack.z, stack.w, 0u);
+  }
+  if (depth >= 1u && stack.x == mediumId) {
+    return vec4<u32>(stack.y, stack.z, stack.w, 0u);
+  }
+  return stack;
+}
+
+fn transitioned_medium_stack_depth(ray: RayRecord, hit: HitRecord) -> u32 {
+  let stack = transitioned_medium_stack(ray, hit);
+  if (stack.w != 0u) {
+    return 4u;
+  }
+  if (stack.z != 0u) {
+    return 3u;
+  }
+  if (stack.y != 0u) {
+    return 2u;
+  }
+  if (stack.x != 0u) {
+    return 1u;
+  }
+  return 0u;
+}
+
+fn transmitted_medium_ref_id(ray: RayRecord, hit: HitRecord) -> u32 {
+  if (!medium_valid(hit.mediumRefId)) {
+    return medium_stack_current_id(ray);
+  }
+  let stack = transitioned_medium_stack(ray, hit);
+  if (stack.w != 0u) {
+    return stack.w;
+  }
+  if (stack.z != 0u) {
+    return stack.z;
+  }
+  if (stack.y != 0u) {
+    return stack.y;
+  }
+  if (stack.x != 0u) {
+    return stack.x;
+  }
+  return 0u;
 }
 
 fn surface_delta_reflection_throughput(hit: HitRecord, viewDirection: vec3<f32>) -> vec3<f32> {
@@ -698,7 +773,8 @@ fn visibility_test_ray(origin: vec3<f32>, direction: vec3<f32>) -> RayRecord {
     0u,
     vec4<f32>(origin, 1.0),
     vec4<f32>(rayDirection, 0.0),
-    vec4<f32>(1.0, 1.0, 1.0, 1.0)
+    vec4<f32>(1.0, 1.0, 1.0, 1.0),
+    vec4<u32>(0u)
   );
 }
 

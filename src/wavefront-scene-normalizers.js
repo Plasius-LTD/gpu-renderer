@@ -16,6 +16,7 @@ import {
 } from "./wavefront-core.js";
 import {
   deriveWavefrontTransportMedium,
+  normalizeWavefrontMaterialExtensions,
   normalizeWavefrontThickness,
   readMaterialKind,
 } from "./wavefront-materials.js";
@@ -66,6 +67,7 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
         ).map((value) => Math.max(value, 0.001));
   const materialKindInput = input.materialKind ?? input.material?.kind;
   const materialKind = readMaterialKind(materialKindInput);
+  const materialExtensions = normalizeWavefrontMaterialExtensions(input);
   const color = asColor(
     input.color ??
       input.baseColor ??
@@ -80,13 +82,13 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
   );
   const opacity = clamp(readFiniteNumber("opacity", input.opacity ?? input.material?.opacity, color[3] ?? 1), 0, 1);
   const transmission = clamp(
-    readFiniteNumber("transmission", input.transmission ?? input.material?.transmission, 0),
+    readFiniteNumber("transmission", input.transmission ?? input.material?.transmission, materialExtensions.transmission),
     0,
     1
   );
-  const sheenColor = resolveSheenColor(input, color);
+  const sheenColor = resolveSheenColor(input, materialExtensions.sheenColor ?? color);
   const specularColor = asColor(
-    input.specularColor ?? input.material?.specularColor,
+    input.specularColor ?? input.material?.specularColor ?? materialExtensions.specularColor,
     [1, 1, 1, 1]
   ).map((value, componentIndex) => (componentIndex < 3 ? clamp(value, 0, 1) : 1));
   const medium = deriveWavefrontTransportMedium(input, index + 1);
@@ -117,24 +119,25 @@ export function normalizeWavefrontSceneObject(input = {}, index = 0) {
     roughness: clamp(readFiniteNumber("roughness", input.roughness ?? input.material?.roughness, 0.72), 0, 1),
     metallic: clamp(readFiniteNumber("metallic", input.metallic ?? input.material?.metallic, 0), 0, 1),
     opacity,
-    ior: clamp(readFiniteNumber("ior", input.ior ?? input.material?.ior, 1.45), 1, 3),
+    ior: clamp(readFiniteNumber("ior", input.ior ?? input.material?.ior, materialExtensions.ior), 1, 3),
     sheen: clamp(readFiniteNumber("sheen", input.sheen ?? input.material?.sheen, 0), 0, 1),
     sheenTint: clamp(readFiniteNumber("sheenTint", input.sheenTint ?? input.material?.sheenTint, 0), 0, 1),
     sheenColor: Object.freeze(sheenColor),
-    clearcoat: clamp(readFiniteNumber("clearcoat", input.clearcoat ?? input.material?.clearcoat, 0), 0, 1),
+    clearcoat: clamp(readFiniteNumber("clearcoat", input.clearcoat ?? input.material?.clearcoat, materialExtensions.clearcoat), 0, 1),
     clearcoatRoughness: clamp(
       readFiniteNumber(
         "clearcoatRoughness",
         input.clearcoatRoughness ?? input.material?.clearcoatRoughness,
-        0.08
+        materialExtensions.clearcoatRoughness
       ),
       0,
       1
     ),
-    specular: clamp(readFiniteNumber("specular", input.specular ?? input.material?.specular, 1), 0, 1),
+    specular: clamp(readFiniteNumber("specular", input.specular ?? input.material?.specular, materialExtensions.specular), 0, 1),
     specularColor: Object.freeze(specularColor),
-    thickness: normalizeWavefrontThickness(input, "thickness"),
+    thickness: Math.max(normalizeWavefrontThickness(input, "thickness"), materialExtensions.volumeThickness),
     transmission,
+    materialExtensions,
   });
 }
 
@@ -220,6 +223,7 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
       : null;
   const materialKindInput = input.materialKind ?? input.material?.kind;
   const materialKind = readMaterialKind(materialKindInput);
+  const materialExtensions = normalizeWavefrontMaterialExtensions(input);
   const color = asColor(
     input.color ??
       input.baseColor ??
@@ -234,13 +238,13 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
   );
   const opacity = clamp(readFiniteNumber("opacity", input.opacity ?? input.material?.opacity, color[3] ?? 1), 0, 1);
   const transmission = clamp(
-    readFiniteNumber("transmission", input.transmission ?? input.material?.transmission, 0),
+    readFiniteNumber("transmission", input.transmission ?? input.material?.transmission, materialExtensions.transmission),
     0,
     1
   );
-  const sheenColor = resolveSheenColor(input, color);
+  const sheenColor = resolveSheenColor(input, materialExtensions.sheenColor ?? color);
   const specularColor = asColor(
-    input.specularColor ?? input.material?.specularColor,
+    input.specularColor ?? input.material?.specularColor ?? materialExtensions.specularColor,
     [1, 1, 1, 1]
   ).map((value, componentIndex) => (componentIndex < 3 ? clamp(value, 0, 1) : 1));
   const medium = deriveWavefrontTransportMedium(input, meshIndex + 1);
@@ -281,30 +285,32 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     roughness: clamp(readFiniteNumber("roughness", input.roughness ?? input.material?.roughness, 0.72), 0, 1),
     metallic: clamp(readFiniteNumber("metallic", input.metallic ?? input.material?.metallic, 0), 0, 1),
     opacity,
-    ior: clamp(readFiniteNumber("ior", input.ior ?? input.material?.ior, 1.45), 1, 3),
+    ior: clamp(readFiniteNumber("ior", input.ior ?? input.material?.ior, materialExtensions.ior), 1, 3),
     sheen: clamp(readFiniteNumber("sheen", input.sheen ?? input.material?.sheen, 0), 0, 1),
     sheenTint: clamp(readFiniteNumber("sheenTint", input.sheenTint ?? input.material?.sheenTint, 0), 0, 1),
     sheenColor: Object.freeze(sheenColor),
-    clearcoat: clamp(readFiniteNumber("clearcoat", input.clearcoat ?? input.material?.clearcoat, 0), 0, 1),
+    clearcoat: clamp(readFiniteNumber("clearcoat", input.clearcoat ?? input.material?.clearcoat, materialExtensions.clearcoat), 0, 1),
     clearcoatRoughness: clamp(
       readFiniteNumber(
         "clearcoatRoughness",
         input.clearcoatRoughness ?? input.material?.clearcoatRoughness,
-        0.08
+        materialExtensions.clearcoatRoughness
       ),
       0,
       1
     ),
-    specular: clamp(readFiniteNumber("specular", input.specular ?? input.material?.specular, 1), 0, 1),
+    specular: clamp(readFiniteNumber("specular", input.specular ?? input.material?.specular, materialExtensions.specular), 0, 1),
     specularColor: Object.freeze(specularColor),
-    thickness: normalizeWavefrontThickness(input, "mesh thickness"),
+    thickness: Math.max(normalizeWavefrontThickness(input, "mesh thickness"), materialExtensions.volumeThickness),
     transmission,
+    materialExtensions,
     baseColorTexture: input.baseColorTexture ?? input.material?.baseColorTexture ?? null,
     metallicRoughnessTexture:
       input.metallicRoughnessTexture ?? input.material?.metallicRoughnessTexture ?? null,
     normalTexture: input.normalTexture ?? input.material?.normalTexture ?? null,
     occlusionTexture: input.occlusionTexture ?? input.material?.occlusionTexture ?? null,
     emissiveTexture: input.emissiveTexture ?? input.material?.emissiveTexture ?? null,
+    extensionTextures: materialExtensions.textures,
   });
 }
 

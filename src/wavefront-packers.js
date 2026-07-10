@@ -115,6 +115,29 @@ export function packWavefrontTriangles(triangles, capacity = triangles.length) {
     writeVec4(floatView, byteOffset + 304, triangle.occlusionAtlas ?? [0, 0, 1, 1]);
     writeVec4(floatView, byteOffset + 320, triangle.emissiveAtlas ?? [0, 0, 1, 1]);
     writeVec4(floatView, byteOffset + 336, triangle.textureSettings ?? [1, 1, 1, 0]);
+    writeVec4(floatView, byteOffset + 352, triangle.materialExtension2 ?? [0, 0, 1.3, 0]);
+    writeVec4(floatView, byteOffset + 368, triangle.materialExtension3 ?? [100, 400, 0, 0]);
+    const extensionTextureNames = [
+      "clearcoat",
+      "clearcoatRoughness",
+      "clearcoatNormal",
+      "transmission",
+      "thickness",
+      "sheenColor",
+      "sheenRoughness",
+      "specular",
+      "specularColor",
+      "iridescence",
+      "iridescenceThickness",
+      "anisotropy",
+    ];
+    extensionTextureNames.forEach((name, extensionIndex) => {
+      writeVec4(
+        floatView,
+        byteOffset + 384 + extensionIndex * 16,
+        triangle.extensionTextures?.[name] ?? [0, 0, 1, 1]
+      );
+    });
   });
 
   return Object.freeze({

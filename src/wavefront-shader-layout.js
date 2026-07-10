@@ -20,10 +20,11 @@ struct RayRecord {
   bounce: u32,
   mediumRefId: u32,
   flags: u32,
-  pad0: u32,
+  mediumStackDepth: u32,
   origin: vec4<f32>,
   direction: vec4<f32>,
   throughput: vec4<f32>,
+  mediumStack: vec4<u32>,
 };
 
 struct HitRecord {
@@ -103,6 +104,20 @@ struct TriangleRecord {
   occlusionAtlas: vec4<f32>,
   emissiveAtlas: vec4<f32>,
   textureSettings: vec4<f32>,
+  materialExtension2: vec4<f32>,
+  materialExtension3: vec4<f32>,
+  clearcoatAtlas: vec4<f32>,
+  clearcoatRoughnessAtlas: vec4<f32>,
+  clearcoatNormalAtlas: vec4<f32>,
+  transmissionAtlas: vec4<f32>,
+  thicknessAtlas: vec4<f32>,
+  sheenColorAtlas: vec4<f32>,
+  sheenRoughnessAtlas: vec4<f32>,
+  specularAtlas: vec4<f32>,
+  specularColorAtlas: vec4<f32>,
+  iridescenceAtlas: vec4<f32>,
+  iridescenceThicknessAtlas: vec4<f32>,
+  anisotropyAtlas: vec4<f32>,
 };
 
 struct BvhNode {
@@ -318,6 +333,18 @@ struct EnvironmentPortal {
 @group(0) @binding(30) var brdfLutSampler: sampler;
 @group(0) @binding(31) var environmentSamplingTexture: texture_2d<f32>;
 @group(0) @binding(32) var mediumTableTexture: texture_2d<f32>;
+@group(0) @binding(33) var clearcoatAtlasTexture: texture_2d<f32>;
+@group(0) @binding(34) var clearcoatRoughnessAtlasTexture: texture_2d<f32>;
+@group(0) @binding(35) var clearcoatNormalAtlasTexture: texture_2d<f32>;
+@group(0) @binding(36) var transmissionAtlasTexture: texture_2d<f32>;
+@group(0) @binding(37) var thicknessAtlasTexture: texture_2d<f32>;
+@group(0) @binding(38) var sheenColorAtlasTexture: texture_2d<f32>;
+@group(0) @binding(39) var sheenRoughnessAtlasTexture: texture_2d<f32>;
+@group(0) @binding(40) var specularAtlasTexture: texture_2d<f32>;
+@group(0) @binding(41) var specularColorAtlasTexture: texture_2d<f32>;
+@group(0) @binding(42) var iridescenceAtlasTexture: texture_2d<f32>;
+@group(0) @binding(43) var iridescenceThicknessAtlasTexture: texture_2d<f32>;
+@group(0) @binding(44) var anisotropyAtlasTexture: texture_2d<f32>;
 
 fn hash_u32(value: u32) -> u32 {
   var x = value;
