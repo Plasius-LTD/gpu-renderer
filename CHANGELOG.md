@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.37] - 2026-07-10
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Removed the deterministic cached-indirect radiance contribution from strict
     physical transport so low-SPP Product Studio renders no longer gain shadows
     or reflections from a fixed probe approximation instead of actual path
@@ -930,3 +944,4 @@ All notable changes to this project will be documented in this file.
 [0.2.34]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.34
 [0.2.35]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.35
 [0.2.36]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.36
+[0.2.37]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.37
