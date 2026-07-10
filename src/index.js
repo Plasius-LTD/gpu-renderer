@@ -50,6 +50,23 @@ export {
   createWavefrontPathTracingPlan,
 } from "./renderer-wavefront-plan.js";
 export {
+  applyMediumTransmittance,
+  beerLambertTransmittance,
+  createMediumStack,
+  createSpectralSamples,
+  createTransportBranches,
+  currentMediumId,
+  enterMediumStack,
+  exitMediumStack,
+  resolveSpectralIor,
+  transitionMediumStack,
+  MAX_MEDIUM_STACK_DEPTH,
+  MAX_TRANSPORT_BRANCHES,
+} from "./wavefront-transport.js";
+export {
+  normalizeWavefrontMaterialExtensions,
+} from "./wavefront-materials.js";
+export {
   createRayTracingRenderPlan,
   getRendererWorkerManifest,
   getRendererWorkerProfile,

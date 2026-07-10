@@ -464,6 +464,33 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     config.gpuMaterialSource.emissiveAtlas,
     "plasius.wavefront.materialAtlas.emissive"
   );
+  const extensionAtlasNames = [
+    "clearcoat",
+    "clearcoatRoughness",
+    "clearcoatNormal",
+    "transmission",
+    "thickness",
+    "sheenColor",
+    "sheenRoughness",
+    "specular",
+    "specularColor",
+    "iridescence",
+    "iridescenceThickness",
+    "anisotropy",
+  ];
+  const extensionAtlasResources = Object.freeze(
+    Object.fromEntries(
+      extensionAtlasNames.map((name) => [
+        name,
+        createAtlasTextureResource(
+          device,
+          constants,
+          config.gpuMaterialSource.extensionAtlases[name],
+          `plasius.wavefront.materialAtlas.${name}`
+        ),
+      ])
+    )
+  );
   const materialAtlasSampler = device.createSampler({
     label: "plasius.wavefront.materialAtlasSampler",
     addressModeU: "clamp-to-edge",
@@ -511,6 +538,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       brdfLutResource,
       environmentSamplingResource,
       mediumTextureResource,
+      extensionAtlasResources,
     });
   }
 
@@ -1008,6 +1036,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     if (emissiveAtlasResource.ownsTexture) {
       emissiveAtlasResource.texture?.destroy?.();
     }
+    Object.values(extensionAtlasResources).forEach((resource) => {
+      if (resource.ownsTexture) {
+        resource.texture?.destroy?.();
+      }
+    });
     context.unconfigure?.();
   }
 

@@ -286,6 +286,42 @@ export interface WavefrontMediumInput {
   readonly scattering?: readonly [number, number, number] | readonly number[];
 }
 
+export interface WavefrontMaterialExtensionTextureInputs {
+  readonly clearcoat?: WavefrontTextureSampleInput | null;
+  readonly clearcoatRoughness?: WavefrontTextureSampleInput | null;
+  readonly clearcoatNormal?: WavefrontTextureSampleInput | null;
+  readonly transmission?: WavefrontTextureSampleInput | null;
+  readonly thickness?: WavefrontTextureSampleInput | null;
+  readonly sheenColor?: WavefrontTextureSampleInput | null;
+  readonly sheenRoughness?: WavefrontTextureSampleInput | null;
+  readonly specular?: WavefrontTextureSampleInput | null;
+  readonly specularColor?: WavefrontTextureSampleInput | null;
+  readonly iridescence?: WavefrontTextureSampleInput | null;
+  readonly iridescenceThickness?: WavefrontTextureSampleInput | null;
+  readonly anisotropy?: WavefrontTextureSampleInput | null;
+}
+
+export interface WavefrontMaterialExtensions {
+  readonly clearcoat: number;
+  readonly clearcoatRoughness: number;
+  readonly ior: number;
+  readonly transmission: number;
+  readonly volumeThickness: number;
+  readonly sheenColor: readonly number[];
+  readonly sheenRoughness: number;
+  readonly specular: number;
+  readonly specularColor: readonly number[];
+  readonly iridescence: number;
+  readonly iridescenceIor: number;
+  readonly iridescenceThicknessMinimum: number;
+  readonly iridescenceThicknessMaximum: number;
+  readonly dispersion: number;
+  readonly anisotropy: number;
+  readonly anisotropyRotation: number;
+  readonly unlit: boolean;
+  readonly textures: WavefrontMaterialExtensionTextureInputs;
+}
+
 export interface WavefrontVolumeInput {
   readonly thickness?: number;
   readonly phaseModel?: number | "isotropic";
@@ -350,6 +386,7 @@ export interface WavefrontSceneObjectInput {
   readonly thickness?: number;
   readonly transmission?: number;
   readonly volume?: WavefrontVolumeInput | null;
+  readonly extensions?: Record<string, Record<string, unknown>>;
   readonly material?: {
     readonly kind?: WavefrontMaterialKind;
     readonly color?: RendererColor | readonly number[];
@@ -399,6 +436,7 @@ export interface WavefrontSceneObject {
   readonly specularColor: readonly [number, number, number, number] | readonly number[];
   readonly thickness: number;
   readonly transmission: number;
+  readonly materialExtensions: WavefrontMaterialExtensions;
 }
 
 export interface WavefrontMeshInput {
@@ -434,6 +472,7 @@ export interface WavefrontMeshInput {
   readonly thickness?: number;
   readonly transmission?: number;
   readonly volume?: WavefrontVolumeInput | null;
+  readonly extensions?: Record<string, Record<string, unknown>>;
   readonly material?: {
     readonly kind?: WavefrontMaterialKind;
     readonly color?: RendererColor | readonly number[];
@@ -457,6 +496,7 @@ export interface WavefrontMeshInput {
     readonly medium?: WavefrontMediumInput | null;
     readonly mediumId?: number;
     readonly volume?: WavefrontVolumeInput | null;
+    readonly extensions?: Record<string, Record<string, unknown>>;
     readonly baseColorTexture?: WavefrontTextureSampleInput | null;
     readonly metallicRoughnessTexture?: WavefrontTextureSampleInput | null;
     readonly normalTexture?: WavefrontTextureSampleInput | null;
@@ -469,6 +509,7 @@ export interface WavefrontMeshInput {
   readonly occlusionTexture?: WavefrontTextureSampleInput | null;
   readonly emissiveTexture?: WavefrontTextureSampleInput | null;
   readonly medium?: WavefrontMediumInput | null;
+  readonly extensions?: Record<string, Record<string, unknown>>;
 }
 
 export interface WavefrontTriangleRecord {
@@ -493,6 +534,8 @@ export interface WavefrontTriangleRecord {
   readonly material: readonly number[];
   readonly materialResponse: readonly number[];
   readonly materialExtension?: readonly number[];
+  readonly materialExtension2?: readonly number[];
+  readonly materialExtension3?: readonly number[];
   readonly specularColor?: readonly number[];
   readonly baseColorAtlas?: readonly number[];
   readonly metallicRoughnessAtlas?: readonly number[];
@@ -500,6 +543,7 @@ export interface WavefrontTriangleRecord {
   readonly occlusionAtlas?: readonly number[];
   readonly emissiveAtlas?: readonly number[];
   readonly textureSettings?: readonly number[];
+  readonly extensionTextures?: Readonly<Record<string, readonly number[]>>;
   readonly bounds: Readonly<{ min: readonly number[]; max: readonly number[] }>;
   readonly centroid: readonly number[];
 }
@@ -534,6 +578,8 @@ export interface WavefrontReferenceRay {
   readonly sampleId: number;
   readonly bounce: number;
   readonly mediumRefId: number;
+  readonly mediumStackDepth: number;
+  readonly mediumStack: readonly [number, number, number, number] | readonly number[];
   readonly flags: number;
   readonly origin: readonly [number, number, number] | readonly number[];
   readonly direction: readonly [number, number, number] | readonly number[];
@@ -661,6 +707,9 @@ export interface WavefrontGpuMaterialSource {
   readonly normalAtlas: WavefrontGpuTextureAtlasSource;
   readonly occlusionAtlas: WavefrontGpuTextureAtlasSource;
   readonly emissiveAtlas: WavefrontGpuTextureAtlasSource;
+  readonly extensionAtlases: Readonly<
+    Record<string, WavefrontGpuTextureAtlasSource>
+  >;
 }
 
 export interface WavefrontEmissiveTriangleIndexSource {
@@ -1260,6 +1309,53 @@ export function createWavefrontReferenceRay(
   config: WavefrontPathTracingComputeConfig,
   options?: CreateWavefrontReferenceRayOptions
 ): WavefrontReferenceRay;
+export const MAX_MEDIUM_STACK_DEPTH: 4;
+export const MAX_TRANSPORT_BRANCHES: 2;
+export const DEFAULT_SPECTRAL_WAVELENGTHS: readonly number[];
+export function createMediumStack(
+  mediumIds?: readonly number[],
+  maxDepth?: number
+): readonly number[];
+export function currentMediumId(stack?: readonly number[] | null): number;
+export function enterMediumStack(
+  stack: readonly number[] | null | undefined,
+  mediumId: number,
+  maxDepth?: number
+): Readonly<{ stack: readonly number[]; mediumId: number; overflowed: boolean }>;
+export function exitMediumStack(
+  stack: readonly number[] | null | undefined,
+  mediumId: number,
+  maxDepth?: number
+): Readonly<{ stack: readonly number[]; mediumId: number; matched: boolean }>;
+export function transitionMediumStack(
+  stack: readonly number[] | null | undefined,
+  mediumId: number,
+  entering: boolean,
+  maxDepth?: number
+): Readonly<{ stack: readonly number[]; mediumId: number; matched?: boolean; overflowed?: boolean }>;
+export function beerLambertTransmittance(
+  medium: WavefrontMediumInput | null | undefined,
+  distance: number
+): readonly [number, number, number];
+export function resolveSpectralIor(
+  ior: number,
+  dispersion?: number,
+  wavelengthNm?: number,
+  referenceWavelengthNm?: number
+): number;
+export function createSpectralSamples(options?: {
+  ior?: number;
+  dispersion?: number;
+  wavelengths?: readonly number[];
+}): readonly Readonly<{
+  wavelengthNm: number;
+  ior: number;
+  weight: number;
+}>[];
+export function createTransportBranches(options?: Record<string, unknown>): readonly Readonly<Record<string, unknown>>[];
+export function normalizeWavefrontMaterialExtensions(
+  input?: Record<string, unknown> | null
+): WavefrontMaterialExtensions;
 export function intersectWavefrontReferenceTriangle(
   ray: WavefrontReferenceRay,
   triangle: WavefrontTriangleRecord,
@@ -1322,12 +1418,12 @@ export const rendererWavefrontComputeStatsStride: 8;
 export const wavefrontPathTracingComputeLimits: Readonly<{
   workgroupSize: 64;
   traceStorageBufferBindings: number;
-  rayRecordBytes: 80;
+  rayRecordBytes: 96;
   hitRecordBytes: 256;
   sceneObjectRecordBytes: 160;
   meshVertexRecordBytes: 48;
   meshRangeRecordBytes: 240;
-  triangleRecordBytes: 352;
+  triangleRecordBytes: 576;
   materialRecordBytes: 192;
   bvhNodeRecordBytes: 48;
   bvhLeafReferenceRecordBytes: 16;

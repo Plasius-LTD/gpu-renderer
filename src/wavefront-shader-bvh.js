@@ -288,7 +288,8 @@ fn make_ray(pixelIndex: u32) -> RayRecord {
     0u,
     vec4<f32>(config.cameraPosition.xyz, 1.0),
     vec4<f32>(direction, 0.0),
-    vec4<f32>(1.0, 1.0, 1.0, 1.0)
+    vec4<f32>(1.0, 1.0, 1.0, 1.0),
+    vec4<u32>(0u)
   );
 }
 

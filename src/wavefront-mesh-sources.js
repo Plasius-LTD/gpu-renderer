@@ -84,6 +84,18 @@ function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
             mesh.transmission,
             mesh.thickness,
           ]),
+          materialExtension2: Object.freeze([
+            mesh.materialExtensions?.dispersion ?? 0,
+            mesh.materialExtensions?.iridescence ?? 0,
+            mesh.materialExtensions?.iridescenceIor ?? 1.3,
+            mesh.materialExtensions?.anisotropy ?? 0,
+          ]),
+          materialExtension3: Object.freeze([
+            mesh.materialExtensions?.iridescenceThicknessMinimum ?? 100,
+            mesh.materialExtensions?.iridescenceThicknessMaximum ?? 400,
+            mesh.materialExtensions?.sheenRoughness ?? 0,
+            mesh.materialExtensions?.anisotropyRotation ?? 0,
+          ]),
           specularColor: Object.freeze([
             mesh.specularColor[0] ?? 1,
             mesh.specularColor[1] ?? 1,
@@ -111,6 +123,14 @@ function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
             clampUnit(mesh.emissiveTexture?.strength ?? 1),
             0,
           ]),
+          extensionTextures: Object.freeze(
+            Object.fromEntries(
+              Object.entries(resolvedMaterialSource.extensionAtlases ?? {}).map(([name, atlas]) => [
+                name,
+                atlas.resolveRect(mesh.extensionTextures?.[name]),
+              ])
+            )
+          ),
           bounds: Object.freeze({
             min: Object.freeze(bounds.min),
             max: Object.freeze(bounds.max),
@@ -410,6 +430,31 @@ export function createWavefrontGpuMaterialSource(meshes = []) {
     normalized.map((mesh) => mesh.emissiveTexture),
     [255, 255, 255, 255]
   );
+  const extensionTextureNames = [
+    "clearcoat",
+    "clearcoatRoughness",
+    "clearcoatNormal",
+    "transmission",
+    "thickness",
+    "sheenColor",
+    "sheenRoughness",
+    "specular",
+    "specularColor",
+    "iridescence",
+    "iridescenceThickness",
+    "anisotropy",
+  ];
+  const extensionAtlases = Object.freeze(
+    Object.fromEntries(
+      extensionTextureNames.map((name) => [
+        name,
+        buildTextureAtlas(
+          normalized.map((mesh) => mesh.extensionTextures?.[name]),
+          [255, 255, 255, 255]
+        ),
+      ])
+    )
+  );
   const bytes = new ArrayBuffer(Math.max(1, normalized.length) * GPU_MATERIAL_RECORD_BYTES);
   const floatView = new Float32Array(bytes);
 
@@ -468,6 +513,7 @@ export function createWavefrontGpuMaterialSource(meshes = []) {
     normalAtlas,
     occlusionAtlas,
     emissiveAtlas,
+    extensionAtlases,
   });
 }
 

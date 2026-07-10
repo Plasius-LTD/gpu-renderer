@@ -149,6 +149,8 @@ export function createWavefrontReferenceRay(config, options = {}) {
     sampleId: sampleIndex,
     bounce: 0,
     mediumRefId: 0,
+    mediumStackDepth: 0,
+    mediumStack: Object.freeze([0, 0, 0, 0]),
     flags: 0,
     origin: Object.freeze([...config.camera.position]),
     direction: Object.freeze(direction),

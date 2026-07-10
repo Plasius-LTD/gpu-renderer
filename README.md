@@ -99,6 +99,32 @@ console.log(plan.representationBands);
 console.log(plan.wavefront.queueLayout.strategy);
 ```
 
+## Authored Material Transport
+
+Wavefront materials support authored `KHR_materials_*` factors and extension
+textures, bounded nested media, Beer-Lambert attenuation, and reference
+transport helpers for reflected/transmitted branching and spectral dispersion.
+GPU rays carry up to four nested media and enqueue at most two dielectric
+continuations per hit; deeper nesting and full spectral rendering remain
+bounded by those explicit limits.
+
+```js
+import {
+  createMediumStack,
+  createTransportBranches,
+  createSpectralSamples,
+} from "@plasius/gpu-renderer";
+
+const stack = createMediumStack([1, 4]);
+const branches = createTransportBranches({
+  mediumStack: stack,
+  mediumId: 7,
+  transmission: 1,
+  ior: 1.5,
+});
+const wavelengths = createSpectralSamples({ ior: 1.5, dispersion: 0.2 });
+```
+
 The plan makes the stable visual snapshot boundary explicit, publishes the
 required RT-first stage ordering, and exposes representation-band plus
 acceleration-structure update policy metadata for downstream lighting and

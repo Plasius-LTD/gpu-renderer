@@ -26,6 +26,7 @@ export function createWavefrontTraceBindGroup({
   brdfLutResource,
   environmentSamplingResource,
   mediumTextureResource,
+  extensionAtlasResources = {},
   label,
 }) {
   return device.createBindGroup({
@@ -57,6 +58,18 @@ export function createWavefrontTraceBindGroup({
       { binding: 30, resource: brdfLutResource.sampler },
       { binding: 31, resource: environmentSamplingResource.view },
       { binding: 32, resource: mediumTextureResource.view },
+      { binding: 33, resource: extensionAtlasResources.clearcoat.view },
+      { binding: 34, resource: extensionAtlasResources.clearcoatRoughness.view },
+      { binding: 35, resource: extensionAtlasResources.clearcoatNormal.view },
+      { binding: 36, resource: extensionAtlasResources.transmission.view },
+      { binding: 37, resource: extensionAtlasResources.thickness.view },
+      { binding: 38, resource: extensionAtlasResources.sheenColor.view },
+      { binding: 39, resource: extensionAtlasResources.sheenRoughness.view },
+      { binding: 40, resource: extensionAtlasResources.specular.view },
+      { binding: 41, resource: extensionAtlasResources.specularColor.view },
+      { binding: 42, resource: extensionAtlasResources.iridescence.view },
+      { binding: 43, resource: extensionAtlasResources.iridescenceThickness.view },
+      { binding: 44, resource: extensionAtlasResources.anisotropy.view },
     ],
   });
 }

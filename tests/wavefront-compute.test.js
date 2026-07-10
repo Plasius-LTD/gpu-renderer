@@ -465,7 +465,7 @@ test("wavefront compute compatibility exports expose the canonical mesh shader",
   assert.match(types, /hitRecordBytes: 256;/);
   assert.match(types, /sceneObjectRecordBytes: 160;/);
   assert.match(types, /meshRangeRecordBytes: 240;/);
-  assert.match(types, /triangleRecordBytes: 352;/);
+  assert.match(types, /triangleRecordBytes: 576;/);
   assert.match(types, /materialRecordBytes: 192;/);
   assert.throws(
     () => createWavefrontPathTracingComputeShaderSource({ workgroupSize: 32 }),
@@ -1191,7 +1191,7 @@ test("wavefront compute samples all-material direct light with MIS before random
   assert.match(source, /nDotL \* misWeight \/ max\(lightSample\.pdf, 0\.000001\)/);
   assert.match(source, /let transmissionReflectChance = select\(/);
   assert.doesNotMatch(source, /mix\(reflectChance, max\(reflectChance, 1\.0 - transmission\), transmission > 0\.001\)/);
-  assert.match(source, /let segmentTransmittance = medium_transmittance\(ray\.mediumRefId, hit\.distance\);/);
+  assert.match(source, /let segmentTransmittance = medium_transmittance\(medium_stack_current_id\(ray\), hit\.distance\);/);
   assert.match(source, /let arrivingThroughput = ray\.throughput\.xyz \* segmentTransmittance;/);
   assert.match(source, /let shouldEstimateDirectLight = surface_supports_direct_lighting\(hit\);/);
   assert.doesNotMatch(
@@ -1446,7 +1446,7 @@ test("wavefront compute samples material textures on the GPU at the resolved hit
   const source = readRendererSource();
 
   assert.match(source, /const GPU_MATERIAL_RECORD_BYTES = 192/);
-  assert.match(source, /const TRIANGLE_RECORD_BYTES = 352/);
+  assert.match(source, /const TRIANGLE_RECORD_BYTES = 576/);
   assert.match(source, /@group\(0\) @binding\(23\) var baseColorAtlasTexture: texture_2d<f32>/);
   assert.match(source, /@group\(0\) @binding\(28\) var materialAtlasSampler: sampler/);
   assert.match(source, /fn sample_surface_material\(/);
@@ -1457,6 +1457,9 @@ test("wavefront compute samples material textures on the GPU at the resolved hit
   assert.match(source, /\(normalTexel\.y \* 2\.0 - 1\.0\) \* normalScale/);
   assert.match(source, /triangle\.baseColorAtlas/);
   assert.match(source, /triangle\.textureSettings/);
+  assert.match(source, /triangle\.clearcoatAtlas/);
+  assert.match(source, /triangle\.transmissionAtlas/);
+  assert.match(source, /@group\(0\) @binding\(44\) var anisotropyAtlasTexture: texture_2d<f32>/);
   assert.match(source, /mesh\.baseColorAtlas/);
   assert.match(source, /hitTriangle\.materialSlot/);
   assert.doesNotMatch(source, /getImageData\(.*render/);
@@ -1555,13 +1558,14 @@ test("wavefront compute exposes medium-table contracts and Beer-Lambert transpor
   assert.match(source, /fn medium_transmittance\(mediumRefId: u32, distance: f32\) -> vec3<f32>/);
   assert.match(source, /exp\(-extinction\.x \* distance\)/);
   assert.match(source, /fn transmitted_medium_ref_id\(ray: RayRecord, hit: HitRecord\) -> u32/);
-  assert.match(source, /if \(!medium_valid\(hit\.mediumRefId\)\) \{\s+return ray\.mediumRefId;\s+\}/);
-  assert.match(
-    source,
-    /if \(hit\.frontFace == 1u\) \{\s+if \(ray\.mediumRefId == 0u \|\| ray\.mediumRefId == hit\.mediumRefId\) \{\s+return hit\.mediumRefId;\s+\}\s+return ray\.mediumRefId;\s+\}/
-  );
-  assert.match(mediumDesign, /single active medium/i);
-  assert.match(mediumDesign, /nested medium stacks fall back to the current ray medium/i);
+  assert.match(source, /if \(!medium_valid\(hit\.mediumRefId\)\) \{\s+return medium_stack_current_id\(ray\);\s+\}/);
+  assert.match(source, /fn medium_stack_current_id\(ray: RayRecord\) -> u32/);
+  assert.match(source, /fn transitioned_medium_stack\(ray: RayRecord, hit: HitRecord\) -> vec4<u32>/);
+  assert.match(source, /fn transitioned_medium_stack_depth\(ray: RayRecord, hit: HitRecord\) -> u32/);
+  assert.match(source, /mediumStackDepth: u32/);
+  assert.match(source, /mediumStack: vec4<u32>/);
+  assert.match(mediumDesign, /bounded nested medium stack/i);
+  assert.match(mediumDesign, /Beer-Lambert/i);
   assert.equal(config.mediumCount, 2);
   assert.deepEqual(config.mediums.map((medium) => medium.id), [0, 3]);
   assert.equal(config.gpuMeshSource.meshes.records[0].thickness, 0.35);
@@ -2691,7 +2695,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     assert.ok(device.renderPasses >= 1);
     assert.equal(device.drawCalls.includes(3), true);
     assert.ok(device.queue.submissions.length >= 1);
-    assert.equal(device.queue.textureWrites.length, 10);
+    assert.equal(device.queue.textureWrites.length, 22);
     assert.equal(device.queue.textureWrites[0].size.width, 2);
     assert.equal(device.queue.textureWrites[0].size.height, 1);
     assert.equal(device.queue.textureWrites[0].layout.bytesPerRow, 256);

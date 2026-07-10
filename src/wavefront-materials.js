@@ -64,7 +64,79 @@ function readMediumPhaseModel(value) {
 }
 
 function resolveWavefrontVolumeInput(input) {
-  return input?.volume ?? input?.material?.volume ?? null;
+  if (input?.volume ?? input?.material?.volume) {
+    return input.volume ?? input.material.volume;
+  }
+  const extension = resolveExtension(input, "volume");
+  return Object.keys(extension).length > 0 ? extension : null;
+}
+
+function resolveMaterialExtensions(input) {
+  return input?.extensions ?? input?.material?.extensions ?? input?.materialExtensions ?? {};
+}
+
+function resolveExtension(input, name) {
+  const extensions = resolveMaterialExtensions(input);
+  return extensions[name] ?? extensions[`KHR_materials_${name}`] ?? {};
+}
+
+function readExtensionNumber(input, extensionName, key, fallback) {
+  const extension = resolveExtension(input, extensionName);
+  return readFiniteNumber(
+    `KHR_materials_${extensionName}.${key}`,
+    extension[key],
+    fallback
+  );
+}
+
+function resolveExtensionTexture(input, extensionName, key) {
+  const extension = resolveExtension(input, extensionName);
+  return extension[key] ?? null;
+}
+
+export function normalizeWavefrontMaterialExtensions(input = {}) {
+  const clearcoat = resolveExtension(input, "clearcoat");
+  const ior = resolveExtension(input, "ior");
+  const transmission = resolveExtension(input, "transmission");
+  const volume = resolveExtension(input, "volume");
+  const sheen = resolveExtension(input, "sheen");
+  const specular = resolveExtension(input, "specular");
+  const iridescence = resolveExtension(input, "iridescence");
+  const anisotropy = resolveExtension(input, "anisotropy");
+  const unlit = resolveExtension(input, "unlit");
+  return Object.freeze({
+    clearcoat: clamp(readFiniteNumber("clearcoat", clearcoat.clearcoatFactor, input.clearcoat ?? input.material?.clearcoat ?? 0), 0, 1),
+    clearcoatRoughness: clamp(readFiniteNumber("clearcoatRoughness", clearcoat.clearcoatRoughnessFactor, input.clearcoatRoughness ?? input.material?.clearcoatRoughness ?? 0.08), 0, 1),
+    ior: clamp(readFiniteNumber("ior", ior.ior, input.ior ?? input.material?.ior ?? 1.45), 1, 3),
+    transmission: clamp(readFiniteNumber("transmission", transmission.transmissionFactor, input.transmission ?? input.material?.transmission ?? 0), 0, 1),
+    volumeThickness: Math.max(0, readFiniteNumber("volume.thicknessFactor", volume.thicknessFactor, input.thickness ?? input.material?.thickness ?? 0)),
+    sheenColor: Object.freeze(asColor(sheen.sheenColorFactor ?? input.sheenColor ?? input.material?.sheenColor, [0, 0, 0, 1])),
+    sheenRoughness: clamp(readFiniteNumber("sheenRoughness", sheen.sheenRoughnessFactor, 0), 0, 1),
+    specular: clamp(readFiniteNumber("specular", specular.specularFactor, input.specular ?? input.material?.specular ?? 1), 0, 1),
+    specularColor: Object.freeze(asColor(specular.specularColorFactor ?? input.specularColor ?? input.material?.specularColor, [1, 1, 1, 1])),
+    iridescence: clamp(readFiniteNumber("iridescence", iridescence.iridescenceFactor, 0), 0, 1),
+    iridescenceIor: clamp(readFiniteNumber("iridescenceIor", iridescence.iridescenceIor, 1.3), 1, 3),
+    iridescenceThicknessMinimum: Math.max(0, readFiniteNumber("iridescenceThicknessMinimum", iridescence.iridescenceThicknessMinimum, 100)),
+    iridescenceThicknessMaximum: Math.max(0, readFiniteNumber("iridescenceThicknessMaximum", iridescence.iridescenceThicknessMaximum, 400)),
+    dispersion: clamp(readExtensionNumber(input, "dispersion", "dispersion", 0), 0, 2),
+    anisotropy: clamp(readFiniteNumber("anisotropy", anisotropy.anisotropyStrength, 0), 0, 1),
+    anisotropyRotation: readFiniteNumber("anisotropyRotation", anisotropy.anisotropyRotation, 0),
+    unlit: Object.keys(unlit).length > 0,
+    textures: Object.freeze({
+      clearcoat: resolveExtensionTexture(input, "clearcoat", "clearcoatTexture"),
+      clearcoatRoughness: resolveExtensionTexture(input, "clearcoat", "clearcoatRoughnessTexture"),
+      clearcoatNormal: resolveExtensionTexture(input, "clearcoat", "clearcoatNormalTexture"),
+      transmission: resolveExtensionTexture(input, "transmission", "transmissionTexture"),
+      thickness: resolveExtensionTexture(input, "volume", "thicknessTexture"),
+      sheenColor: resolveExtensionTexture(input, "sheen", "sheenColorTexture"),
+      sheenRoughness: resolveExtensionTexture(input, "sheen", "sheenRoughnessTexture"),
+      specular: resolveExtensionTexture(input, "specular", "specularTexture"),
+      specularColor: resolveExtensionTexture(input, "specular", "specularColorTexture"),
+      iridescence: resolveExtensionTexture(input, "iridescence", "iridescenceTexture"),
+      iridescenceThickness: resolveExtensionTexture(input, "iridescence", "iridescenceThicknessTexture"),
+      anisotropy: resolveExtensionTexture(input, "anisotropy", "anisotropyTexture"),
+    }),
+  });
 }
 
 export function normalizeWavefrontThickness(input, label) {
@@ -98,7 +170,7 @@ export function deriveWavefrontTransportMedium(input, fallbackId = 1) {
     return normalizeWavefrontMedium(
       {
         ...input.medium,
-        id: input.medium.id ?? input.medium.mediumId ?? resolvedId,
+      id: input.medium.id ?? input.medium.mediumId ?? resolvedId,
       },
       fallbackId
     );

@@ -77,6 +77,38 @@ fn sample_surface_material(
   let normalTexel = sample_atlas(normalAtlasTexture, triangle.normalAtlas, uv);
   let occlusionTexel = sample_atlas(occlusionAtlasTexture, triangle.occlusionAtlas, uv);
   let emissiveTexel = sample_atlas(emissiveAtlasTexture, triangle.emissiveAtlas, uv);
+  let clearcoatTexel = sample_atlas(clearcoatAtlasTexture, triangle.clearcoatAtlas, uv);
+  let clearcoatRoughnessTexel = sample_atlas(
+    clearcoatRoughnessAtlasTexture,
+    triangle.clearcoatRoughnessAtlas,
+    uv
+  );
+  let clearcoatNormalTexel = sample_atlas(
+    clearcoatNormalAtlasTexture,
+    triangle.clearcoatNormalAtlas,
+    uv
+  );
+  let transmissionTexel = sample_atlas(transmissionAtlasTexture, triangle.transmissionAtlas, uv);
+  let thicknessTexel = sample_atlas(thicknessAtlasTexture, triangle.thicknessAtlas, uv);
+  let sheenColorTexel = sample_atlas(sheenColorAtlasTexture, triangle.sheenColorAtlas, uv);
+  let sheenRoughnessTexel = sample_atlas(
+    sheenRoughnessAtlasTexture,
+    triangle.sheenRoughnessAtlas,
+    uv
+  );
+  let specularTexel = sample_atlas(specularAtlasTexture, triangle.specularAtlas, uv);
+  let specularColorTexel = sample_atlas(
+    specularColorAtlasTexture,
+    triangle.specularColorAtlas,
+    uv
+  );
+  let iridescenceTexel = sample_atlas(iridescenceAtlasTexture, triangle.iridescenceAtlas, uv);
+  let iridescenceThicknessTexel = sample_atlas(
+    iridescenceThicknessAtlasTexture,
+    triangle.iridescenceThicknessAtlas,
+    uv
+  );
+  let anisotropyTexel = sample_atlas(anisotropyAtlasTexture, triangle.anisotropyAtlas, uv);
   let normalScale = clamp(triangle.textureSettings.x, 0.0, 1.0);
   let tangentBasis = build_triangle_tangent_basis(triangle, geometricNormal);
   let tangentNormal = safe_normalize(
@@ -111,9 +143,20 @@ fn sample_surface_material(
       clamp(triangle.material.z * baseColor.a, 0.0, 1.0),
       clamp(triangle.material.w, 1.0, 3.0)
     ),
-    triangle.materialResponse,
-    triangle.materialExtension,
-    triangle.specularColor,
+    vec4<f32>(
+      triangle.materialResponse.rgb * sheenColorTexel.rgb,
+      triangle.materialResponse.w * clearcoatTexel.r * clearcoatNormalTexel.r
+    ),
+    vec4<f32>(
+      triangle.materialExtension.x * clearcoatRoughnessTexel.r * (0.5 + 0.5 * sheenRoughnessTexel.r),
+      triangle.materialExtension.y * specularTexel.r * (0.5 + 0.5 * iridescenceTexel.r),
+      triangle.materialExtension.z * transmissionTexel.r,
+      triangle.materialExtension.w * thicknessTexel.r * (0.5 + 0.5 * iridescenceThicknessTexel.r)
+    ),
+    vec4<f32>(
+      triangle.specularColor.rgb * specularColorTexel.rgb * (0.5 + 0.5 * anisotropyTexel.r),
+      triangle.specularColor.a
+    ),
     repair_shading_normal(geometricNormal, mappedNormal),
     clamp(
       mix(1.0, occlusionTexel.x, clamp(triangle.textureSettings.y, 0.0, 1.0)),
