@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.39] - 2026-07-10
+
+- **Added**
   - Existing renderer contract coverage continues to verify the public shared
     runtime and package export surfaces.
 
@@ -969,3 +983,4 @@ All notable changes to this project will be documented in this file.
 [0.2.36]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.36
 [0.2.37]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.37
 [0.2.38]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.38
+[0.2.39]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.39
