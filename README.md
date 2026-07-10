@@ -200,16 +200,15 @@ geometry are MIS-weighted against that direct emissive estimator, so rare
 softbox hits remain physically valid without adding full unbalanced source
 radiance as isolated stippled pixels.
 `renderer.transport.deterministicLowSppIndirect.enabled` is also strict-mode
-only. When enabled it consistently replaces the first stochastic indirect
-continuation with a deterministic surface-radiance probe cache keyed from stable
-surface state, without switching indirect estimators at 8 SPP or other sample
-count thresholds. The cache stores physical radiance from visible explicit
-lights, environment, and emissive geometry, reports it as
-`transportContributions.cachedIndirectLuminance`, and reports the suppressed
-residual continuation as a zero termination. This is not vertex
-brightness/contrast lighting, denoise, ambient fill, or a raster fallback; it is
-a bounded transport source whose diagnostics make any residual stochastic
-contribution explicit.
+only. The flag remains in the public experiment matrix so Product Studio can
+keep reporting requested and effective rollout state, but the strict shader path
+does not inject cached indirect radiance or suppress physical continuation. Any
+future low-SPP indirect stabilizer must be introduced as an auditable transport
+source with measured PDFs, visibility, and validation against high-SPP reference
+renders before it contributes radiance. Until then,
+`transportContributions.cachedIndirectLuminance` should remain zero and
+multi-bounce energy should come from direct explicit lighting, true terminal
+emissive/environment hits, or stochastic BSDF continuation.
 Set `presentationOutput: "linear"` for linear presented validation captures, or
 omit it to keep the default tone-mapped presentation.
 
