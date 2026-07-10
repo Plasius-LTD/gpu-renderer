@@ -18,7 +18,10 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Removed the deterministic cached-indirect radiance contribution from strict
+    physical transport so low-SPP Product Studio renders no longer gain shadows
+    or reflections from a fixed probe approximation instead of actual path
+    termination and continuation.
 
 - **Security**
   - (placeholder)

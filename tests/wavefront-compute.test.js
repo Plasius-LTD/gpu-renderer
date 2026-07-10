@@ -1267,33 +1267,28 @@ test("wavefront compute MIS-weights terminal emissive continuation hits", () => 
   );
 });
 
-test("wavefront compute isolates deterministic low-SPP indirect transport", () => {
+test("wavefront compute keeps deterministic low-SPP indirect diagnostic only", () => {
   const source = readRendererSource();
 
   assert.match(source, /TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT = 128u/);
-  assert.match(source, /fn deterministic_low_spp_indirect_enabled\(\) -> bool/);
-  const deterministicIndirectPredicate = source.match(
-    /fn deterministic_low_spp_indirect_enabled\(\) -> bool \{[\s\S]*?\n\}/
-  )?.[0] ?? "";
-  assert.match(
-    deterministicIndirectPredicate,
-    /transport_experiment_enabled\(TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT\)/
-  );
-  assert.doesNotMatch(deterministicIndirectPredicate, /samplesPerPixel/);
-  assert.match(source, /fn deterministic_low_spp_cached_indirect\(ray: RayRecord, hit: HitRecord, segmentTransmittance: vec3<f32>\) -> vec3<f32>/);
-  assert.match(source, /let sample = hammersley_2d\(probeIndex, probeCount\);/);
-  assert.match(source, /let probeDirection = cosine_sample_hemisphere\(sample, normal\);/);
-  assert.match(source, /let probeHit = resolve_indirect_probe_hit\(probeRay\);/);
-  assert.match(source, /deterministic_low_spp_probe_direct_radiance\(probeRay, probeHit\)/);
-  assert.match(source, /let hasIndirectBounceBudget = ray\.bounce \+ 1u < config\.maxDepth;/);
-  assert.match(
+  assert.doesNotMatch(source, /fn deterministic_low_spp_indirect_enabled\(\) -> bool/);
+  assert.doesNotMatch(source, /deterministic_low_spp_cached_indirect/);
+  assert.doesNotMatch(source, /deterministic_low_spp_probe_/);
+  assert.doesNotMatch(source, /resolve_indirect_probe_hit/);
+  assert.doesNotMatch(source, /weightedCachedIndirect/);
+  assert.doesNotMatch(source, /record_transport_contribution\(TRANSPORT_BUCKET_CACHED_INDIRECT/);
+  assert.doesNotMatch(
     source,
-    /deterministic_low_spp_indirect_enabled\(\) &&\s+shouldEstimateDirectLight &&\s+hasIndirectBounceBudget/s
+    /record_deferred_terminal_source\(\s*ray,\s*vec3<f32>\(0\.0\),\s*TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO/
   );
-  assert.match(source, /record_transport_contribution\(TRANSPORT_BUCKET_CACHED_INDIRECT, weightedCachedIndirect\);/);
-  assert.match(source, /TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO/);
+  assert.doesNotMatch(
+    source,
+    /record_termination_metrics\(\s*TERMINAL_SOURCE_KIND_DETERMINISTIC_RESIDUAL_ZERO/
+  );
   assert.match(source, /deterministicResidualZeroCount: atomic<u32>/);
   assert.match(source, /atomicAdd\(&counters\.termination\.deterministicResidualZeroCount, 1u\);/);
+  assert.match(source, /let scatter = scatter_direction\(ray, hit\);/);
+  assert.match(source, /surface_continuation_throughput\(/);
   assert.match(source, /record_transport_contribution\(TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL, safeResolved\);/);
   assert.match(source, /record_transport_checksum\(index, linearOutput\);/);
 });
