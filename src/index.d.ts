@@ -1,3 +1,60 @@
+/// <reference types="webxr" />
+
+import type {
+  FeedbackGameDiagnosticBackend,
+  FeedbackGameDiagnosticCounter,
+  FeedbackGameDiagnosticErrorCode,
+  FeedbackGameDiagnosticFeatureId,
+  FeedbackGameDiagnosticFrameRateBucket,
+  FeedbackGameDiagnosticFrameTimeBucket,
+  FeedbackGameDiagnostics,
+  FeedbackGameDiagnosticRenderer,
+  FeedbackGameDiagnosticSurfaceId,
+  FeedbackGameDiagnosticViewportBucket,
+} from "@plasius/gpu-shared/feedback-diagnostics";
+import type { XrStoreState } from "@plasius/gpu-xr";
+
+export interface CreateFeedbackGameDiagnosticSnapshotInput {
+  readonly featureEnabled: boolean;
+  readonly capabilityGranted: boolean;
+  readonly consentConfirmed: boolean;
+  readonly surfaceId: FeedbackGameDiagnosticSurfaceId;
+  readonly renderer: FeedbackGameDiagnosticRenderer;
+  readonly backend: FeedbackGameDiagnosticBackend;
+  /** CSS-pixel viewport width; it is bucketed synchronously and never returned. */
+  readonly viewportWidth: number | null;
+  /** CSS-pixel viewport height; it is bucketed synchronously and never returned. */
+  readonly viewportHeight: number | null;
+  /** Recent coarse FPS observation; it is bucketed synchronously and never returned. */
+  readonly frameRate: number | null;
+  /** Recent coarse frame-time observation; it is bucketed synchronously and never returned. */
+  readonly frameTimeMs: number | null;
+  readonly featureIds: readonly FeedbackGameDiagnosticFeatureId[];
+  readonly counters: readonly FeedbackGameDiagnosticCounter[];
+  readonly errorCodes: readonly FeedbackGameDiagnosticErrorCode[];
+}
+
+export function bucketFeedbackGameViewport(
+  width: unknown,
+  height: unknown,
+): FeedbackGameDiagnosticViewportBucket;
+
+export function bucketFeedbackGameFrameRate(
+  frameRate: unknown,
+): FeedbackGameDiagnosticFrameRateBucket;
+
+export function bucketFeedbackGameFrameTime(
+  frameTimeMs: unknown,
+): FeedbackGameDiagnosticFrameTimeBucket;
+
+export function createFeedbackGameDiagnosticSnapshot<
+  SurfaceId extends FeedbackGameDiagnosticSurfaceId,
+>(
+  input: CreateFeedbackGameDiagnosticSnapshotInput & {
+    readonly surfaceId: SurfaceId;
+  },
+): Extract<FeedbackGameDiagnostics, { readonly surfaceId: SurfaceId }> | null;
+
 export type RendererColor = string | [number, number, number, number?];
 export type AnimatedSceneVector3 = readonly [number, number, number] | readonly number[];
 export type AnimatedScenePropKind =
@@ -509,7 +566,6 @@ export interface WavefrontMeshInput {
   readonly occlusionTexture?: WavefrontTextureSampleInput | null;
   readonly emissiveTexture?: WavefrontTextureSampleInput | null;
   readonly medium?: WavefrontMediumInput | null;
-  readonly extensions?: Record<string, Record<string, unknown>>;
 }
 
 export interface WavefrontTriangleRecord {
@@ -1536,13 +1592,12 @@ export interface GpuRenderer {
   setXrActive(active: boolean): void;
   getSnapshot(): RendererSnapshot;
   bindXrManager(
-    xrManager: {
-      subscribe: (listener: (state: { activeSession: XRSession | null }) => void) => () => void;
-      getState?: () => { activeSession: XRSession | null };
-      store?: { getSnapshot: () => { activeSession: XRSession | null } };
-    },
+    xrManager: RendererXrManager,
     bindOptions?: {
-      onSessionStart?: (session: XRSession, renderer: GpuRenderer) => void;
+      onSessionStart?: (
+        session: NonNullable<XrStoreState["activeSession"]>,
+        renderer: GpuRenderer
+      ) => void;
       onSessionEnd?: (renderer: GpuRenderer) => void;
     }
   ): () => void;
@@ -1578,15 +1633,22 @@ export function createRendererDebugHooks(
   options: RendererDebugHooksOptions
 ): Pick<RendererHooks, "onFrameStart" | "onFrameComplete">;
 
+export type RendererXrState = Pick<XrStoreState, "activeSession">;
+
+export interface RendererXrManager {
+  subscribe(listener: (state: RendererXrState) => void): () => void;
+  getState?(): RendererXrState;
+  store?: { getSnapshot(): RendererXrState };
+}
+
 export function bindRendererToXrManager(
   renderer: Pick<GpuRenderer, "setXrActive">,
-  xrManager: {
-    subscribe: (listener: (state: { activeSession: XRSession | null }) => void) => () => void;
-    getState?: () => { activeSession: XRSession | null };
-    store?: { getSnapshot: () => { activeSession: XRSession | null } };
-  },
+  xrManager: RendererXrManager,
   options?: {
-    onSessionStart?: (session: XRSession, renderer: Pick<GpuRenderer, "setXrActive">) => void;
+    onSessionStart?: (
+      session: NonNullable<XrStoreState["activeSession"]>,
+      renderer: Pick<GpuRenderer, "setXrActive">
+    ) => void;
     onSessionEnd?: (renderer: Pick<GpuRenderer, "setXrActive">) => void;
   }
 ): () => void;

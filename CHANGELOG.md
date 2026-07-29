@@ -12,15 +12,25 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added an explicit consent-, flag-, and capability-gated helper that converts
+    coarse renderer health observations into the closed shared feedback
+    diagnostics packet for approved generator and GPU demo surfaces.
 
 - **Changed**
   - Updated internal GPU dependencies to their surviving clean lines and refreshed the esbuild resolution.
+  - Bound diagnostics to the focused shared-package subpath and canonical
+    contract-version export, and enabled complete declaration checking with the
+    published WebXR type definitions.
 
 - **Fixed**
-  - (placeholder)
+  - Removed a duplicate public mesh `extensions` declaration and replaced
+    unresolved ambient XR session references with the `@plasius/gpu-xr` state
+    contract.
 
 - **Security**
+  - Kept feedback diagnostics separate from general renderer snapshots and
+    excluded user-captured pixels, DOM, player data, URLs, filenames, exact
+    measurements, adapter identity and raw warnings from the output contract.
   - Replaced token-based npm publication with a two-phase exact-main OIDC workflow, immutable tarball/SBOM hand-off, isolated pull-request validation, and fail-closed integrity checks.
   - Added fail-closed source and npm-package admission for the administrative contributor registry and pinned the CI/CD runtime to Node.js 24.18.0 LTS.
   - (placeholder)
