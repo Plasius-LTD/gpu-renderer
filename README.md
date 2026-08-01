@@ -585,8 +585,13 @@ npm run pack:check
 ## Release integrity
 
 CI keeps the administrative contributor registry outside Git and npm package
-artifacts using exact, case-normalised path checks. CI runs on approved
-self-hosted runners. Release preparation and npm publication use GitHub-hosted
-runners with Node.js 24.18.0 LTS. CD remains disabled until the npm trusted
-publisher binding is verified and the legacy token fallback is removed.
+artifacts using exact, case-normalised path checks. External fork heads are
+rejected; same-repository pull requests validate on GitHub-hosted runners and
+main pushes validate on approved self-hosted runners. Release preparation and
+publication use a two-run exact-main protocol on GitHub-hosted Node.js 24.18.0
+LTS. A read-only job seals the package tarball and SBOM before a dependency-free
+production job publishes that exact artifact through npm OIDC with provenance;
+there is no npm write-token fallback. CD remains disabled until the npm trusted
+publisher binding and protected-branch-only production environment are
+independently verified.
 <!-- END PLASIUS RELEASE INTEGRITY -->
