@@ -148,6 +148,15 @@ in dedicated runtime helpers so performance-facing integrations can consume
 stable frame stats without inheriting the renderer's shader and pipeline
 assembly internals.
 
+Shader modules are preflighted with the standard
+`GPUShaderModule.getCompilationInfo()` API before compute-pipeline creation,
+and failures retain their WGSL line and column diagnostics. GPU-built triangles
+initialize the complete WGSL `TriangleRecord` layout, using the same neutral
+defaults as CPU packing for material-extension fields that are not carried by
+the GPU mesh input. The trace pipeline declares every extension-atlas binding
+and requests its 21-sampled-texture device limit only after checking the
+adapter exposes that capability.
+
 ## Animated Scene Renderer
 
 `createAnimatedSceneRenderer` provides the renderer-owned v1 surface for the

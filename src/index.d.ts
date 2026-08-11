@@ -986,6 +986,7 @@ export interface WavefrontGpuParallelismDiagnostics {
     readonly maxComputeWorkgroupSizeZ: number | null;
     readonly maxComputeWorkgroupsPerDimension: number | null;
     readonly maxStorageBuffersPerShaderStage: number | null;
+    readonly maxSampledTexturesPerShaderStage: number | null;
     readonly maxStorageBufferBindingSize: number | null;
   }>;
   readonly configuredWorkgroupSize: number;
@@ -1418,6 +1419,7 @@ export const rendererWavefrontComputeStatsStride: 8;
 export const wavefrontPathTracingComputeLimits: Readonly<{
   workgroupSize: 64;
   traceStorageBufferBindings: number;
+  traceSampledTextureBindings: number;
   rayRecordBytes: 96;
   hitRecordBytes: 256;
   sceneObjectRecordBytes: 160;

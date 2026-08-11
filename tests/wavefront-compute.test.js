@@ -43,6 +43,12 @@ import { dispatchWavefrontGpuAccelerationBuild } from "../src/wavefront-accelera
 import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
 import { createConfigPayload } from "../src/wavefront-packers.js";
 import {
+  assertShaderModuleCompiles,
+  createComputePipeline,
+  createWavefrontDeviceDescriptor,
+} from "../src/wavefront-runtime-support.js";
+import { createWavefrontBindGroupLayouts } from "../src/wavefront-pipelines.js";
+import {
   listWavefrontSampleDimensions,
   sampleWavefrontDimension2D,
   WAVEFRONT_SAMPLE_DIMENSIONS,
@@ -87,6 +93,48 @@ function readRendererSource() {
 
 function readRendererTypes() {
   return readFileSync(new URL("../src/index.d.ts", import.meta.url), "utf8");
+}
+
+function readWgslStructFieldCount(source, structName) {
+  const match = source.match(new RegExp(`struct\\s+${structName}\\s*\\{([\\s\\S]*?)\\};`));
+  assert.ok(match, `Expected WGSL struct ${structName}.`);
+  return match[1]
+    .split("\n")
+    .filter((line) => /^\s*[A-Za-z_]\w*\s*:/.test(line)).length;
+}
+
+function readWgslConstructorArgumentCounts(source, structName) {
+  const needle = `${structName}(`;
+  const counts = [];
+  let searchIndex = 0;
+  while (searchIndex < source.length) {
+    const constructorIndex = source.indexOf(needle, searchIndex);
+    if (constructorIndex < 0) {
+      break;
+    }
+
+    let depth = 1;
+    let argumentCount = 0;
+    let hasArgument = false;
+    let index = constructorIndex + needle.length;
+    for (; index < source.length && depth > 0; index += 1) {
+      const character = source[index];
+      if (character === "(") {
+        depth += 1;
+        hasArgument = true;
+      } else if (character === ")") {
+        depth -= 1;
+      } else if (character === "," && depth === 1) {
+        argumentCount += 1;
+      } else if (depth === 1 && !/\s/.test(character)) {
+        hasArgument = true;
+      }
+    }
+    assert.equal(depth, 0, `Expected ${structName} constructor to close.`);
+    counts.push(hasArgument ? argumentCount + 1 : 0);
+    searchIndex = index;
+  }
+  return counts;
 }
 
 async function withWebGpuConstants(callback) {
@@ -328,7 +376,7 @@ class FakeWavefrontDevice {
   createShaderModule(descriptor) {
     return {
       descriptor,
-      async compilationInfo() {
+      async getCompilationInfo() {
         return { messages: [] };
       },
     };
@@ -415,6 +463,8 @@ test("wavefront compute config keeps 4K queues tile-bounded", () => {
   assert.equal(config.tilePixelCapacity, 128 * 128);
   assert.equal(wavefrontPathTracingComputeLimits.hitRecordBytes, 256);
   assert.equal(wavefrontPathTracingComputeLimits.workgroupSize, rendererWavefrontComputeWorkgroupSize);
+  assert.equal(wavefrontPathTracingComputeLimits.traceStorageBufferBindings, 10);
+  assert.equal(wavefrontPathTracingComputeLimits.traceSampledTextureBindings, 21);
   assert.equal(rendererWavefrontComputeStatsStride, 8);
   assert.equal(config.memory.queueBytes, 128 * 128 * wavefrontPathTracingComputeLimits.rayRecordBytes);
   assert.equal(config.memory.hitBytes, 128 * 128 * wavefrontPathTracingComputeLimits.hitRecordBytes);
@@ -471,6 +521,125 @@ test("wavefront compute compatibility exports expose the canonical mesh shader",
     () => createWavefrontPathTracingComputeShaderSource({ workgroupSize: 32 }),
     /requires workgroupSize=64/
   );
+});
+
+test("wavefront TriangleRecord constructors match the declared field count", () => {
+  const shaderSource = createWavefrontPathTracingComputeShaderSource();
+  const fieldCount = readWgslStructFieldCount(shaderSource, "TriangleRecord");
+  const constructorArgumentCounts = readWgslConstructorArgumentCounts(
+    shaderSource,
+    "TriangleRecord"
+  );
+
+  assert.ok(constructorArgumentCounts.length > 0, "Expected at least one TriangleRecord constructor.");
+  for (const argumentCount of constructorArgumentCounts) {
+    assert.equal(argumentCount, fieldCount);
+  }
+});
+
+test("shader preflight uses getCompilationInfo and reports WGSL errors", async () => {
+  let compilationInfoCalls = 0;
+  const shaderModule = {
+    async getCompilationInfo() {
+      compilationInfoCalls += 1;
+      return {
+        messages: [
+          {
+            type: "error",
+            lineNum: 42,
+            linePos: 7,
+            message: "structure constructor drift",
+          },
+        ],
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => assertShaderModuleCompiles(shaderModule, "plasius.wavefront.computeShader"),
+    /WGSL compilation preflight failed.*line 42:7 structure constructor drift/s
+  );
+  assert.equal(compilationInfoCalls, 1);
+});
+
+test("compute pipeline failures preserve getCompilationInfo diagnostics", async () => {
+  const shaderModule = {
+    async getCompilationInfo() {
+      return {
+        messages: [
+          {
+            type: "error",
+            lineNum: 1947,
+            linePos: 30,
+            message: "structure constructor has too few inputs: expected 42, found 28",
+          },
+        ],
+      };
+    },
+  };
+  const device = {
+    async createComputePipelineAsync() {
+      throw new Error("Invalid ShaderModule");
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      createComputePipeline(
+        device,
+        shaderModule,
+        {},
+        "prepareMeshTrianglesAndLeaves",
+        "plasius.wavefront.prepareMeshTrianglesAndLeaves"
+      ),
+    /Invalid ShaderModule.*line 1947:30 structure constructor has too few inputs/s
+  );
+});
+
+test("trace bind group layout includes every WGSL extension atlas binding", () => {
+  const shaderSource = createWavefrontPathTracingComputeShaderSource();
+  const extensionAtlasBindings = [...shaderSource.matchAll(
+    /@group\(0\)\s+@binding\((\d+)\)\s+var\s+\w+AtlasTexture:\s+texture_2d<f32>;/g
+  )]
+    .map((match) => Number(match[1]))
+    .filter((binding) => binding >= 33);
+  const device = new FakeWavefrontDevice();
+  const layouts = createWavefrontBindGroupLayouts(device, gpuConstants);
+  const traceBindings = new Set(layouts.trace.descriptor.entries.map((entry) => entry.binding));
+  const sampledTextureBindingCount = layouts.trace.descriptor.entries.filter(
+    (entry) => entry.texture
+  ).length;
+
+  assert.equal(extensionAtlasBindings.length, 12);
+  assert.equal(
+    sampledTextureBindingCount,
+    wavefrontPathTracingComputeLimits.traceSampledTextureBindings
+  );
+  for (const binding of extensionAtlasBindings) {
+    assert.ok(traceBindings.has(binding), `Expected trace bind group layout binding ${binding}.`);
+  }
+});
+
+test("wavefront device descriptor requests every sampled texture binding", () => {
+  assert.throws(
+    () =>
+      createWavefrontDeviceDescriptor({
+        limits: {
+          maxStorageBuffersPerShaderStage: 10,
+          maxSampledTexturesPerShaderStage: 20,
+        },
+      }),
+    /requires maxSampledTexturesPerShaderStage>=21/
+  );
+
+  const descriptor = createWavefrontDeviceDescriptor({
+    limits: {
+      maxStorageBuffersPerShaderStage: 10,
+      maxSampledTexturesPerShaderStage: 32,
+    },
+  });
+  assert.equal(descriptor.requiredLimits.maxStorageBuffersPerShaderStage, 10);
+  assert.equal(descriptor.requiredLimits.maxSampledTexturesPerShaderStage, 21);
 });
 
 test("wavefront compute config exposes bounded samples per pixel", () => {
@@ -2516,6 +2685,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
           maxComputeWorkgroupSizeZ: 64,
           maxComputeWorkgroupsPerDimension: 65_535,
           maxStorageBuffersPerShaderStage: 10,
+          maxSampledTexturesPerShaderStage: 32,
         },
         info: {
           vendor: "plasius-test-vendor",
@@ -2589,6 +2759,10 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
       requestedDeviceDescriptor.requiredLimits.maxStorageBuffersPerShaderStage,
       10
     );
+    assert.equal(
+      requestedDeviceDescriptor.requiredLimits.maxSampledTexturesPerShaderStage,
+      21
+    );
     assert.equal(frame.frame, 1);
     assert.equal(frame.displayQuality, true);
     assert.equal(frame.accelerationBuildMode, "gpu");
@@ -2614,6 +2788,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     assert.equal(frame.gpuParallelism.adapterLimits.maxComputeInvocationsPerWorkgroup, 256);
     assert.equal(frame.gpuParallelism.adapterLimits.maxComputeWorkgroupsPerDimension, 65_535);
     assert.equal(frame.gpuParallelism.adapterLimits.maxStorageBuffersPerShaderStage, 10);
+    assert.equal(frame.gpuParallelism.adapterLimits.maxSampledTexturesPerShaderStage, 32);
     assert.equal(frame.gpuParallelism.configuredWorkgroupSize, 64);
     assert.ok(frame.gpuParallelism.directDispatches > 0);
     assert.ok(frame.gpuParallelism.directWorkgroups > 0);

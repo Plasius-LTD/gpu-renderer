@@ -18,7 +18,12 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Fixed wavefront shader startup after the `TriangleRecord`
+    material-extension expansion by initializing complete GPU-built and
+    fallback records, and switched shader preflight and pipeline diagnostics to
+    the standard `GPUShaderModule.getCompilationInfo()` API so the original
+    WGSL line and column errors are preserved. Restored the complete nested
+    material atlas bind-group layout and its sampled-texture capability check.
 
 - **Security**
   - (placeholder)

@@ -113,36 +113,35 @@ fn prepareMeshTrianglesAndLeaves(@builtin(global_invocation_id) globalId: vec3<u
   let uv1 = select(vec2<f32>(0.0), vertex1.uv.xy, vertex1.uv.z > 0.5);
   let uv2 = select(vec2<f32>(0.0), vertex2.uv.xy, vertex2.uv.z > 0.5);
 
-  triangles[triangleIndex] = TriangleRecord(
-    triangleIndex,
-    mesh.meshId,
-    mesh.materialKind,
-    mesh.flags,
-    mesh.materialRefId,
-    mesh.mediumRefId,
-    mesh.materialSlot,
-    0u,
-    vec4<f32>(vertex0.position.xyz, 0.0),
-    vec4<f32>(vertex1.position.xyz, 0.0),
-    vec4<f32>(vertex2.position.xyz, 0.0),
-    vec4<f32>(n0, 0.0),
-    vec4<f32>(n1, 0.0),
-    vec4<f32>(n2, 0.0),
-    vec4<f32>(uv0, uv1),
-    vec4<f32>(uv2, 0.0, 0.0),
-    mesh.color,
-    mesh.emission,
-    mesh.material,
-    mesh.materialResponse,
-    mesh.materialExtension,
-    mesh.specularColor,
-    mesh.baseColorAtlas,
-    mesh.metallicRoughnessAtlas,
-    mesh.normalAtlas,
-    mesh.occlusionAtlas,
-    mesh.emissiveAtlas,
-    mesh.textureSettings
-  );
+  var triangle = default_triangle_record();
+  triangle.triangleId = triangleIndex;
+  triangle.meshId = mesh.meshId;
+  triangle.materialKind = mesh.materialKind;
+  triangle.flags = mesh.flags;
+  triangle.materialRefId = mesh.materialRefId;
+  triangle.mediumRefId = mesh.mediumRefId;
+  triangle.materialSlot = mesh.materialSlot;
+  triangle.v0 = vec4<f32>(vertex0.position.xyz, 0.0);
+  triangle.v1 = vec4<f32>(vertex1.position.xyz, 0.0);
+  triangle.v2 = vec4<f32>(vertex2.position.xyz, 0.0);
+  triangle.n0 = vec4<f32>(n0, 0.0);
+  triangle.n1 = vec4<f32>(n1, 0.0);
+  triangle.n2 = vec4<f32>(n2, 0.0);
+  triangle.uv0uv1 = vec4<f32>(uv0, uv1);
+  triangle.uv2Pad = vec4<f32>(uv2, 0.0, 0.0);
+  triangle.color = mesh.color;
+  triangle.emission = mesh.emission;
+  triangle.material = mesh.material;
+  triangle.materialResponse = mesh.materialResponse;
+  triangle.materialExtension = mesh.materialExtension;
+  triangle.specularColor = mesh.specularColor;
+  triangle.baseColorAtlas = mesh.baseColorAtlas;
+  triangle.metallicRoughnessAtlas = mesh.metallicRoughnessAtlas;
+  triangle.normalAtlas = mesh.normalAtlas;
+  triangle.occlusionAtlas = mesh.occlusionAtlas;
+  triangle.emissiveAtlas = mesh.emissiveAtlas;
+  triangle.textureSettings = mesh.textureSettings;
+  triangles[triangleIndex] = triangle;
 
   let leafBase = config.triangleCount - 1u;
   let nodeIndex = leafBase + triangleIndex;
