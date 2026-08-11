@@ -28,6 +28,8 @@ All notable changes to this project will be documented in this file.
     contract.
 
 - **Security**
+  - Updated the development-tool dependency graph to the patched
+    `brace-expansion` release after the feedback release audit.
   - Kept feedback diagnostics separate from general renderer snapshots and
     excluded user-captured pixels, DOM, player data, URLs, filenames, exact
     measurements, adapter identity and raw warnings from the output contract.
