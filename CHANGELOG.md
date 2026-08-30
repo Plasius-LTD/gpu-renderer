@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.41] - 2026-08-30
+
+- **Added**
   - Added opt-in fixed-SPP ray-count and timing telemetry to awaited
     `renderFrame({ readStats: true })` results, including exact primary,
     continuation, total path-segment, and per-bounce counts plus WebGPU
@@ -1014,3 +1028,4 @@ All notable changes to this project will be documented in this file.
 [0.2.38]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.38
 [0.2.39]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.39
 [0.2.40]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.40
+[0.2.41]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.41
