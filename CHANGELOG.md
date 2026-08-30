@@ -15,6 +15,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.40] - 2026-08-30
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Updated internal GPU dependencies to their surviving clean lines and refreshed the esbuild resolution.
 
 - **Fixed**
@@ -991,3 +1005,4 @@ All notable changes to this project will be documented in this file.
 [0.2.37]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.37
 [0.2.38]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.38
 [0.2.39]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.39
+[0.2.40]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.40
