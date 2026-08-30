@@ -100,6 +100,14 @@ test("dependency code cannot run inside the OIDC mutation job", () => {
 test("release metadata lands through a unique non-force-pushed PR", () => {
   assert.match(
     releasePrepareWorkflow,
+    /name: Checkout main[\s\S]*?persist-credentials: false/u,
+  );
+  assert.match(
+    releasePrepareWorkflow,
+    /git remote set-url origin "https:\/\/x-access-token:\$\{AUTH_TOKEN\}@github\.com\/\$\{GITHUB_REPOSITORY\}\.git"/u,
+  );
+  assert.match(
+    releasePrepareWorkflow,
     /BRANCH="release\/\$\{TAG\}-\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}"/u,
   );
   assert.doesNotMatch(
