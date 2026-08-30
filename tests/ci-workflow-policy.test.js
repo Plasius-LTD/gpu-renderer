@@ -98,6 +98,14 @@ test("dependency code cannot run inside the OIDC mutation job", () => {
   assert.doesNotMatch(publishJob, /npm run /u);
 });
 
+test("tarball membership checks drain the archive listing under pipefail", () => {
+  assert.match(
+    cdWorkflow,
+    /tar -tzf "\$\{TARBALL\}" \| grep -E '\^package\/dist\(\/\|\$\)' >\/dev\/null/u,
+  );
+  assert.doesNotMatch(cdWorkflow, /tar -tzf "\$\{TARBALL\}" \| grep -Eq/u);
+});
+
 test("release metadata lands through a unique non-force-pushed PR", () => {
   assert.match(
     releasePrepareWorkflow,
