@@ -77,6 +77,30 @@ test("publication uses hosted npm OIDC without a write-token fallback", () => {
   assert.doesNotMatch(npmConfig, /NODE_AUTH_TOKEN/u);
 });
 
+test("publication treats the immutable tarball as an explicit local path", () => {
+  assert.match(
+    cdWorkflow,
+    /npm publish "\.\/\$\{TARBALL\}" --ignore-scripts/u,
+  );
+  assert.doesNotMatch(
+    cdWorkflow,
+    /npm publish "\$\{TARBALL\}" --ignore-scripts/u,
+  );
+});
+
+test("failed unpublished releases recover without rewriting published identity", () => {
+  assert.match(cdWorkflow, /PACKAGE_PUBLISHED/u);
+  assert.match(cdWorkflow, /git merge-base --is-ancestor/u);
+  assert.match(cdWorkflow, /OLD_PACKAGE_METADATA/u);
+  assert.match(cdWorkflow, /RELEASE_IS_DRAFT/u);
+  assert.match(
+    cdWorkflow,
+    /A published GitHub release exists for unpublished npm tag/u,
+  );
+  assert.match(cdWorkflow, /gh api --method DELETE/u);
+  assert.match(cdWorkflow, /git push origin ":refs\/tags\/\$\{TAG\}"/u);
+});
+
 test("dependency code cannot run inside the OIDC mutation job", () => {
   const validationJob = cdWorkflow.slice(
     cdWorkflow.indexOf("\n  validate_and_pack:"),
