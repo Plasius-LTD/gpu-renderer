@@ -118,6 +118,32 @@ function walk(root, callback, relative = "") {
   }
 }
 
+function withRegularFile(file, label, callback) {
+  if (!Number.isInteger(fs.constants.O_NOFOLLOW)) {
+    throw new Error("atomic non-symlink file validation is unavailable on this platform");
+  }
+  let descriptor;
+  try {
+    descriptor = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    if (!fs.fstatSync(descriptor).isFile()) {
+      throw new Error(`${label} is not a regular file: ${file}`);
+    }
+    return callback(descriptor);
+  } catch (error) {
+    if (error?.code === "ENOENT") throw new Error(`${label} is missing: ${file}`, { cause: error });
+    if (error?.code === "ELOOP") {
+      throw new Error(`${label} is a symbolic link: ${file}`, { cause: error });
+    }
+    throw error;
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+}
+
+function readRegularText(file, label) {
+  return withRegularFile(file, label, (descriptor) => fs.readFileSync(descriptor, "utf8"));
+}
+
 function inspectJson(value, location, violations, trail = "$") {
   if (Array.isArray(value)) {
     value.forEach((item, index) => inspectJson(item, location, violations, `${trail}[${index}]`));
@@ -212,26 +238,23 @@ function inspectRepository(root) {
     if (basename === "package.json" || LOCK_NAMES.has(basename)) {
       if (basename.endsWith(".json")) {
         try {
-          inspectJson(JSON.parse(fs.readFileSync(absolute, "utf8")), relative, violations);
+          inspectJson(JSON.parse(readRegularText(absolute, relative)), relative, violations);
         } catch (error) {
           violations.push(`${relative}:invalid-json:${error.message}`);
         }
       } else {
-        fs.readFileSync(absolute, "utf8").split(/\r?\n/u).forEach((line, index) => {
+        readRegularText(absolute, relative).split(/\r?\n/u).forEach((line, index) => {
           if (isForbiddenPackageName(line)) violations.push(`${relative}:${index + 1}`);
         });
       }
       return;
     }
-    inspectText(fs.readFileSync(absolute, "utf8"), relative, violations);
+    inspectText(readRegularText(absolute, relative), relative, violations);
   });
   return { checks: [...checks], violations: [...new Set(violations)].sort() };
 }
 
 function inspectInstalledGraph(root) {
-  if (!fs.existsSync(path.join(root, "node_modules"))) {
-    throw new Error("installed dependency evidence is missing (node_modules not found)");
-  }
   const result = spawnSync("npm", ["ls", "--all", "--json", "--long"], {
     cwd: root,
     encoding: "utf8",
@@ -254,31 +277,33 @@ function inspectInstalledGraph(root) {
 
 function inspectInstalledManifests(root) {
   const nodeModules = path.join(root, "node_modules");
-  if (!fs.existsSync(nodeModules)) {
-    throw new Error("installed dependency evidence is missing (node_modules not found)");
-  }
   const violations = [];
 
   const inspectPackageDirectory = (directory, relative) => {
     const manifestPath = path.join(directory, "package.json");
-    if (!fs.existsSync(manifestPath)) {
-      throw new Error(`installed package manifest is missing: ${relative}`);
-    }
-    const stats = fs.lstatSync(manifestPath);
-    if (stats.isSymbolicLink() || !stats.isFile()) {
-      throw new Error(`installed package manifest is not a regular file: ${relative}`);
-    }
     inspectJson(
-      JSON.parse(fs.readFileSync(manifestPath, "utf8")),
+      JSON.parse(readRegularText(manifestPath, `installed package manifest for ${relative}`)),
       `installed-manifest:${relative}/package.json`,
       violations,
     );
     const nested = path.join(directory, "node_modules");
-    if (fs.existsSync(nested)) inspectNodeModules(nested, `${relative}/node_modules`);
+    inspectNodeModules(nested, `${relative}/node_modules`);
   };
 
-  const inspectNodeModules = (directory, relative) => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+  const inspectNodeModules = (directory, relative, required = false) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch (error) {
+      if (!required && error?.code === "ENOENT") return;
+      if (required && error?.code === "ENOENT") {
+        throw new Error("installed dependency evidence is missing (node_modules not found)", {
+          cause: error,
+        });
+      }
+      throw error;
+    }
+    for (const entry of entries) {
       if (entry.name === ".bin" || entry.name.startsWith(".")) continue;
       const absolute = path.join(directory, entry.name);
       const child = `${relative}/${entry.name}`;
@@ -301,14 +326,13 @@ function inspectInstalledManifests(root) {
     }
   };
 
-  inspectNodeModules(nodeModules, "node_modules");
+  inspectNodeModules(nodeModules, "node_modules", true);
   return violations;
 }
 
 function inspectSbom(file) {
-  if (!fs.existsSync(file)) throw new Error(`SBOM evidence is missing: ${file}`);
   const violations = [];
-  inspectJson(JSON.parse(fs.readFileSync(file, "utf8")), path.basename(file), violations);
+  inspectJson(JSON.parse(readRegularText(file, "SBOM evidence")), path.basename(file), violations);
   return violations;
 }
 
@@ -336,7 +360,8 @@ function runNpmJson(args, root, label) {
 }
 
 function inspectPublicEntrypoints(packageRoot) {
-  const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
+  const manifestPath = path.join(packageRoot, "package.json");
+  const manifest = JSON.parse(readRegularText(manifestPath, "tarball package manifest"));
   const targets = new Set();
   const collect = (value) => {
     if (typeof value === "string") {
@@ -362,7 +387,9 @@ function inspectPublicEntrypoints(packageRoot) {
       continue;
     }
     const absolute = path.join(packageRoot, ...normalized.split("/"));
-    if (!fs.existsSync(absolute) || fs.lstatSync(absolute).isSymbolicLink()) {
+    try {
+      withRegularFile(absolute, `public entrypoint ${normalized}`, () => true);
+    } catch {
       violations.push(`missing-public-entrypoint:${normalized}`);
     }
   }
@@ -424,8 +451,7 @@ function digestEvidence(evidence) {
 
 function readPackageIdentity(root) {
   const manifestPath = path.join(root, "package.json");
-  if (!fs.existsSync(manifestPath)) throw new Error("package identity manifest is missing");
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const manifest = JSON.parse(readRegularText(manifestPath, "package identity manifest"));
   if (
     typeof manifest.name !== "string"
     || manifest.name.trim() === ""
@@ -438,8 +464,7 @@ function readPackageIdentity(root) {
 }
 
 function verifyEvidence(file) {
-  if (!fs.existsSync(file)) throw new Error(`package evidence is missing: ${file}`);
-  const evidence = JSON.parse(fs.readFileSync(file, "utf8"));
+  const evidence = JSON.parse(readRegularText(file, "package evidence"));
   if (evidence.schemaVersion !== 1 || evidence.status !== "pass") {
     throw new Error(`package evidence is not a passing v1 document: ${file}`);
   }

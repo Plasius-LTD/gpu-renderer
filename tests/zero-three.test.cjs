@@ -137,6 +137,15 @@ test("reads peer and optional edges from every installed package manifest", () =
   assert.ok(inspectInstalledManifests(root).length >= 2);
 });
 
+test("opens installed manifests atomically without following symbolic links", () => {
+  const validator = fs.readFileSync(
+    path.resolve(__dirname, "..", "scripts", "verify-zero-three.cjs"),
+    "utf8",
+  );
+  assert.match(validator, /O_NOFOLLOW/u);
+  assert.doesNotMatch(validator, /lstatSync\(manifestPath\)/u);
+});
+
 test("rejects prohibited SBOM components and scans the actual npm tarball", () => {
   const root = fixture();
   const sbom = path.join(root, "sbom.json");
