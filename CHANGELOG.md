@@ -12,13 +12,21 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added opt-in fixed-SPP ray-count and timing telemetry to awaited
+    `renderFrame({ readStats: true })` results, including exact primary,
+    continuation, total path-segment, and per-bounce counts plus WebGPU
+    timestamp-query timing with an explicit queue-completion fallback.
 
 - **Changed**
-  - (placeholder)
+  - Switched WGSL preflight diagnostics to the standard
+    `GPUShaderModule.getCompilationInfo()` API and request the 21 sampled
+    textures already required by the final material shader when the adapter
+    exposes that limit.
 
 - **Fixed**
-  - (placeholder)
+  - Fixed final assembled WGSL compilation by making triangle initialization
+    resilient to record-field additions and aligning the trace bind-group
+    layout with all declared material-extension textures.
 
 - **Security**
   - (placeholder)

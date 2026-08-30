@@ -47,6 +47,18 @@ export function createWavefrontBindGroupLayouts(device, constants) {
       { binding: 30, visibility: constants.shader.COMPUTE, sampler: { type: "filtering" } },
       { binding: 31, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
       { binding: 32, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 33, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 34, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 35, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 36, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 37, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 38, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 39, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 40, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 41, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 42, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 43, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 44, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
     ],
   });
   const acceleration = device.createBindGroupLayout({

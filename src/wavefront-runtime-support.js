@@ -3,6 +3,7 @@ import {
   GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS,
   GPU_READBACK_COMPLETION_TIMEOUT_MS,
   GPU_SUBMITTED_WORK_TIMEOUT_MS,
+  TRACE_SAMPLED_TEXTURE_BINDINGS,
   TRACE_STORAGE_BUFFER_BINDINGS,
   WORKGROUP_SIZE,
   readNonNegativeInteger,
@@ -50,11 +51,11 @@ export function resolveCanvas(canvasOrSelector, documentRef = globalThis.documen
 }
 
 async function getPipelineDiagnostics(shaderModule) {
-  if (typeof shaderModule?.compilationInfo !== "function") {
+  if (typeof shaderModule?.getCompilationInfo !== "function") {
     return "";
   }
   try {
-    const info = await shaderModule.compilationInfo();
+    const info = await shaderModule.getCompilationInfo();
     const messages = info.messages ?? [];
     if (messages.length === 0) {
       return "";
@@ -96,10 +97,10 @@ export async function createComputePipeline(device, shaderModule, layout, entryP
 }
 
 export async function assertShaderModuleCompiles(shaderModule, label) {
-  if (typeof shaderModule?.compilationInfo !== "function") {
+  if (typeof shaderModule?.getCompilationInfo !== "function") {
     return;
   }
-  const info = await shaderModule.compilationInfo();
+  const info = await shaderModule.getCompilationInfo();
   const messages = Array.isArray(info?.messages) ? info.messages : [];
   const errors = messages.filter((message) => message?.type === "error");
   if (errors.length <= 0) {
@@ -138,7 +139,39 @@ export function createWavefrontDeviceDescriptor(adapter, options = {}) {
     );
   }
 
+  const exposedSampledTextureLimit = Number(adapter?.limits?.maxSampledTexturesPerShaderStage);
+  if (Number.isFinite(exposedSampledTextureLimit)) {
+    if (exposedSampledTextureLimit < TRACE_SAMPLED_TEXTURE_BINDINGS) {
+      throw new Error(
+        `Wavefront material tracing requires maxSampledTexturesPerShaderStage>=${TRACE_SAMPLED_TEXTURE_BINDINGS}, ` +
+          `but this adapter exposes ${exposedSampledTextureLimit}.`
+      );
+    }
+    requiredLimits.maxSampledTexturesPerShaderStage = Math.max(
+      Number(requiredLimits.maxSampledTexturesPerShaderStage ?? 0),
+      TRACE_SAMPLED_TEXTURE_BINDINGS
+    );
+  }
+
   const descriptor = { ...(options.deviceDescriptor ?? {}) };
+  const requiredFeatures = Array.from(descriptor.requiredFeatures ?? []);
+  const adapterFeatures = adapter?.features;
+  const timestampQuerySupported =
+    typeof adapterFeatures?.has === "function"
+      ? adapterFeatures.has("timestamp-query")
+      : adapterFeatures && typeof adapterFeatures[Symbol.iterator] === "function"
+        ? Array.from(adapterFeatures).includes("timestamp-query")
+        : false;
+  if (
+    options.gpuTimestamps !== false &&
+    timestampQuerySupported &&
+    !requiredFeatures.includes("timestamp-query")
+  ) {
+    requiredFeatures.push("timestamp-query");
+  }
+  if (requiredFeatures.length > 0) {
+    descriptor.requiredFeatures = requiredFeatures;
+  }
   if (Object.keys(requiredLimits).length > 0) {
     descriptor.requiredLimits = {
       ...(descriptor.requiredLimits ?? {}),

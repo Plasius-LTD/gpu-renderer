@@ -41,7 +41,10 @@ import {
 } from "../src/wavefront-denoise-validation.js";
 import { dispatchWavefrontGpuAccelerationBuild } from "../src/wavefront-acceleration-builder.js";
 import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
+import { createWavefrontFrameTelemetryResources } from "../src/wavefront-frame-telemetry.js";
 import { createConfigPayload } from "../src/wavefront-packers.js";
+import { createWavefrontBindGroupLayouts } from "../src/wavefront-pipelines.js";
+import { assertShaderModuleCompiles } from "../src/wavefront-runtime-support.js";
 import {
   listWavefrontSampleDimensions,
   sampleWavefrontDimension2D,
@@ -56,6 +59,7 @@ const gpuConstants = Object.freeze({
     STORAGE: 8,
     UNIFORM: 16,
     INDIRECT: 32,
+    QUERY_RESOLVE: 64,
   }),
   texture: Object.freeze({
     COPY_SRC: 1,
@@ -123,11 +127,33 @@ class FakeWavefrontBuffer {
     this.device = device;
     this.descriptor = descriptor;
     this.destroyed = false;
-    this.readback = new Uint8Array(256);
-    this.readback.set([32, 64, 128, 255]);
+    this.readback = new Uint8Array(Math.max(256, descriptor.size ?? 0));
+    if (descriptor.label === "plasius.wavefront.rayCounts.readback") {
+      new Uint32Array(this.readback.buffer).set(
+        device.rayCountReadbackValues ?? [64, 16]
+      );
+    } else if (descriptor.label === "plasius.wavefront.timestamps.readback") {
+      new BigUint64Array(this.readback.buffer).set(
+        device.timestampReadbackValues ?? [1_000_000n, 5_000_000n]
+      );
+    } else {
+      this.readback.set([32, 64, 128, 255]);
+    }
   }
 
   async mapAsync() {
+    if (
+      this.descriptor.label === "plasius.wavefront.rayCounts.readback" &&
+      this.device.failRayCountMap === true
+    ) {
+      throw new Error("simulated ray-count map failure");
+    }
+    if (
+      this.descriptor.label === "plasius.wavefront.timestamps.readback" &&
+      this.device.failTimestampMap === true
+    ) {
+      throw new Error("simulated timestamp map failure");
+    }
     if (
       this.device.requireSubmittedWorkDoneBeforeMapAsync === true &&
       this.device.queue.submittedWorkDone !== true
@@ -222,12 +248,24 @@ class FakeWavefrontCommandEncoder {
 
   beginComputePass(descriptor) {
     this.device.computePasses += 1;
+    this.device.computePassDescriptors.push(descriptor);
     return new FakeWavefrontComputePass(this.device, descriptor);
   }
 
   beginRenderPass(descriptor) {
     this.device.renderPasses += 1;
+    this.device.renderPassDescriptors.push(descriptor);
     return new FakeWavefrontRenderPass(this.device, descriptor);
+  }
+
+  resolveQuerySet(querySet, firstQuery, queryCount, destination, destinationOffset) {
+    this.device.queryResolves.push({
+      querySet,
+      firstQuery,
+      queryCount,
+      destination,
+      destinationOffset,
+    });
   }
 
   copyTextureToBuffer(source, destination, size) {
@@ -250,7 +288,7 @@ class FakeWavefrontCommandEncoder {
 }
 
 class FakeWavefrontDevice {
-  constructor() {
+  constructor(options = {}) {
     this.limits = {
       maxStorageBufferBindingSize: 134_217_728,
       minUniformBufferOffsetAlignment: 256,
@@ -262,6 +300,11 @@ class FakeWavefrontDevice {
     this.copyBufferToBufferCalls = [];
     this.copyTextureToBufferCalls = [];
     this.drawCalls = [];
+    this.features = new Set(options.features ?? []);
+    this.querySets = [];
+    this.queryResolves = [];
+    this.computePassDescriptors = [];
+    this.renderPassDescriptors = [];
     this.pipelineLabels = [];
     this.bindGroupSets = 0;
     this.pipelineSets = 0;
@@ -317,6 +360,18 @@ class FakeWavefrontDevice {
     return { descriptor };
   }
 
+  createQuerySet(descriptor) {
+    const querySet = {
+      descriptor,
+      destroyed: false,
+      destroy() {
+        this.destroyed = true;
+      },
+    };
+    this.querySets.push(querySet);
+    return querySet;
+  }
+
   createBindGroupLayout(descriptor) {
     return { descriptor };
   }
@@ -328,7 +383,7 @@ class FakeWavefrontDevice {
   createShaderModule(descriptor) {
     return {
       descriptor,
-      async compilationInfo() {
+      async getCompilationInfo() {
         return { messages: [] };
       },
     };
@@ -359,8 +414,10 @@ function createFakeWavefrontNavigator(device = new FakeWavefrontDevice(), adapte
         return {
           limits: adapterOptions.limits,
           info: adapterOptions.info,
+          features: new Set(adapterOptions.features ?? device.features ?? []),
           async requestDevice(descriptor) {
             adapterOptions.onRequestDevice?.(descriptor);
+            device.features = new Set(descriptor?.requiredFeatures ?? []);
             return device;
           },
         };
@@ -467,10 +524,63 @@ test("wavefront compute compatibility exports expose the canonical mesh shader",
   assert.match(types, /meshRangeRecordBytes: 240;/);
   assert.match(types, /triangleRecordBytes: 576;/);
   assert.match(types, /materialRecordBytes: 192;/);
+  assert.match(types, /readonly secondaryRays: number \| null;/);
+  assert.match(types, /readonly totalPathSegments: number \| null;/);
+  assert.match(types, /readonly rayCounts: WavefrontRayCountTelemetry;/);
+  assert.match(types, /readonly timings: WavefrontFrameTimingTelemetry;/);
+  assert.match(types, /readonly telemetryMemoryBytes: number;/);
   assert.throws(
     () => createWavefrontPathTracingComputeShaderSource({ workgroupSize: 32 }),
     /requires workgroupSize=64/
   );
+});
+
+test("assembled wavefront WGSL avoids field-count-sensitive triangle constructors", () => {
+  const shaderSource = createWavefrontPathTracingComputeShaderSource();
+  const constructors = shaderSource.match(/TriangleRecord\(/g) ?? [];
+  const zeroInitializers = shaderSource.match(/TriangleRecord\(\)/g) ?? [];
+
+  assert.equal(constructors.length, 2);
+  assert.equal(zeroInitializers.length, constructors.length);
+  assert.match(shaderSource, /preparedTriangle\.materialExtension2 = vec4<f32>\(0\.0, 0\.0, 1\.3, 0\.0\)/);
+  assert.match(shaderSource, /preparedTriangle\.materialExtension3 = vec4<f32>\(100\.0, 400\.0, 0\.0, 0\.0\)/);
+  assert.match(shaderSource, /preparedTriangle\.anisotropyAtlas = vec4<f32>\(0\.0, 0\.0, 1\.0, 1\.0\)/);
+});
+
+test("shader preflight uses the standard WebGPU compilation diagnostics API", async () => {
+  let calls = 0;
+  const shaderModule = {
+    async getCompilationInfo() {
+      calls += 1;
+      return {
+        messages: [
+          {
+            type: "error",
+            lineNum: 1947,
+            linePos: 30,
+            message: "structure constructor has too few inputs",
+          },
+        ],
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => assertShaderModuleCompiles(shaderModule, "plasius.wavefront.computeShader"),
+    /WGSL compilation preflight failed.*line 1947:30 structure constructor has too few inputs/s
+  );
+  assert.equal(calls, 1);
+  const source = readRendererSource();
+  assert.match(source, /getCompilationInfo/);
+  assert.doesNotMatch(source, /\.compilationInfo\(/);
+});
+
+test("trace bind-group layout covers every declared material extension texture", () => {
+  const layouts = createWavefrontBindGroupLayouts(new FakeWavefrontDevice(), gpuConstants);
+  const bindings = layouts.trace.descriptor.entries.map(({ binding }) => binding);
+
+  assert.deepEqual(bindings.slice(-12), Array.from({ length: 12 }, (_, index) => 33 + index));
+  assert.equal(new Set(bindings).size, bindings.length);
 });
 
 test("wavefront compute config exposes bounded samples per pixel", () => {
@@ -2498,6 +2608,21 @@ serialWebGpuTest("wavefront compute renderer rejects unavailable WebGPU setup pa
       }),
       /requires maxStorageBuffersPerShaderStage>=10/
     );
+
+    await assert.rejects(
+      createWavefrontPathTracingComputeRenderer({
+        canvas: createFakeWavefrontCanvas(),
+        navigator: createFakeWavefrontNavigator(new FakeWavefrontDevice(), {
+          limits: {
+            maxStorageBuffersPerShaderStage: 10,
+            maxSampledTexturesPerShaderStage: 16,
+          },
+        }),
+        width: 8,
+        height: 8,
+      }),
+      /requires maxSampledTexturesPerShaderStage>=21/
+    );
   });
 });
 
@@ -2516,6 +2641,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
           maxComputeWorkgroupSizeZ: 64,
           maxComputeWorkgroupsPerDimension: 65_535,
           maxStorageBuffersPerShaderStage: 10,
+          maxSampledTexturesPerShaderStage: 48,
         },
         info: {
           vendor: "plasius-test-vendor",
@@ -2588,6 +2714,10 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     assert.equal(
       requestedDeviceDescriptor.requiredLimits.maxStorageBuffersPerShaderStage,
       10
+    );
+    assert.equal(
+      requestedDeviceDescriptor.requiredLimits.maxSampledTexturesPerShaderStage,
+      21
     );
     assert.equal(frame.frame, 1);
     assert.equal(frame.displayQuality, true);
@@ -2687,7 +2817,15 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
           (call.sourceOffset === 16 && call.destinationOffset === 0 && call.size === 12) ||
           (call.sourceOffset === 0 &&
             call.destinationOffset === 0 &&
-            call.size === wavefrontPathTracingComputeLimits.counterRecordBytes)
+            call.size === wavefrontPathTracingComputeLimits.counterRecordBytes) ||
+          (call.source?.descriptor?.label === "plasius.wavefront.counters" &&
+            call.destination?.descriptor?.label === "plasius.wavefront.rayCounts" &&
+            call.sourceOffset === 0 &&
+            call.size === 4) ||
+          (call.source?.descriptor?.label === "plasius.wavefront.rayCounts" &&
+            call.destination?.descriptor?.label === "plasius.wavefront.rayCounts.readback" &&
+            call.sourceOffset === 0 &&
+            call.destinationOffset === 0)
       ),
       true
     );
@@ -2875,6 +3013,364 @@ serialWebGpuTest("wavefront renderFrame waits for submitted GPU work before repo
 
     renderer.destroy();
   });
+});
+
+serialWebGpuTest("fixed-SPP telemetry-off path keeps the exact pass sequence and allocates no telemetry resources", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 2,
+      denoise: false,
+      deferredPathResolve: true,
+    });
+
+    const frame = renderer.renderOnce();
+    const computeLabels = device.computePassDescriptors.map(({ label }) => label);
+
+    assert.deepEqual(computeLabels, [
+      "plasius.wavefront.generatePrimaryRaysPass",
+      "plasius.wavefront.bounce.0",
+      "plasius.wavefront.bounce.1",
+      "plasius.wavefront.outputPass",
+      "plasius.wavefront.generatePrimaryRaysPass",
+      "plasius.wavefront.bounce.0",
+      "plasius.wavefront.bounce.1",
+      "plasius.wavefront.outputPass",
+    ]);
+    assert.equal(device.renderPassDescriptors.at(-1)?.label, "plasius.wavefront.presentPass");
+    assert.equal(
+      device.computePassDescriptors.some(({ timestampWrites }) => timestampWrites),
+      false
+    );
+    assert.equal(
+      device.renderPassDescriptors.some(({ timestampWrites }) => timestampWrites),
+      false
+    );
+    assert.equal(
+      device.buffers.some(({ descriptor }) => descriptor.label?.includes("rayCounts")),
+      false
+    );
+    assert.equal(
+      device.buffers.some(({ descriptor }) => descriptor.label?.includes("timestamps")),
+      false
+    );
+    assert.equal(device.querySets.length, 0);
+    assert.equal(frame.primaryRays, 128);
+    assert.equal(frame.secondaryRays, null);
+    assert.equal(frame.totalPathSegments, null);
+    assert.equal(frame.rayCounts.status, "not-requested");
+    assert.equal(frame.timings.status, "not-requested");
+    assert.equal(frame.telemetryMemoryBytes, 0);
+
+    renderer.destroy();
+  });
+});
+
+serialWebGpuTest("wavefront readStats reports exact ray segments and timestamp-query GPU time", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice({ features: ["timestamp-query"] });
+    device.rayCountReadbackValues = [64, 16];
+    device.timestampReadbackValues = [1_000_000n, 5_000_000n];
+    let requestedDeviceDescriptor;
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device, {
+        features: ["timestamp-query"],
+        onRequestDevice(descriptor) {
+          requestedDeviceDescriptor = descriptor;
+        },
+      }),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 1,
+      denoise: false,
+      deferredPathResolve: true,
+    });
+
+    const frame = await renderer.renderFrame({ readStats: true, readOutputProbe: false });
+
+    assert.deepEqual(requestedDeviceDescriptor.requiredFeatures, ["timestamp-query"]);
+    assert.equal(device.querySets.length, 1);
+    assert.equal(device.querySets[0].descriptor.count, 2);
+    assert.equal(device.computePassDescriptors[0].timestampWrites.beginningOfPassWriteIndex, 0);
+    assert.equal(
+      device.renderPassDescriptors.at(-1).timestampWrites.endOfPassWriteIndex,
+      1
+    );
+    assert.equal(device.queryResolves.length, 1);
+    assert.equal(frame.primaryRays, 64);
+    assert.equal(frame.secondaryRays, 16);
+    assert.equal(frame.totalPathSegments, 80);
+    assert.deepEqual(frame.rayCounts.bounceHistogram, [64, 16]);
+    assert.equal(frame.rayCounts.status, "available");
+    assert.equal(frame.rayCounts.source, "gpu-active-queue-readback");
+    assert.equal(frame.rayCounts.expectedPrimaryRays, 64);
+    assert.equal(frame.rayCounts.observedPrimaryRays, 64);
+    assert.equal(frame.timings.status, "available");
+    assert.equal(frame.timings.source, "timestamp-query");
+    assert.equal(frame.timings.timestampQueryStatus, "available");
+    assert.equal(frame.timings.totalGpuTimeMs, 4);
+    assert.ok(frame.timings.totalRenderJobTimeMs >= 0);
+    assert.equal(frame.timings.classificationTimeMs, null);
+    assert.equal(frame.timings.compactionTimeMs, null);
+    assert.equal(frame.timings.samplingTimeMs, null);
+    assert.ok(frame.telemetryMemoryBytes > 0);
+
+    renderer.destroy();
+    assert.equal(device.querySets[0].destroyed, true);
+  });
+});
+
+serialWebGpuTest("wavefront readStats isolates timestamp readback failure from valid ray counts", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice({ features: ["timestamp-query"] });
+    device.rayCountReadbackValues = [64, 16];
+    device.failTimestampMap = true;
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device, { features: ["timestamp-query"] }),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 1,
+      denoise: false,
+      deferredPathResolve: true,
+    });
+
+    const frame = await renderer.renderFrame({ readStats: true, readOutputProbe: false });
+
+    assert.equal(frame.rayCounts.status, "available");
+    assert.equal(frame.secondaryRays, 16);
+    assert.equal(frame.totalPathSegments, 80);
+    assert.equal(frame.timings.status, "fallback");
+    assert.equal(frame.timings.source, "queue-completion");
+    assert.equal(frame.timings.timestampQueryStatus, "failed");
+    assert.match(frame.timings.reason, /simulated timestamp map failure/);
+
+    renderer.destroy();
+  });
+});
+
+serialWebGpuTest("wavefront readStats distinguishes timestamp setup failure from unsupported adapters", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice({ features: ["timestamp-query"] });
+    device.rayCountReadbackValues = [64, 8];
+    device.createQuerySet = () => {
+      throw new Error("simulated timestamp setup failure");
+    };
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device, { features: ["timestamp-query"] }),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 1,
+      denoise: false,
+      deferredPathResolve: true,
+    });
+
+    const frame = await renderer.renderFrame({ readStats: true, readOutputProbe: false });
+
+    assert.equal(frame.rayCounts.status, "available");
+    assert.equal(frame.secondaryRays, 8);
+    assert.equal(frame.timings.status, "fallback");
+    assert.equal(frame.timings.source, "queue-completion");
+    assert.equal(frame.timings.timestampQueryStatus, "failed");
+    assert.match(frame.timings.reason, /timestamp-query-setup-failed:simulated timestamp setup failure/);
+
+    renderer.destroy();
+  });
+});
+
+serialWebGpuTest("wavefront readStats distinguishes timestamp fallback from exact ray counters", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    device.rayCountReadbackValues = [64, 8];
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 1,
+      denoise: false,
+      deferredPathResolve: true,
+    });
+
+    const frame = await renderer.renderFrame({ readStats: true, readOutputProbe: false });
+
+    assert.equal(frame.rayCounts.status, "available");
+    assert.equal(frame.secondaryRays, 8);
+    assert.equal(frame.totalPathSegments, 72);
+    assert.equal(frame.timings.status, "fallback");
+    assert.equal(frame.timings.source, "queue-completion");
+    assert.equal(frame.timings.timestampQueryStatus, "unsupported");
+    assert.equal(frame.timings.totalGpuTimeMs, null);
+    assert.ok(frame.timings.totalRenderJobTimeMs >= 0);
+    assert.equal(device.querySets.length, 0);
+
+    renderer.destroy();
+  });
+});
+
+serialWebGpuTest("wavefront gpuTimestamps false suppresses the optional device feature request", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice({ features: ["timestamp-query"] });
+    device.rayCountReadbackValues = [64, 8];
+    let requestedDeviceDescriptor = "not-called";
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device, {
+        features: ["timestamp-query"],
+        onRequestDevice(descriptor) {
+          requestedDeviceDescriptor = descriptor;
+        },
+      }),
+      gpuTimestamps: false,
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 1,
+      denoise: false,
+      deferredPathResolve: true,
+    });
+
+    const frame = await renderer.renderFrame({ readStats: true, readOutputProbe: false });
+
+    assert.equal(requestedDeviceDescriptor, undefined);
+    assert.equal(device.features.has("timestamp-query"), false);
+    assert.equal(device.querySets.length, 0);
+    assert.equal(frame.rayCounts.status, "available");
+    assert.equal(frame.timings.timestampQueryStatus, "unsupported");
+    assert.equal(frame.timings.source, "queue-completion");
+
+    renderer.destroy();
+  });
+});
+
+serialWebGpuTest("wavefront readStats reports unavailable telemetry when GPU completion is not awaited", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice({ features: ["timestamp-query"] });
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device, { features: ["timestamp-query"] }),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 1,
+      denoise: false,
+      deferredPathResolve: true,
+    });
+
+    const frame = await renderer.renderFrame({
+      readStats: true,
+      readOutputProbe: false,
+      awaitGPUCompletion: false,
+    });
+
+    assert.equal(frame.rayCounts.status, "unavailable");
+    assert.equal(frame.rayCounts.reason, "gpu-work-not-awaited");
+    assert.equal(frame.secondaryRays, null);
+    assert.equal(frame.totalPathSegments, null);
+    assert.equal(frame.timings.status, "unavailable");
+    assert.equal(frame.timings.source, "cpu-submit");
+    assert.equal(frame.timings.timestampQueryStatus, "not-recorded");
+    assert.equal(frame.telemetryMemoryBytes, 0);
+    assert.equal(device.querySets.length, 0);
+    assert.equal(
+      device.buffers.some(({ descriptor }) => descriptor.label?.includes("rayCounts")),
+      false
+    );
+
+    renderer.destroy();
+  });
+});
+
+serialWebGpuTest("wavefront readStats fails closed when observed primary-ray counts drift", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    device.rayCountReadbackValues = [63, 16];
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 1,
+      denoise: false,
+      deferredPathResolve: true,
+    });
+
+    const frame = await renderer.renderFrame({ readStats: true, readOutputProbe: false });
+
+    assert.equal(frame.rayCounts.status, "failed");
+    assert.equal(frame.rayCounts.expectedPrimaryRays, 64);
+    assert.equal(frame.rayCounts.observedPrimaryRays, 63);
+    assert.match(frame.rayCounts.reason, /primary-ray-count-mismatch/);
+    assert.equal(frame.secondaryRays, null);
+    assert.equal(frame.totalPathSegments, null);
+
+    renderer.destroy();
+  });
+});
+
+test("wavefront telemetry resources fail closed when readback is unavailable or capacity is exceeded", async () => {
+  const unavailable = createWavefrontFrameTelemetryResources({
+    device: new FakeWavefrontDevice(),
+    constants: { ...gpuConstants, map: null },
+    maxRayCountRecords: 1,
+  });
+  assert.equal(unavailable.available, false);
+  assert.equal(unavailable.memoryBytes, 0);
+  unavailable.beginFrame();
+  unavailable.recordActiveRayCount();
+  assert.deepEqual(unavailable.decorateFirstPass({ label: "first" }), { label: "first" });
+  assert.deepEqual(unavailable.decorateFinalPass({ label: "last" }), { label: "last" });
+  const unavailableResult = await unavailable.readFrame({
+    expectedPrimaryRays: 64,
+    expectedRayCounts: 1,
+  });
+  assert.equal(unavailableResult.rayCounts.status, "unavailable");
+  assert.equal(unavailableResult.rayCounts.reason, "gpu-map-read-unavailable");
+  unavailable.destroy();
+
+  const device = new FakeWavefrontDevice();
+  const overflow = createWavefrontFrameTelemetryResources({
+    device,
+    constants: gpuConstants,
+    maxRayCountRecords: 1,
+  });
+  const encoder = device.createCommandEncoder({ label: "telemetry-overflow" });
+  const counterBuffer = device.createBuffer({
+    label: "counter",
+    size: 4,
+    usage: gpuConstants.buffer.COPY_SRC,
+  });
+  overflow.beginFrame();
+  overflow.recordActiveRayCount(encoder, counterBuffer, 0);
+  overflow.recordActiveRayCount(encoder, counterBuffer, 1);
+  const overflowResult = await overflow.readFrame({
+    expectedPrimaryRays: 64,
+    expectedRayCounts: 2,
+    waitForSubmittedGpuWork: async () => true,
+  });
+  assert.equal(overflowResult.rayCounts.status, "failed");
+  assert.equal(overflowResult.rayCounts.reason, "ray-count-record-capacity-exceeded");
+  overflow.destroy();
 });
 
 serialWebGpuTest("wavefront renderFrame rejects when awaited submitted GPU work times out", async () => {
