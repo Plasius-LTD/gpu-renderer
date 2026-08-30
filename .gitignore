@@ -11,6 +11,7 @@ coverage
 .npm-cache-packcheck/
 playwright-report
 test-results
+release-artifacts/
 
 # Private key material in cert directories (never commit)
 **/certs/**/*-key.pem
