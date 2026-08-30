@@ -855,7 +855,10 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
           TAG: ${{ steps.release.outputs.release_tag }}
+          PACKAGE_NAME: ${{ steps.release.outputs.package_name }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.release_version }}
           PACKAGE_PUBLISHED: ${{ steps.release.outputs.should_publish_npm != 'true' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -863,11 +866,46 @@ jobs:
           REMOTE_TAG_SHA="$(git ls-remote origin "refs/tags/${TAG}" | awk 'NR == 1 { print $1 }')"
           if [ -n "${REMOTE_TAG_SHA}" ]; then
             if [ "${REMOTE_TAG_SHA}" != "${EXPECTED_SHA}" ]; then
-              echo "Tag ${TAG} points at ${REMOTE_TAG_SHA}, expected ${EXPECTED_SHA}; refusing to rewrite it." >&2
-              exit 1
+              if [ "${PACKAGE_PUBLISHED}" = "true" ]; then
+                echo "Published tag ${TAG} points at ${REMOTE_TAG_SHA}, expected ${EXPECTED_SHA}; refusing to rewrite it." >&2
+                exit 1
+              fi
+              if ! git merge-base --is-ancestor "${REMOTE_TAG_SHA}" "${EXPECTED_SHA}"; then
+                echo "Unpublished tag ${TAG} does not point at an ancestor of ${EXPECTED_SHA}; refusing recovery." >&2
+                exit 1
+              fi
+
+              OLD_PACKAGE_METADATA="$(git show "${REMOTE_TAG_SHA}:package.json" | jq -er '[.name, .version] | @tsv')"
+              EXPECTED_PACKAGE_METADATA="${PACKAGE_NAME}"$'\t'"${PACKAGE_VERSION}"
+              if [ "${OLD_PACKAGE_METADATA}" != "${EXPECTED_PACKAGE_METADATA}" ]; then
+                echo "Unpublished tag ${TAG} does not have the expected package identity; refusing recovery." >&2
+                exit 1
+              fi
+
+              RELEASES="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")"
+              MATCHING_RELEASE_COUNT="$(jq --arg tag "${TAG}" '[.[] | select(.tag_name == $tag)] | length' <<<"${RELEASES}")"
+              if [ "${MATCHING_RELEASE_COUNT}" -gt 1 ]; then
+                echo "Multiple releases exist for unpublished tag ${TAG}; refusing recovery." >&2
+                exit 1
+              fi
+              if [ "${MATCHING_RELEASE_COUNT}" -eq 1 ]; then
+                RELEASE_METADATA="$(jq -er --arg tag "${TAG}" '.[] | select(.tag_name == $tag) | [.id, .draft] | @tsv' <<<"${RELEASES}")"
+                read -r RELEASE_ID RELEASE_IS_DRAFT <<<"${RELEASE_METADATA}"
+                if [ "${RELEASE_IS_DRAFT}" != "true" ]; then
+                  echo "A published GitHub release exists for unpublished npm tag ${TAG}; refusing recovery." >&2
+                  exit 1
+                fi
+                gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"
+              fi
+
+              git push origin ":refs/tags/${TAG}"
+              REMOTE_TAG_SHA=""
+              echo "Removed recoverable unpublished release state for ${TAG}."
             fi
-            echo "Tag ${TAG} already points at ${EXPECTED_SHA}."
-            exit 0
+            if [ -n "${REMOTE_TAG_SHA}" ]; then
+              echo "Tag ${TAG} already points at ${EXPECTED_SHA}."
+              exit 0
+            fi
           fi
 
           if [ "${PACKAGE_PUBLISHED}" = "true" ]; then
@@ -939,7 +977,7 @@ jobs:
           set -euo pipefail
 
           PUBLISH_ARGS=(--access public --provenance --registry https://registry.npmjs.org --tag "${DIST_TAG}")
-          npm publish "${TARBALL}" --ignore-scripts "${PUBLISH_ARGS[@]}"
+          npm publish "./${TARBALL}" --ignore-scripts "${PUBLISH_ARGS[@]}"
 
       - name: Skip duplicate npm publication
         if: steps.release.outputs.should_publish_npm != 'true'
