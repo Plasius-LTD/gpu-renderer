@@ -24,6 +24,7 @@ export function createWavefrontFrameEncoder({
   presentPipeline,
   presentBindGroup,
   context,
+  getFrameTelemetry = () => null,
 }) {
   const resolveConfig = resolveGetter(getConfig);
   const resolveBindGroups = resolveGetter(getBindGroups);
@@ -32,9 +33,12 @@ export function createWavefrontFrameEncoder({
     encodeTileSample(encoder, tile, configOffset, parallelism) {
       const config = resolveConfig();
       const bindGroups = resolveBindGroups();
-      const generatePass = encoder.beginComputePass({
-        label: "plasius.wavefront.generatePrimaryRaysPass",
-      });
+      const frameTelemetry = getFrameTelemetry();
+      const generatePass = encoder.beginComputePass(
+        frameTelemetry?.decorateFirstPass({
+          label: "plasius.wavefront.generatePrimaryRaysPass",
+        }) ?? { label: "plasius.wavefront.generatePrimaryRaysPass" }
+      );
       const tileWorkgroups = Math.ceil((tile.width * tile.height) / WORKGROUP_SIZE);
 
       generatePass.setBindGroup(0, bindGroups[0], [configOffset]);
@@ -44,6 +48,7 @@ export function createWavefrontFrameEncoder({
       generatePass.end();
 
       for (let bounceIndex = 0; bounceIndex < config.maxDepth; bounceIndex += 1) {
+        frameTelemetry?.recordActiveRayCount(encoder, counterBuffer, bounceIndex);
         encoder.copyBufferToBuffer(
           counterBuffer,
           COUNTER_DISPATCH_ARGS_OFFSET,
@@ -125,7 +130,7 @@ export function createWavefrontFrameEncoder({
 
     encodePresent(encoder) {
       const texture = context.getCurrentTexture();
-      const passEncoder = encoder.beginRenderPass({
+      const descriptor = {
         label: "plasius.wavefront.presentPass",
         colorAttachments: [
           {
@@ -135,7 +140,10 @@ export function createWavefrontFrameEncoder({
             storeOp: "store",
           },
         ],
-      });
+      };
+      const passEncoder = encoder.beginRenderPass(
+        getFrameTelemetry()?.decorateFinalPass(descriptor) ?? descriptor
+      );
       passEncoder.setPipeline(presentPipeline);
       passEncoder.setBindGroup(0, presentBindGroup);
       passEncoder.draw(3);

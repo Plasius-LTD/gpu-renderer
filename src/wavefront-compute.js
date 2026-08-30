@@ -50,6 +50,11 @@ import {
   createWavefrontFrameStats,
   resolveWavefrontRenderedSamplesPerPixel,
 } from "./wavefront-frame-stats.js";
+import {
+  createWavefrontFrameTelemetryResources,
+  createWavefrontFrameTimingTelemetry,
+  createWavefrontRayCountTelemetry,
+} from "./wavefront-frame-telemetry.js";
 import { createWavefrontFrameEncoder } from "./wavefront-frame-encoder.js";
 import {
   dispatchWavefrontFrame,
@@ -573,6 +578,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     outputView,
     sampler,
   });
+  let activeFrameTelemetry = null;
+  let frameTelemetryResources = null;
   const frameEncoder = createWavefrontFrameEncoder({
     getConfig: () => config,
     getBindGroups: () => bindGroups,
@@ -585,6 +592,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     presentPipeline,
     presentBindGroup,
     context,
+    getFrameTelemetry: () => activeFrameTelemetry,
   });
 
   let frame = 0;
@@ -599,6 +607,18 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   );
   const waitForSubmittedGpuWork = (waitOptions = {}) =>
     waitForSubmittedGpuWorkForDevice(device, waitOptions);
+
+  function ensureFrameTelemetryResources() {
+    if (!frameTelemetryResources) {
+      frameTelemetryResources = createWavefrontFrameTelemetryResources({
+        device,
+        constants,
+        maxRayCountRecords:
+          tiles.length * config.samplesPerPixel * config.maxDepth,
+      });
+    }
+    return frameTelemetryResources;
+  }
 
   function resolveRenderedSamplesPerPixel(renderOptions = {}, awaitGPUCompletion = true) {
     return resolveWavefrontRenderedSamplesPerPixel({
@@ -735,6 +755,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         frameTimeMs,
         false
       ),
+      timings: createWavefrontFrameTimingTelemetry({
+        status: "not-requested",
+        source: "cpu-submit",
+        timestampQueryStatus: "not-recorded",
+        totalRenderJobTimeMs: frameTimeMs,
+      }),
     });
   }
 
@@ -773,96 +799,160 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     const samplingPlan = resolveRenderedSamplesPerPixel(renderOptions, awaitGPUCompletion);
     const useThrottledHighSamplePath =
       awaitGPUCompletion && samplingPlan.renderedSamplesPerPixel >= 8;
+    const telemetryRequested = renderOptions.readStats === true;
+    const telemetryCanRecord = telemetryRequested && awaitGPUCompletion;
+    const telemetryResourcesForFrame = telemetryCanRecord
+      ? ensureFrameTelemetryResources()
+      : null;
+    if (telemetryResourcesForFrame?.available) {
+      telemetryResourcesForFrame.beginFrame();
+      activeFrameTelemetry = telemetryResourcesForFrame;
+    }
     const frameStartTimeMs = nowMs();
     let frameStats;
-    if (useThrottledHighSamplePath) {
-      frame += 1;
-      const frameIndex = frame + config.frameIndex;
-      const parallelismCounters = createGpuParallelismCounters();
-      const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
-      let frameSubmissionCount = 0;
-      let frameConfigSlot = 0;
-      if (accelerationBuildSubmitted) {
-        const accelerationWaitOptions = {
-          ...estimateSubmittedGpuWorkTiming(
-            { ...config, renderedSamplesPerPixel: 1 },
-            1,
-            renderOptions.submittedWorkTimeoutMs,
-            { includeAccelerationBuild: true }
-          ),
-          allowTimeout: false,
-        };
-        await waitForSubmittedGpuWork(accelerationWaitOptions);
-      }
-      for (let tileIndex = 0; tileIndex < tiles.length; tileIndex += 1) {
-        const tileRangeDispatch = dispatchFrameAwaitingGpu(
-          frameIndex,
-          parallelismCounters,
-          samplingPlan.renderedSamplesPerPixel,
-          {
-            sampleRangeStart: 0,
-            sampleRangeEnd: samplingPlan.renderedSamplesPerPixel,
-            tileStartIndex: tileIndex,
-            tileEndIndex: tileIndex + 1,
-            startingSubmissionCount: frameSubmissionCount,
-            startingSlot: frameConfigSlot,
-            includeDenoise: tileIndex + 1 >= tiles.length,
-            includePresent: tileIndex + 1 >= tiles.length,
-          }
-        );
-        frameSubmissionCount = tileRangeDispatch.submissionCount;
-        frameConfigSlot = tileRangeDispatch.slot;
-        const tileWaitOptions = {
-          ...estimateSubmittedGpuWorkTiming(
-            { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
-            1,
-            renderOptions.submittedWorkTimeoutMs,
+    try {
+      if (useThrottledHighSamplePath) {
+        frame += 1;
+        const frameIndex = frame + config.frameIndex;
+        const parallelismCounters = createGpuParallelismCounters();
+        const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
+        let frameSubmissionCount = 0;
+        let frameConfigSlot = 0;
+        if (accelerationBuildSubmitted) {
+          const accelerationWaitOptions = {
+            ...estimateSubmittedGpuWorkTiming(
+              { ...config, renderedSamplesPerPixel: 1 },
+              1,
+              renderOptions.submittedWorkTimeoutMs,
+              { includeAccelerationBuild: true }
+            ),
+            allowTimeout: false,
+          };
+          await waitForSubmittedGpuWork(accelerationWaitOptions);
+        }
+        for (let tileIndex = 0; tileIndex < tiles.length; tileIndex += 1) {
+          const tileRangeDispatch = dispatchFrameAwaitingGpu(
+            frameIndex,
+            parallelismCounters,
+            samplingPlan.renderedSamplesPerPixel,
             {
-              includeDenoise: tileIndex + 1 >= tiles.length && config.denoise,
+              sampleRangeStart: 0,
+              sampleRangeEnd: samplingPlan.renderedSamplesPerPixel,
+              tileStartIndex: tileIndex,
+              tileEndIndex: tileIndex + 1,
+              startingSubmissionCount: frameSubmissionCount,
+              startingSlot: frameConfigSlot,
+              includeDenoise: tileIndex + 1 >= tiles.length,
               includePresent: tileIndex + 1 >= tiles.length,
             }
-          ),
-          allowTimeout: false,
-        };
-        await waitForSubmittedGpuWork(tileWaitOptions);
-      }
-      frameStats = createFrameStats({
-        frameIndex,
-        accelerationBuildSubmitted,
-        frameSubmissionCount,
-        parallelismCounters,
-        renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel,
-        targetSamplesPerPixel: samplingPlan.targetSamplesPerPixel,
-        frameTimeBudgetMs: samplingPlan.frameTimeBudgetMs,
-        budgetConstrained: samplingPlan.budgetConstrained,
-      });
-    } else {
-      const submittedWorkTiming = estimateSubmittedGpuWorkTiming(
-        { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
-        tiles.length,
-        renderOptions.submittedWorkTimeoutMs,
-        { includeAccelerationBuild: config.gpuAccelerationBuildRequired && !accelerationBuilt }
-      );
-      const submissionWaitOptions = awaitGPUCompletion
-        ? {
-            timeoutMs: submittedWorkTiming.timeoutMs,
-            maxWaitMs: submittedWorkTiming.maxWaitMs,
+          );
+          frameSubmissionCount = tileRangeDispatch.submissionCount;
+          frameConfigSlot = tileRangeDispatch.slot;
+          const tileWaitOptions = {
+            ...estimateSubmittedGpuWorkTiming(
+              { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
+              1,
+              renderOptions.submittedWorkTimeoutMs,
+              {
+                includeDenoise: tileIndex + 1 >= tiles.length && config.denoise,
+                includePresent: tileIndex + 1 >= tiles.length,
+              }
+            ),
             allowTimeout: false,
-          }
-        : {
-            timeoutMs: submittedWorkTiming.timeoutMs,
-            maxWaitMs: submittedWorkTiming.maxWaitMs,
           };
-      frameStats = renderOnce(renderOptions, samplingPlan);
-      if (awaitGPUCompletion) {
-        await waitForSubmittedGpuWork(submissionWaitOptions);
+          await waitForSubmittedGpuWork(tileWaitOptions);
+        }
+        frameStats = createFrameStats({
+          frameIndex,
+          accelerationBuildSubmitted,
+          frameSubmissionCount,
+          parallelismCounters,
+          renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel,
+          targetSamplesPerPixel: samplingPlan.targetSamplesPerPixel,
+          frameTimeBudgetMs: samplingPlan.frameTimeBudgetMs,
+          budgetConstrained: samplingPlan.budgetConstrained,
+        });
+      } else {
+        const submittedWorkTiming = estimateSubmittedGpuWorkTiming(
+          { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
+          tiles.length,
+          renderOptions.submittedWorkTimeoutMs,
+          { includeAccelerationBuild: config.gpuAccelerationBuildRequired && !accelerationBuilt }
+        );
+        const submissionWaitOptions = awaitGPUCompletion
+          ? {
+              timeoutMs: submittedWorkTiming.timeoutMs,
+              maxWaitMs: submittedWorkTiming.maxWaitMs,
+              allowTimeout: false,
+            }
+          : {
+              timeoutMs: submittedWorkTiming.timeoutMs,
+              maxWaitMs: submittedWorkTiming.maxWaitMs,
+            };
+        frameStats = renderOnce(renderOptions, samplingPlan);
+        if (awaitGPUCompletion) {
+          await waitForSubmittedGpuWork(submissionWaitOptions);
+        }
       }
+    } finally {
+      activeFrameTelemetry = null;
     }
     const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
     if (awaitGPUCompletion) {
       lastCompletedFrameTimeMs = frameTimeMs;
       lastCompletedSamplesPerPixel = frameStats.renderedSamplesPerPixel ?? frameStats.samplesPerPixel;
     }
+    const expectedPrimaryRays =
+      config.width * config.height * samplingPlan.renderedSamplesPerPixel;
+    const expectedRayCounts =
+      tiles.length * samplingPlan.renderedSamplesPerPixel * config.maxDepth;
+    const telemetryReadback = telemetryCanRecord
+      ? await telemetryResourcesForFrame.readFrame({
+          expectedPrimaryRays,
+          expectedRayCounts,
+          waitForSubmittedGpuWork,
+        })
+      : null;
+    const rayCounts = !telemetryRequested
+      ? createWavefrontRayCountTelemetry()
+      : !awaitGPUCompletion
+        ? createWavefrontRayCountTelemetry({
+            status: "unavailable",
+            expectedPrimaryRays,
+            expectedRayCounts,
+            reason: "gpu-work-not-awaited",
+          })
+        : telemetryReadback.rayCounts;
+    const timings = !telemetryRequested
+      ? createWavefrontFrameTimingTelemetry({
+          status: "not-requested",
+          source: awaitGPUCompletion ? "queue-completion" : "cpu-submit",
+          timestampQueryStatus: "not-recorded",
+          totalRenderJobTimeMs: frameTimeMs,
+        })
+      : !awaitGPUCompletion
+        ? createWavefrontFrameTimingTelemetry({
+            status: "unavailable",
+            source: "cpu-submit",
+            timestampQueryStatus: "not-recorded",
+            totalRenderJobTimeMs: frameTimeMs,
+            reason: "gpu-work-not-awaited",
+          })
+        : telemetryReadback.timestampQueryStatus === "available"
+          ? createWavefrontFrameTimingTelemetry({
+              status: "available",
+              source: "timestamp-query",
+              timestampQueryStatus: "available",
+              totalGpuTimeMs: telemetryReadback.totalGpuTimeMs,
+              totalRenderJobTimeMs: frameTimeMs,
+            })
+          : createWavefrontFrameTimingTelemetry({
+              status: "fallback",
+              source: "queue-completion",
+              timestampQueryStatus: telemetryReadback.timestampQueryStatus,
+              totalRenderJobTimeMs: frameTimeMs,
+              reason: telemetryReadback.reason,
+            });
     const deviceLossStatus =
       awaitGPUCompletion
         ? "not-detected"
@@ -872,6 +962,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     frameStats = Object.freeze({
       ...frameStats,
       deviceLossStatus,
+      secondaryRays:
+        rayCounts.status === "available" ? rayCounts.secondaryRays : null,
+      totalPathSegments:
+        rayCounts.status === "available" ? rayCounts.totalPathSegments : null,
+      rayCounts,
+      timings,
+      telemetryMemoryBytes: telemetryResourcesForFrame?.memoryBytes ?? 0,
       gpuWorkerJobs: createGpuWorkerJobDiagnostics(
         frameStats.gpuParallelism,
         frameStats.commandSubmissions,
@@ -991,6 +1088,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function destroy() {
+    frameTelemetryResources?.destroy?.();
     activeQueue.destroy?.();
     nextQueue.destroy?.();
     hitBuffer.destroy?.();

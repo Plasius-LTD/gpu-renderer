@@ -25,3 +25,4 @@
 - [ADR 0023: Deterministic Low-SPP Indirect Transport](./adr-0023-deterministic-low-spp-indirect-transport.md)
 - [ADR 0024: Bounded Nested Spectral Branching Material Transport](./adr-0024-bounded-nested-spectral-branching-material-transport.md)
 - [ADR 0026: Exact-main OIDC package publishing](./adr-0026-exact-main-oidc-package-publishing.md)
+- [ADR 0027: Lazy fixed-SPP ray and timing telemetry](./adr-0027-lazy-fixed-spp-ray-and-timing-telemetry.md)

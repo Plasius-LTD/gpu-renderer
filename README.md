@@ -450,7 +450,47 @@ drop in jobs/submission or jobs/s versus the approved baseline as a
 release-validation failure unless a linked ticket explicitly approves the
 regression; `submission-batching` warns when the renderer falls back to roughly
 one GPU job per submission despite a higher pass ceiling.
-submitting work that can occupy more than one GPU execution unit. After each
+
+Awaited fixed-SPP renders can opt into exact ray and timing evidence:
+
+```js
+const frame = await renderer.renderFrame({
+  readStats: true,
+  readOutputProbe: false,
+});
+
+console.log({
+  primaryRays: frame.primaryRays,
+  secondaryRays: frame.secondaryRays,
+  totalPathSegments: frame.totalPathSegments,
+  bounceHistogram: frame.rayCounts.bounceHistogram,
+  gpuTimeMs: frame.timings.totalGpuTimeMs,
+  renderJobTimeMs: frame.timings.totalRenderJobTimeMs,
+  timingSource: frame.timings.source,
+});
+```
+
+`primaryRays` is the exact number of camera samples. `secondaryRays` is the
+sum of active continuation records intersected after bounce zero, including
+bounded reflection/transmission branches, and `totalPathSegments` is their sum.
+The renderer copies the existing active-queue counter once per bounce into a
+lazily allocated telemetry buffer; it does not add diagnostic shader atomics or
+change WGSL transport. `rayCounts.status` distinguishes available,
+unavailable, failed, and not-requested evidence. A mismatch between scheduled
+and observed primary rays fails the `ray-count-telemetry` transport guardrail.
+
+When the adapter exposes `timestamp-query`, the device requests it
+opportunistically and two timestamps measure the GPU span from the first
+primary pass through presentation. Set `gpuTimestamps: false` at renderer
+creation to prevent that optional feature request. Where timestamp queries are
+not exposed or fail, `timings` reports `source: "queue-completion"`, leaves
+`totalGpuTimeMs` null, and retains the awaited
+`totalRenderJobTimeMs`. Classification, compaction, and sampling sub-pass times
+remain null until the corresponding adaptive passes exist. Without
+`readStats: true`, and for `renderOnce()`, the fixed dispatcher creates no
+telemetry buffers, query sets, readbacks, or timestamped pass descriptors.
+
+After each
 primary-ray or compaction pass, the GPU writes the active-ray workgroup count
 into the counter buffer and the encoder copies it into an indirect-dispatch
 argument buffer. Intersection and surface-resolution passes therefore scale

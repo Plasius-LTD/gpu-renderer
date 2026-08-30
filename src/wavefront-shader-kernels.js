@@ -224,36 +224,7 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
     vec4<f32>(1.0, 1.0, 1.0, 1.0)
   );
   var candidate = no_candidate();
-  var hitTriangle = TriangleRecord(
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    vec4<f32>(0.0),
-    vec4<f32>(0.0),
-    vec4<f32>(0.0),
-    vec4<f32>(0.0, 1.0, 0.0, 0.0),
-    vec4<f32>(0.0, 1.0, 0.0, 0.0),
-    vec4<f32>(0.0, 1.0, 0.0, 0.0),
-    vec4<f32>(0.0),
-    vec4<f32>(0.0),
-    vec4<f32>(0.0),
-    vec4<f32>(0.0),
-    vec4<f32>(1.0, 0.0, 1.0, 1.0),
-    vec4<f32>(0.0, 0.0, 0.0, 0.08),
-    vec4<f32>(0.08, 1.0, 0.0, 0.0),
-    vec4<f32>(1.0, 1.0, 1.0, 1.0),
-    vec4<f32>(0.0, 0.0, 1.0, 1.0),
-    vec4<f32>(0.0, 0.0, 1.0, 1.0),
-    vec4<f32>(0.0, 0.0, 1.0, 1.0),
-    vec4<f32>(0.0, 0.0, 1.0, 1.0),
-    vec4<f32>(0.0, 0.0, 1.0, 1.0),
-    vec4<f32>(1.0, 1.0, 1.0, 0.0)
-  );
+  var hitTriangle = TriangleRecord();
 
   for (var objectIndex = 0u; objectIndex < config.sceneObjectCount; objectIndex = objectIndex + 1u) {
     let object = sceneObjects[objectIndex];
