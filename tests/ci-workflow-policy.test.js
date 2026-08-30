@@ -89,6 +89,10 @@ test("publication treats the immutable tarball as an explicit local path", () =>
 });
 
 test("failed unpublished releases recover without rewriting published identity", () => {
+  const releaseTagJob = cdWorkflow.slice(
+    cdWorkflow.indexOf("- name: Ensure release tag points at exact main commit"),
+    cdWorkflow.indexOf("- name: Create GitHub Release draft"),
+  );
   assert.match(cdWorkflow, /PACKAGE_PUBLISHED/u);
   assert.match(cdWorkflow, /git merge-base --is-ancestor/u);
   assert.match(cdWorkflow, /OLD_PACKAGE_METADATA/u);
@@ -99,6 +103,15 @@ test("failed unpublished releases recover without rewriting published identity",
   );
   assert.match(cdWorkflow, /gh api --method DELETE/u);
   assert.match(cdWorkflow, /git push origin ":refs\/tags\/\$\{TAG\}"/u);
+  assert.match(releaseTagJob, /git tag -d "\$\{TAG\}"/u);
+  assert.ok(
+    releaseTagJob.indexOf('git push origin ":refs/tags/${TAG}"') <
+      releaseTagJob.indexOf('git tag -d "${TAG}"'),
+  );
+  assert.ok(
+    releaseTagJob.indexOf('git tag -d "${TAG}"') <
+      releaseTagJob.lastIndexOf('git tag "${TAG}" "${EXPECTED_SHA}"'),
+  );
 });
 
 test("dependency code cannot run inside the OIDC mutation job", () => {
