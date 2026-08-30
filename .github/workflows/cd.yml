@@ -899,6 +899,7 @@ jobs:
               fi
 
               git push origin ":refs/tags/${TAG}"
+              git tag -d "${TAG}"
               REMOTE_TAG_SHA=""
               echo "Removed recoverable unpublished release state for ${TAG}."
             fi
