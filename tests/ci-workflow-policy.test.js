@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { Script } from "node:vm";
 
 const read = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
@@ -116,4 +117,20 @@ test("release metadata lands through a unique non-force-pushed PR", () => {
   );
   assert.doesNotMatch(releasePrepareWorkflow, /--force-with-lease/u);
   assert.doesNotMatch(releasePrepareWorkflow, /secrets: inherit/u);
+});
+
+test("release version selection remains syntactically executable", () => {
+  const embeddedScript = releasePrepareWorkflow.match(
+    /TARGET_VER=\$\(node -e '\n([\s\S]*?)\n\s+' "\$\{CURRENT_VER\}"/u,
+  )?.[1];
+  assert.ok(embeddedScript, "expected the embedded release version selection script");
+  assert.doesNotThrow(() => new Script(embeddedScript));
+});
+
+test("release prerelease identity selection remains syntactically executable", () => {
+  const embeddedScript = releasePrepareWorkflow.match(
+    /EFFECTIVE_PREID=\$\(TARGET_VER="\$\{MAIN_VERSION\}" node -e '\n([\s\S]*?)\n\s+'\)/u,
+  )?.[1];
+  assert.ok(embeddedScript, "expected the embedded prerelease identity script");
+  assert.doesNotThrow(() => new Script(embeddedScript));
 });
