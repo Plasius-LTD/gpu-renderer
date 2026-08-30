@@ -27,6 +27,21 @@ Apache-2.0. ESM + CJS builds.
 npm install @plasius/gpu-renderer
 ```
 
+## Permanent Zero-Three boundary
+
+This WebGPU renderer and its complete production, development, test, tooling,
+peer, optional, and artifact dependency graphs permanently prohibit Three.js,
+R3F, TSL, their related packages, and any dependency path reaching them. There
+is no compatibility mode, fallback, waiver, or rollback to those renderers.
+
+Run `npm run zero-three:source` before installing dependencies, or run
+`npm run build && npm run zero-three` after `npm ci` for the installed graph,
+built bundle, actual npm tarball, and generated CycloneDX evidence. The full
+command writes digest-bound package/version evidence to
+`release-artifacts/zero-three-evidence.json`. CI retains it, and production CD
+passes it by immutable artifact ID, verifies it again, attaches it to the
+GitHub release, and attests it.
+
 ## Usage
 
 ```js

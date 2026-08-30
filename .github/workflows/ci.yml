@@ -43,6 +43,9 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
 
+      - name: Enforce permanent Zero-Three install admission
+        run: npm run zero-three:source
+
       - name: Install deps
         run: npm ci --no-fund --no-audit --legacy-peer-deps
 
@@ -71,6 +74,17 @@ jobs:
           else
             npm run test -- --coverage
           fi
+
+      - name: Enforce permanent Zero-Three package evidence
+        run: npm run zero-three
+
+      - name: Retain Zero-Three package evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: zero-three-evidence-${{ github.sha }}
+          path: release-artifacts/zero-three-evidence.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Locate coverage report
         run: |
@@ -138,6 +152,10 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
+      - name: Enforce permanent Zero-Three source policy
+        run: npm run zero-three:source
+      - name: Verify permanent Zero-Three negative fixtures
+        run: npm run zero-three:test
       - name: Verify public artifact integrity
         run: node ./scripts/verify-public-artifacts.cjs '--package-dir' '.'
   # END PLASIUS PUBLIC ARTIFACT INTEGRITY JOB

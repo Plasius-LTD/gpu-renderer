@@ -21,6 +21,10 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Security**
+  - Added permanent fail-closed Zero-Three validation for manifests, source,
+    locks, installed dependency graphs, declarations, bundles, npm tarballs,
+    CycloneDX SBOMs, and active documentation, with digest-bound evidence
+    retained and attested by CI/CD.
   - Pinned patched transitive npm dependencies to clear the current audit baseline.
   - Replaced token-based npm publication with a two-phase exact-main OIDC workflow, immutable tarball/SBOM hand-off, isolated pull-request validation, and fail-closed integrity checks.
   - Added fail-closed source and npm-package admission for the administrative contributor registry and pinned the CI/CD runtime to Node.js 24.18.0 LTS.

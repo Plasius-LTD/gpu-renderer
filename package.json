@@ -36,8 +36,11 @@
     "test": "npm run test:unit",
     "test:unit": "node --test",
     "test:coverage": "c8 --reporter=lcov --reporter=text node --test",
+    "zero-three": "node scripts/verify-zero-three.cjs --package --evidence-out release-artifacts/zero-three-evidence.json",
+    "zero-three:source": "node scripts/verify-zero-three.cjs --source-only",
+    "zero-three:test": "node --test tests/zero-three.test.cjs",
     "pack:check": "node scripts/verify-public-package.cjs",
-    "prepublishOnly": "npm run build && npm run pack:check"
+    "prepublishOnly": "npm run build && npm run pack:check && npm run zero-three"
   },
   "keywords": [
     "webgpu",
