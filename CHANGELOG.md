@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Security**
+  - Pinned patched transitive npm dependencies to clear the current audit baseline.
   - Replaced token-based npm publication with a two-phase exact-main OIDC workflow, immutable tarball/SBOM hand-off, isolated pull-request validation, and fail-closed integrity checks.
   - Added fail-closed source and npm-package admission for the administrative contributor registry and pinned the CI/CD runtime to Node.js 24.18.0 LTS.
   - (placeholder)
