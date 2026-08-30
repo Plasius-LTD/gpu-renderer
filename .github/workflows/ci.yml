@@ -41,7 +41,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
-          cache: 'npm'
+          cache: ${{ github.event_name == 'pull_request' && 'npm' || '' }}
+          package-manager-cache: false
 
       - name: Enforce permanent Zero-Three install admission
         run: npm run zero-three:source
