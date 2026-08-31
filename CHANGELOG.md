@@ -12,10 +12,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added an explicit consent-, flag-, and capability-gated helper that converts
+    coarse renderer health observations into the closed shared feedback
+    diagnostics packet for approved generator and GPU demo surfaces.
 
 - **Changed**
-  - (placeholder)
+  - Updated `@plasius/gpu-shared` to the protected-CD-published 1.1.1 release
+    that exposes the focused feedback-diagnostics contract, and revalidated
+    the renderer against the registry artifact.
 
 - **Fixed**
   - (placeholder)
@@ -90,11 +94,21 @@ All notable changes to this project will be documented in this file.
 
 - **Changed**
   - Updated internal GPU dependencies to their surviving clean lines and refreshed the esbuild resolution.
+  - Bound diagnostics to the focused shared-package subpath and canonical
+    contract-version export, and enabled complete declaration checking with the
+    published WebXR type definitions.
 
 - **Fixed**
-  - (placeholder)
+  - Removed a duplicate public mesh `extensions` declaration and replaced
+    unresolved ambient XR session references with the `@plasius/gpu-xr` state
+    contract.
 
 - **Security**
+  - Updated the development-tool dependency graph to the patched
+    `brace-expansion` release after the feedback release audit.
+  - Kept feedback diagnostics separate from general renderer snapshots and
+    excluded user-captured pixels, DOM, player data, URLs, filenames, exact
+    measurements, adapter identity and raw warnings from the output contract.
   - Added permanent fail-closed Zero-Three validation for manifests, source,
     locks, installed dependency graphs, declarations, bundles, npm tarballs,
     CycloneDX SBOMs, and active documentation, with digest-bound evidence

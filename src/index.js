@@ -5,6 +5,12 @@ export {
   createProfessionalAnimatedSceneRenderer,
 } from "./professional-animated-scene-renderer.js";
 export {
+  bucketFeedbackGameFrameRate,
+  bucketFeedbackGameFrameTime,
+  bucketFeedbackGameViewport,
+  createFeedbackGameDiagnosticSnapshot,
+} from "./feedback-diagnostics.js";
+export {
   createDefaultWavefrontSceneObjects,
   createWavefrontBvhBuildLevels,
   createWavefrontBvhSortStages,

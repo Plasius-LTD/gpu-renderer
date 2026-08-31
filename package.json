@@ -27,7 +27,7 @@
   "scripts": {
     "build": "tsup",
     "demo": "python3 -m http.server --directory ..",
-    "typecheck": "node scripts/check-source-syntax.cjs",
+    "typecheck": "node scripts/check-source-syntax.cjs && tsc -p tsconfig.types.json && node scripts/verify-clean-type-consumer.cjs",
     "audit:eslint": "eslint . --max-warnings=0",
     "audit:deps": "npm ls --all --omit=optional --omit=peer > /dev/null 2>&1 || true",
     "audit:npm": "npm audit --audit-level=high --omit=dev",
@@ -53,8 +53,9 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@plasius/gpu-camera": "^0.1.18",
-    "@plasius/gpu-shared": "^1.0.14",
-    "@plasius/gpu-xr": "^0.1.17"
+    "@plasius/gpu-shared": "^1.1.1",
+    "@plasius/gpu-xr": "^0.1.17",
+    "@types/webxr": "^0.5.24"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

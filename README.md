@@ -16,10 +16,49 @@ an explicit WebGPU-first runtime that can be consumed from React, vanilla, or
 worker-driven app surfaces.
 
 The package targets Node.js 24, consumes the stable `@plasius/gpu-shared` 1.x
-runtime line (`^1.0.12`), and validates its development tooling against the
+runtime line (`^1.1.1`), and validates its development tooling against the
 current ESLint 10 and TypeScript 7 baselines.
 
 Apache-2.0. ESM + CJS builds.
+
+## Privacy-Safe Feedback Diagnostics
+
+Approved in-game viewers can explicitly convert a small set of current renderer
+health observations into the closed
+`@plasius/gpu-shared/feedback-diagnostics` packet:
+
+```js
+import { createFeedbackGameDiagnosticSnapshot } from "@plasius/gpu-renderer";
+
+const diagnostics = createFeedbackGameDiagnosticSnapshot({
+  featureEnabled,
+  capabilityGranted,
+  consentConfirmed: true,
+  surfaceId: "site.gpu-demo",
+  renderer: "webgpu",
+  backend: "worker",
+  viewportWidth: 1920,
+  viewportHeight: 1080,
+  frameRate: 59.9,
+  frameTimeMs: 16.7,
+  featureIds: ["renderer.frame-loop"],
+  counters: [{ code: "frame-drop", count: 2 }],
+  errorCodes: [],
+});
+```
+
+The helper returns `null` before reading renderer observations unless the
+remotely evaluated `feedback.game-diagnostics.enabled` flag, the
+`feedback.game-diagnostics.attach` capability, and explicit consent are all
+present. It derives trusted provenance and returns only coarse buckets and
+closed codes.
+
+This API is deliberately separate from general renderer snapshots. It accepts
+no canvas, user-captured pixels, DOM, player object, URL, filename,
+adapter/device detail, coordinate or raw warning, performs no automatic
+diagnostic capture or network/storage operation, and never registers
+`/player-system`. Disabling the flag preserves ordinary structured-only bug
+reporting.
 
 ## Install
 
