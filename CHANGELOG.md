@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.43] - 2026-08-31
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Negotiated scene-derived `maxStorageBufferBindingSize` and, when required,
     `maxBufferSize` before WebGPU device creation so large mesh/BVH scenes fail
     early on unsupported adapters and render on adapters that expose sufficient
@@ -1054,3 +1068,4 @@ All notable changes to this project will be documented in this file.
 [0.2.40]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.40
 [0.2.41]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.41
 [0.2.42]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.42
+[0.2.43]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.43
