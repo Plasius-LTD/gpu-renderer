@@ -36,6 +36,11 @@ test("pull-request validation admits only same-repository heads", () => {
     ).length,
     2,
   );
+  assert.match(ciWorkflow, /timeout-minutes: 30/u);
+  assert.equal(
+    (ciWorkflow.match(/package-manager-cache: false/gu) ?? []).length,
+    2,
+  );
 });
 
 test("publication binds a second run to exact main and successful CI", () => {

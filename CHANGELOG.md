@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - Preserved hosted pull-request isolation, bounded validation runtime, and
+    disabled package-manager cache finalization on self-hosted main validation.
   - (placeholder)
 
 - **Security**
