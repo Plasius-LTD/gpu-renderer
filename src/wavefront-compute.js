@@ -2653,7 +2653,13 @@ function clampTileSizeForDevice(config, device) {
 
   const maxPixelsByRay = Math.floor(limit / RAY_RECORD_BYTES);
   const maxPixelsByHit = Math.floor(limit / HIT_RECORD_BYTES);
-  const maxPixels = Math.max(256, Math.min(maxPixelsByRay, maxPixelsByHit));
+  const maxPixelsByPathVertex = Math.floor(
+    limit / ((config.maxDepth + 1) * PATH_VERTEX_RECORD_BYTES)
+  );
+  const maxPixels = Math.max(
+    256,
+    Math.min(maxPixelsByRay, maxPixelsByHit, maxPixelsByPathVertex)
+  );
   if (config.tilePixelCapacity <= maxPixels) {
     return config.tileSize;
   }
@@ -6098,6 +6104,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       width: config.width,
       height: config.height,
       tileSize: safeTileSize,
+      tilePixelCapacity: Math.min(
+        config.tilePixelCapacity,
+        safeTileSize * safeTileSize
+      ),
     });
   }
   canvas.width = config.width;

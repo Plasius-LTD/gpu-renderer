@@ -59,6 +59,9 @@ All notable changes to this project will be documented in this file.
     renderer-specific ladder construction in app or demo code.
 
 - **Fixed**
+  - Clamped wavefront tile capacity against the depth-scaled path-vertex
+    storage binding so supported high-depth reference renders stay within
+    `maxStorageBufferBindingSize`.
   - Awaited wavefront frame waits now scale their submitted-work timeout by
     actual triangle load as well as pass count, preventing mesh-heavy
     validation frames from failing early while the GPU is still legitimately

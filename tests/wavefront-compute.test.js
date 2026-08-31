@@ -1746,6 +1746,40 @@ serialWebGpuTest("wavefront compute renderer rejects unavailable WebGPU setup pa
   });
 });
 
+serialWebGpuTest("wavefront compute renderer clamps high-depth tiles to the storage binding limit", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device, {
+        limits: {
+          maxComputeInvocationsPerWorkgroup: 256,
+          maxComputeWorkgroupSizeX: 256,
+          maxComputeWorkgroupSizeY: 256,
+          maxComputeWorkgroupSizeZ: 64,
+          maxComputeWorkgroupsPerDimension: 65_535,
+          maxStorageBuffersPerShaderStage: 10,
+        },
+      }),
+      width: 8,
+      height: 8,
+      tileSize: 512,
+      maxDepth: 32,
+    });
+
+    try {
+      const snapshot = renderer.getSnapshot();
+      assert.ok(snapshot.tileSize < 512);
+      assert.ok(
+        snapshot.memory.pathVertexBytes <= device.limits.maxStorageBufferBindingSize,
+        `path vertex binding ${snapshot.memory.pathVertexBytes} exceeds ${device.limits.maxStorageBufferBindingSize}`
+      );
+    } finally {
+      renderer.destroy();
+    }
+  });
+});
+
 serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();
