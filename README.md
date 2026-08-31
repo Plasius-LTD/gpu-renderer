@@ -478,6 +478,9 @@ lazily allocated telemetry buffer; it does not add diagnostic shader atomics or
 change WGSL transport. `rayCounts.status` distinguishes available,
 unavailable, failed, and not-requested evidence. A mismatch between scheduled
 and observed primary rays fails the `ray-count-telemetry` transport guardrail.
+Ray-count reduction uses constant call-stack space, including the supported
+4K/eight-bounce/128-SPP stress envelope where hundreds of thousands of
+tile/sample/depth records collapse into a small per-bounce histogram.
 
 When the adapter exposes `timestamp-query`, the device requests it
 opportunistically and two timestamps measure the GPU span from the first

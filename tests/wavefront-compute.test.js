@@ -3373,6 +3373,51 @@ test("wavefront telemetry resources fail closed when readback is unavailable or 
   overflow.destroy();
 });
 
+test("wavefront telemetry reduces stress-scale ray records without call-stack growth", async () => {
+  const recordsPerBounce = 17_280;
+  const bounceCount = 8;
+  const recordCount = recordsPerBounce * bounceCount;
+  const device = new FakeWavefrontDevice();
+  device.rayCountReadbackValues = Array.from({ length: recordCount }, () => 1);
+  const telemetry = createWavefrontFrameTelemetryResources({
+    device,
+    constants: gpuConstants,
+    maxRayCountRecords: recordCount,
+  });
+  const encoder = device.createCommandEncoder({ label: "telemetry-stress" });
+  const counterBuffer = device.createBuffer({
+    label: "counter",
+    size: 4,
+    usage: gpuConstants.buffer.COPY_SRC,
+  });
+  telemetry.beginFrame();
+  for (let index = 0; index < recordCount; index += 1) {
+    telemetry.recordActiveRayCount(
+      encoder,
+      counterBuffer,
+      Math.floor(index / recordsPerBounce)
+    );
+  }
+
+  const result = await telemetry.readFrame({
+    expectedPrimaryRays: recordsPerBounce,
+    expectedRayCounts: recordCount,
+    waitForSubmittedGpuWork: async () => true,
+  });
+
+  assert.equal(result.rayCounts.status, "available");
+  assert.equal(result.rayCounts.observedPrimaryRays, recordsPerBounce);
+  assert.equal(result.rayCounts.secondaryRays, recordCount - recordsPerBounce);
+  assert.equal(result.rayCounts.totalPathSegments, recordCount);
+  assert.equal(result.rayCounts.capturedRayCounts, recordCount);
+  assert.equal(result.rayCounts.expectedRayCounts, recordCount);
+  assert.deepEqual(
+    result.rayCounts.bounceHistogram,
+    Array.from({ length: bounceCount }, () => recordsPerBounce)
+  );
+  telemetry.destroy();
+});
+
 serialWebGpuTest("wavefront renderFrame rejects when awaited submitted GPU work times out", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();

@@ -297,7 +297,11 @@ export function createWavefrontFrameTelemetryResources({
       rayCountReadbackBuffer.unmap();
       rayReadbackMapped = false;
 
-      const bounceHistogram = Array.from({ length: Math.max(0, ...bounceIndices) + 1 }, () => 0);
+      let maximumBounceIndex = 0;
+      for (const bounceIndex of bounceIndices) {
+        maximumBounceIndex = Math.max(maximumBounceIndex, bounceIndex);
+      }
+      const bounceHistogram = Array.from({ length: maximumBounceIndex + 1 }, () => 0);
       let observedPrimaryRays = 0;
       let secondaryRays = 0;
       let totalPathSegments = 0;
