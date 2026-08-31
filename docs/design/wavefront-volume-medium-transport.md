@@ -27,19 +27,33 @@ shared wavefront renderer without demo-local medium construction.
    - `thickness`
 3. Config assembly collects all referenced media into the compact medium-table
    texture.
-4. The trace pass carries the active `mediumRefId` on the ray.
+4. The trace pass carries a bounded four-entry `mediumStack` plus its depth on
+   the ray; `mediumRefId` remains as a compatibility/current-medium field.
 5. Surface resolution multiplies travelled throughput by Beer-Lambert
    transmittance for the distance traversed in the current medium.
 
+## Current Fallback Contract
+
+- The renderer carries a bounded nested medium stack per ray (four entries in the GPU record); the current medium is the top entry.
+- Invalid or unknown surface medium ids preserve the current stack instead of
+  propagating a broken lookup.
+- Entry pushes the authored medium id, while exit removes the matching entry
+  and exposes the next outer medium.
+- The GPU stack is capped at four entries; overflow keeps the newest four
+  entries and is surfaced by the CPU transport contract.
+
 ## Explicit Non-Goals
 
-- nested medium stacks;
-- reflected/transmitted branching trees;
-- spectral or wavelength-sampled dispersion;
-- full texture-driven support for every `KHR_materials_*` extension.
+- deeper-than-four nested medium stacks and physically exact arbitrary-depth stacks;
+- arbitrary-depth reflected/transmitted branching trees;
+- full spectral rendering beyond the bounded reference wavelength samples;
+- extension semantics that are not authored by the source glTF material.
 
 ## Validation
 
 - unit coverage for implicit medium derivation from volume inputs;
+- unit coverage for bounded entry/exit stack transitions and Beer-Lambert
+  attenuation;
+- source-contract coverage for secondary reflected/transmitted queue records;
 - stable packing tests for scene-object and material records;
 - renderer typecheck, build, lint, tests, and coverage.

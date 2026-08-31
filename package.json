@@ -1,6 +1,6 @@
 {
   "name": "@plasius/gpu-renderer",
-  "version": "0.2.4",
+  "version": "0.2.43",
   "description": "Framework-agnostic WebGPU renderer runtime for Plasius projects.",
   "type": "module",
   "sideEffects": false,
@@ -27,7 +27,7 @@
   "scripts": {
     "build": "tsup",
     "demo": "python3 -m http.server --directory ..",
-    "typecheck": "node --check src/index.js && node --check src/wavefront-frame-runtime.js && node --check src/wavefront-compute.js",
+    "typecheck": "node scripts/check-source-syntax.cjs",
     "audit:eslint": "eslint . --max-warnings=0",
     "audit:deps": "npm ls --all --omit=optional --omit=peer > /dev/null 2>&1 || true",
     "audit:npm": "npm audit --audit-level=high --omit=dev",
@@ -36,8 +36,11 @@
     "test": "npm run test:unit",
     "test:unit": "node --test",
     "test:coverage": "c8 --reporter=lcov --reporter=text node --test",
+    "zero-three": "node scripts/verify-zero-three.cjs --package --evidence-out release-artifacts/zero-three-evidence.json",
+    "zero-three:source": "node scripts/verify-zero-three.cjs --source-only",
+    "zero-three:test": "node --test tests/zero-three.test.cjs",
     "pack:check": "node scripts/verify-public-package.cjs",
-    "prepublishOnly": "npm run build && npm run pack:check"
+    "prepublishOnly": "npm run build && npm run pack:check && npm run zero-three"
   },
   "keywords": [
     "webgpu",
@@ -49,16 +52,17 @@
   "author": "Plasius LTD <development@plasius.co.uk>",
   "license": "Apache-2.0",
   "dependencies": {
-    "@plasius/gpu-shared": "^0.1.11",
-    "@plasius/gpu-xr": "^0.1.11"
+    "@plasius/gpu-camera": "^0.1.18",
+    "@plasius/gpu-shared": "^1.0.14",
+    "@plasius/gpu-xr": "^0.1.17"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "c8": "^11.0.0",
-    "eslint": "^10.3.0",
-    "globals": "^17.6.0",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
     "tsup": "^8.5.1",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "repository": {
     "type": "git",
@@ -82,6 +86,8 @@
     }
   ],
   "overrides": {
+    "brace-expansion": "5.0.9",
+    "esbuild": "^0.28.1",
     "minimatch": "^10.2.1"
   },
   "engines": {

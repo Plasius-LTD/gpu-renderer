@@ -1,4 +1,237 @@
 export type RendererColor = string | [number, number, number, number?];
+export type AnimatedSceneVector3 = readonly [number, number, number] | readonly number[];
+export type AnimatedScenePropKind =
+  | "crop-row"
+  | "fence-segment"
+  | "crate"
+  | "cart"
+  | "small-tree"
+  | "path-marker";
+
+export interface AnimatedScenePathPoint {
+  readonly id: string;
+  readonly position: AnimatedSceneVector3;
+  readonly arriveMs: number;
+}
+
+export interface AnimatedSceneBeat {
+  readonly id: string;
+  readonly order: number;
+  readonly kind?: string;
+  readonly clipId: string;
+  readonly durationMs: number;
+  readonly pathPointId?: string;
+  readonly rootMotion?: "prefer-root-motion" | "route-driven" | "in-place" | string;
+  readonly validatedDurationMs?: number;
+  readonly movementRequirement?: {
+    readonly type: "stationary" | "travel" | "jump" | "root-authored";
+    readonly distance?: number;
+    readonly maxDrift?: number;
+    readonly speedRange?: readonly [number, number] | readonly number[];
+    readonly directionToleranceDegrees?: number;
+    readonly verticalArc?: readonly [number, number] | readonly number[];
+    readonly loop?: "once" | "repeat" | "hold";
+    readonly validatedDurationMs?: number;
+  };
+  readonly blend?: {
+    readonly inMs?: number;
+    readonly outMs?: number;
+  };
+}
+
+export interface AnimatedSceneCameraFollowRig {
+  readonly mode?: "lagged-follow" | "editor" | "spectator" | "third-person" | "first-person";
+  readonly viewMode?: "editor" | "spectator" | "third-person" | "first-person";
+  readonly cubicBezier?: readonly [number, number, number, number] | readonly number[];
+  readonly lagMs?: number;
+  readonly lookAheadMs?: number;
+  readonly offset?: AnimatedSceneVector3;
+  readonly constraints?: {
+    readonly minDistance?: number;
+    readonly maxDistance?: number;
+    readonly minPolarAngle?: number;
+    readonly maxPolarAngle?: number;
+    readonly firstPersonHeadOffset?: number;
+    readonly headLookMaxYaw?: number;
+    readonly headLookMaxPitch?: number;
+    readonly headLookWeight?: number;
+  };
+  readonly headLook?: {
+    readonly enabled?: boolean;
+    readonly activeOnly?: boolean;
+    readonly returnMs?: number;
+  };
+  readonly headBoneAvailable?: boolean;
+  readonly headHeight?: number;
+}
+
+export interface AnimatedSceneProp {
+  readonly id?: string;
+  readonly kind: AnimatedScenePropKind | string;
+  readonly position: AnimatedSceneVector3;
+}
+
+export interface AnimatedSceneClipAsset {
+  readonly id: string;
+  readonly asset?: ArrayBuffer | null;
+  readonly movementProfile?: {
+    readonly motionMode?: "stationary" | "calibrated-in-place" | "root-authored" | "jump" | "modifier" | "invalid" | string;
+    readonly durationMs?: number;
+    readonly rootTranslationDistance?: number;
+    readonly strideLength?: number;
+    readonly strideLengthMeters?: number;
+    readonly expectedSpeed?: number;
+    readonly worldDisplacementAllowed?: boolean;
+    readonly footSlideTolerance?: number;
+  } | null;
+}
+
+export interface CreateAnimatedSceneRendererOptions {
+  readonly canvas: string | HTMLCanvasElement | {
+    width: number;
+    height: number;
+    style?: Record<string, string>;
+    getContext(type: "2d"): CanvasRenderingContext2D | null;
+  };
+  readonly route?: readonly AnimatedScenePathPoint[];
+  readonly beats?: readonly AnimatedSceneBeat[];
+  readonly props?: readonly AnimatedSceneProp[];
+  readonly camera?: AnimatedSceneCameraFollowRig;
+  readonly modelAsset?: ArrayBuffer | null;
+  readonly clipAssets?: readonly AnimatedSceneClipAsset[];
+  readonly animationAdventure?: {
+    readonly route?: readonly AnimatedScenePathPoint[];
+    readonly beats?: readonly AnimatedSceneBeat[];
+    readonly props?: readonly AnimatedSceneProp[];
+    readonly camera?: AnimatedSceneCameraFollowRig;
+    readonly modelAsset?: ArrayBuffer | null;
+    readonly clipAssets?: readonly AnimatedSceneClipAsset[];
+  };
+  readonly requestAnimationFrame?: (callback: FrameRequestCallback) => number;
+  readonly cancelAnimationFrame?: (handle: number) => void;
+}
+
+export interface CreateProfessionalAnimatedSceneRendererOptions extends Omit<CreateAnimatedSceneRendererOptions, "canvas"> {
+  readonly canvas: string | HTMLCanvasElement | {
+    width: number;
+    height: number;
+    style?: Record<string, string>;
+    getContext(type: "webgpu"): GPUCanvasContext | null;
+  };
+  readonly navigator?: Navigator;
+  readonly document?: Document;
+  readonly clearColor?: RendererColor;
+}
+
+export interface AnimatedSceneSnapshot {
+  readonly frame: number;
+  readonly running: boolean;
+  readonly activeClipId: string;
+  readonly activeBeatId: string;
+  readonly activeMovementMode: "stationary" | "travel" | "jump" | "root-authored" | string;
+  readonly blendProgress: number;
+  readonly clipTimeMs: number;
+  readonly characterPosition: readonly [number, number, number];
+  readonly cameraPosition: readonly [number, number, number];
+  readonly cameraViewMode: "editor" | "spectator" | "third-person" | "first-person";
+  readonly cameraTransform: {
+    readonly position: readonly [number, number, number];
+    readonly target: readonly [number, number, number];
+    readonly up: readonly [number, number, number];
+  };
+  readonly targetDistance: number;
+  readonly headLook: {
+    readonly status: "inactive" | "active" | "returning" | "unavailable";
+    readonly yaw: number;
+    readonly pitch: number;
+    readonly weight: number;
+    readonly target: readonly [number, number, number];
+  };
+  readonly characterGroundY: number;
+  readonly characterVisible: boolean;
+  readonly modelLoaded: boolean;
+  readonly modelRenderable: boolean;
+  readonly fallbackProxyActive: boolean;
+  readonly skinnedVertexCount: number;
+  readonly skinnedTriangleCount: number;
+  readonly skinnedJointCount: number;
+  readonly skinnedAnimatedNodeCount: number;
+  readonly skinnedClipCount: number;
+  readonly activeClipRenderable: boolean;
+  readonly propGroundAnchors: readonly {
+    readonly id: string;
+    readonly kind: string;
+    readonly groundY: number;
+    readonly depth: number;
+    readonly visible: boolean;
+  }[];
+  readonly movementValidation: {
+    readonly status: "passed" | "warning" | "failed";
+    readonly warnings: readonly string[];
+    readonly activeBeatId: string;
+    readonly activeClipId: string;
+    readonly motionMode: string;
+    readonly rootMotionSource: string;
+    readonly expectedSpeed: number;
+    readonly actualSpeed: number;
+    readonly movementDistance: number;
+    readonly loopCount: number;
+    readonly footSlideWarning?: string | null;
+  };
+  readonly frameState: "initialized" | "running" | "rendered-once" | "destroyed";
+}
+
+export interface ProfessionalAnimatedSceneSnapshot extends Omit<AnimatedSceneSnapshot, "cameraViewMode" | "headLook" | "targetDistance" | "characterGroundY" | "characterVisible" | "propGroundAnchors"> {
+  readonly renderMode: "webgpu-pbr";
+  readonly webGpuActive: boolean;
+  readonly texturedSkinnedRenderingActive: boolean;
+  readonly pbrMaterialActive: boolean;
+  readonly shadowPassActive: boolean;
+  readonly textureCount: number;
+  readonly materialCount: number;
+  readonly normalTextureActive: boolean;
+  readonly cameraViewMode: "cinematic-follow";
+  readonly movementValidation: AnimatedSceneSnapshot["movementValidation"] & {
+    readonly rootMotionPolicy: "root-motion-required";
+    readonly rootTranslationDistance?: number;
+  };
+}
+
+export interface AnimatedSceneRenderer {
+  start(): void;
+  resize(width: number, height: number, devicePixelRatio?: number): void;
+  renderOnce(timestamp?: number): AnimatedSceneSnapshot;
+  getSnapshot(): AnimatedSceneSnapshot;
+  setCamera(nextCamera?: Partial<AnimatedSceneCameraFollowRig>): void;
+  setCameraViewMode(viewMode: "editor" | "spectator" | "third-person" | "first-person"): void;
+  applyCameraControl(
+    control: {
+      readonly type?: "orbit" | "truck" | "pan" | "dolly" | "look";
+      readonly deltaAzimuth?: number;
+      readonly deltaPolar?: number;
+      readonly deltaX?: number;
+      readonly deltaY?: number;
+      readonly deltaYaw?: number;
+      readonly deltaPitch?: number;
+      readonly distance?: number;
+    },
+    options?: { readonly activeControl?: boolean },
+  ): void;
+  destroy(): void;
+}
+
+export function createAnimatedSceneRenderer(options: CreateAnimatedSceneRendererOptions): AnimatedSceneRenderer;
+
+export function createProfessionalAnimatedSceneRenderer(
+  options: CreateProfessionalAnimatedSceneRendererOptions,
+): Promise<{
+  start(): void;
+  resize(width: number, height: number, devicePixelRatio?: number): void;
+  renderOnce(timestamp?: number): ProfessionalAnimatedSceneSnapshot;
+  getSnapshot(): ProfessionalAnimatedSceneSnapshot;
+  destroy(): void;
+}>;
+
 export type WavefrontSceneObjectKind = "sphere" | "box" | "aabb" | "bounds" | number;
 export type WavefrontMaterialKind =
   | "diffuse"
@@ -51,6 +284,42 @@ export interface WavefrontMediumInput {
   readonly attenuationDistance?: number;
   readonly absorption?: readonly [number, number, number] | readonly number[];
   readonly scattering?: readonly [number, number, number] | readonly number[];
+}
+
+export interface WavefrontMaterialExtensionTextureInputs {
+  readonly clearcoat?: WavefrontTextureSampleInput | null;
+  readonly clearcoatRoughness?: WavefrontTextureSampleInput | null;
+  readonly clearcoatNormal?: WavefrontTextureSampleInput | null;
+  readonly transmission?: WavefrontTextureSampleInput | null;
+  readonly thickness?: WavefrontTextureSampleInput | null;
+  readonly sheenColor?: WavefrontTextureSampleInput | null;
+  readonly sheenRoughness?: WavefrontTextureSampleInput | null;
+  readonly specular?: WavefrontTextureSampleInput | null;
+  readonly specularColor?: WavefrontTextureSampleInput | null;
+  readonly iridescence?: WavefrontTextureSampleInput | null;
+  readonly iridescenceThickness?: WavefrontTextureSampleInput | null;
+  readonly anisotropy?: WavefrontTextureSampleInput | null;
+}
+
+export interface WavefrontMaterialExtensions {
+  readonly clearcoat: number;
+  readonly clearcoatRoughness: number;
+  readonly ior: number;
+  readonly transmission: number;
+  readonly volumeThickness: number;
+  readonly sheenColor: readonly number[];
+  readonly sheenRoughness: number;
+  readonly specular: number;
+  readonly specularColor: readonly number[];
+  readonly iridescence: number;
+  readonly iridescenceIor: number;
+  readonly iridescenceThicknessMinimum: number;
+  readonly iridescenceThicknessMaximum: number;
+  readonly dispersion: number;
+  readonly anisotropy: number;
+  readonly anisotropyRotation: number;
+  readonly unlit: boolean;
+  readonly textures: WavefrontMaterialExtensionTextureInputs;
 }
 
 export interface WavefrontVolumeInput {
@@ -117,6 +386,7 @@ export interface WavefrontSceneObjectInput {
   readonly thickness?: number;
   readonly transmission?: number;
   readonly volume?: WavefrontVolumeInput | null;
+  readonly extensions?: Record<string, Record<string, unknown>>;
   readonly material?: {
     readonly kind?: WavefrontMaterialKind;
     readonly color?: RendererColor | readonly number[];
@@ -166,6 +436,7 @@ export interface WavefrontSceneObject {
   readonly specularColor: readonly [number, number, number, number] | readonly number[];
   readonly thickness: number;
   readonly transmission: number;
+  readonly materialExtensions: WavefrontMaterialExtensions;
 }
 
 export interface WavefrontMeshInput {
@@ -201,6 +472,7 @@ export interface WavefrontMeshInput {
   readonly thickness?: number;
   readonly transmission?: number;
   readonly volume?: WavefrontVolumeInput | null;
+  readonly extensions?: Record<string, Record<string, unknown>>;
   readonly material?: {
     readonly kind?: WavefrontMaterialKind;
     readonly color?: RendererColor | readonly number[];
@@ -224,6 +496,7 @@ export interface WavefrontMeshInput {
     readonly medium?: WavefrontMediumInput | null;
     readonly mediumId?: number;
     readonly volume?: WavefrontVolumeInput | null;
+    readonly extensions?: Record<string, Record<string, unknown>>;
     readonly baseColorTexture?: WavefrontTextureSampleInput | null;
     readonly metallicRoughnessTexture?: WavefrontTextureSampleInput | null;
     readonly normalTexture?: WavefrontTextureSampleInput | null;
@@ -236,6 +509,7 @@ export interface WavefrontMeshInput {
   readonly occlusionTexture?: WavefrontTextureSampleInput | null;
   readonly emissiveTexture?: WavefrontTextureSampleInput | null;
   readonly medium?: WavefrontMediumInput | null;
+  readonly extensions?: Record<string, Record<string, unknown>>;
 }
 
 export interface WavefrontTriangleRecord {
@@ -260,6 +534,8 @@ export interface WavefrontTriangleRecord {
   readonly material: readonly number[];
   readonly materialResponse: readonly number[];
   readonly materialExtension?: readonly number[];
+  readonly materialExtension2?: readonly number[];
+  readonly materialExtension3?: readonly number[];
   readonly specularColor?: readonly number[];
   readonly baseColorAtlas?: readonly number[];
   readonly metallicRoughnessAtlas?: readonly number[];
@@ -267,6 +543,7 @@ export interface WavefrontTriangleRecord {
   readonly occlusionAtlas?: readonly number[];
   readonly emissiveAtlas?: readonly number[];
   readonly textureSettings?: readonly number[];
+  readonly extensionTextures?: Readonly<Record<string, readonly number[]>>;
   readonly bounds: Readonly<{ min: readonly number[]; max: readonly number[] }>;
   readonly centroid: readonly number[];
 }
@@ -301,6 +578,8 @@ export interface WavefrontReferenceRay {
   readonly sampleId: number;
   readonly bounce: number;
   readonly mediumRefId: number;
+  readonly mediumStackDepth: number;
+  readonly mediumStack: readonly [number, number, number, number] | readonly number[];
   readonly flags: number;
   readonly origin: readonly [number, number, number] | readonly number[];
   readonly direction: readonly [number, number, number] | readonly number[];
@@ -428,6 +707,9 @@ export interface WavefrontGpuMaterialSource {
   readonly normalAtlas: WavefrontGpuTextureAtlasSource;
   readonly occlusionAtlas: WavefrontGpuTextureAtlasSource;
   readonly emissiveAtlas: WavefrontGpuTextureAtlasSource;
+  readonly extensionAtlases: Readonly<
+    Record<string, WavefrontGpuTextureAtlasSource>
+  >;
 }
 
 export interface WavefrontEmissiveTriangleIndexSource {
@@ -541,6 +823,9 @@ export interface WavefrontPathTracingComputeConfig {
   readonly environmentPortalMode: 0 | 1 | 2;
   readonly environmentMap: WavefrontEnvironmentMapInput;
   readonly deferredPathResolve: boolean;
+  readonly strictPhysicalLowSppLighting: boolean;
+  readonly transportExperiments: WavefrontTransportExperimentState;
+  readonly transportExperimentFlags: number;
   readonly triangleCount: number;
   readonly triangleCapacity: number;
   readonly bvhNodeCount: number;
@@ -565,6 +850,74 @@ export interface WavefrontPathTracingComputeConfig {
   readonly denoise: boolean;
   readonly frameIndex: number;
   readonly memory: WavefrontPathTracingMemoryEstimate;
+}
+
+export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
+  readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
+  readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
+  readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
+  readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+  readonly "renderer.transport.sourceStableDirectLighting.enabled"?: boolean;
+  readonly "renderer.transport.deterministicLowSppIndirect.enabled"?: boolean;
+  readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
+  readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
+  readonly enabled?: {
+    readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
+    readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
+    readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
+    readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
+    readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+    readonly "renderer.transport.sourceStableDirectLighting.enabled"?: boolean;
+    readonly "renderer.transport.deterministicLowSppIndirect.enabled"?: boolean;
+    readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
+    readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
+  };
+  readonly flags?: {
+    readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
+    readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
+    readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
+    readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
+    readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+    readonly "renderer.transport.sourceStableDirectLighting.enabled"?: boolean;
+    readonly "renderer.transport.deterministicLowSppIndirect.enabled"?: boolean;
+    readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
+    readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
+  };
+  readonly renderer?: {
+    readonly transport?: {
+      readonly strictPhysicalLowSppLighting?: boolean;
+      readonly stableSampleRouting?: boolean;
+      readonly strictZeroOverflow?: boolean;
+      readonly deferLowSppRussianRoulette?: boolean;
+      readonly deterministicDirectLighting?: boolean;
+      readonly sourceStableDirectLighting?: boolean | { readonly enabled?: boolean };
+      readonly deterministicLowSppIndirect?: boolean | { readonly enabled?: boolean };
+    };
+    readonly environment?: {
+      readonly productStudioImportance?: boolean;
+    };
+    readonly diagnostics?: {
+      readonly productTransportTelemetry?: boolean;
+    };
+  };
+}
+
+export interface WavefrontTransportExperimentFlags {
+  readonly stableSampleRouting: boolean;
+  readonly strictZeroOverflow: boolean;
+  readonly deferLowSppRussianRoulette: boolean;
+  readonly deterministicDirectLighting: boolean;
+  readonly productStudioImportance: boolean;
+  readonly productTransportTelemetry: boolean;
+  readonly sourceStableDirectLighting: boolean;
+  readonly deterministicLowSppIndirect: boolean;
+}
+
+export interface WavefrontTransportExperimentState {
+  readonly requested: WavefrontTransportExperimentFlags;
+  readonly effective: WavefrontTransportExperimentFlags;
+  readonly bitmask: number;
 }
 
 export interface WavefrontEnvironmentLightingInput {
@@ -607,12 +960,20 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly triangleBytes: number;
   readonly materialTableBytes: number;
   readonly bvhNodeBytes: number;
+  readonly bvhCombinedBytes: number;
   readonly bvhLeafReferenceBytes: number;
   readonly emissiveTriangleMetadataBytes: number;
+  readonly meshVertexBytes: number;
+  readonly meshIndexBytes: number;
+  readonly meshRangeBytes: number;
   readonly environmentPortalBytes: number;
   readonly configBytes: number;
+  readonly configBufferStride: number;
+  readonly frameConfigBytes: number;
+  readonly bvhBuildConfigBytes: number;
   readonly counterBytes: number;
   readonly indirectDispatchBytes: number;
+  readonly sceneStorageBufferBindingBytes: number;
   readonly totalHotBufferBytes: number;
 }
 
@@ -634,6 +995,7 @@ export interface WavefrontGpuParallelismDiagnostics {
     readonly maxComputeWorkgroupsPerDimension: number | null;
     readonly maxStorageBuffersPerShaderStage: number | null;
     readonly maxStorageBufferBindingSize: number | null;
+    readonly maxBufferSize: number | null;
   }>;
   readonly configuredWorkgroupSize: number;
   readonly directDispatches: number;
@@ -658,6 +1020,8 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly navigator?: Navigator | { gpu?: GPU };
   readonly document?: Document;
   readonly deviceDescriptor?: GPUDeviceDescriptor;
+  /** Opportunistically request WebGPU timestamp-query support when exposed. Defaults to true. */
+  readonly gpuTimestamps?: boolean;
   readonly requiredLimits?: Partial<Record<string, number>>;
   readonly powerPreference?: GPUPowerPreference;
   readonly alpha?: boolean;
@@ -695,6 +1059,17 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly environmentLighting?: WavefrontEnvironmentLightingInput;
   readonly displayQuality?: boolean;
   readonly denoise?: boolean;
+  readonly presentationOutput?: "tone-mapped" | "linear";
+  readonly strictPhysicalLowSppLighting?: boolean;
+  readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
+  readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
+  readonly "renderer.transport.deferLowSppRussianRoulette.enabled"?: boolean;
+  readonly "renderer.transport.deterministicDirectLighting.enabled"?: boolean;
+  readonly "renderer.transport.sourceStableDirectLighting.enabled"?: boolean;
+  readonly "renderer.transport.deterministicLowSppIndirect.enabled"?: boolean;
+  readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
+  readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
+  readonly featureFlags?: WavefrontRendererFeatureFlags;
   readonly frameIndex?: number;
 }
 
@@ -742,6 +1117,9 @@ export interface WavefrontPathTracingComputeRenderer {
     mediumCount: number;
     environmentMap: WavefrontEnvironmentMapSnapshot;
     deferredPathResolve: boolean;
+    strictPhysicalLowSppLighting: boolean;
+    transportExperiments: WavefrontTransportExperimentState;
+    transportExperimentFlags: number;
     bvhNodeCount: number;
     displayQuality: boolean;
     accelerationBuildMode: WavefrontAccelerationBuildMode;
@@ -753,6 +1131,31 @@ export interface WavefrontPathTracingComputeRenderer {
     memory: WavefrontPathTracingMemoryEstimate;
   }>;
   destroy(): void;
+}
+
+export interface WavefrontRayCountTelemetry {
+  readonly status: "not-requested" | "available" | "unavailable" | "failed";
+  readonly source: "gpu-active-queue-readback" | null;
+  readonly expectedPrimaryRays: number | null;
+  readonly observedPrimaryRays: number | null;
+  readonly secondaryRays: number | null;
+  readonly totalPathSegments: number | null;
+  readonly bounceHistogram: readonly number[];
+  readonly capturedRayCounts: number;
+  readonly expectedRayCounts: number;
+  readonly reason: string | null;
+}
+
+export interface WavefrontFrameTimingTelemetry {
+  readonly status: "not-requested" | "available" | "fallback" | "unavailable" | "failed";
+  readonly source: "timestamp-query" | "queue-completion" | "cpu-submit" | null;
+  readonly timestampQueryStatus: "not-recorded" | "available" | "unsupported" | "failed";
+  readonly totalGpuTimeMs: number | null;
+  readonly totalRenderJobTimeMs: number;
+  readonly classificationTimeMs: number | null;
+  readonly compactionTimeMs: number | null;
+  readonly samplingTimeMs: number | null;
+  readonly reason: string | null;
 }
 
 export interface WavefrontPathTracingComputeFrameStats {
@@ -769,6 +1172,11 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly maxFramePassesPerSubmission: number;
   readonly screenRays: number;
   readonly primaryRays: number;
+  readonly secondaryRays: number | null;
+  readonly totalPathSegments: number | null;
+  readonly rayCounts: WavefrontRayCountTelemetry;
+  readonly timings: WavefrontFrameTimingTelemetry;
+  readonly telemetryMemoryBytes: number;
   readonly sceneObjectCount: number;
   readonly triangleCount: number;
   readonly emissiveTriangleCount: number;
@@ -777,6 +1185,9 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly mediumCount: number;
   readonly environmentMap: WavefrontEnvironmentMapSnapshot;
   readonly deferredPathResolve: boolean;
+  readonly strictPhysicalLowSppLighting: boolean;
+  readonly transportExperiments: WavefrontTransportExperimentState;
+  readonly transportExperimentFlags: number;
   readonly bvhNodeCount: number;
   readonly displayQuality: boolean;
   readonly accelerationBuildMode: WavefrontAccelerationBuildMode;
@@ -785,6 +1196,7 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly accelerationBuilt: boolean;
   readonly accelerationBuildCount: number;
   readonly commandSubmissions: number;
+  readonly deviceLossStatus?: "not-detected" | "pending" | "not-exposed" | "lost";
   readonly gpuWorkerJobs: Readonly<{
     completedPerFrame: number;
     completedPerSecond: number | null;
@@ -793,6 +1205,37 @@ export interface WavefrontPathTracingComputeFrameStats {
     indirectDispatchesCompleted: number;
     frameTimeMs: number;
     awaitedGpuCompletion: boolean;
+  }>;
+  readonly transportGuardrails?: Readonly<{
+    status: "pass" | "warn" | "fail";
+    thresholds: Readonly<{
+      maxPerJobRegressionRatio: number;
+    }>;
+    current: Readonly<{
+      jobsPerFrame: number;
+      jobsPerSecond: number | null;
+      jobsPerSubmission: number;
+      commandSubmissions: number;
+      frameTimeMs: number;
+      awaitedGpuCompletion: boolean;
+      maxFramePassesPerSubmission: number;
+      queueOverflow: number;
+      deviceLossStatus: "not-detected" | "pending" | "not-exposed" | "lost";
+      radianceDiagnostics: Readonly<{
+        invalidSamples: number;
+        legacyClampEquivalentSamples: number;
+      }>;
+      rayCountStatus: WavefrontRayCountTelemetry["status"];
+      memory: Readonly<{
+        totalBytes: number;
+        breakdown: WavefrontPathTracingMemoryEstimate | null;
+      }>;
+    }>;
+    checks: readonly Readonly<{
+      id: string;
+      status: "pass" | "warn" | "fail";
+      details: string;
+    }>[];
   }>;
   readonly frameConfigSlots: number;
   readonly gpuParallelism: WavefrontGpuParallelismDiagnostics;
@@ -812,6 +1255,26 @@ export interface WavefrontPathTracingComputeFrameStats {
     environment: number;
     ambientFallback: number;
     maxDepth: number;
+    absorptionNull: number;
+    russianRoulette: number;
+    strictMaxDepth: number;
+    deterministicResidualZero: number;
+  }>;
+  readonly terminalRadiance?: Readonly<{
+    totalLuminance: number;
+    ambientResidualLuminance: number;
+    ambientResidualShare: number;
+  }>;
+  readonly radianceDiagnostics?: Readonly<{
+    invalidSamples: number;
+    legacyClampEquivalentSamples: number;
+  }>;
+  readonly transportContributions?: Readonly<{
+    directExplicitLuminance: number;
+    cachedIndirectLuminance: number;
+    stochasticResidualLuminance: number;
+    zeroTerminationCount: number;
+    deterministicChecksum: number;
   }>;
   readonly queueOverflow?: number;
 }
@@ -825,12 +1288,27 @@ export function createWavefrontGpuMaterialSource(
 ): WavefrontGpuMaterialSource;
 export function createDefaultWavefrontSceneObjects(): readonly WavefrontSceneObject[];
 export function estimateWavefrontPathTracingMemory(options?: {
+  width?: number;
+  height?: number;
+  tileSize?: number;
+  samplesPerPixel?: number;
   tilePixelCapacity?: number;
+  maxDepth?: number;
   sceneObjectCapacity?: number;
   triangleCapacity?: number;
+  materialCapacity?: number;
   bvhNodeCapacity?: number;
   bvhLeafSortCapacity?: number;
   emissiveTriangleCapacity?: number;
+  environmentPortalCapacity?: number;
+  meshVertexCount?: number;
+  meshIndexCount?: number;
+  meshRangeCount?: number;
+  bvhSortStageCount?: number;
+  bvhBuildLevelCount?: number;
+  denoise?: boolean;
+  deferredPathResolve?: boolean;
+  minUniformBufferOffsetAlignment?: number;
 }): WavefrontPathTracingMemoryEstimate;
 export function normalizeWavefrontMesh(
   input: WavefrontMeshInput,
@@ -888,6 +1366,53 @@ export function createWavefrontReferenceRay(
   config: WavefrontPathTracingComputeConfig,
   options?: CreateWavefrontReferenceRayOptions
 ): WavefrontReferenceRay;
+export const MAX_MEDIUM_STACK_DEPTH: 4;
+export const MAX_TRANSPORT_BRANCHES: 2;
+export const DEFAULT_SPECTRAL_WAVELENGTHS: readonly number[];
+export function createMediumStack(
+  mediumIds?: readonly number[],
+  maxDepth?: number
+): readonly number[];
+export function currentMediumId(stack?: readonly number[] | null): number;
+export function enterMediumStack(
+  stack: readonly number[] | null | undefined,
+  mediumId: number,
+  maxDepth?: number
+): Readonly<{ stack: readonly number[]; mediumId: number; overflowed: boolean }>;
+export function exitMediumStack(
+  stack: readonly number[] | null | undefined,
+  mediumId: number,
+  maxDepth?: number
+): Readonly<{ stack: readonly number[]; mediumId: number; matched: boolean }>;
+export function transitionMediumStack(
+  stack: readonly number[] | null | undefined,
+  mediumId: number,
+  entering: boolean,
+  maxDepth?: number
+): Readonly<{ stack: readonly number[]; mediumId: number; matched?: boolean; overflowed?: boolean }>;
+export function beerLambertTransmittance(
+  medium: WavefrontMediumInput | null | undefined,
+  distance: number
+): readonly [number, number, number];
+export function resolveSpectralIor(
+  ior: number,
+  dispersion?: number,
+  wavelengthNm?: number,
+  referenceWavelengthNm?: number
+): number;
+export function createSpectralSamples(options?: {
+  ior?: number;
+  dispersion?: number;
+  wavelengths?: readonly number[];
+}): readonly Readonly<{
+  wavelengthNm: number;
+  ior: number;
+  weight: number;
+}>[];
+export function createTransportBranches(options?: Record<string, unknown>): readonly Readonly<Record<string, unknown>>[];
+export function normalizeWavefrontMaterialExtensions(
+  input?: Record<string, unknown> | null
+): WavefrontMaterialExtensions;
 export function intersectWavefrontReferenceTriangle(
   ray: WavefrontReferenceRay,
   triangle: WavefrontTriangleRecord,
@@ -950,12 +1475,13 @@ export const rendererWavefrontComputeStatsStride: 8;
 export const wavefrontPathTracingComputeLimits: Readonly<{
   workgroupSize: 64;
   traceStorageBufferBindings: number;
-  rayRecordBytes: 80;
+  traceSampledTextureBindings: number;
+  rayRecordBytes: 96;
   hitRecordBytes: 256;
   sceneObjectRecordBytes: 160;
   meshVertexRecordBytes: 48;
   meshRangeRecordBytes: 240;
-  triangleRecordBytes: 352;
+  triangleRecordBytes: 576;
   materialRecordBytes: 192;
   bvhNodeRecordBytes: 48;
   bvhLeafReferenceRecordBytes: 16;
@@ -964,7 +1490,7 @@ export const wavefrontPathTracingComputeLimits: Readonly<{
   environmentPortalRecordBytes: 96;
   accumulationRecordBytes: 16;
   pathVertexRecordBytes: 16;
-  counterRecordBytes: 32;
+  counterRecordBytes: 128;
   indirectDispatchRecordBytes: 12;
 }>;
 export const wavefrontSceneObjectKinds: Readonly<{

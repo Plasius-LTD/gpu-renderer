@@ -3,6 +3,14 @@ name: CD (Publish to npm)
 on:
   workflow_dispatch:
     inputs:
+      phase:
+        description: "Release phase. Prepare creates the release commit; publish is dispatched automatically for that exact commit."
+        required: true
+        type: choice
+        default: prepare
+        options:
+          - prepare
+          - publish
       bump:
         description: "Version bump type"
         required: true
@@ -17,321 +25,1043 @@ on:
         description: "Pre-release id (e.g. beta, rc). Leave blank for stable"
         required: false
         type: string
+      expected_commit_sha:
+        description: "Internal fail-closed binding for the publish phase"
+        required: false
+        type: string
+      release_tag:
+        description: "Internal fail-closed release tag for the publish phase"
+        required: false
+        type: string
 
 permissions:
-  actions: read
-  contents: write
-  id-token: write # for npm provenance (requires Node 18+ and npm >=9)
-  attestations: write
-  pull-requests: write
+  contents: read
 
-env:
-  FALLBACK_RUNNER_LABEL: ubuntu-latest
-  SELF_HOSTED_RUNNER_LABELS: '["self-hosted","Linux","X64"]'
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+concurrency:
+  group: npm-cd-${{ github.repository }}-${{ inputs.phase == 'publish' && format('publish-{0}', inputs.expected_commit_sha) || 'prepare' }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  prepare_release:
+    if: inputs.phase == 'prepare'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-prepare.yml
+    with:
+      bump: ${{ inputs.bump }}
+      preid: ${{ inputs.preid }}
+      release_prep_app_client_id: ${{ vars.RELEASE_PREP_APP_CLIENT_ID }}
+    secrets:
+      RELEASE_PREP_APP_PRIVATE_KEY: ${{ secrets.RELEASE_PREP_APP_PRIVATE_KEY }}
+
+  queue_publish:
+    if: inputs.phase == 'prepare'
+    needs: prepare_release
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      actions: write
+      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Checkout prepared release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare_release.outputs.commit_sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Use Node.js 24
+      - name: Wait for successful exact-SHA main CI
+        env:
+          EXPECTED_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if ! printf '%s' "${EXPECTED_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "Release preparation did not return a full commit SHA." >&2
+            exit 1
+          fi
+
+          DEADLINE=$((SECONDS + 1800))
+          while [ "${SECONDS}" -lt "${DEADLINE}" ]; do
+            RUNS="$(
+              gh api -X GET \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+                -f branch=main \
+                -f event=push \
+                -f head_sha="${EXPECTED_SHA}" \
+                -f status=success \
+                -f per_page=100
+            )"
+            MATCHES="$(
+              jq \
+                --arg sha "${EXPECTED_SHA}" \
+                '[.workflow_runs[] | select(
+                  .head_sha == $sha and
+                  .head_branch == "main" and
+                  .event == "push" and
+                  .status == "completed" and
+                  .conclusion == "success"
+                )] | length' \
+                <<<"${RUNS}"
+            )"
+
+            if [ "${MATCHES}" -gt 0 ]; then
+              echo "Exact-SHA CI succeeded for ${EXPECTED_SHA}."
+              break
+            fi
+
+            sleep 15
+          done
+
+          if [ "${MATCHES:-0}" -le 0 ]; then
+            echo "No successful main push CI completed for ${EXPECTED_SHA} within 1800 seconds." >&2
+            exit 1
+          fi
+
+      - name: Dispatch exact-main publish run
+        env:
+          EXPECTED_SHA: ${{ needs.prepare_release.outputs.commit_sha }}
+          RELEASE_TAG: ${{ needs.prepare_release.outputs.tag }}
+          PREID: ${{ needs.prepare_release.outputs.effective_preid }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          git fetch origin main --no-tags
+          REMOTE_MAIN="$(git rev-parse refs/remotes/origin/main)"
+          if [ "${REMOTE_MAIN}" != "${EXPECTED_SHA}" ]; then
+            echo "main moved from prepared commit ${EXPECTED_SHA} to ${REMOTE_MAIN}; refusing to dispatch publication." >&2
+            exit 1
+          fi
+
+          jq -n \
+            --arg sha "${EXPECTED_SHA}" \
+            --arg tag "${RELEASE_TAG}" \
+            --arg preid "${PREID}" \
+            '{
+              "ref": "main",
+              "inputs": {
+                "phase": "publish",
+                "bump": "none",
+                "preid": $preid,
+                "expected_commit_sha": $sha,
+                "release_tag": $tag
+              }
+            }' |
+            gh api -X POST \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/cd.yml/dispatches" \
+              --input -
+
+          echo "Queued tokenless publication of ${RELEASE_TAG} from ${EXPECTED_SHA}."
+
+  validate_and_pack:
+    if: inputs.phase == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      package_name: ${{ steps.release.outputs.package_name }}
+      release_version: ${{ steps.release.outputs.release_version }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      effective_preid: ${{ steps.release.outputs.effective_preid }}
+      tarball_name: ${{ steps.bundle.outputs.tarball_name }}
+      tarball_sha256: ${{ steps.bundle.outputs.tarball_sha256 }}
+      tarball_artifact_id: ${{ steps.upload_package.outputs.artifact-id }}
+      tarball_artifact_digest: ${{ steps.upload_package.outputs.artifact-digest }}
+      sbom_sha256: ${{ steps.bundle.outputs.sbom_sha256 }}
+      sbom_artifact_id: ${{ steps.upload_sbom.outputs.artifact-id }}
+      sbom_artifact_digest: ${{ steps.upload_sbom.outputs.artifact-digest }}
+      zero_three_evidence_sha256: ${{ steps.bundle.outputs.zero_three_evidence_sha256 }}
+      zero_three_evidence_artifact_id: ${{ steps.upload_zero_three.outputs.artifact-id }}
+      zero_three_evidence_artifact_digest: ${{ steps.upload_zero_three.outputs.artifact-digest }}
+    steps:
+      - name: Checkout exact workflow commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Use Node.js 24.18.0
         uses: actions/setup-node@v6
         with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
+          node-version-file: ".nvmrc"
+          package-manager-cache: false
 
-      - name: Prepare release metadata
-        id: pkg
+      - name: Verify release runtime
+        run: |
+          set -euo pipefail
+
+          EXPECTED_NODE="$(tr -d '[:space:]' < .nvmrc)"
+          ACTUAL_NODE="$(node --version | sed 's/^v//')"
+          if [ "${EXPECTED_NODE}" != "24.18.0" ] || [ "${ACTUAL_NODE}" != "${EXPECTED_NODE}" ]; then
+            echo "Expected Node.js 24.18.0, found ${ACTUAL_NODE} with .nvmrc=${EXPECTED_NODE}." >&2
+            exit 1
+          fi
+
+          ACTUAL_NPM="$(npm --version)"
+          node - "${ACTUAL_NPM}" <<'NODE'
+          const actual = process.argv[2].split(".").map(Number);
+          const minimum = "11.5.1".split(".").map(Number);
+          for (let index = 0; index < 3; index += 1) {
+            if (actual[index] > minimum[index]) process.exit(0);
+            if (actual[index] < minimum[index]) process.exit(1);
+          }
+          process.exit(0);
+          NODE
+
+          echo "Using Node.js ${ACTUAL_NODE} and npm ${ACTUAL_NPM}."
+
+      - name: Enforce exact-main release identity
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          BUMP: ${{ inputs.bump }}
+          EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if ! printf '%s' "${EXPECTED_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "Publish requires a full expected_commit_sha." >&2
+            exit 1
+          fi
+          if [ -z "${RELEASE_TAG}" ]; then
+            echo "Publish requires release_tag." >&2
+            exit 1
+          fi
+          if [ '${{ github.ref }}' != "refs/heads/main" ]; then
+            echo "Publication must be dispatched from refs/heads/main." >&2
+            exit 1
+          fi
+          if [ '${{ github.sha }}' != "${EXPECTED_SHA}" ]; then
+            echo "Workflow SHA ${{ github.sha }} does not match prepared SHA ${EXPECTED_SHA}." >&2
+            exit 1
+          fi
+
+          git fetch origin main --no-tags
+          REMOTE_MAIN="$(git rev-parse refs/remotes/origin/main)"
+          if [ "${REMOTE_MAIN}" != "${EXPECTED_SHA}" ]; then
+            echo "Remote main ${REMOTE_MAIN} does not match prepared SHA ${EXPECTED_SHA}." >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "${EXPECTED_SHA}" refs/remotes/origin/main
+
+          RUNS="$(
+            gh api -X GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+              -f branch=main \
+              -f event=push \
+              -f head_sha="${EXPECTED_SHA}" \
+              -f status=success \
+              -f per_page=100
+          )"
+          MATCHES="$(
+            jq \
+              --arg sha "${EXPECTED_SHA}" \
+              '[.workflow_runs[] | select(
+                .head_sha == $sha and
+                .head_branch == "main" and
+                .event == "push" and
+                .status == "completed" and
+                .conclusion == "success"
+              )] | length' \
+              <<<"${RUNS}"
+          )"
+          if [ "${MATCHES}" -le 0 ]; then
+            echo "No successful exact-SHA main push CI exists for ${EXPECTED_SHA}." >&2
+            exit 1
+          fi
+
+      - name: Derive release metadata
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
           PREID: ${{ inputs.preid }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          CURRENT_VER=$(node -p "require('./package.json').version")
-          NAME=$(node -p "require('./package.json').name")
-
-          if [ "${BUMP}" = "none" ]; then
-            NEW_VER="v${CURRENT_VER}"
-            # The later metadata step creates and pushes this tag before gh release create --verify-tag.
-          else
-            case "${BUMP:-patch}" in
-              major|minor|patch) ;;
-              *)
-                echo "Unknown bump type: ${BUMP}" >&2
-                exit 1
-                ;;
-            esac
-
-            REGISTRY_VER=$(npm view "$NAME" version 2>/dev/null || true)
-            TARGET_VER=$(node -e '
-          const [localVersion, registryVersion, bump, preid] = process.argv.slice(1);
-          const clean = (value) => String(value || "").replace(/^v/, "").trim();
-          const parse = (value) => {
-            const [core] = clean(value).split("-");
-            const parts = core.split(".").map((part) => Number(part));
-            if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part) || part < 0)) {
-              throw new Error(`Invalid semver value: ${value}`);
-            }
-            return parts;
-          };
-          const compare = (left, right) => {
-            for (let index = 0; index < 3; index += 1) {
-              const diff = left[index] - right[index];
-              if (diff !== 0) return diff;
-            }
-            return 0;
-          };
-
-          const local = parse(localVersion);
-          const registry = registryVersion ? parse(registryVersion) : local;
-          const base = compare(registry, local) > 0 ? registry : local;
-          let next;
-          switch (bump) {
-            case "major":
-              next = [base[0] + 1, 0, 0];
-              break;
-            case "minor":
-              next = [base[0], base[1] + 1, 0];
-              break;
-            case "patch":
-              next = [base[0], base[1], base[2] + 1];
-              break;
-            default:
-              throw new Error(`Unknown bump type: ${bump}`);
-          }
-
-          let version = next.join(".");
-          if (preid) {
-            version = `${version}-${preid}.0`;
-          }
-          process.stdout.write(version);
-          ' "$CURRENT_VER" "$REGISTRY_VER" "$BUMP" "${PREID:-}")
-            NEW_VER=$(npm version "$TARGET_VER" --no-git-tag-version --allow-same-version)
+          PACKAGE_NAME="$(node -p "require('./package.json').name || ''")"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version || ''")"
+          EXPECTED_TAG="v${PACKAGE_VERSION}"
+          if [ -z "${PACKAGE_NAME}" ] || [ -z "${PACKAGE_VERSION}" ]; then
+            echo "package.json must define name and version." >&2
+            exit 1
+          fi
+          if [ "${RELEASE_TAG}" != "${EXPECTED_TAG}" ]; then
+            echo "Release tag ${RELEASE_TAG} does not match package version ${PACKAGE_VERSION}." >&2
+            exit 1
+          fi
+          if [ -n "${PREID}" ] && ! printf '%s' "${PREID}" | grep -Eq '^[0-9A-Za-z][0-9A-Za-z.-]*$'; then
+            echo "Invalid pre-release id: ${PREID}" >&2
+            exit 1
           fi
 
-          echo "New version: $NEW_VER"
-
-          # Expose tag (vX.Y.Z) and version (X.Y.Z) for later steps
-          VER_NO_V=${NEW_VER#v}
-          echo "tag=$NEW_VER" >> "$GITHUB_OUTPUT"
-          echo "version=$VER_NO_V" >> "$GITHUB_OUTPUT"
-
-          NAME=$(node -p "require('./package.json').name")
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          if npm view "$NAME" version >/dev/null 2>&1; then
-            echo "flags=" >> "$GITHUB_OUTPUT"
-          else
-            echo "flags=--access public" >> "$GITHUB_OUTPUT"
+          DERIVED_PREID=$(PACKAGE_VERSION="${PACKAGE_VERSION}" node -e '
+          const version = process.env.PACKAGE_VERSION || "";
+          const match = version.match(/^[0-9]+\.[0-9]+\.[0-9]+(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/);
+          if (!match) {
+            console.error(`Cannot derive pre-release identity from invalid version ${version}.`);
+            process.exit(1);
+          }
+          const identifiers = match[1] ? match[1].split(".") : [];
+          if (identifiers.length > 1 && /^[0-9]+$/.test(identifiers.at(-1))) {
+            identifiers.pop();
+          }
+          process.stdout.write(identifiers.join("."));
+          ')
+          if [ "${PREID}" != "${DERIVED_PREID}" ]; then
+            echo "Supplied pre-release identity ${PREID:-<stable>} does not match the pre-release identity derived from ${PACKAGE_VERSION} (${DERIVED_PREID:-<stable>})." >&2
+            exit 1
           fi
 
-      - name: Install deps (CI)
-        run: npm ci
+          SHOULD_PUBLISH_NPM="true"
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry https://registry.npmjs.org >/dev/null 2>&1; then
+            SHOULD_PUBLISH_NPM="false"
+          fi
 
-      - name: Test (coverage)
-        run: npm run test:coverage
+          {
+            echo "package_name=${PACKAGE_NAME}"
+            echo "release_version=${PACKAGE_VERSION}"
+            echo "release_tag=${RELEASE_TAG}"
+            echo "should_publish_npm=${SHOULD_PUBLISH_NPM}"
+            echo "derived_preid=${DERIVED_PREID}"
+            echo "effective_preid=${DERIVED_PREID}"
+          } >> "${GITHUB_OUTPUT}"
 
-      - name: Install Codecov CLI
-        run: python3 -m pip install --upgrade codecov-cli
-
-      - name: Upload coverage to Codecov
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Verify private artifact policy
         run: |
-          codecovcli --verbose upload-process --disable-search --fail-on-error \
-            -n "release-${GITHUB_RUN_ID}" \
-            -F unittests \
-            -f ./coverage/lcov.info
+          set -euo pipefail
+          if node -e "const scripts = require('./package.json').scripts || {}; process.exit(scripts['privacy:check'] ? 0 : 1)"; then
+            npm run privacy:check
+          fi
 
-      - name: Build
-        run: npm run build --if-present
+      - name: Enforce permanent Zero-Three install admission
+        run: npm run zero-three:source
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit --legacy-peer-deps
+
+      - name: Run validation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          has_script() {
+            node -e "const scripts = require('./package.json').scripts || {}; process.exit(scripts[process.argv[1]] ? 0 : 1)" "$1"
+          }
+
+          if has_script lint; then npm run lint; fi
+          if has_script typecheck; then npm run typecheck; fi
+          if has_script audit:npm; then npm run audit:npm; fi
+          if has_script build; then npm run build; fi
+          if has_script test:coverage; then
+            npm run test:coverage
+          elif has_script test; then
+            npm test
+          fi
+          if has_script pack:check; then npm run pack:check; fi
+
+      - name: Enforce permanent Zero-Three package evidence
+        run: npm run zero-three
 
       - name: Generate SBOM (CycloneDX)
         run: npm sbom --sbom-format=cyclonedx --sbom-type=library --omit dev > sbom.cdx.json
 
-      - name: Attest SBOM (GitHub Artifact Attestations)
-        uses: actions/attest-build-provenance@v3
-        with:
-          subject-path: sbom.cdx.json
-
-      - name: Update CHANGELOG.md (move Unreleased to new version)
-        env:
-          VERSION: ${{ steps.pkg.outputs.version }}
-          TAG: ${{ steps.pkg.outputs.tag }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          verbose: true
+      - name: Build immutable publication bundle
+        id: bundle
+        shell: bash
         run: |
           set -euo pipefail
 
-          FILE="CHANGELOG.md"
-          if [ ! -f "$FILE" ]; then
-            echo "No CHANGELOG.md found; skipping changelog update."
-            exit 0
+          PACK_JSON="$(npm pack --ignore-scripts --json)"
+          TARBALL_NAME="$(jq -er 'if length == 1 then .[0].filename else empty end' <<<"${PACK_JSON}")"
+          if [ "$(basename "${TARBALL_NAME}")" != "${TARBALL_NAME}" ] || ! printf '%s' "${TARBALL_NAME}" | grep -Eq '^[0-9A-Za-z._-]+\.tgz$'; then
+            echo "npm pack returned an unsafe tarball name: ${TARBALL_NAME}" >&2
+            exit 1
           fi
-
-          if grep -q "^## \[${VERSION}\]" "$FILE"; then
-            echo "CHANGELOG.md already contains a ${VERSION} release section; skipping changelog update."
-            exit 0
+          if [ ! -f "${TARBALL_NAME}" ] || [ -L "${TARBALL_NAME}" ]; then
+            echo "Expected one regular, non-symlink package tarball: ${TARBALL_NAME}" >&2
+            exit 1
           fi
-
-          DATE=$(date -u +%Y-%m-%d)
-          VERSION_LINE="## [${VERSION}] - ${DATE}"
-
-          # Identify Unreleased block boundaries
-          UNREL_START=$(grep -n '^## \[Unreleased\]' "$FILE" | cut -d: -f1 || true)
-          if [ -z "$UNREL_START" ]; then
-            echo "No '## [Unreleased]' section found; skipping changelog update."
-            exit 0
+          if [ ! -f sbom.cdx.json ] || [ -L sbom.cdx.json ]; then
+            echo "Expected a regular, non-symlink SBOM." >&2
+            exit 1
           fi
-          NEXT_HDR=$(awk 'NR>'"$UNREL_START"' && /^## \[/{print NR; exit}' "$FILE")
-          if [ -z "$NEXT_HDR" ]; then
-            NEXT_HDR=$(wc -l < "$FILE")
-            NEXT_HDR=$((NEXT_HDR+1))
+          ZERO_THREE_EVIDENCE="release-artifacts/zero-three-evidence.json"
+          if [ ! -f "${ZERO_THREE_EVIDENCE}" ] || [ -L "${ZERO_THREE_EVIDENCE}" ]; then
+            echo "Expected regular, non-symlink Zero-Three evidence." >&2
+            exit 1
           fi
+          jq -e . sbom.cdx.json >/dev/null
+          jq -e . "${ZERO_THREE_EVIDENCE}" >/dev/null
 
-          # Extract sections
-          HEADER=$(sed -n "1,${UNREL_START}p" "$FILE")
-          UNREL_CONTENT=$(sed -n "$((UNREL_START+1)),$((NEXT_HDR-1))p" "$FILE")
-          TAIL=$(sed -n "${NEXT_HDR},\$p" "$FILE")
-
-          # Prepare new Unreleased template (Keep a Changelog style) without tabs/indent issues
-          NEW_UNRELEASED=$(printf '%s\n' \
-            '' \
-            '- **Added**' \
-            '  - (placeholder)' \
-            '' \
-            '- **Changed**' \
-            '  - (placeholder)' \
-            '' \
-            '- **Fixed**' \
-            '  - (placeholder)' \
-            '' \
-            '- **Security**' \
-            '  - (placeholder)')
-
-          # Build the new CHANGELOG content
-          TMP_FILE=$(mktemp)
-          {
-            printf "%s\n" "$HEADER"
-            printf "%s\n\n" "$NEW_UNRELEASED"
-            printf "%s\n" "$VERSION_LINE"
-            # If Unreleased was empty, at least add a placeholder so the section isn't blank
-            if [ -z "$(echo "$UNREL_CONTENT" | tr -d '\n' | tr -d '[:space:]')" ]; then
-              printf "### Changed\n- (no notable changes)\n\n"
-            else
-              printf "%s\n" "$UNREL_CONTENT"
-              # Ensure a trailing newline after the inserted section
-              printf "\n"
+          TARBALL_SHA256="$(sha256sum "${TARBALL_NAME}" | awk '{print $1}')"
+          SBOM_SHA256="$(sha256sum sbom.cdx.json | awk '{print $1}')"
+          ZERO_THREE_EVIDENCE_SHA256="$(sha256sum "${ZERO_THREE_EVIDENCE}" | awk '{print $1}')"
+          for DIGEST in "${TARBALL_SHA256}" "${SBOM_SHA256}" "${ZERO_THREE_EVIDENCE_SHA256}"; do
+            if ! printf '%s' "${DIGEST}" | grep -Eq '^[0-9a-f]{64}$'; then
+              echo "Publication bundle SHA-256 generation failed." >&2
+              exit 1
             fi
-            printf "%s\n" "$TAIL"
-          } > "$TMP_FILE"
+          done
 
-          mv "$TMP_FILE" "$FILE"
+          {
+            echo "tarball_name=${TARBALL_NAME}"
+            echo "tarball_sha256=${TARBALL_SHA256}"
+            echo "sbom_sha256=${SBOM_SHA256}"
+            echo "zero_three_evidence_sha256=${ZERO_THREE_EVIDENCE_SHA256}"
+          } >> "${GITHUB_OUTPUT}"
 
-          # Update bottom compare links
-          # Update [Unreleased] compare to start at v${VERSION}
-          COMPARE_URL="https://github.com/${GITHUB_REPOSITORY}/compare/v${VERSION}...HEAD"
-          awk -v repl="[Unreleased]: ${COMPARE_URL}" 'BEGIN{OFS=FS} { if ($0 ~ /^\[Unreleased\]: /) { print repl } else { print } }' "$FILE" > "$FILE.tmp"
-          mv "$FILE.tmp" "$FILE"
+      - name: Upload immutable package tarball
+        id: upload_package
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.bundle.outputs.tarball_name }}
+          archive: false
+          retention-days: 1
 
-          # Append a link for the new version if not present
-          if ! grep -q "^\[${VERSION}\]:" "$FILE"; then
-            echo "[${VERSION}]: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}" >> "$FILE"
-          fi
+      - name: Upload immutable SBOM
+        id: upload_sbom
+        uses: actions/upload-artifact@v7
+        with:
+          path: sbom.cdx.json
+          archive: false
+          retention-days: 1
 
-      - name: Commit release metadata and tag
-        env:
-          TAG: ${{ steps.pkg.outputs.tag }}
-          VERSION: ${{ steps.pkg.outputs.version }}
+      - name: Upload immutable Zero-Three evidence
+        id: upload_zero_three
+        uses: actions/upload-artifact@v7
+        with:
+          path: release-artifacts/zero-three-evidence.json
+          archive: false
+          retention-days: 1
+
+      - name: Locate coverage report for Codecov
+        id: codecov_coverage
+        shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch --tags origin
-          RELEASE_BRANCH="automation/release-${TAG#v}-${GITHUB_RUN_ID}"
+          LCOV_FILE="$(find coverage -type f -name lcov.info | head -n 1 || true)"
+          if [ -z "${LCOV_FILE}" ] || [ ! -f "${LCOV_FILE}" ]; then
+            echo "No lcov.info found; skipping Codecov upload."
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "Using coverage report: ${LCOV_FILE}"
+          echo "available=true" >> "${GITHUB_OUTPUT}"
+          echo "files=${LCOV_FILE}" >> "${GITHUB_OUTPUT}"
 
-          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
-            echo "Tag ${TAG} already exists. Immutable releases must use a new version."
+      - name: Upload coverage to Codecov (best effort)
+        id: codecov
+        if: steps.codecov_coverage.outputs.available == 'true'
+        continue-on-error: true
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ steps.codecov_coverage.outputs.files }}
+          flags: unittests
+          fail_ci_if_error: false
+          slug: ${{ github.repository }}
+
+      - name: Report Codecov upload warning
+        if: always() && steps.codecov.outcome == 'failure'
+        run: echo "::warning title=Codecov upload unavailable::Release coverage upload failed or was quota-limited; immutable publication artifacts were already sealed and remain unchanged."
+
+  publish:
+    if: inputs.phase == 'publish'
+    needs: validate_and_pack
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      actions: read
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout exact workflow commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Use Node.js 24.18.0
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          package-manager-cache: false
+
+      - name: Verify release runtime
+        run: |
+          set -euo pipefail
+
+          EXPECTED_NODE="$(tr -d '[:space:]' < .nvmrc)"
+          ACTUAL_NODE="$(node --version | sed 's/^v//')"
+          if [ "${EXPECTED_NODE}" != "24.18.0" ] || [ "${ACTUAL_NODE}" != "${EXPECTED_NODE}" ]; then
+            echo "Expected Node.js 24.18.0, found ${ACTUAL_NODE} with .nvmrc=${EXPECTED_NODE}." >&2
             exit 1
           fi
 
-          git add package.json package-lock.json CHANGELOG.md
-          METADATA_CHANGED=0
-          if git diff --cached --quiet; then
-            echo "No release metadata changes to commit for ${TAG}; tagging current HEAD."
-          else
-            git commit -m "chore: release ${TAG} [skip ci]"
-            METADATA_CHANGED=1
-          fi
+          ACTUAL_NPM="$(npm --version)"
+          node - "${ACTUAL_NPM}" <<'NODE'
+          const actual = process.argv[2].split(".").map(Number);
+          const minimum = "11.5.1".split(".").map(Number);
+          for (let index = 0; index < 3; index += 1) {
+            if (actual[index] > minimum[index]) process.exit(0);
+            if (actual[index] < minimum[index]) process.exit(1);
+          }
+          process.exit(0);
+          NODE
 
-          git tag "${TAG}"
-          if [ "$METADATA_CHANGED" = "1" ]; then
-            git push origin "HEAD:${RELEASE_BRANCH}" "${TAG}"
-            if ! gh pr create \
-              --base "${GITHUB_REF_NAME:-main}" \
-              --head "${RELEASE_BRANCH}" \
-              --title "docs(changelog): release ${TAG}" \
-              --body "Generated by the CD workflow for ${TAG}. The package publish uses the tagged release metadata commit; this PR persists package.json, package-lock.json, and CHANGELOG.md on the protected main branch."; then
-              echo "::warning::Unable to create release metadata PR from GitHub Actions. Branch ${RELEASE_BRANCH} and tag ${TAG} were pushed; publication will continue."
-            fi
-          else
-            git push origin "${TAG}"
-          fi
+          echo "Using Node.js ${ACTUAL_NODE} and npm ${ACTUAL_NPM}."
 
-      - name: Create GitHub Release draft (immutable-safe)
+      - name: Enforce exact-main release identity
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.pkg.outputs.tag }}"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft')"
-            if [ "$IS_DRAFT" != "true" ]; then
-              echo "Release $TAG already exists and is published. Immutable releases cannot be modified after publication; cut a new version instead."
+
+          if ! printf '%s' "${EXPECTED_SHA}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "Publish requires a full expected_commit_sha." >&2
+            exit 1
+          fi
+          if [ -z "${RELEASE_TAG}" ]; then
+            echo "Publish requires release_tag." >&2
+            exit 1
+          fi
+          if [ '${{ github.ref }}' != "refs/heads/main" ]; then
+            echo "Publication must be dispatched from refs/heads/main." >&2
+            exit 1
+          fi
+          if [ '${{ github.sha }}' != "${EXPECTED_SHA}" ]; then
+            echo "Workflow SHA ${{ github.sha }} does not match prepared SHA ${EXPECTED_SHA}." >&2
+            exit 1
+          fi
+
+          git fetch origin main --no-tags
+          REMOTE_MAIN="$(git rev-parse refs/remotes/origin/main)"
+          if [ "${REMOTE_MAIN}" != "${EXPECTED_SHA}" ]; then
+            echo "Remote main ${REMOTE_MAIN} does not match prepared SHA ${EXPECTED_SHA}." >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "${EXPECTED_SHA}" refs/remotes/origin/main
+
+          RUNS="$(
+            gh api -X GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+              -f branch=main \
+              -f event=push \
+              -f head_sha="${EXPECTED_SHA}" \
+              -f status=success \
+              -f per_page=100
+          )"
+          MATCHES="$(
+            jq \
+              --arg sha "${EXPECTED_SHA}" \
+              '[.workflow_runs[] | select(
+                .head_sha == $sha and
+                .head_branch == "main" and
+                .event == "push" and
+                .status == "completed" and
+                .conclusion == "success"
+              )] | length' \
+              <<<"${RUNS}"
+          )"
+          if [ "${MATCHES}" -le 0 ]; then
+            echo "No successful exact-SHA main push CI exists for ${EXPECTED_SHA}." >&2
+            exit 1
+          fi
+
+      - name: Download exact package artifact
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.validate_and_pack.outputs.tarball_artifact_id }}
+          path: release-package
+          digest-mismatch: error
+
+      - name: Download exact SBOM artifact
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.validate_and_pack.outputs.sbom_artifact_id }}
+          path: release-sbom
+          digest-mismatch: error
+
+      - name: Download exact Zero-Three evidence artifact
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.validate_and_pack.outputs.zero_three_evidence_artifact_id }}
+          path: release-zero-three
+          digest-mismatch: error
+
+      - name: Verify immutable publication bundle
+        id: release
+        env:
+          EXPECTED_PACKAGE_NAME: ${{ needs.validate_and_pack.outputs.package_name }}
+          EXPECTED_VERSION: ${{ needs.validate_and_pack.outputs.release_version }}
+          EXPECTED_TAG: ${{ needs.validate_and_pack.outputs.release_tag }}
+          EXPECTED_PREID: ${{ needs.validate_and_pack.outputs.effective_preid }}
+          EXPECTED_TARBALL_NAME: ${{ needs.validate_and_pack.outputs.tarball_name }}
+          EXPECTED_TARBALL_SHA256: ${{ needs.validate_and_pack.outputs.tarball_sha256 }}
+          EXPECTED_TARBALL_ARTIFACT_DIGEST: ${{ needs.validate_and_pack.outputs.tarball_artifact_digest }}
+          EXPECTED_SBOM_SHA256: ${{ needs.validate_and_pack.outputs.sbom_sha256 }}
+          EXPECTED_SBOM_ARTIFACT_DIGEST: ${{ needs.validate_and_pack.outputs.sbom_artifact_digest }}
+          EXPECTED_ZERO_THREE_EVIDENCE_SHA256: ${{ needs.validate_and_pack.outputs.zero_three_evidence_sha256 }}
+          EXPECTED_ZERO_THREE_EVIDENCE_ARTIFACT_DIGEST: ${{ needs.validate_and_pack.outputs.zero_three_evidence_artifact_digest }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          PREID_INPUT: ${{ inputs.preid }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t PACKAGE_ENTRIES < <(find release-package -mindepth 1 -maxdepth 1 -print)
+          mapfile -t SBOM_ENTRIES < <(find release-sbom -mindepth 1 -maxdepth 1 -print)
+          mapfile -t ZERO_THREE_ENTRIES < <(find release-zero-three -mindepth 1 -maxdepth 1 -print)
+          if [ "${#PACKAGE_ENTRIES[@]}" -ne 1 ] || [ "${#SBOM_ENTRIES[@]}" -ne 1 ] || [ "${#ZERO_THREE_ENTRIES[@]}" -ne 1 ]; then
+            echo "Each publication artifact ID must resolve to exactly one file." >&2
+            exit 1
+          fi
+
+          TARBALL="${PACKAGE_ENTRIES[0]}"
+          SBOM="${SBOM_ENTRIES[0]}"
+          ZERO_THREE_EVIDENCE="${ZERO_THREE_ENTRIES[0]}"
+          if [ ! -f "${TARBALL}" ] || [ -L "${TARBALL}" ] || [ ! -f "${SBOM}" ] || [ -L "${SBOM}" ] || [ ! -f "${ZERO_THREE_EVIDENCE}" ] || [ -L "${ZERO_THREE_EVIDENCE}" ]; then
+            echo "Publication artifacts must be regular, non-symlink files." >&2
+            exit 1
+          fi
+          if [ "$(basename "${TARBALL}")" != "${EXPECTED_TARBALL_NAME}" ] || [ "$(basename "${SBOM}")" != "sbom.cdx.json" ] || [ "$(basename "${ZERO_THREE_EVIDENCE}")" != "zero-three-evidence.json" ]; then
+            echo "Downloaded publication artifact names do not match the immutable hand-off." >&2
+            exit 1
+          fi
+
+          TARBALL_SHA256="$(sha256sum "${TARBALL}" | awk '{print $1}')"
+          SBOM_SHA256="$(sha256sum "${SBOM}" | awk '{print $1}')"
+          ZERO_THREE_EVIDENCE_SHA256="$(sha256sum "${ZERO_THREE_EVIDENCE}" | awk '{print $1}')"
+          if [ "${TARBALL_SHA256}" != "${EXPECTED_TARBALL_SHA256}" ] || [ "${SBOM_SHA256}" != "${EXPECTED_SBOM_SHA256}" ] || [ "${ZERO_THREE_EVIDENCE_SHA256}" != "${EXPECTED_ZERO_THREE_EVIDENCE_SHA256}" ]; then
+            echo "Downloaded publication artifact SHA-256 does not match the read-only build job." >&2
+            exit 1
+          fi
+          for ARTIFACT_DIGEST in "${EXPECTED_TARBALL_ARTIFACT_DIGEST}" "${EXPECTED_SBOM_ARTIFACT_DIGEST}" "${EXPECTED_ZERO_THREE_EVIDENCE_ARTIFACT_DIGEST}"; do
+            if ! printf '%s' "${ARTIFACT_DIGEST}" | grep -Eq '^[0-9a-f]{64}$'; then
+              echo "GitHub artifact digests were not bound into the publication hand-off." >&2
+              exit 1
+            fi
+          done
+          jq -e . "${SBOM}" >/dev/null
+          jq -e . "${ZERO_THREE_EVIDENCE}" >/dev/null
+
+          while IFS= read -r MEMBER; do
+            case "${MEMBER}" in
+              package | package/*) ;;
+              *)
+                echo "Unsafe package member outside package/: ${MEMBER}" >&2
+                exit 1
+                ;;
+            esac
+            case "${MEMBER}" in
+              /* | ../* | */../* | */..)
+                echo "Unsafe package traversal member: ${MEMBER}" >&2
+              exit 1
+              ;;
+            esac
+          done < <(tar -tzf "${TARBALL}")
+
+          if ! tar -tzf "${TARBALL}" | node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const prohibited = "legal/cla-registry.csv";
+            const normalizeArtifactPath = (value) => {
+              const normalized = path.posix
+                .normalize(String(value).replaceAll("\\", "/"))
+                .replace(/^(?:\.\/)+/u, "")
+                .normalize("NFKC")
+                .toLocaleLowerCase("en-US");
+              return normalized.startsWith("package/")
+                ? normalized.slice("package/".length)
+                : normalized;
+            };
+            const members = fs
+              .readFileSync(0, "utf8")
+              .split(/\r?\n/u)
+              .filter(Boolean);
+            if (
+              members.some(
+                (member) => normalizeArtifactPath(member) === prohibited,
+              )
+            ) {
+              process.exit(1);
+            }
+          '; then
+            echo "Package tarball contains prohibited path metadata." >&2
+            exit 1
+          fi
+
+          if ! tar -tzf "${TARBALL}" | grep -E '^package/dist(/|$)' >/dev/null; then
+            echo "Package tarball is missing built dist output." >&2
+            exit 1
+          fi
+
+          PACKED_METADATA="$(tar -xOzf "${TARBALL}" package/package.json | jq -er '[.name, .version] | @tsv')"
+          IFS=$'\t' read -r PACKED_NAME PACKED_VERSION <<<"${PACKED_METADATA}"
+          SOURCE_NAME="$(node -p "require('./package.json').name || ''")"
+          SOURCE_VERSION="$(node -p "require('./package.json').version || ''")"
+          SOURCE_TAG="v${SOURCE_VERSION}"
+          if [ "${SOURCE_NAME}" != "${EXPECTED_PACKAGE_NAME}" ] || [ "${PACKED_NAME}" != "${EXPECTED_PACKAGE_NAME}" ]; then
+            echo "Package name differs across source, bundle, and hand-off." >&2
+            exit 1
+          fi
+          if [ "${SOURCE_VERSION}" != "${EXPECTED_VERSION}" ] || [ "${PACKED_VERSION}" != "${EXPECTED_VERSION}" ]; then
+            echo "Package version differs across source, bundle, and hand-off." >&2
+            exit 1
+          fi
+          if [ "${SOURCE_TAG}" != "${EXPECTED_TAG}" ] || [ "${RELEASE_TAG_INPUT}" != "${EXPECTED_TAG}" ]; then
+            echo "Release tag differs across source, bundle, and dispatch hand-off." >&2
+            exit 1
+          fi
+
+          node - "${ZERO_THREE_EVIDENCE}" <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const evidence = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const required = [
+            "source", "manifests", "locks", "installed", "declarations",
+            "bundles", "tarball", "sbom", "active-docs",
+          ];
+          if (
+            evidence.schemaVersion !== 1
+            || evidence.status !== "pass"
+            || required.some((name) => evidence.checks?.[name] !== true)
+            || evidence.package?.name !== process.env.EXPECTED_PACKAGE_NAME
+            || evidence.package?.version !== process.env.EXPECTED_VERSION
+            || !/^[a-f0-9]{64}$/.test(evidence.digest ?? "")
+          ) {
+            throw new Error("Zero-Three evidence is incomplete or identifies another package release.");
+          }
+          const { digest, ...unsigned } = evidence;
+          const expected = crypto.createHash("sha256").update(JSON.stringify(unsigned)).digest("hex");
+          if (digest !== expected) throw new Error("Zero-Three evidence content digest is invalid.");
+          NODE
+
+          DERIVED_PREID=$(PACKAGE_VERSION="${SOURCE_VERSION}" node -e '
+          const version = process.env.PACKAGE_VERSION || "";
+          const match = version.match(/^[0-9]+\.[0-9]+\.[0-9]+(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/);
+          if (!match) process.exit(1);
+          const identifiers = match[1] ? match[1].split(".") : [];
+          if (identifiers.length > 1 && /^[0-9]+$/.test(identifiers.at(-1))) identifiers.pop();
+          process.stdout.write(identifiers.join("."));
+          ')
+          if [ "${DERIVED_PREID}" != "${EXPECTED_PREID}" ] || [ "${PREID_INPUT}" != "${EXPECTED_PREID}" ]; then
+            echo "Pre-release identity differs across source, bundle, and dispatch hand-off." >&2
+            exit 1
+          fi
+
+          DIST_TAG="latest"
+          if [ -n "${DERIVED_PREID}" ]; then
+            DIST_TAG="${DERIVED_PREID}"
+          fi
+          TARBALL_INTEGRITY="sha512-$(openssl dgst -sha512 -binary "${TARBALL}" | openssl base64 -A)"
+          if ! printf '%s' "${TARBALL_INTEGRITY}" | grep -Eq '^sha512-[A-Za-z0-9+/]+={0,2}$'; then
+            echo "Could not derive a SHA-512 SRI value for the immutable package tarball." >&2
+            exit 1
+          fi
+
+          SHOULD_PUBLISH_NPM="true"
+          if npm view "${SOURCE_NAME}@${SOURCE_VERSION}" version --registry https://registry.npmjs.org >/dev/null 2>&1; then
+            REGISTRY_INTEGRITY="$(
+              npm view \
+                "${SOURCE_NAME}@${SOURCE_VERSION}" \
+                dist.integrity \
+                --registry https://registry.npmjs.org \
+                --prefer-online \
+                --json |
+                jq -er 'if type == "string" and length > 0 then . else empty end'
+            )"
+            if [ "${REGISTRY_INTEGRITY}" != "${TARBALL_INTEGRITY}" ]; then
+              echo "Existing npm package integrity does not match the immutable publication tarball." >&2
               exit 1
             fi
 
-            echo "Draft release $TAG already exists; refreshing mutable assets."
-            if [ -f sbom.cdx.json ]; then
-              gh release upload "$TAG" sbom.cdx.json --clobber
-            else
-              echo "No SBOM generated; leaving existing draft assets unchanged."
+            REGISTRY_DIST_TAG_VERSION="$(
+              npm view \
+                "${SOURCE_NAME}" \
+                dist-tags \
+                --registry https://registry.npmjs.org \
+                --prefer-online \
+                --json |
+                jq -er --arg tag "${DIST_TAG}" '.[$tag] // empty'
+            )"
+            if [ "${REGISTRY_DIST_TAG_VERSION}" != "${SOURCE_VERSION}" ]; then
+              echo "Existing npm distribution tag does not point at the exact package version." >&2
+              exit 1
             fi
-          else
-            if [ -f sbom.cdx.json ]; then
-              gh release create "$TAG" sbom.cdx.json                 --title "Release $TAG"                 --generate-notes                 --verify-tag                 --draft
-            else
-              gh release create "$TAG"                 --title "Release $TAG"                 --generate-notes                 --verify-tag                 --draft
-            fi
+
+            SHOULD_PUBLISH_NPM="false"
           fi
 
-      - name: Publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          npm publish ${{ steps.pkg.outputs.flags }} --provenance
+          {
+            echo "package_name=${SOURCE_NAME}"
+            echo "release_version=${SOURCE_VERSION}"
+            echo "release_tag=${SOURCE_TAG}"
+            echo "effective_preid=${DERIVED_PREID}"
+            echo "should_publish_npm=${SHOULD_PUBLISH_NPM}"
+            echo "dist_tag=${DIST_TAG}"
+            echo "tarball_integrity=${TARBALL_INTEGRITY}"
+            echo "tarball_path=${TARBALL}"
+            echo "sbom_path=${SBOM}"
+            echo "zero_three_evidence_path=${ZERO_THREE_EVIDENCE}"
+          } >> "${GITHUB_OUTPUT}"
 
-      - name: Publish GitHub Release
+      - name: Revalidate exact main immediately before release mutation
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.pkg.outputs.tag }}"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Expected draft release $TAG to exist before publication."
+
+          git fetch origin main --no-tags
+          REMOTE_MAIN="$(git rev-parse refs/remotes/origin/main)"
+          if [ "${REMOTE_MAIN}" != "${EXPECTED_SHA}" ]; then
+            echo "main moved to ${REMOTE_MAIN}; refusing to mutate release state for ${EXPECTED_SHA}." >&2
             exit 1
           fi
 
-          IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq '.isDraft')"
-          if [ "$IS_DRAFT" = "true" ]; then
-            gh release edit "$TAG" --draft=false --latest
+          RUNS="$(
+            gh api -X GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+              -f branch=main \
+              -f event=push \
+              -f head_sha="${EXPECTED_SHA}" \
+              -f status=success \
+              -f per_page=100
+          )"
+          MATCHES="$(
+            jq \
+              --arg sha "${EXPECTED_SHA}" \
+              '[.workflow_runs[] | select(
+                .head_sha == $sha and
+                .head_branch == "main" and
+                .event == "push" and
+                .status == "completed" and
+                .conclusion == "success"
+              )] | length' \
+              <<<"${RUNS}"
+          )"
+          if [ "${MATCHES}" -le 0 ]; then
+            echo "Exact-SHA CI evidence disappeared for ${EXPECTED_SHA}; refusing release mutation." >&2
+            exit 1
+          fi
+
+      - name: Ensure release tag points at exact main commit
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          TAG: ${{ steps.release.outputs.release_tag }}
+          PACKAGE_NAME: ${{ steps.release.outputs.package_name }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.release_version }}
+          PACKAGE_PUBLISHED: ${{ steps.release.outputs.should_publish_npm != 'true' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          git fetch origin --tags
+          REMOTE_TAG_SHA="$(git ls-remote origin "refs/tags/${TAG}" | awk 'NR == 1 { print $1 }')"
+          if [ -n "${REMOTE_TAG_SHA}" ]; then
+            if [ "${REMOTE_TAG_SHA}" != "${EXPECTED_SHA}" ]; then
+              if [ "${PACKAGE_PUBLISHED}" = "true" ]; then
+                echo "Published tag ${TAG} points at ${REMOTE_TAG_SHA}, expected ${EXPECTED_SHA}; refusing to rewrite it." >&2
+                exit 1
+              fi
+              if ! git merge-base --is-ancestor "${REMOTE_TAG_SHA}" "${EXPECTED_SHA}"; then
+                echo "Unpublished tag ${TAG} does not point at an ancestor of ${EXPECTED_SHA}; refusing recovery." >&2
+                exit 1
+              fi
+
+              OLD_PACKAGE_METADATA="$(git show "${REMOTE_TAG_SHA}:package.json" | jq -er '[.name, .version] | @tsv')"
+              EXPECTED_PACKAGE_METADATA="${PACKAGE_NAME}"$'\t'"${PACKAGE_VERSION}"
+              if [ "${OLD_PACKAGE_METADATA}" != "${EXPECTED_PACKAGE_METADATA}" ]; then
+                echo "Unpublished tag ${TAG} does not have the expected package identity; refusing recovery." >&2
+                exit 1
+              fi
+
+              RELEASES="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")"
+              MATCHING_RELEASE_COUNT="$(jq --arg tag "${TAG}" '[.[] | select(.tag_name == $tag)] | length' <<<"${RELEASES}")"
+              if [ "${MATCHING_RELEASE_COUNT}" -gt 1 ]; then
+                echo "Multiple releases exist for unpublished tag ${TAG}; refusing recovery." >&2
+                exit 1
+              fi
+              if [ "${MATCHING_RELEASE_COUNT}" -eq 1 ]; then
+                RELEASE_METADATA="$(jq -er --arg tag "${TAG}" '.[] | select(.tag_name == $tag) | [.id, .draft] | @tsv' <<<"${RELEASES}")"
+                read -r RELEASE_ID RELEASE_IS_DRAFT <<<"${RELEASE_METADATA}"
+                if [ "${RELEASE_IS_DRAFT}" != "true" ]; then
+                  echo "A published GitHub release exists for unpublished npm tag ${TAG}; refusing recovery." >&2
+                  exit 1
+                fi
+                gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"
+              fi
+
+              git push origin ":refs/tags/${TAG}"
+              git tag -d "${TAG}"
+              REMOTE_TAG_SHA=""
+              echo "Removed recoverable unpublished release state for ${TAG}."
+            fi
+            if [ -n "${REMOTE_TAG_SHA}" ]; then
+              echo "Tag ${TAG} already points at ${EXPECTED_SHA}."
+              exit 0
+            fi
+          fi
+
+          if [ "${PACKAGE_PUBLISHED}" = "true" ]; then
+            echo "Package version already exists but tag ${TAG} is absent; refusing to reconstruct release identity." >&2
+            exit 1
+          fi
+
+          git tag "${TAG}" "${EXPECTED_SHA}"
+          git push origin "refs/tags/${TAG}"
+
+      - name: Create GitHub Release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.release_tag }}
+          PREID: ${{ steps.release.outputs.effective_preid }}
+          SBOM: ${{ steps.release.outputs.sbom_path }}
+          ZERO_THREE_EVIDENCE: ${{ steps.release.outputs.zero_three_evidence_path }}
+        run: |
+          set -euo pipefail
+
+          EXPECTED_PRERELEASE="false"
+          if [ -n "${PREID}" ]; then
+            EXPECTED_PRERELEASE="true"
+          fi
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            RELEASE_STATE="$(gh release view "${TAG}" --json isDraft,isPrerelease --jq '[.isDraft, .isPrerelease] | map(tostring) | join(" ")')"
+            read -r IS_DRAFT IS_PRERELEASE <<<"${RELEASE_STATE}"
+            if [ "${IS_PRERELEASE}" != "${EXPECTED_PRERELEASE}" ]; then
+              echo "Published release ${TAG} does not match the version-derived prerelease state ${EXPECTED_PRERELEASE}." >&2
+              exit 1
+            fi
+            if [ "${IS_DRAFT}" != "true" ]; then
+              echo "Release ${TAG} is already published with the expected prerelease state."
+              exit 0
+            fi
+
+            gh release upload "${TAG}" "${SBOM}" "${ZERO_THREE_EVIDENCE}" --clobber
           else
-            echo "Release $TAG is already published; skipping publication."
+            ARGS=(--title "Release ${TAG}" --generate-notes --verify-tag --draft)
+            if [ -n "${PREID}" ]; then
+              ARGS+=(--prerelease)
+            fi
+
+            gh release create "${TAG}" "${SBOM}" "${ZERO_THREE_EVIDENCE}" "${ARGS[@]}"
+          fi
+
+      - name: Attest immutable package tarball
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.release.outputs.tarball_path }}
+
+      - name: Attest immutable SBOM
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.release.outputs.sbom_path }}
+
+      - name: Attest immutable Zero-Three evidence
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.release.outputs.zero_three_evidence_path }}
+
+      - name: Publish package through npm OIDC
+        if: steps.release.outputs.should_publish_npm == 'true'
+        env:
+          DIST_TAG: ${{ steps.release.outputs.dist_tag }}
+          TARBALL: ${{ steps.release.outputs.tarball_path }}
+        run: |
+          set -euo pipefail
+
+          PUBLISH_ARGS=(--access public --provenance --registry https://registry.npmjs.org --tag "${DIST_TAG}")
+          npm publish "./${TARBALL}" --ignore-scripts "${PUBLISH_ARGS[@]}"
+
+      - name: Skip duplicate npm publication
+        if: steps.release.outputs.should_publish_npm != 'true'
+        run: echo "${{ steps.release.outputs.package_name }}@${{ steps.release.outputs.release_version }} is already published; continuing idempotent GitHub release finalization."
+
+      - name: Verify exact npm registry publication
+        env:
+          PACKAGE_NAME: ${{ steps.release.outputs.package_name }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.release_version }}
+          EXPECTED_DIST_TAG: ${{ steps.release.outputs.dist_tag }}
+          EXPECTED_INTEGRITY: ${{ steps.release.outputs.tarball_integrity }}
+        run: |
+          set -euo pipefail
+
+          DEADLINE=$((SECONDS + 300))
+          while [ "${SECONDS}" -lt "${DEADLINE}" ]; do
+            REGISTRY_INTEGRITY="$(
+              npm view \
+                "${PACKAGE_NAME}@${PACKAGE_VERSION}" \
+                dist.integrity \
+                --registry https://registry.npmjs.org \
+                --prefer-online \
+                --json 2>/dev/null |
+                jq -er 'if type == "string" and length > 0 then . else empty end' 2>/dev/null ||
+                true
+            )"
+            if [ -n "${REGISTRY_INTEGRITY}" ] && [ "${REGISTRY_INTEGRITY}" != "${EXPECTED_INTEGRITY}" ]; then
+              echo "Published npm package integrity differs from the attested immutable tarball." >&2
+              exit 1
+            fi
+
+            REGISTRY_DIST_TAG_VERSION="$(
+              npm view \
+                "${PACKAGE_NAME}" \
+                dist-tags \
+                --registry https://registry.npmjs.org \
+                --prefer-online \
+                --json 2>/dev/null |
+                jq -er --arg tag "${EXPECTED_DIST_TAG}" '.[$tag] // empty' 2>/dev/null ||
+                true
+            )"
+            if [ "${REGISTRY_INTEGRITY}" = "${EXPECTED_INTEGRITY}" ] && [ "${REGISTRY_DIST_TAG_VERSION}" = "${PACKAGE_VERSION}" ]; then
+              echo "npm registry contains the exact immutable tarball and expected distribution tag."
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "npm registry did not expose the exact immutable tarball and expected distribution tag within 300 seconds." >&2
+          exit 1
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.release_tag }}
+          PREID: ${{ steps.release.outputs.effective_preid }}
+        run: |
+          set -euo pipefail
+
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Expected release ${TAG} to exist before finalization." >&2
+            exit 1
+          fi
+
+          EXPECTED_PRERELEASE="false"
+          if [ -n "${PREID}" ]; then
+            EXPECTED_PRERELEASE="true"
+          fi
+
+          RELEASE_STATE="$(gh release view "${TAG}" --json isDraft,isPrerelease --jq '[.isDraft, .isPrerelease] | map(tostring) | join(" ")')"
+          read -r IS_DRAFT IS_PRERELEASE <<<"${RELEASE_STATE}"
+          if [ "${IS_PRERELEASE}" != "${EXPECTED_PRERELEASE}" ]; then
+            echo "Published release ${TAG} does not match the version-derived prerelease state ${EXPECTED_PRERELEASE}." >&2
+            exit 1
+          fi
+          if [ "${IS_DRAFT}" != "true" ]; then
+            echo "Release ${TAG} is already published with the expected prerelease state."
+            exit 0
+          fi
+
+          if [ -n "${PREID}" ]; then
+            gh release edit "${TAG}" --draft=false --prerelease
+          else
+            gh release edit "${TAG}" --draft=false --latest --prerelease=false
           fi

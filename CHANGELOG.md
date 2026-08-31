@@ -12,11 +12,607 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.43] - 2026-08-31
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Negotiated scene-derived `maxStorageBufferBindingSize` and, when required,
+    `maxBufferSize` before WebGPU device creation so large mesh/BVH scenes fail
+    early on unsupported adapters and render on adapters that expose sufficient
+    non-default limits.
+  - Corrected wavefront memory telemetry to match every persistent GPU buffer
+    descriptor exactly once, including placeholder records, combined BVH and
+    emissive metadata, mesh sources, and aligned frame/build config buffers,
+    while removing the nonexistent material-table allocation.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.42] - 2026-08-31
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Made fixed-SPP ray-count reduction stack-safe for the supported
+    4K/eight-bounce/128-SPP envelope by replacing unbounded argument spreading
+    with a constant-stack linear maximum scan.
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.41] - 2026-08-30
+
+- **Added**
+  - Added opt-in fixed-SPP ray-count and timing telemetry to awaited
+    `renderFrame({ readStats: true })` results, including exact primary,
+    continuation, total path-segment, and per-bounce counts plus WebGPU
+    timestamp-query timing with an explicit queue-completion fallback.
+
+- **Changed**
+  - Switched WGSL preflight diagnostics to the standard
+    `GPUShaderModule.getCompilationInfo()` API and request the 21 sampled
+    textures already required by the final material shader when the adapter
+    exposes that limit.
+
+- **Fixed**
+  - Fixed final assembled WGSL compilation by making triangle initialization
+    resilient to record-field additions and aligning the trace bind-group
+    layout with all declared material-extension textures.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.40] - 2026-08-30
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - Updated internal GPU dependencies to their surviving clean lines and refreshed the esbuild resolution.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - Added permanent fail-closed Zero-Three validation for manifests, source,
+    locks, installed dependency graphs, declarations, bundles, npm tarballs,
+    CycloneDX SBOMs, and active documentation, with digest-bound evidence
+    retained and attested by CI/CD.
+  - Pinned patched transitive npm dependencies to clear the current audit baseline.
+  - Replaced token-based npm publication with a two-phase exact-main OIDC workflow, immutable tarball/SBOM hand-off, isolated pull-request validation, and fail-closed integrity checks.
+  - Added fail-closed source and npm-package admission for the administrative contributor registry and pinned the CI/CD runtime to Node.js 24.18.0 LTS.
+  - (placeholder)
+
+## [0.2.39] - 2026-07-10
+
+- **Added**
+  - Existing renderer contract coverage continues to verify the public shared
+    runtime and package export surfaces.
+
+- **Changed**
+  - Updated `@plasius/gpu-shared` to the stable 1.x line (`^1.0.12`).
+  - Refreshed ESLint, globals, and TypeScript development baselines; TypeScript
+    7 is now the package development baseline.
+
+- **Fixed**
+  - Regenerated `package-lock.json` from the refreshed manifests and documented
+    the Node.js 24/runtime compatibility baseline.
+
+- **Security**
+  - Runtime dependency audit remains clear of high-severity vulnerabilities.
+
+## [0.2.38] - 2026-07-10
+
+- **Added**
+  - Added bounded nested-medium stacks, Beer-Lambert segment attenuation,
+    reflected/transmitted branch bookkeeping, and bounded spectral dispersion
+    helpers for wavefront transport.
+  - Added normalization and atlas retention for authored `KHR_materials_*`
+    factors and extension textures.
+
+- **Changed**
+  - Changed GPU ray and triangle records to carry medium-stack state and
+    texture-backed material-extension records.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.37] - 2026-07-10
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Removed the deterministic cached-indirect radiance contribution from strict
+    physical transport so low-SPP Product Studio renders no longer gain shadows
+    or reflections from a fixed probe approximation instead of actual path
+    termination and continuation.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.36] - 2026-07-09
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Fixed deterministic cached-indirect transport so enabling
+    `renderer.transport.deterministicLowSppIndirect.enabled` no longer switches
+    from deterministic indirect lighting at 1-4 SPP to stochastic residual
+    continuation at 8 SPP and above.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.35] - 2026-07-09
+
+- **Added**
+  - Added `renderer.transport.deterministicLowSppIndirect.enabled` as a
+    strict-mode Product Studio transport flag for deterministic low-SPP indirect
+    radiance evaluation.
+  - Added transport contribution diagnostics for direct explicit light, cached
+    indirect light, stochastic residual light, zero terminations, and a
+    deterministic checksum.
+
+- **Changed**
+  - Changed deterministic low-SPP indirect mode to suppress the first stochastic
+    residual continuation, replacing it with auditable deterministic radiance
+    probes that use physical visibility and direct-light evaluation.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.34] - 2026-07-03
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - Changed emissive light metadata upload to resolve stable triangle ids back
+    to the BVH-ordered triangle buffer before writing GPU light records.
+
+- **Fixed**
+  - Fixed multi-bounce source-stable renders so terminal emissive continuation
+    hits are MIS-weighted against direct emissive sampling instead of adding
+    full softbox radiance as sparse stippled pixels.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.33] - 2026-07-03
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Fixed professional Animation Adventure travel so repeated locomotion clips
+    advance by accumulated root-motion distance instead of a single unlooped
+    root translation.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.32] - 2026-07-03
+
+- **Added**
+  - Added `createProfessionalAnimatedSceneRenderer`, a fail-closed WebGPU
+    Animation Adventure surface with textured skinned GLB diagnostics,
+    root-motion-required movement validation, cinematic follow camera state,
+    and no 2D proxy fallback.
+
+- **Changed**
+  - Expanded animated GLB parsing to report UVs, normals, material/texture
+    counts, diffuse and normal texture availability, missing texture buffers,
+    and per-clip root translation distance.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.31] - 2026-07-03
+
+- **Added**
+  - Added `renderer.transport.sourceStableDirectLighting.enabled` as a strict
+    physical Product Studio transport flag for source-stable direct-light
+    validation.
+  - Added `presentationOutput: "tone-mapped" | "linear"` for denoise-off
+    Product Studio validation captures.
+
+- **Changed**
+  - Changed source-stable direct lighting to reuse deterministic direct-light
+    evaluation while removing direct-light sample dependence on adjacent pixel
+    ids and frame-index shimmer.
+  - Changed emissive light metadata upload to resolve stable triangle ids back
+    to the BVH-ordered triangle buffer before writing GPU light records.
+
+- **Fixed**
+  - Fixed multi-bounce source-stable renders so terminal emissive continuation
+    hits are MIS-weighted against direct emissive sampling instead of adding
+    full softbox radiance as sparse stippled pixels.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.30] - 2026-07-03
+
+- **Added**
+  - Added composable strict low-SPP transport experiment flags for stable
+    sample routing, strict zero overflow, deferred low-SPP Russian roulette,
+    deterministic direct lighting, Product Studio environment importance, and
+    product transport telemetry.
+
+- **Changed**
+  - Changed wavefront renderer config, frame stats, and snapshots to expose the
+    requested/effective transport experiment set and packed shader bitfield.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.29] - 2026-07-02
+
+- **Added**
+  - Added Animation Adventure movement diagnostics to animated scene snapshots,
+    including active movement mode, expected/actual speed, movement distance,
+    root-motion source, loop count, and foot-slide warnings.
+
+- **Changed**
+  - Changed animated scene character motion to resolve from beat-scoped
+    movement requirements so stationary action beats hold their route anchor
+    instead of being dragged along later route segments.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.28] - 2026-07-02
+
+- **Added**
+  - Added the boolean `renderer.transport.strictPhysicalLowSppLighting` rollout
+    path, including direct/nested feature-flag input support and frame stats for
+    strict physical low-SPP lighting validation.
+  - Added strict physical termination diagnostics for absorption/null
+    throughput, Russian roulette, and strict max-depth termination.
+
+- **Changed**
+  - Changed strict low-SPP wavefront lighting to sample procedural sunlight as a
+    shadow-tested directional source, procedural sky over the visible
+    hemisphere, and emissive triangles by area-weighted emission power with
+    matching MIS PDFs.
+
+- **Fixed**
+  - Prevented strict physical low-SPP renders from using terminal ambient rescue
+    for max-depth, null-throughput, or queue-overflow termination.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.27] - 2026-07-02
+
+- **Added**
+  - Added a renderer-owned animated scene surface for adventure playback with scripted beats, route motion, blend snapshots, and bezier-lag camera follow.
+  - Added animated camera mode integration with `@plasius/gpu-camera`,
+    including editor, spectator, third-person, and first-person view snapshots
+    plus head-look intent state.
+  - Added a renderer-owned model-tree leaf material lab with procedural branches, close-up leaf rendering controls, quality tiers, and offscreen renderer telemetry for GPU Demo model iteration.
+
+- **Changed**
+  - Updated renderer dependencies to consume the `@plasius/gpu-shared` v1 line
+    and the next `@plasius/gpu-camera` camera-rig release.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.26] - 2026-07-02
+
+- **Added**
+  - Added animated camera mode integration with `@plasius/gpu-camera`,
+    including editor, spectator, third-person, and first-person view snapshots
+    plus head-look intent state.
+
+- **Changed**
+  - Added `@plasius/gpu-camera` as a runtime dependency for shared animated
+    character camera rig resolution.
+
+- **Fixed**
+  - Fixed Animation Adventure skinned GLB canvas drawing so Peasant Girl renders
+    as a filled mesh instead of a sparse stroked/wireframe triangle subset under
+    task `#117`.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.25] - 2026-07-01
+
+- **Added**
+  - Added renderer-owned skinned GLB ingestion for Animation Adventure,
+    including mesh/skin/clip parsing, Mixamo node-name retargeting, CPU
+    skinning for the active clip, model-derived canvas drawing, and snapshot
+    renderability diagnostics under task `#114`.
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.24] - 2026-07-01
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Fixed Animation Adventure canvas projection so farm props and the visible
+    Peasant Girl proxy stay grounded on the route plane, with improved crop
+    soil, tree, cart, crate, and character drawing plus snapshot diagnostics for
+    character visibility and prop ground anchors under task `#108`.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.23] - 2026-07-01
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - Updated runtime GPU dependencies to `@plasius/gpu-shared` `^1.0.2` and
+    `@plasius/gpu-xr` `^0.1.16` so downstream GPU Demo consumers do not pull
+    stale shared runtime packages transitively.
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.22] - 2026-06-30
+
+- **Added**
+  - Added a renderer-owned animated scene surface for adventure playback with scripted beats, route motion, blend snapshots, and bezier-lag camera follow.
+  - Added a renderer-owned model-tree leaf material lab with procedural branches, close-up leaf rendering controls, quality tiers, and offscreen renderer telemetry for GPU Demo model iteration.
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.21] - 2026-06-29
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Added the missing `samplesPerPixel` field to the WGSL frame config and
+    matching CPU uniform payload so live Product Studio wavefront shaders compile
+    in browser runtimes that validate the assembled shader strictly.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.20] - 2026-06-29
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Removed a duplicate `radical_inverse_vdc` WGSL helper definition from the
+    assembled wavefront compute shader so stricter live-browser compilers do not
+    reject validation-scene startup before first frame.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.19] - 2026-06-28
+
+- **Added**
+  - Added a named wavefront sample-dimension registry plus low-discrepancy 2D
+    sampling helpers for camera jitter, BSDF continuation, and direct/emissive
+    light selection.
+  - Added machine-checkable high-SPP denoise-independence thresholds for
+    structural artifacts, invalid samples, baseline noise, and sheen/chrome/wood
+    detail retention.
+
+- **Changed**
+  - Changed wavefront jitter/light sampling to use explicit sample-dimension
+    constants instead of ad hoc numeric offsets in shader code.
+
+- **Fixed**
+  - Prevented denoise-on output from qualifying a high-SPP validation report
+    when the paired denoise-off result still contains structural artifacts.
+
+## [0.2.18] - 2026-06-22
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.17] - 2026-06-22
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.16] - 2026-06-22
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - Wavefront transport now derives continuation and visibility-ray origin offsets
+    from geometric/shading-normal agreement and ray direction instead of a fixed
+    shading-normal bias.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.15] - 2026-06-22
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - Changed wavefront terminal and direct-light accumulation to preserve HDR
+    linear radiance through accumulation and deferred resolve, while sanitizing
+    only invalid or half-float-overflow samples before presentation.
+
+- **Fixed**
+  - Fixed the renderer's legacy per-sample `4.0` radiance clamp so HDR
+    fireflies are now measured through `radianceDiagnostics` and
+    `transportGuardrails` instead of being silently biased out of the linear
+    estimator path.
+  - Fixed medium handoff fallback so invalid medium ids and unsupported nested
+    medium transitions keep the current ray medium instead of propagating a
+    broken or pretend stack state.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.14] - 2026-06-22
+
+- **Added**
+  - Added deterministic numeric transport-validation helpers and unit coverage
+    for BSDF PDF consistency, furnace-style reflectance bounds, and bounded
+    terminal-environment residual handling in the wavefront renderer.
+
+- **Changed**
+  - Split the renderer and wavefront implementation into purpose-specific
+    modules while preserving the existing public package exports, and updated
+    source syntax checks to cover every JavaScript file under `src/`.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.13] - 2026-06-22
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.12] - 2026-06-22
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.11] - 2026-06-22
+
+- **Added**
+  - Added ADR 0017 to document physical deferred-throughput continuation,
+    invalid-throughput fallback, and rollout expectations for
+    `renderer.transport.physicalEstimator`.
+  - Added terminal-radiance diagnostics to awaited wavefront frame stats so
+    callers can measure total terminal luminance, ambient-residual luminance,
+    and ambient-residual share during renderer validation.
   - Added `updateCamera(...)` support for wavefront renderers so validation
     views can animate camera movement without rebuilding mesh buffers.
   - Added `gpuWorkerJobs` diagnostics to wavefront frame stats so callers can
     inspect completed compute-dispatch jobs per frame, per second, and per
     command submission alongside the existing GPU parallelism figures.
+  - Added `transportGuardrails` summaries to awaited wavefront frame stats so
+    validation harnesses can read throughput, submission, queue-overflow,
+    memory, and device-loss health from one structured result.
   - Added `gpuParallelism` diagnostics to wavefront frame stats and snapshots so
     consumers can inspect adapter compute limits, direct workgroups,
     indirect-dispatch estimates, and whether a frame exposes multi-workgroup GPU
@@ -57,11 +653,23 @@ All notable changes to this project will be documented in this file.
   - Added `createWavefrontAdaptiveSamplingLevels(...)` so consumers can hand
     wavefront SPP adaptation to `@plasius/gpu-performance` without duplicating
     renderer-specific ladder construction in app or demo code.
+  - Added ADR 0016 for the mixed environment/emissive direct-light MIS
+    contract used by the wavefront display-quality renderer.
 
 - **Fixed**
   - Clamped wavefront tile capacity against the depth-scaled path-vertex
     storage binding so supported high-depth reference renders stay within
     `maxStorageBufferBindingSize`.
+  - Raised the bounded wavefront `maxDepth` ceiling to 32 so offline/reference
+    renders can request 20-bounce paths without being clamped by renderer
+    configuration.
+  - Fixed release metadata preparation on protected `main` so repositories that
+    only require pull-request mediation can fall back to a `github.token` PR
+    path instead of failing immediately on missing `RELEASE_PREP_TOKEN`.
+  - Fixed deferred wavefront continuation to record sanitized physical
+    throughput segments instead of heuristic path-response colours, with
+    explicit delta-lobe tagging and bounded terminal fallback for invalid
+    continuation throughput.
   - Awaited wavefront frame waits now scale their submitted-work timeout by
     actual triangle load as well as pass count, preventing mesh-heavy
     validation frames from failing early while the GPU is still legitimately
@@ -124,6 +732,10 @@ All notable changes to this project will be documented in this file.
     conductor, clearcoat, and transmission paths so environment misses and
     explicit HDRI samples can use MIS instead of the older light-guidance
     heuristics.
+  - Changed wavefront explicit direct lighting to use a one-sample
+    environment/emissive mixture with solid-angle-normalized area-light PDFs
+    and BSDF-semantic eligibility instead of the older material-kind/bounce
+    gate.
 
 - **Fixed**
   - Fixed low-sample wavefront renders so non-emissive surface hits receive a
@@ -430,3 +1042,36 @@ All notable changes to this project will be documented in this file.
 [0.1.12]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.12
 [0.1.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.1.14
 [0.2.1]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.1
+[0.2.11]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.11
+[0.2.12]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.12
+[0.2.13]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.13
+[0.2.14]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.14
+[0.2.15]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.15
+[0.2.16]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.16
+[0.2.17]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.17
+[0.2.18]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.18
+[0.2.19]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.19
+[0.2.20]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.20
+[0.2.21]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.21
+[0.2.22]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.22
+[0.2.23]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.23
+[0.2.24]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.24
+[0.2.25]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.25
+[0.2.26]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.26
+[0.2.27]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.27
+[0.2.28]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.28
+[0.2.29]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.29
+[0.2.30]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.30
+[0.2.31]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.31
+[0.2.32]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.32
+[0.2.33]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.33
+[0.2.34]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.34
+[0.2.35]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.35
+[0.2.36]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.36
+[0.2.37]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.37
+[0.2.38]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.38
+[0.2.39]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.39
+[0.2.40]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.40
+[0.2.41]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.41
+[0.2.42]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.42
+[0.2.43]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.43

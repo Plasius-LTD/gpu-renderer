@@ -117,6 +117,168 @@ export function createGpuWorkerJobDiagnostics(
   })
 }
 
+export const defaultWavefrontTransportGuardrailThresholds = Object.freeze({
+  maxPerJobRegressionRatio: 0.1,
+})
+
+function summarizeWavefrontMemory(memory) {
+  const entries = Object.entries(memory ?? {}).filter(
+    ([key, value]) => key.endsWith("Bytes") && Number.isFinite(value)
+  )
+  const totalBytes = entries.reduce((total, [, value]) => total + Number(value), 0)
+  return Object.freeze({
+    totalBytes,
+    breakdown: memory ?? null,
+  })
+}
+
+function normalizeDeviceLossStatus(status, awaitedGpuCompletion) {
+  if (status === "lost") {
+    return "lost"
+  }
+  if (status === "not-exposed") {
+    return "not-exposed"
+  }
+  if (status === "pending") {
+    return "pending"
+  }
+  return awaitedGpuCompletion ? "not-detected" : "pending"
+}
+
+function createTransportGuardrailCheck(id, status, details) {
+  return Object.freeze({
+    id,
+    status,
+    details,
+  })
+}
+
+export function createWavefrontTransportGuardrailSummary(frameStats, options = {}) {
+  const workerJobs = frameStats?.gpuWorkerJobs ?? {}
+  const commandSubmissions = Math.max(0, Number(frameStats?.commandSubmissions ?? 0))
+  const completedPerFrame = Math.max(0, Number(workerJobs.completedPerFrame ?? 0))
+  const completedPerSecond =
+    Number.isFinite(workerJobs.completedPerSecond) && workerJobs.completedPerSecond > 0
+      ? Number(workerJobs.completedPerSecond)
+      : null
+  const completedPerSubmission =
+    commandSubmissions > 0
+      ? completedPerFrame / commandSubmissions
+      : Math.max(0, Number(workerJobs.completedPerSubmission ?? completedPerFrame))
+  const frameTimeMs = Math.max(0, Number(workerJobs.frameTimeMs ?? 0))
+  const awaitedGpuCompletion = workerJobs.awaitedGpuCompletion !== false
+  const queueOverflow = Math.max(0, Number(frameStats?.queueOverflow ?? 0))
+  const maxFramePassesPerSubmission = Math.max(
+    0,
+    Number(frameStats?.maxFramePassesPerSubmission ?? 0)
+  )
+  const deviceLossStatus = normalizeDeviceLossStatus(
+    options.deviceLossStatus ?? frameStats?.deviceLossStatus,
+    awaitedGpuCompletion
+  )
+  const invalidSamples = Math.max(
+    0,
+    Number(frameStats?.radianceDiagnostics?.invalidSamples ?? 0)
+  )
+  const legacyClampEquivalentSamples = Math.max(
+    0,
+    Number(frameStats?.radianceDiagnostics?.legacyClampEquivalentSamples ?? 0)
+  )
+  const rayCountStatus =
+    typeof frameStats?.rayCounts?.status === "string"
+      ? frameStats.rayCounts.status
+      : "not-requested"
+  const rayCountReason =
+    typeof frameStats?.rayCounts?.reason === "string"
+      ? frameStats.rayCounts.reason
+      : null
+  const memory = summarizeWavefrontMemory(frameStats?.memory)
+  const checks = Object.freeze([
+    createTransportGuardrailCheck(
+      "device-loss",
+      deviceLossStatus === "lost" ? "fail" : deviceLossStatus === "pending" ? "warn" : "pass",
+      deviceLossStatus === "lost"
+        ? "The WebGPU device was lost during or immediately after the frame."
+        : deviceLossStatus === "pending"
+          ? "GPU work was not awaited, so device-loss status is still pending."
+          : deviceLossStatus === "not-exposed"
+            ? "This environment does not expose device-lost diagnostics."
+            : "No device loss was detected for this frame."
+    ),
+    createTransportGuardrailCheck(
+      "queue-overflow",
+      queueOverflow > 0 ? "warn" : "pass",
+      queueOverflow > 0
+        ? `Queue overflow terminated ${queueOverflow} paths during the frame.`
+        : "No queue-overflow termination was recorded."
+    ),
+    createTransportGuardrailCheck(
+      "submission-batching",
+      commandSubmissions <= 0
+        ? "warn"
+        : maxFramePassesPerSubmission > 1 && completedPerSubmission <= 1
+          ? "warn"
+          : "pass",
+      commandSubmissions <= 0
+        ? "No command submissions were recorded for the frame."
+        : maxFramePassesPerSubmission > 1 && completedPerSubmission <= 1
+          ? `Only ${completedPerSubmission.toFixed(2)} GPU jobs completed per command submission despite a ${maxFramePassesPerSubmission}-pass ceiling.`
+          : `${completedPerFrame} GPU jobs completed across ${commandSubmissions} command submissions (${completedPerSubmission.toFixed(2)} jobs/submission).`
+    ),
+    createTransportGuardrailCheck(
+      "radiance-diagnostics",
+      invalidSamples > 0 ? "fail" : legacyClampEquivalentSamples > 0 ? "warn" : "pass",
+      invalidSamples > 0
+        ? `Renderer recorded ${invalidSamples} invalid radiance sample(s); inspect transport math before trusting the frame.`
+        : legacyClampEquivalentSamples > 0
+          ? `${legacyClampEquivalentSamples} weighted sample(s) exceeded the legacy 4.0 preview clamp threshold; convergence stayed unbiased, but review firefly diagnostics before rollout.`
+          : "No invalid radiance samples or legacy-clamp-equivalent fireflies were recorded."
+    ),
+    createTransportGuardrailCheck(
+      "ray-count-telemetry",
+      rayCountStatus === "failed"
+        ? "fail"
+        : rayCountStatus === "unavailable"
+          ? "warn"
+          : "pass",
+      rayCountStatus === "failed"
+        ? `Ray-count telemetry failed closed: ${rayCountReason ?? "unknown failure"}.`
+        : rayCountStatus === "unavailable"
+          ? `Ray-count telemetry was requested but unavailable: ${rayCountReason ?? "unknown reason"}.`
+          : rayCountStatus === "available"
+            ? "Primary, secondary, and total path-segment counts were captured."
+            : "Ray-count telemetry was not requested for this frame."
+    ),
+  ])
+  const status = checks.some((check) => check.status === "fail")
+    ? "fail"
+    : checks.some((check) => check.status === "warn")
+      ? "warn"
+      : "pass"
+  return Object.freeze({
+    status,
+    thresholds: defaultWavefrontTransportGuardrailThresholds,
+    current: Object.freeze({
+      jobsPerFrame: completedPerFrame,
+      jobsPerSecond: completedPerSecond,
+      jobsPerSubmission: completedPerSubmission,
+      commandSubmissions,
+      frameTimeMs,
+      awaitedGpuCompletion,
+      maxFramePassesPerSubmission,
+      queueOverflow,
+      deviceLossStatus,
+      radianceDiagnostics: Object.freeze({
+        invalidSamples,
+        legacyClampEquivalentSamples,
+      }),
+      rayCountStatus,
+      memory,
+    }),
+    checks,
+  })
+}
+
 export function createGpuSubmissionBatcher({
   device,
   frameIndex,

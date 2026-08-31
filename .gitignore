@@ -8,10 +8,14 @@ yarn-error.log*
 pnpm-debug.log*
 dist
 coverage
+.npm-cache-packcheck/
 playwright-report
 test-results
+release-artifacts/
 
 # Private key material in cert directories (never commit)
 **/certs/**/*-key.pem
 **/certs/**/*.key
 **/certs/**/*.p8
+
+/legal/CLA-REGISTRY.csv

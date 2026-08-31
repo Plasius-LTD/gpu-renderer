@@ -15,6 +15,10 @@ This package is intended to replace Three.js-dependent render orchestration with
 an explicit WebGPU-first runtime that can be consumed from React, vanilla, or
 worker-driven app surfaces.
 
+The package targets Node.js 24, consumes the stable `@plasius/gpu-shared` 1.x
+runtime line (`^1.0.12`), and validates its development tooling against the
+current ESLint 10 and TypeScript 7 baselines.
+
 Apache-2.0. ESM + CJS builds.
 
 ## Install
@@ -22,6 +26,21 @@ Apache-2.0. ESM + CJS builds.
 ```sh
 npm install @plasius/gpu-renderer
 ```
+
+## Permanent Zero-Three boundary
+
+This WebGPU renderer and its complete production, development, test, tooling,
+peer, optional, and artifact dependency graphs permanently prohibit Three.js,
+R3F, TSL, their related packages, and any dependency path reaching them. There
+is no compatibility mode, fallback, waiver, or rollback to those renderers.
+
+Run `npm run zero-three:source` before installing dependencies, or run
+`npm run build && npm run zero-three` after `npm ci` for the installed graph,
+built bundle, actual npm tarball, and generated CycloneDX evidence. The full
+command writes digest-bound package/version evidence to
+`release-artifacts/zero-three-evidence.json`. CI retains it, and production CD
+passes it by immutable artifact ID, verifies it again, attaches it to the
+GitHub release, and attests it.
 
 ## Usage
 
@@ -99,6 +118,32 @@ console.log(plan.representationBands);
 console.log(plan.wavefront.queueLayout.strategy);
 ```
 
+## Authored Material Transport
+
+Wavefront materials support authored `KHR_materials_*` factors and extension
+textures, bounded nested media, Beer-Lambert attenuation, and reference
+transport helpers for reflected/transmitted branching and spectral dispersion.
+GPU rays carry up to four nested media and enqueue at most two dielectric
+continuations per hit; deeper nesting and full spectral rendering remain
+bounded by those explicit limits.
+
+```js
+import {
+  createMediumStack,
+  createTransportBranches,
+  createSpectralSamples,
+} from "@plasius/gpu-renderer";
+
+const stack = createMediumStack([1, 4]);
+const branches = createTransportBranches({
+  mediumStack: stack,
+  mediumId: 7,
+  transmission: 1,
+  ior: 1.5,
+});
+const wavelengths = createSpectralSamples({ ior: 1.5, dispersion: 0.2 });
+```
+
 The plan makes the stable visual snapshot boundary explicit, publishes the
 required RT-first stage ordering, and exposes representation-band plus
 acceleration-structure update policy metadata for downstream lighting and
@@ -117,6 +162,100 @@ their WGSL layouts. Frame submission batching and dispatch diagnostics are kept
 in dedicated runtime helpers so performance-facing integrations can consume
 stable frame stats without inheriting the renderer's shader and pipeline
 assembly internals.
+
+## Animated Scene Renderer
+
+`createAnimatedSceneRenderer` provides the renderer-owned v1 surface for the
+GPU animation adventure demo. It accepts scripted beats, route points, props,
+and a backward-compatible `lagged-follow` camera rig that now resolves through
+the shared `@plasius/gpu-camera` editor, spectator, third-person, and
+first-person rig primitives. The renderer exposes `start`, `resize`,
+`getSnapshot`, `setCamera`, `setCameraViewMode`, `applyCameraControl`, and
+`destroy` for host packages. Third-person distance is clamped by camera
+constraints, first-person resolves from the head anchor, and head-look is
+reported as transient post-animation intent instead of mutating clip data. It
+is implemented inside `gpu-renderer` and does not route animation playback
+through Three.js. When hosts provide
+`modelAsset` and `clipAssets`, the v1 canvas renderer parses the Peasant Girl
+GLB mesh, skin, inverse-bind matrices, and Mixamo-compatible clip channels,
+then CPU-skins the active clip and draws model-derived geometry into the
+adventure canvas. Snapshots expose `modelRenderable`, `fallbackProxyActive`,
+`skinnedVertexCount`, `skinnedJointCount`, `activeClipRenderable`,
+`cameraViewMode`, `cameraTransform`, `targetDistance`, `headLook`,
+`characterVisible`, `characterGroundY`, and `propGroundAnchors` so hosts can
+catch camera, scene grounding, and model-renderability regressions.
+When hosts provide beat `movementRequirement` fields and clip
+`movementProfile` metadata, character displacement is resolved per beat:
+travel/jump beats move between route anchors, while stationary action beats
+hold their current anchor unless the profile explicitly allows authored root
+translation. Snapshots expose movement validation diagnostics so hosts can
+detect mismatched animation motion before accepting playback.
+
+`createProfessionalAnimatedSceneRenderer` is the fail-closed WebGPU entrypoint
+for the professional Animation Adventure path. It requires a WebGPU canvas,
+skinned GLB character metadata with UVs, normals, diffuse and normal textures,
+and root-authored movement profiles for travel beats. It rejects the legacy
+2D proxy path instead of silently falling back, renders through WebGPU, and
+exposes `renderMode: "webgpu-pbr"`, texture counts, normal-map readiness,
+root-motion policy, character position, camera position, and active clip
+diagnostics for host validation. Repeated travel beats accumulate root-motion
+distance from the clip duration and loop count, capped by the declared movement
+requirement and route segment. The current surface establishes the WebGPU
+lifecycle and validation boundary for the PBR animation path; shader-level
+textured character and environment drawing builds on this boundary.
+
+The production transport rollout remains gated by
+`renderer.transport.physicalEstimator`. With the flag enabled, deferred
+continuation vertices carry sanitized physical throughput segments instead of a
+heuristic material-response tint, while the older fallback path remains the
+rollback route during validation.
+Low-SPP physical lighting hardening is separately controlled by the boolean
+`renderer.transport.strictPhysicalLowSppLighting` flag, passed either as
+`strictPhysicalLowSppLighting: true` or through `featureFlags`. When enabled,
+the renderer disables terminal ambient rescue for max-depth/null-throughput
+termination, samples procedural sunlight as an explicit shadow-tested
+directional source, samples procedural sky over the visible hemisphere, and
+selects emissive triangles by area-weighted emission power with matching MIS
+PDFs. Use `denoise: false` when validating this strict path so remaining
+variance is measured in the transport rather than hidden by filtering.
+Strict validation can also enable the Product Studio transport experiment
+matrix through independent boolean feature flags. The flags are composable:
+none, one, several, or all may be requested at once. Flags that depend on strict
+physical transport report as requested but no-op effectively when
+`renderer.transport.strictPhysicalLowSppLighting` is disabled.
+
+- `renderer.transport.stableSampleRouting.enabled`
+- `renderer.transport.strictZeroOverflow.enabled`
+- `renderer.transport.deferLowSppRussianRoulette.enabled`
+- `renderer.transport.deterministicDirectLighting.enabled`
+- `renderer.transport.sourceStableDirectLighting.enabled`
+- `renderer.transport.deterministicLowSppIndirect.enabled`
+- `renderer.environment.productStudioImportance.enabled`
+- `renderer.diagnostics.productTransportTelemetry.enabled`
+
+Renderer config, frame stats, and snapshots expose both the structured
+`transportExperiments` state and the packed `transportExperimentFlags` bitfield
+so Product Studio diagnostics can record the exact active set for each render.
+`renderer.transport.sourceStableDirectLighting.enabled` is intended for
+denoise-off Product Studio validation: in strict physical mode it enables the
+deterministic direct-light path and removes direct-light sample dependence on
+adjacent pixel ids and frame index so low-SPP source routing is stable without
+adding ambient fill. Multi-bounce continuation rays that terminate on emissive
+geometry are MIS-weighted against that direct emissive estimator, so rare
+softbox hits remain physically valid without adding full unbalanced source
+radiance as isolated stippled pixels.
+`renderer.transport.deterministicLowSppIndirect.enabled` is also strict-mode
+only. The flag remains in the public experiment matrix so Product Studio can
+keep reporting requested and effective rollout state, but the strict shader path
+does not inject cached indirect radiance or suppress physical continuation. Any
+future low-SPP indirect stabilizer must be introduced as an auditable transport
+source with measured PDFs, visibility, and validation against high-SPP reference
+renders before it contributes radiance. Until then,
+`transportContributions.cachedIndirectLuminance` should remain zero and
+multi-bounce energy should come from direct explicit lighting, true terminal
+emissive/environment hits, or stochastic BSDF continuation.
+Set `presentationOutput: "linear"` for linear presented validation captures, or
+omit it to keep the default tone-mapped presentation.
 
 ```js
 import {
@@ -214,7 +353,9 @@ GPU ray, and applies Beer-Lambert transmittance to travelled segments on the
 GPU. Thickness is now preserved in material packing for later shell-volume
 work, but the current renderer still tracks only one active medium id per ray
 and does not yet implement nested media, spectral dispersion, or a branching
-reflection/refraction tree.
+reflection/refraction tree. Invalid medium ids fall back to the current ray
+medium, and entering a second medium while one is already active preserves the
+existing medium id until dedicated stack support is implemented.
 
 `samplesPerPixel` controls how many GPU primary-ray samples are accumulated per
 screen pixel within a single render. This multiplies dispatch work but does not
@@ -226,16 +367,23 @@ linear radiance to an `rgba16float` texture first, then runs a two-stage
 full-frame GPU denoise through an `rgba16float` scratch texture before final
 tone mapping into the presented `rgba8unorm` output. Filtering in linear
 radiance space lets the denoise pass cross tile boundaries without compressing
-energy/detail before the final resolve. The renderer also stores compact
+energy/detail before the final resolve. High-SPP wavefront sampling now routes
+camera jitter, BSDF continuation, emissive-light selection, and environment
+selection through named sample dimensions in
+`src/wavefront-sampling-dimensions.js`, using low-discrepancy 2D pairs where
+they improve convergence without adding CPU-side sample tables. The companion
+`src/wavefront-denoise-validation.js` acceptance helper keeps denoise-off
+validation explicit with structural-artifact, invalid-sample, baseline-noise,
+and sheen/chrome/wood detail-retention thresholds so the
+`renderer.denoise.highSppIndependence` rollout can stay reviewable and
+rollbackable. The renderer also stores compact
 emissive-triangle metadata in the existing BVH buffer tail and uses it to guide
 diffuse continuation rays toward finite mesh light geometry. This is not a
 separate shadow/direct-light pass: the active ray still has to hit emissive
 geometry or miss into the environment before radiance is committed. Guided
 emissive hits carry a bounded estimator weight so finite light guidance does not
 over-expose low-sample renders before full material PDFs/MIS are implemented.
-High-energy samples are clamped in linear radiance space to keep low-sample
-preview output stable while production sampling, temporal accumulation, and
-better material PDFs are hardened. By default, `deferredPathResolve` records
+By default, `deferredPathResolve` records
 per-bounce material responses in a tile-bounded path buffer and records the
 terminal emissive/HDRI/environment source in the final path slot. The output
 pass then resolves that recorded path backward and adds the weighted sample to
@@ -255,7 +403,20 @@ so bright presets retain colour at the last collision without returning to a
 whitewashed global ambient term. Extremely dark recorded bounce responses are
 also remapped to a small scene-brightness-driven luminance floor so bright
 low-sample scenes do not produce isolated black speckles when a valid terminal
-source was already found.
+source was already found. Awaited `renderFrame({ readStats: true })` results now
+keep linear accumulation unclamped, sanitize only invalid or half-float-
+overflow samples before presentation, and expose
+`terminalRadiance.totalLuminance`,
+`terminalRadiance.ambientResidualLuminance`, and
+`terminalRadiance.ambientResidualShare` so validation harnesses can track how
+much of the final resolved image came from terminal ambient residuals.
+The same stats also expose `radianceDiagnostics.invalidSamples` and
+`radianceDiagnostics.legacyClampEquivalentSamples`, so hardening scenes can
+measure NaN/Inf cleanup and legacy-4.0-equivalent fireflies without
+re-introducing a hidden estimator clamp.
+When `strictPhysicalLowSppLighting` is enabled, termination stats also separate
+`absorptionNull`, `russianRoulette`, and `strictMaxDepth` so validation can
+distinguish physically explainable dark samples from legacy ambient fallback.
 For static mesh scenes, the GPU acceleration build is submitted once and then
 reused by subsequent frames. Per-frame tracing writes one dynamic uniform slot
 per tile/sample or post-process pass and batches tile tracing, tile output,
@@ -268,6 +429,17 @@ without rebuilding scene buffers. `renderFrame(...)` also accepts an optional
 guarantees at least the minimum full-screen pass, and frame stats report both
 configured `samplesPerPixel` and actual `renderedSamplesPerPixel` so realtime
 callers can budget motion frames without overstating delivered quality.
+Before requesting a WebGPU device, the renderer derives the largest scene
+storage binding from the normalized scene, mesh, and BVH records. It requests
+the smallest sufficient `maxStorageBufferBindingSize` (and `maxBufferSize` only
+when the WebGPU default is also exceeded), preserves stricter caller limits,
+and rejects unsupported adapters before device creation. Default-sized scenes
+do not elevate either size limit. `config.memory` and snapshot memory telemetry
+describe the actual persistent GPU buffer descriptors: placeholder records,
+combined BVH/emissive storage, mesh source buffers, aligned frame/build uniform
+buffers, counters, and dispatch arguments are each counted exactly once;
+`materialTableBytes` is zero because material data is packed into mesh and
+triangle records rather than a standalone GPU buffer.
 For consumers that want to hand wavefront SPP adaptation to
 `@plasius/gpu-performance`, `createWavefrontAdaptiveSamplingLevels(...)` exposes
 a bounded low-to-high ladder of per-frame `samplesPerPixel`,
@@ -280,7 +452,59 @@ counts, and upper-bound indirect work estimates. WebGPU does not expose physical
 GPU core counts, so `physicalCoreCount` remains `null`; use
 `exposesMultiWorkgroupParallelism`, `largestDirectWorkgroupsPerDispatch`, and
 `largestEstimatedIndirectWorkgroupsPerDispatch` to confirm the renderer is
-submitting work that can occupy more than one GPU execution unit. After each
+issuing multi-workgroup GPU work. Awaited frame results also expose a
+`transportGuardrails` summary with jobs/frame, jobs/s, jobs/submission, command
+submissions, queue-overflow count, radiance diagnostics, total tracked memory
+bytes, and device-loss status so validation harnesses can gate transport work
+without scraping ad hoc metrics from multiple fields. Treat any sustained >10%
+drop in jobs/submission or jobs/s versus the approved baseline as a
+release-validation failure unless a linked ticket explicitly approves the
+regression; `submission-batching` warns when the renderer falls back to roughly
+one GPU job per submission despite a higher pass ceiling.
+
+Awaited fixed-SPP renders can opt into exact ray and timing evidence:
+
+```js
+const frame = await renderer.renderFrame({
+  readStats: true,
+  readOutputProbe: false,
+});
+
+console.log({
+  primaryRays: frame.primaryRays,
+  secondaryRays: frame.secondaryRays,
+  totalPathSegments: frame.totalPathSegments,
+  bounceHistogram: frame.rayCounts.bounceHistogram,
+  gpuTimeMs: frame.timings.totalGpuTimeMs,
+  renderJobTimeMs: frame.timings.totalRenderJobTimeMs,
+  timingSource: frame.timings.source,
+});
+```
+
+`primaryRays` is the exact number of camera samples. `secondaryRays` is the
+sum of active continuation records intersected after bounce zero, including
+bounded reflection/transmission branches, and `totalPathSegments` is their sum.
+The renderer copies the existing active-queue counter once per bounce into a
+lazily allocated telemetry buffer; it does not add diagnostic shader atomics or
+change WGSL transport. `rayCounts.status` distinguishes available,
+unavailable, failed, and not-requested evidence. A mismatch between scheduled
+and observed primary rays fails the `ray-count-telemetry` transport guardrail.
+Ray-count reduction uses constant call-stack space, including the supported
+4K/eight-bounce/128-SPP stress envelope where hundreds of thousands of
+tile/sample/depth records collapse into a small per-bounce histogram.
+
+When the adapter exposes `timestamp-query`, the device requests it
+opportunistically and two timestamps measure the GPU span from the first
+primary pass through presentation. Set `gpuTimestamps: false` at renderer
+creation to prevent that optional feature request. Where timestamp queries are
+not exposed or fail, `timings` reports `source: "queue-completion"`, leaves
+`totalGpuTimeMs` null, and retains the awaited
+`totalRenderJobTimeMs`. Classification, compaction, and sampling sub-pass times
+remain null until the corresponding adaptive passes exist. Without
+`readStats: true`, and for `renderOnce()`, the fixed dispatcher creates no
+telemetry buffers, query sets, readbacks, or timestamped pass descriptors.
+
+After each
 primary-ray or compaction pass, the GPU writes the active-ray workgroup count
 into the counter buffer and the encoder copies it into an indirect-dispatch
 argument buffer. Intersection and surface-resolution passes therefore scale
@@ -387,11 +611,56 @@ npm run pack:check
 
 ## Files
 
-- `src/index.js`: WebGPU renderer runtime and XR binding helper.
-- `src/wavefront-compute.js`: Canonical WebGPU mesh BVH wavefront renderer,
-  debug scene-object fixtures, and deterministic reference helpers.
+- `src/index.js`: public package facade for renderer runtime, render-plan, and
+  wavefront exports.
+- `src/renderer-*.js`: framework-agnostic renderer constants, validation,
+  worker manifests, wavefront render plans, and WebGPU runtime/XR binding
+  helpers.
+- `src/wavefront-compute.js`: canonical WebGPU mesh BVH wavefront renderer
+  lifecycle, live state, and public renderer instance methods.
+- `src/wavefront-acceleration-builder.js`, `src/wavefront-frame-encoder.js`,
+  `src/wavefront-frame-dispatcher.js`, and `src/wavefront-frame-stats.js`:
+  purpose-specific acceleration build, pass encoding, tile/sample dispatch, and
+  frame-stat policy helpers.
+- `src/wavefront-bind-groups.js`, `src/wavefront-pipelines.js`,
+  `src/wavefront-gpu-synchronization.js`, and `src/wavefront-readbacks.js`:
+  WebGPU bind-group construction, pipeline construction, queue synchronization,
+  and readback/probe helpers.
+- `src/wavefront-config.js`: wavefront camera, environment, portal, memory, and
+  scene-source configuration.
+- `src/wavefront-scene-data.js`: compatibility facade for wavefront scene data
+  helpers.
+- `src/wavefront-materials.js`, `src/wavefront-scene-normalizers.js`, and
+  `src/wavefront-mesh-sources.js`: material/medium normalization, scene/mesh
+  normalization, texture-atlas creation, BVH source generation, and GPU mesh
+  source packing.
+- `src/wavefront-shaders.js` and `src/wavefront-shader-*.js`: WGSL assembly
+  and purpose-specific shader source sections for layout, materials, lighting,
+  BVH/intersection, and render kernels.
+- `src/wavefront-gpu-resources.js`, `src/wavefront-packers.js`, and
+  `src/wavefront-runtime-support.js`: GPU resources, binary record packers, and
+  WebGPU runtime/pipeline support.
+- `src/wavefront-reference.js` and `src/wavefront-sampling.js`: deterministic
+  reference transport and sampling helpers used by validation tests.
 - `src/index.d.ts`: public API typings.
+- `scripts/check-source-syntax.cjs`: syntax-checks every JavaScript source file
+  included under `src/`.
 - `tests/package.test.js`: unit tests for renderer lifecycle behavior.
 - `docs/design/worker-manifest-integration.md`: renderer frame-stage DAG model.
 - `docs/adrs/*`: architecture decisions for renderer runtime design.
 - `docs/tdrs/*`: technical direction for frame hook integration.
+
+<!-- BEGIN PLASIUS RELEASE INTEGRITY -->
+## Release integrity
+
+CI keeps the administrative contributor registry outside Git and npm package
+artifacts using exact, case-normalised path checks. External fork heads are
+rejected; same-repository pull requests validate on GitHub-hosted runners and
+main pushes validate on approved self-hosted runners. Release preparation and
+publication use a two-run exact-main protocol on GitHub-hosted Node.js 24.18.0
+LTS. A read-only job seals the package tarball and SBOM before a dependency-free
+production job publishes that exact artifact through npm OIDC with provenance;
+there is no npm write-token fallback. CD remains disabled until the npm trusted
+publisher binding and protected-branch-only production environment are
+independently verified.
+<!-- END PLASIUS RELEASE INTEGRITY -->
