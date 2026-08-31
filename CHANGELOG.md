@@ -18,6 +18,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - Made fixed-SPP ray-count reduction stack-safe for the supported
+    4K/eight-bounce/128-SPP envelope by replacing unbounded argument spreading
+    with a constant-stack linear maximum scan.
   - (placeholder)
 
 - **Security**
