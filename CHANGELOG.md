@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.44] - 2026-08-31
+
+- **Added**
   - Added an explicit consent-, flag-, and capability-gated helper that converts
     coarse renderer health observations into the closed shared feedback
     diagnostics packet for approved generator and GPU demo surfaces.
@@ -1089,3 +1103,4 @@ All notable changes to this project will be documented in this file.
 [0.2.41]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.41
 [0.2.42]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.42
 [0.2.43]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.43
+[0.2.44]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.44
