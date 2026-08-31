@@ -657,6 +657,9 @@ All notable changes to this project will be documented in this file.
     contract used by the wavefront display-quality renderer.
 
 - **Fixed**
+  - Clamped wavefront tile capacity against the depth-scaled path-vertex
+    storage binding so supported high-depth reference renders stay within
+    `maxStorageBufferBindingSize`.
   - Raised the bounded wavefront `maxDepth` ceiling to 32 so offline/reference
     renders can request 20-bounce paths without being clamped by renderer
     configuration.
@@ -684,6 +687,9 @@ All notable changes to this project will be documented in this file.
     corruption and stalled validation captures on higher-SPP frames.
 
 - **Changed**
+  - Raised the bounded wavefront `maxDepth` ceiling to 32 so offline/reference
+    renders can request 20-bounce paths without being clamped by renderer
+    configuration.
   - Changed internal wavefront frame batching and dispatch-diagnostics plumbing
     to live in a dedicated runtime helper module so scheduling concerns stay
     separated from shader and pipeline assembly.

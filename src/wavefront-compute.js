@@ -211,6 +211,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       width: config.width,
       height: config.height,
       tileSize: safeTileSize,
+      tilePixelCapacity: Math.min(
+        config.tilePixelCapacity,
+        safeTileSize * safeTileSize
+      ),
     });
   }
   config = Object.freeze({
