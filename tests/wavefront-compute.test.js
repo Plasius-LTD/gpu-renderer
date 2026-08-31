@@ -429,6 +429,35 @@ function createFakeWavefrontNavigator(device = new FakeWavefrontDevice(), adapte
   };
 }
 
+async function captureRequestedWavefrontDeviceDescriptor(options = {}, adapterLimits = {}) {
+  const stopAfterDescriptor = new Error("stop after device descriptor capture");
+  let requestedDeviceDescriptor = null;
+  await assert.rejects(
+    createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(new FakeWavefrontDevice(), {
+        limits: {
+          maxStorageBuffersPerShaderStage: 10,
+          maxSampledTexturesPerShaderStage: 21,
+          maxStorageBufferBindingSize: 4_294_967_292,
+          maxBufferSize: 4_294_967_292,
+          ...adapterLimits,
+        },
+        onRequestDevice(descriptor) {
+          requestedDeviceDescriptor = descriptor;
+          throw stopAfterDescriptor;
+        },
+      }),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      ...options,
+    }),
+    (error) => error === stopAfterDescriptor
+  );
+  return requestedDeviceDescriptor;
+}
+
 function createFakeWavefrontCanvas() {
   const context = {
     configured: null,
@@ -482,7 +511,10 @@ test("wavefront compute config keeps 4K queues tile-bounded", () => {
     config.memory.indirectDispatchBytes,
     wavefrontPathTracingComputeLimits.indirectDispatchRecordBytes
   );
-  assert.equal(config.memory.bvhLeafReferenceBytes, 0);
+  assert.equal(
+    config.memory.bvhLeafReferenceBytes,
+    wavefrontPathTracingComputeLimits.bvhLeafReferenceRecordBytes
+  );
   assert.equal(config.memory.emissiveTriangleMetadataBytes, 0);
   assert.equal(config.memory.environmentPortalBytes, 32 * wavefrontPathTracingComputeLimits.environmentPortalRecordBytes);
   assert.ok(config.memory.queueBytes < 134_217_728);
@@ -2221,7 +2253,11 @@ test("wavefront config stores emissive guidance metadata in the BVH buffer tail"
     config.memory.emissiveTriangleMetadataBytes,
     2 * wavefrontPathTracingComputeLimits.emissiveTriangleMetadataRecordBytes
   );
-  assert.equal(config.memory.materialTableBytes, wavefrontPathTracingComputeLimits.materialRecordBytes);
+  assert.equal(config.memory.materialTableBytes, 0);
+  assert.equal(
+    config.memory.bvhCombinedBytes,
+    config.memory.bvhNodeBytes + config.memory.emissiveTriangleMetadataBytes
+  );
 });
 
 test("wavefront mesh acceleration derives flat normals when vertex normals are absent", () => {
@@ -2623,6 +2659,88 @@ serialWebGpuTest("wavefront compute renderer rejects unavailable WebGPU setup pa
       }),
       /requires maxSampledTexturesPerShaderStage>=21/
     );
+  });
+});
+
+serialWebGpuTest("wavefront renderer negotiates the exact large-scene storage binding limit", async () => {
+  await withWebGpuConstants(async () => {
+    const descriptor = await captureRequestedWavefrontDeviceDescriptor({
+      triangleCapacity: 265_468,
+    });
+
+    assert.equal(
+      descriptor.requiredLimits.maxStorageBufferBindingSize,
+      152_909_568
+    );
+    assert.equal(descriptor.requiredLimits.maxBufferSize, undefined);
+  });
+});
+
+serialWebGpuTest("wavefront renderer also negotiates maxBufferSize above the WebGPU default", async () => {
+  await withWebGpuConstants(async () => {
+    const descriptor = await captureRequestedWavefrontDeviceDescriptor({
+      triangleCapacity: 500_000,
+    });
+
+    assert.equal(descriptor.requiredLimits.maxStorageBufferBindingSize, 288_000_000);
+    assert.equal(descriptor.requiredLimits.maxBufferSize, 288_000_000);
+  });
+});
+
+serialWebGpuTest("wavefront renderer rejects unsupported large-scene limits before requesting a device", async () => {
+  await withWebGpuConstants(async () => {
+    let deviceRequested = false;
+    await assert.rejects(
+      createWavefrontPathTracingComputeRenderer({
+        canvas: createFakeWavefrontCanvas(),
+        navigator: createFakeWavefrontNavigator(new FakeWavefrontDevice(), {
+          limits: {
+            maxStorageBuffersPerShaderStage: 10,
+            maxSampledTexturesPerShaderStage: 21,
+            maxStorageBufferBindingSize: 150_000_000,
+            maxBufferSize: 268_435_456,
+          },
+          onRequestDevice() {
+            deviceRequested = true;
+            throw new Error("device request must not be reached");
+          },
+        }),
+        width: 8,
+        height: 8,
+        triangleCapacity: 265_468,
+      }),
+      /require maxStorageBufferBindingSize>=152909568 bytes, but this adapter exposes 150000000 bytes/
+    );
+    assert.equal(deviceRequested, false);
+  });
+});
+
+serialWebGpuTest("wavefront renderer preserves stricter caller device limits", async () => {
+  await withWebGpuConstants(async () => {
+    const descriptor = await captureRequestedWavefrontDeviceDescriptor({
+      triangleCapacity: 265_468,
+      requiredLimits: {
+        maxStorageBufferBindingSize: 180_000_000,
+      },
+      deviceDescriptor: {
+        requiredLimits: {
+          maxStorageBufferBindingSize: 200_000_000,
+          maxBufferSize: 300_000_000,
+        },
+      },
+    });
+
+    assert.equal(descriptor.requiredLimits.maxStorageBufferBindingSize, 200_000_000);
+    assert.equal(descriptor.requiredLimits.maxBufferSize, 300_000_000);
+  });
+});
+
+serialWebGpuTest("wavefront renderer does not elevate storage size limits for default scenes", async () => {
+  await withWebGpuConstants(async () => {
+    const descriptor = await captureRequestedWavefrontDeviceDescriptor();
+
+    assert.equal(descriptor.requiredLimits.maxStorageBufferBindingSize, undefined);
+    assert.equal(descriptor.requiredLimits.maxBufferSize, undefined);
   });
 });
 
@@ -3611,4 +3729,82 @@ test("default wavefront scene includes emissive termination geometry", () => {
   });
   assert.ok(estimate.queueBytes < 134_217_728);
   assert.ok(estimate.totalHotBufferBytes < 40_000_000);
+});
+
+serialWebGpuTest("wavefront memory evidence matches every persistent GPU buffer allocation", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device, {
+        limits: {
+          maxStorageBuffersPerShaderStage: 10,
+          maxSampledTexturesPerShaderStage: 21,
+          maxStorageBufferBindingSize: 134_217_728,
+          maxBufferSize: 268_435_456,
+          minUniformBufferOffsetAlignment: 256,
+        },
+      }),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 2,
+      denoise: true,
+      accelerationBuildMode: "gpu",
+      meshes: [
+        {
+          id: 901,
+          positions: [-1, 0, 0, 1, 0, 0, 0, 1, 0],
+          indices: [0, 1, 2],
+          normals: [0, 0, 1, 0, 0, 1, 0, 0, 1],
+          materialKind: "emissive",
+          emission: [4, 3, 2, 1],
+          color: [0.7, 0.6, 0.5, 1],
+        },
+      ],
+    });
+    const memory = renderer.getSnapshot().memory;
+    const buffersByLabel = new Map(
+      device.buffers.map((buffer) => [buffer.descriptor.label, buffer.descriptor.size])
+    );
+
+    assert.equal(memory.meshVertexBytes, 3 * wavefrontPathTracingComputeLimits.meshVertexRecordBytes);
+    assert.equal(memory.meshIndexBytes, 3 * 4);
+    assert.equal(memory.meshRangeBytes, wavefrontPathTracingComputeLimits.meshRangeRecordBytes);
+    assert.equal(
+      memory.bvhCombinedBytes,
+      memory.bvhNodeBytes + memory.emissiveTriangleMetadataBytes
+    );
+    assert.equal(memory.materialTableBytes, 0);
+    assert.equal(buffersByLabel.get("plasius.wavefront.activeQueue"), memory.queueBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.nextQueue"), memory.queueBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.hitBuffer"), memory.hitBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.accumulation"), memory.accumulationBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.pathVertices"), memory.pathVertexBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.sceneObjects"), memory.sceneObjectBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.triangles"), memory.triangleBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.bvhNodes"), memory.bvhCombinedBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.meshVertices"), memory.meshVertexBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.meshIndices"), memory.meshIndexBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.meshRanges"), memory.meshRangeBytes);
+    assert.equal(
+      buffersByLabel.get("plasius.wavefront.environmentPortals"),
+      memory.environmentPortalBytes
+    );
+    assert.equal(buffersByLabel.get("plasius.wavefront.bvhLeafRefs"), memory.bvhLeafReferenceBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.frameConfig"), memory.frameConfigBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.bvhBuildConfig"), memory.bvhBuildConfigBytes);
+    assert.equal(buffersByLabel.get("plasius.wavefront.counters"), memory.counterBytes);
+    assert.equal(
+      buffersByLabel.get("plasius.wavefront.activeDispatchArgs"),
+      memory.indirectDispatchBytes
+    );
+    assert.equal(
+      memory.totalHotBufferBytes,
+      [...buffersByLabel.values()].reduce((total, size) => total + size, 0)
+    );
+
+    renderer.destroy();
+  });
 });

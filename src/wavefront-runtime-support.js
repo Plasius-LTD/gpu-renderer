@@ -10,6 +10,37 @@ import {
   readPositiveInteger,
 } from "./wavefront-core.js";
 
+const WEBGPU_DEFAULT_MAX_STORAGE_BUFFER_BINDING_SIZE = 128 * 1024 * 1024;
+const WEBGPU_DEFAULT_MAX_BUFFER_SIZE = 256 * 1024 * 1024;
+
+function readRequestedDeviceLimit(source, name) {
+  const rawValue = source?.[name];
+  if (rawValue === undefined || rawValue === null) {
+    return 0;
+  }
+  const value = Number(rawValue);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative safe integer.`);
+  }
+  return value;
+}
+
+function assertAdapterSupportsRequiredLimit(adapter, name, requiredValue) {
+  const availableValue = Number(adapter?.limits?.[name]);
+  if (!Number.isFinite(availableValue)) {
+    throw new Error(
+      `Wavefront scene buffers require ${name}>=${requiredValue} bytes, ` +
+        "but this adapter does not expose that limit."
+    );
+  }
+  if (availableValue < requiredValue) {
+    throw new Error(
+      `Wavefront scene buffers require ${name}>=${requiredValue} bytes, ` +
+        `but this adapter exposes ${availableValue} bytes.`
+    );
+  }
+}
+
 export function getGpuUsageConstants() {
   if (
     typeof GPUBufferUsage === "undefined" ||
@@ -123,8 +154,13 @@ export async function createRenderPipeline(device, descriptor) {
   return device.createRenderPipeline(descriptor);
 }
 
-export function createWavefrontDeviceDescriptor(adapter, options = {}) {
-  const requiredLimits = { ...(options.requiredLimits ?? {}) };
+export function createWavefrontDeviceDescriptor(adapter, options = {}, memory = null) {
+  const descriptor = { ...(options.deviceDescriptor ?? {}) };
+  const descriptorRequiredLimits = { ...(descriptor.requiredLimits ?? {}) };
+  const requiredLimits = {
+    ...descriptorRequiredLimits,
+    ...(options.requiredLimits ?? {}),
+  };
   const exposedStorageBufferLimit = Number(adapter?.limits?.maxStorageBuffersPerShaderStage);
   if (Number.isFinite(exposedStorageBufferLimit)) {
     if (exposedStorageBufferLimit < TRACE_STORAGE_BUFFER_BINDINGS) {
@@ -153,7 +189,40 @@ export function createWavefrontDeviceDescriptor(adapter, options = {}) {
     );
   }
 
-  const descriptor = { ...(options.deviceDescriptor ?? {}) };
+  const sceneStorageBufferBindingBytes = Number(
+    memory?.sceneStorageBufferBindingBytes ?? 0
+  );
+  const requestedStorageBufferBindingSize = Math.max(
+    readRequestedDeviceLimit(descriptorRequiredLimits, "maxStorageBufferBindingSize"),
+    readRequestedDeviceLimit(options.requiredLimits, "maxStorageBufferBindingSize"),
+    sceneStorageBufferBindingBytes > WEBGPU_DEFAULT_MAX_STORAGE_BUFFER_BINDING_SIZE
+      ? sceneStorageBufferBindingBytes
+      : 0
+  );
+  if (requestedStorageBufferBindingSize > 0) {
+    assertAdapterSupportsRequiredLimit(
+      adapter,
+      "maxStorageBufferBindingSize",
+      requestedStorageBufferBindingSize
+    );
+    requiredLimits.maxStorageBufferBindingSize = requestedStorageBufferBindingSize;
+  }
+
+  const requestedMaxBufferSize = Math.max(
+    readRequestedDeviceLimit(descriptorRequiredLimits, "maxBufferSize"),
+    readRequestedDeviceLimit(options.requiredLimits, "maxBufferSize"),
+    sceneStorageBufferBindingBytes > WEBGPU_DEFAULT_MAX_BUFFER_SIZE
+      ? sceneStorageBufferBindingBytes
+      : 0,
+    requestedStorageBufferBindingSize > WEBGPU_DEFAULT_MAX_BUFFER_SIZE
+      ? requestedStorageBufferBindingSize
+      : 0
+  );
+  if (requestedMaxBufferSize > 0) {
+    assertAdapterSupportsRequiredLimit(adapter, "maxBufferSize", requestedMaxBufferSize);
+    requiredLimits.maxBufferSize = requestedMaxBufferSize;
+  }
+
   const requiredFeatures = Array.from(descriptor.requiredFeatures ?? []);
   const adapterFeatures = adapter?.features;
   const timestampQuerySupported =
@@ -217,6 +286,7 @@ export function createGpuAdapterParallelismDiagnostics(adapter, device) {
       maxComputeWorkgroupsPerDimension: readGpuLimit(adapter, device, "maxComputeWorkgroupsPerDimension"),
       maxStorageBuffersPerShaderStage: readGpuLimit(adapter, device, "maxStorageBuffersPerShaderStage"),
       maxStorageBufferBindingSize: readGpuLimit(adapter, device, "maxStorageBufferBindingSize"),
+      maxBufferSize: readGpuLimit(adapter, device, "maxBufferSize"),
     }),
     configuredWorkgroupSize: WORKGROUP_SIZE,
   });
