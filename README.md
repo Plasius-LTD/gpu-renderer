@@ -8,8 +8,6 @@
 [![Security Policy](https://img.shields.io/badge/security%20policy-yes-orange.svg)](./SECURITY.md)
 [![Changelog](https://img.shields.io/badge/changelog-md-blue.svg)](./CHANGELOG.md)
 
-[![license](https://img.shields.io/github/license/Plasius-LTD/gpu-renderer)](./LICENSE)
-
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 This package is intended to replace Three.js-dependent render orchestration with
 an explicit WebGPU-first runtime that can be consumed from React, vanilla, or
