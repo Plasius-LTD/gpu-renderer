@@ -15,12 +15,12 @@ import {
   createWavefrontMeshAcceleration,
 } from "./wavefront-scene-data.js";
 import {
+  estimateWavefrontPathTracingMemoryForConfig,
   createWavefrontPathTracingComputeConfig,
   packEnvironmentPortals,
   supportsWavefrontPathTracingCompute,
 } from "./wavefront-config.js";
 import {
-  alignTo,
   clampTileSizeForDevice,
   createAtlasTextureResource,
   createBrdfLutResource,
@@ -76,11 +76,7 @@ import {
 } from "./wavefront-runtime-support.js";
 
 import {
-  ACCUMULATION_RECORD_BYTES,
-  BVH_LEAF_REF_RECORD_BYTES,
   BVH_NODE_RECORD_BYTES,
-  CONFIG_BUFFER_BYTES,
-  COUNTER_BUFFER_BYTES,
   DEFAULT_AMBIENT_COLOR,
   DEFAULT_BRDF_LUT_SAMPLE_COUNT,
   DEFAULT_BRDF_LUT_SIZE,
@@ -98,14 +94,11 @@ import {
   DEFAULT_WIDTH,
   EMISSIVE_TRIANGLE_INDEX_BYTES,
   EMPTY_TERMINATION_METRICS,
-  ENVIRONMENT_PORTAL_RECORD_BYTES,
   GPU_MATERIAL_RECORD_BYTES,
   GPU_MAX_SUBMITTED_WORK_DEADLINE_MS,
   GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS,
-  HIT_RECORD_BYTES,
   HIT_TYPE_EMISSIVE,
   HIT_TYPE_SURFACE,
-  INDIRECT_DISPATCH_ARGS_BYTES,
   MATERIAL_DIELECTRIC,
   MATERIAL_DIFFUSE,
   MATERIAL_EMISSIVE,
@@ -114,19 +107,13 @@ import {
   MAX_PATH_TRACING_DEPTH,
   MAX_SAMPLES_PER_PIXEL,
   MEDIUM_TABLE_ROWS,
-  MESH_RANGE_RECORD_BYTES,
-  MESH_VERTEX_RECORD_BYTES,
   OBJECT_KIND_BOX,
   OBJECT_KIND_SPHERE,
-  PATH_VERTEX_RECORD_BYTES,
-  RAY_RECORD_BYTES,
-  SCENE_OBJECT_RECORD_BYTES,
   TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH,
   TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW,
   TERMINAL_SOURCE_KIND_EMISSIVE,
   TERMINAL_SOURCE_KIND_ENVIRONMENT,
   TRACE_STORAGE_BUFFER_BINDINGS,
-  TRIANGLE_RECORD_BYTES,
   add,
   asColor,
   asUnitVec3,
@@ -201,7 +188,9 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     throw new Error("Unable to acquire a WebGPU adapter for wavefront path tracing.");
   }
 
-  const device = await adapter.requestDevice(createWavefrontDeviceDescriptor(adapter, options));
+  const device = await adapter.requestDevice(
+    createWavefrontDeviceDescriptor(adapter, options, initialConfig.memory)
+  );
   const gpuAdapterParallelism = createGpuAdapterParallelismDiagnostics(adapter, device);
   const context = canvas.getContext("webgpu");
   if (!context || typeof context.configure !== "function") {
@@ -224,6 +213,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       tileSize: safeTileSize,
     });
   }
+  config = Object.freeze({
+    ...config,
+    memory: estimateWavefrontPathTracingMemoryForConfig(config, device.limits),
+  });
   canvas.width = config.width;
   canvas.height = config.height;
   context.configure({
@@ -233,82 +226,72 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   });
 
   const bufferUsage = constants.buffer.STORAGE | constants.buffer.COPY_DST;
-  const rayQueueBytes = config.tilePixelCapacity * RAY_RECORD_BYTES;
-  const hitBytes = config.tilePixelCapacity * HIT_RECORD_BYTES;
-  const accumulationBytes = config.tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
-  const pathVertexBytes = config.tilePixelCapacity * (config.maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
-  const activeQueue = createBuffer(device, bufferUsage, rayQueueBytes, "plasius.wavefront.activeQueue");
-  const nextQueue = createBuffer(device, bufferUsage, rayQueueBytes, "plasius.wavefront.nextQueue");
-  const hitBuffer = createBuffer(device, bufferUsage, hitBytes, "plasius.wavefront.hitBuffer");
+  const memory = config.memory;
+  const activeQueue = createBuffer(device, bufferUsage, memory.queueBytes, "plasius.wavefront.activeQueue");
+  const nextQueue = createBuffer(device, bufferUsage, memory.queueBytes, "plasius.wavefront.nextQueue");
+  const hitBuffer = createBuffer(device, bufferUsage, memory.hitBytes, "plasius.wavefront.hitBuffer");
   const accumulationBuffer = createBuffer(
     device,
     bufferUsage,
-    accumulationBytes,
+    memory.accumulationBytes,
     "plasius.wavefront.accumulation"
   );
   const pathVertexBuffer = createBuffer(
     device,
     bufferUsage,
-    pathVertexBytes,
+    memory.pathVertexBytes,
     "plasius.wavefront.pathVertices"
   );
   const sceneObjectBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    config.sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES,
+    memory.sceneObjectBytes,
     "plasius.wavefront.sceneObjects"
   );
   const triangleBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.triangleCapacity) * TRIANGLE_RECORD_BYTES,
+    memory.triangleBytes,
     "plasius.wavefront.triangles"
   );
   const bvhNodeBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.bvhNodeCapacity + config.emissiveTriangleCapacity) *
-      BVH_NODE_RECORD_BYTES,
+    memory.bvhCombinedBytes,
     "plasius.wavefront.bvhNodes"
   );
   const meshVertexBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.gpuMeshSource.vertices.count) * MESH_VERTEX_RECORD_BYTES,
+    memory.meshVertexBytes,
     "plasius.wavefront.meshVertices"
   );
   const meshIndexBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.gpuMeshSource.indices.count) * 4,
+    memory.meshIndexBytes,
     "plasius.wavefront.meshIndices"
   );
   const meshRangeBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.gpuMeshSource.meshes.count) * MESH_RANGE_RECORD_BYTES,
+    memory.meshRangeBytes,
     "plasius.wavefront.meshRanges"
   );
   const environmentPortalBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.environmentPortalCapacity) * ENVIRONMENT_PORTAL_RECORD_BYTES,
+    memory.environmentPortalBytes,
     "plasius.wavefront.environmentPortals"
   );
   const bvhLeafRefBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.bvhLeafSortCapacity) * BVH_LEAF_REF_RECORD_BYTES,
+    memory.bvhLeafReferenceBytes,
     "plasius.wavefront.bvhLeafRefs"
   );
   const tiles = createTiles(config.width, config.height, config.tileSize);
-  const uniformOffsetAlignment = Number(device?.limits?.minUniformBufferOffsetAlignment);
-  const configBufferStride = alignTo(
-    CONFIG_BUFFER_BYTES,
-    Number.isFinite(uniformOffsetAlignment) && uniformOffsetAlignment > 0
-      ? uniformOffsetAlignment
-      : CONFIG_BUFFER_BYTES
-  );
+  const configBufferStride = memory.configBufferStride;
   const outputConfigSlotCount = config.deferredPathResolve ? 0 : tiles.length;
   const frameConfigSlotCount = Math.max(
     1,
@@ -317,27 +300,25 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   const configBuffer = createBuffer(
     device,
     constants.buffer.UNIFORM | constants.buffer.COPY_DST,
-    frameConfigSlotCount * configBufferStride,
+    memory.frameConfigBytes,
     "plasius.wavefront.frameConfig"
   );
-  const bvhBuildConfigSlots =
-    1 + config.bvhSortStages.length + config.bvhBuildLevels.length;
   const bvhBuildConfigBuffer = createBuffer(
     device,
     constants.buffer.UNIFORM | constants.buffer.COPY_DST,
-    Math.max(1, bvhBuildConfigSlots) * configBufferStride,
+    memory.bvhBuildConfigBytes,
     "plasius.wavefront.bvhBuildConfig"
   );
   const counterBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST | constants.buffer.COPY_SRC,
-    COUNTER_BUFFER_BYTES,
+    memory.counterBytes,
     "plasius.wavefront.counters"
   );
   const activeDispatchBuffer = createBuffer(
     device,
     constants.buffer.INDIRECT | constants.buffer.COPY_DST,
-    INDIRECT_DISPATCH_ARGS_BYTES,
+    memory.indirectDispatchBytes,
     "plasius.wavefront.activeDispatchArgs"
   );
 

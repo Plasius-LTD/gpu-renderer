@@ -18,7 +18,14 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Negotiated scene-derived `maxStorageBufferBindingSize` and, when required,
+    `maxBufferSize` before WebGPU device creation so large mesh/BVH scenes fail
+    early on unsupported adapters and render on adapters that expose sufficient
+    non-default limits.
+  - Corrected wavefront memory telemetry to match every persistent GPU buffer
+    descriptor exactly once, including placeholder records, combined BVH and
+    emissive metadata, mesh sources, and aligned frame/build config buffers,
+    while removing the nonexistent material-table allocation.
 
 - **Security**
   - (placeholder)

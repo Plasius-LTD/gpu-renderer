@@ -19,7 +19,6 @@ import {
   EMISSIVE_TRIANGLE_INDEX_BYTES,
   EMPTY_TERMINATION_METRICS,
   ENVIRONMENT_PORTAL_RECORD_BYTES,
-  GPU_MATERIAL_RECORD_BYTES,
   HIT_RECORD_BYTES,
   INDIRECT_DISPATCH_ARGS_BYTES,
   MAX_PATH_TRACING_DEPTH,
@@ -68,6 +67,16 @@ import {
   normalizeSceneObjects,
   resolveAccelerationBuildMode,
 } from "./wavefront-scene-data.js";
+
+const WEBGPU_DEFAULT_MIN_UNIFORM_BUFFER_OFFSET_ALIGNMENT = 256;
+
+function allocatedRecordBytes(count, recordBytes) {
+  return Math.max(1, count) * recordBytes;
+}
+
+function alignByteSize(value, alignment) {
+  return Math.ceil(value / alignment) * alignment;
+}
 
 function resolveEnvironmentLighting(input, environmentColor, ambientColor) {
   const source = input ?? {};
@@ -257,6 +266,18 @@ function resolveCamera(input, width, height) {
 }
 
 export function estimateWavefrontPathTracingMemory(options = {}) {
+  const width = readPositiveInteger("width", options.width, DEFAULT_WIDTH);
+  const height = readPositiveInteger("height", options.height, DEFAULT_HEIGHT);
+  const tileSize = readPositiveInteger("tileSize", options.tileSize, DEFAULT_TILE_SIZE);
+  const samplesPerPixel = clamp(
+    readPositiveInteger(
+      "samplesPerPixel",
+      options.samplesPerPixel,
+      DEFAULT_SAMPLES_PER_PIXEL
+    ),
+    1,
+    MAX_SAMPLES_PER_PIXEL
+  );
   const tilePixelCapacity = readPositiveInteger(
     "tilePixelCapacity",
     options.tilePixelCapacity,
@@ -289,20 +310,106 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     options.environmentPortalCapacity,
     0
   );
-  const materialCapacity = readNonNegativeInteger("materialCapacity", options.materialCapacity, 0);
+  readNonNegativeInteger("materialCapacity", options.materialCapacity, 0);
+  const meshVertexCount = readNonNegativeInteger(
+    "meshVertexCount",
+    options.meshVertexCount,
+    0
+  );
+  const meshIndexCount = readNonNegativeInteger(
+    "meshIndexCount",
+    options.meshIndexCount,
+    0
+  );
+  const meshRangeCount = readNonNegativeInteger(
+    "meshRangeCount",
+    options.meshRangeCount,
+    0
+  );
+  const bvhSortStageCount = readNonNegativeInteger(
+    "bvhSortStageCount",
+    options.bvhSortStageCount,
+    0
+  );
+  const bvhBuildLevelCount = readNonNegativeInteger(
+    "bvhBuildLevelCount",
+    options.bvhBuildLevelCount,
+    0
+  );
+  const minUniformBufferOffsetAlignment = readPositiveInteger(
+    "minUniformBufferOffsetAlignment",
+    options.minUniformBufferOffsetAlignment,
+    WEBGPU_DEFAULT_MIN_UNIFORM_BUFFER_OFFSET_ALIGNMENT
+  );
+  const denoise = options.denoise !== false;
+  const deferredPathResolve = options.deferredPathResolve !== false;
   const queueBytes = tilePixelCapacity * RAY_RECORD_BYTES;
   const hitBytes = tilePixelCapacity * HIT_RECORD_BYTES;
   const accumulationBytes = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
   const pathVertexBytes = tilePixelCapacity * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
   const sceneObjectBytes = sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES;
-  const triangleBytes = triangleCapacity * TRIANGLE_RECORD_BYTES;
-  const materialTableBytes = materialCapacity * GPU_MATERIAL_RECORD_BYTES;
+  const triangleBytes = allocatedRecordBytes(triangleCapacity, TRIANGLE_RECORD_BYTES);
+  const materialTableBytes = 0;
   const bvhNodeBytes = bvhNodeCapacity * BVH_NODE_RECORD_BYTES;
-  const bvhLeafReferenceBytes = bvhLeafSortCapacity * BVH_LEAF_REF_RECORD_BYTES;
+  const bvhLeafReferenceBytes = allocatedRecordBytes(
+    bvhLeafSortCapacity,
+    BVH_LEAF_REF_RECORD_BYTES
+  );
   const emissiveTriangleMetadataBytes =
     emissiveTriangleCapacity * BVH_NODE_RECORD_BYTES;
-  const environmentPortalBytes =
-    environmentPortalCapacity * ENVIRONMENT_PORTAL_RECORD_BYTES;
+  const bvhCombinedBytes = allocatedRecordBytes(
+    bvhNodeCapacity + emissiveTriangleCapacity,
+    BVH_NODE_RECORD_BYTES
+  );
+  const meshVertexBytes = allocatedRecordBytes(meshVertexCount, MESH_VERTEX_RECORD_BYTES);
+  const meshIndexBytes = allocatedRecordBytes(meshIndexCount, 4);
+  const meshRangeBytes = allocatedRecordBytes(meshRangeCount, MESH_RANGE_RECORD_BYTES);
+  const environmentPortalBytes = allocatedRecordBytes(
+    environmentPortalCapacity,
+    ENVIRONMENT_PORTAL_RECORD_BYTES
+  );
+  const tileCount = Math.ceil(width / tileSize) * Math.ceil(height / tileSize);
+  const outputConfigSlotCount = deferredPathResolve ? 0 : tileCount;
+  const frameConfigSlotCount = Math.max(
+    1,
+    tileCount * samplesPerPixel + outputConfigSlotCount + (denoise ? 1 : 0)
+  );
+  const configBufferStride = alignByteSize(
+    CONFIG_BUFFER_BYTES,
+    minUniformBufferOffsetAlignment
+  );
+  const frameConfigBytes = frameConfigSlotCount * configBufferStride;
+  const bvhBuildConfigBytes = Math.max(
+    1,
+    1 + bvhSortStageCount + bvhBuildLevelCount
+  ) * configBufferStride;
+  const sceneStorageBufferBindingBytes = Math.max(
+    sceneObjectBytes,
+    triangleBytes,
+    bvhCombinedBytes,
+    meshVertexBytes,
+    meshIndexBytes,
+    meshRangeBytes,
+    environmentPortalBytes,
+    bvhLeafReferenceBytes
+  );
+  const totalHotBufferBytes =
+    queueBytes * 2 +
+    hitBytes +
+    accumulationBytes +
+    pathVertexBytes +
+    sceneObjectBytes +
+    triangleBytes +
+    bvhCombinedBytes +
+    meshVertexBytes +
+    meshIndexBytes +
+    meshRangeBytes +
+    bvhLeafReferenceBytes +
+    environmentPortalBytes +
+    frameConfigBytes +
+    bvhBuildConfigBytes +
+    COUNTER_BUFFER_BYTES +
+    INDIRECT_DISPATCH_ARGS_BYTES;
 
   return Object.freeze({
     queueBytes,
@@ -314,27 +421,48 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     triangleBytes,
     materialTableBytes,
     bvhNodeBytes,
+    bvhCombinedBytes,
     bvhLeafReferenceBytes,
     emissiveTriangleMetadataBytes,
+    meshVertexBytes,
+    meshIndexBytes,
+    meshRangeBytes,
     environmentPortalBytes,
     configBytes: CONFIG_BUFFER_BYTES,
+    configBufferStride,
+    frameConfigBytes,
+    bvhBuildConfigBytes,
     counterBytes: COUNTER_BUFFER_BYTES,
     indirectDispatchBytes: INDIRECT_DISPATCH_ARGS_BYTES,
-    totalHotBufferBytes:
-      queueBytes * 2 +
-      hitBytes +
-      accumulationBytes +
-      pathVertexBytes +
-      sceneObjectBytes +
-      triangleBytes +
-      materialTableBytes +
-      bvhNodeBytes +
-      bvhLeafReferenceBytes +
-      emissiveTriangleMetadataBytes +
-      environmentPortalBytes +
-      CONFIG_BUFFER_BYTES +
-      COUNTER_BUFFER_BYTES +
-      INDIRECT_DISPATCH_ARGS_BYTES,
+    sceneStorageBufferBindingBytes,
+    totalHotBufferBytes,
+  });
+}
+
+export function estimateWavefrontPathTracingMemoryForConfig(config, limits = {}) {
+  return estimateWavefrontPathTracingMemory({
+    width: config.width,
+    height: config.height,
+    tileSize: config.tileSize,
+    samplesPerPixel: config.samplesPerPixel,
+    tilePixelCapacity: config.tilePixelCapacity,
+    maxDepth: config.maxDepth,
+    sceneObjectCapacity: config.sceneObjectCapacity,
+    triangleCapacity: config.triangleCapacity,
+    bvhNodeCapacity: config.bvhNodeCapacity,
+    bvhLeafSortCapacity: config.bvhLeafSortCapacity,
+    emissiveTriangleCapacity: config.emissiveTriangleCapacity,
+    environmentPortalCapacity: config.environmentPortalCapacity,
+    meshVertexCount: config.gpuMeshSource.vertices.count,
+    meshIndexCount: config.gpuMeshSource.indices.count,
+    meshRangeCount: config.gpuMeshSource.meshes.count,
+    bvhSortStageCount: config.bvhSortStages.length,
+    bvhBuildLevelCount: config.bvhBuildLevels.length,
+    denoise: config.denoise,
+    deferredPathResolve: config.deferredPathResolve,
+    minUniformBufferOffsetAlignment:
+      limits.minUniformBufferOffsetAlignment ??
+      WEBGPU_DEFAULT_MIN_UNIFORM_BUFFER_OFFSET_ALIGNMENT,
   });
 }
 
@@ -509,15 +637,25 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     denoise: options.denoise !== false,
     frameIndex: readNonNegativeInteger("frameIndex", options.frameIndex, 0),
     memory: estimateWavefrontPathTracingMemory({
+      width,
+      height,
+      tileSize,
+      samplesPerPixel,
       tilePixelCapacity,
       maxDepth,
       sceneObjectCapacity,
       triangleCapacity,
-      materialCapacity: gpuMaterialSource.count,
       bvhNodeCapacity,
       bvhLeafSortCapacity,
       emissiveTriangleCapacity: emissiveTriangleIndices.capacity,
       environmentPortalCapacity,
+      meshVertexCount: gpuMeshSource.vertices.count,
+      meshIndexCount: gpuMeshSource.indices.count,
+      meshRangeCount: gpuMeshSource.meshes.count,
+      bvhSortStageCount: bvhSortStages.length,
+      bvhBuildLevelCount: bvhBuildLevels.length,
+      denoise: options.denoise !== false,
+      deferredPathResolve,
     }),
   });
 }

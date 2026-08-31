@@ -960,12 +960,20 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly triangleBytes: number;
   readonly materialTableBytes: number;
   readonly bvhNodeBytes: number;
+  readonly bvhCombinedBytes: number;
   readonly bvhLeafReferenceBytes: number;
   readonly emissiveTriangleMetadataBytes: number;
+  readonly meshVertexBytes: number;
+  readonly meshIndexBytes: number;
+  readonly meshRangeBytes: number;
   readonly environmentPortalBytes: number;
   readonly configBytes: number;
+  readonly configBufferStride: number;
+  readonly frameConfigBytes: number;
+  readonly bvhBuildConfigBytes: number;
   readonly counterBytes: number;
   readonly indirectDispatchBytes: number;
+  readonly sceneStorageBufferBindingBytes: number;
   readonly totalHotBufferBytes: number;
 }
 
@@ -987,6 +995,7 @@ export interface WavefrontGpuParallelismDiagnostics {
     readonly maxComputeWorkgroupsPerDimension: number | null;
     readonly maxStorageBuffersPerShaderStage: number | null;
     readonly maxStorageBufferBindingSize: number | null;
+    readonly maxBufferSize: number | null;
   }>;
   readonly configuredWorkgroupSize: number;
   readonly directDispatches: number;
@@ -1279,12 +1288,27 @@ export function createWavefrontGpuMaterialSource(
 ): WavefrontGpuMaterialSource;
 export function createDefaultWavefrontSceneObjects(): readonly WavefrontSceneObject[];
 export function estimateWavefrontPathTracingMemory(options?: {
+  width?: number;
+  height?: number;
+  tileSize?: number;
+  samplesPerPixel?: number;
   tilePixelCapacity?: number;
+  maxDepth?: number;
   sceneObjectCapacity?: number;
   triangleCapacity?: number;
+  materialCapacity?: number;
   bvhNodeCapacity?: number;
   bvhLeafSortCapacity?: number;
   emissiveTriangleCapacity?: number;
+  environmentPortalCapacity?: number;
+  meshVertexCount?: number;
+  meshIndexCount?: number;
+  meshRangeCount?: number;
+  bvhSortStageCount?: number;
+  bvhBuildLevelCount?: number;
+  denoise?: boolean;
+  deferredPathResolve?: boolean;
+  minUniformBufferOffsetAlignment?: number;
 }): WavefrontPathTracingMemoryEstimate;
 export function normalizeWavefrontMesh(
   input: WavefrontMeshInput,

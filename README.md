@@ -429,6 +429,17 @@ without rebuilding scene buffers. `renderFrame(...)` also accepts an optional
 guarantees at least the minimum full-screen pass, and frame stats report both
 configured `samplesPerPixel` and actual `renderedSamplesPerPixel` so realtime
 callers can budget motion frames without overstating delivered quality.
+Before requesting a WebGPU device, the renderer derives the largest scene
+storage binding from the normalized scene, mesh, and BVH records. It requests
+the smallest sufficient `maxStorageBufferBindingSize` (and `maxBufferSize` only
+when the WebGPU default is also exceeded), preserves stricter caller limits,
+and rejects unsupported adapters before device creation. Default-sized scenes
+do not elevate either size limit. `config.memory` and snapshot memory telemetry
+describe the actual persistent GPU buffer descriptors: placeholder records,
+combined BVH/emissive storage, mesh source buffers, aligned frame/build uniform
+buffers, counters, and dispatch arguments are each counted exactly once;
+`materialTableBytes` is zero because material data is packed into mesh and
+triangle records rather than a standalone GPU buffer.
 For consumers that want to hand wavefront SPP adaptation to
 `@plasius/gpu-performance`, `createWavefrontAdaptiveSamplingLevels(...)` exposes
 a bounded low-to-high ladder of per-frame `samplesPerPixel`,
