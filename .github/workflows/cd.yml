@@ -173,6 +173,9 @@ jobs:
       sbom_sha256: ${{ steps.bundle.outputs.sbom_sha256 }}
       sbom_artifact_id: ${{ steps.upload_sbom.outputs.artifact-id }}
       sbom_artifact_digest: ${{ steps.upload_sbom.outputs.artifact-digest }}
+      zero_three_evidence_sha256: ${{ steps.bundle.outputs.zero_three_evidence_sha256 }}
+      zero_three_evidence_artifact_id: ${{ steps.upload_zero_three.outputs.artifact-id }}
+      zero_three_evidence_artifact_digest: ${{ steps.upload_zero_three.outputs.artifact-digest }}
     steps:
       - name: Checkout exact workflow commit
         uses: actions/checkout@v6
@@ -333,6 +336,9 @@ jobs:
             npm run privacy:check
           fi
 
+      - name: Enforce permanent Zero-Three install admission
+        run: npm run zero-three:source
+
       - name: Install dependencies
         run: npm ci --no-fund --no-audit --legacy-peer-deps
 
@@ -355,6 +361,9 @@ jobs:
             npm test
           fi
           if has_script pack:check; then npm run pack:check; fi
+
+      - name: Enforce permanent Zero-Three package evidence
+        run: npm run zero-three
 
       - name: Generate SBOM (CycloneDX)
         run: npm sbom --sbom-format=cyclonedx --sbom-type=library --omit dev > sbom.cdx.json
@@ -379,11 +388,18 @@ jobs:
             echo "Expected a regular, non-symlink SBOM." >&2
             exit 1
           fi
+          ZERO_THREE_EVIDENCE="release-artifacts/zero-three-evidence.json"
+          if [ ! -f "${ZERO_THREE_EVIDENCE}" ] || [ -L "${ZERO_THREE_EVIDENCE}" ]; then
+            echo "Expected regular, non-symlink Zero-Three evidence." >&2
+            exit 1
+          fi
           jq -e . sbom.cdx.json >/dev/null
+          jq -e . "${ZERO_THREE_EVIDENCE}" >/dev/null
 
           TARBALL_SHA256="$(sha256sum "${TARBALL_NAME}" | awk '{print $1}')"
           SBOM_SHA256="$(sha256sum sbom.cdx.json | awk '{print $1}')"
-          for DIGEST in "${TARBALL_SHA256}" "${SBOM_SHA256}"; do
+          ZERO_THREE_EVIDENCE_SHA256="$(sha256sum "${ZERO_THREE_EVIDENCE}" | awk '{print $1}')"
+          for DIGEST in "${TARBALL_SHA256}" "${SBOM_SHA256}" "${ZERO_THREE_EVIDENCE_SHA256}"; do
             if ! printf '%s' "${DIGEST}" | grep -Eq '^[0-9a-f]{64}$'; then
               echo "Publication bundle SHA-256 generation failed." >&2
               exit 1
@@ -394,6 +410,7 @@ jobs:
             echo "tarball_name=${TARBALL_NAME}"
             echo "tarball_sha256=${TARBALL_SHA256}"
             echo "sbom_sha256=${SBOM_SHA256}"
+            echo "zero_three_evidence_sha256=${ZERO_THREE_EVIDENCE_SHA256}"
           } >> "${GITHUB_OUTPUT}"
 
       - name: Upload immutable package tarball
@@ -409,6 +426,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           path: sbom.cdx.json
+          archive: false
+          retention-days: 1
+
+      - name: Upload immutable Zero-Three evidence
+        id: upload_zero_three
+        uses: actions/upload-artifact@v7
+        with:
+          path: release-artifacts/zero-three-evidence.json
           archive: false
           retention-days: 1
 
@@ -563,6 +588,13 @@ jobs:
           path: release-sbom
           digest-mismatch: error
 
+      - name: Download exact Zero-Three evidence artifact
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.validate_and_pack.outputs.zero_three_evidence_artifact_id }}
+          path: release-zero-three
+          digest-mismatch: error
+
       - name: Verify immutable publication bundle
         id: release
         env:
@@ -575,6 +607,8 @@ jobs:
           EXPECTED_TARBALL_ARTIFACT_DIGEST: ${{ needs.validate_and_pack.outputs.tarball_artifact_digest }}
           EXPECTED_SBOM_SHA256: ${{ needs.validate_and_pack.outputs.sbom_sha256 }}
           EXPECTED_SBOM_ARTIFACT_DIGEST: ${{ needs.validate_and_pack.outputs.sbom_artifact_digest }}
+          EXPECTED_ZERO_THREE_EVIDENCE_SHA256: ${{ needs.validate_and_pack.outputs.zero_three_evidence_sha256 }}
+          EXPECTED_ZERO_THREE_EVIDENCE_ARTIFACT_DIGEST: ${{ needs.validate_and_pack.outputs.zero_three_evidence_artifact_digest }}
           RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
           PREID_INPUT: ${{ inputs.preid }}
         run: |
@@ -582,35 +616,39 @@ jobs:
 
           mapfile -t PACKAGE_ENTRIES < <(find release-package -mindepth 1 -maxdepth 1 -print)
           mapfile -t SBOM_ENTRIES < <(find release-sbom -mindepth 1 -maxdepth 1 -print)
-          if [ "${#PACKAGE_ENTRIES[@]}" -ne 1 ] || [ "${#SBOM_ENTRIES[@]}" -ne 1 ]; then
+          mapfile -t ZERO_THREE_ENTRIES < <(find release-zero-three -mindepth 1 -maxdepth 1 -print)
+          if [ "${#PACKAGE_ENTRIES[@]}" -ne 1 ] || [ "${#SBOM_ENTRIES[@]}" -ne 1 ] || [ "${#ZERO_THREE_ENTRIES[@]}" -ne 1 ]; then
             echo "Each publication artifact ID must resolve to exactly one file." >&2
             exit 1
           fi
 
           TARBALL="${PACKAGE_ENTRIES[0]}"
           SBOM="${SBOM_ENTRIES[0]}"
-          if [ ! -f "${TARBALL}" ] || [ -L "${TARBALL}" ] || [ ! -f "${SBOM}" ] || [ -L "${SBOM}" ]; then
+          ZERO_THREE_EVIDENCE="${ZERO_THREE_ENTRIES[0]}"
+          if [ ! -f "${TARBALL}" ] || [ -L "${TARBALL}" ] || [ ! -f "${SBOM}" ] || [ -L "${SBOM}" ] || [ ! -f "${ZERO_THREE_EVIDENCE}" ] || [ -L "${ZERO_THREE_EVIDENCE}" ]; then
             echo "Publication artifacts must be regular, non-symlink files." >&2
             exit 1
           fi
-          if [ "$(basename "${TARBALL}")" != "${EXPECTED_TARBALL_NAME}" ] || [ "$(basename "${SBOM}")" != "sbom.cdx.json" ]; then
+          if [ "$(basename "${TARBALL}")" != "${EXPECTED_TARBALL_NAME}" ] || [ "$(basename "${SBOM}")" != "sbom.cdx.json" ] || [ "$(basename "${ZERO_THREE_EVIDENCE}")" != "zero-three-evidence.json" ]; then
             echo "Downloaded publication artifact names do not match the immutable hand-off." >&2
             exit 1
           fi
 
           TARBALL_SHA256="$(sha256sum "${TARBALL}" | awk '{print $1}')"
           SBOM_SHA256="$(sha256sum "${SBOM}" | awk '{print $1}')"
-          if [ "${TARBALL_SHA256}" != "${EXPECTED_TARBALL_SHA256}" ] || [ "${SBOM_SHA256}" != "${EXPECTED_SBOM_SHA256}" ]; then
+          ZERO_THREE_EVIDENCE_SHA256="$(sha256sum "${ZERO_THREE_EVIDENCE}" | awk '{print $1}')"
+          if [ "${TARBALL_SHA256}" != "${EXPECTED_TARBALL_SHA256}" ] || [ "${SBOM_SHA256}" != "${EXPECTED_SBOM_SHA256}" ] || [ "${ZERO_THREE_EVIDENCE_SHA256}" != "${EXPECTED_ZERO_THREE_EVIDENCE_SHA256}" ]; then
             echo "Downloaded publication artifact SHA-256 does not match the read-only build job." >&2
             exit 1
           fi
-          for ARTIFACT_DIGEST in "${EXPECTED_TARBALL_ARTIFACT_DIGEST}" "${EXPECTED_SBOM_ARTIFACT_DIGEST}"; do
+          for ARTIFACT_DIGEST in "${EXPECTED_TARBALL_ARTIFACT_DIGEST}" "${EXPECTED_SBOM_ARTIFACT_DIGEST}" "${EXPECTED_ZERO_THREE_EVIDENCE_ARTIFACT_DIGEST}"; do
             if ! printf '%s' "${ARTIFACT_DIGEST}" | grep -Eq '^[0-9a-f]{64}$'; then
               echo "GitHub artifact digests were not bound into the publication hand-off." >&2
               exit 1
             fi
           done
           jq -e . "${SBOM}" >/dev/null
+          jq -e . "${ZERO_THREE_EVIDENCE}" >/dev/null
 
           while IFS= read -r MEMBER; do
             case "${MEMBER}" in
@@ -658,7 +696,7 @@ jobs:
             exit 1
           fi
 
-          if ! tar -tzf "${TARBALL}" | grep -Eq '^package/dist(/|$)'; then
+          if ! tar -tzf "${TARBALL}" | grep -E '^package/dist(/|$)' >/dev/null; then
             echo "Package tarball is missing built dist output." >&2
             exit 1
           fi
@@ -680,6 +718,29 @@ jobs:
             echo "Release tag differs across source, bundle, and dispatch hand-off." >&2
             exit 1
           fi
+
+          node - "${ZERO_THREE_EVIDENCE}" <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const evidence = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const required = [
+            "source", "manifests", "locks", "installed", "declarations",
+            "bundles", "tarball", "sbom", "active-docs",
+          ];
+          if (
+            evidence.schemaVersion !== 1
+            || evidence.status !== "pass"
+            || required.some((name) => evidence.checks?.[name] !== true)
+            || evidence.package?.name !== process.env.EXPECTED_PACKAGE_NAME
+            || evidence.package?.version !== process.env.EXPECTED_VERSION
+            || !/^[a-f0-9]{64}$/.test(evidence.digest ?? "")
+          ) {
+            throw new Error("Zero-Three evidence is incomplete or identifies another package release.");
+          }
+          const { digest, ...unsigned } = evidence;
+          const expected = crypto.createHash("sha256").update(JSON.stringify(unsigned)).digest("hex");
+          if (digest !== expected) throw new Error("Zero-Three evidence content digest is invalid.");
+          NODE
 
           DERIVED_PREID=$(PACKAGE_VERSION="${SOURCE_VERSION}" node -e '
           const version = process.env.PACKAGE_VERSION || "";
@@ -747,6 +808,7 @@ jobs:
             echo "tarball_integrity=${TARBALL_INTEGRITY}"
             echo "tarball_path=${TARBALL}"
             echo "sbom_path=${SBOM}"
+            echo "zero_three_evidence_path=${ZERO_THREE_EVIDENCE}"
           } >> "${GITHUB_OUTPUT}"
 
       - name: Revalidate exact main immediately before release mutation
@@ -793,7 +855,10 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
           TAG: ${{ steps.release.outputs.release_tag }}
+          PACKAGE_NAME: ${{ steps.release.outputs.package_name }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.release_version }}
           PACKAGE_PUBLISHED: ${{ steps.release.outputs.should_publish_npm != 'true' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -801,11 +866,47 @@ jobs:
           REMOTE_TAG_SHA="$(git ls-remote origin "refs/tags/${TAG}" | awk 'NR == 1 { print $1 }')"
           if [ -n "${REMOTE_TAG_SHA}" ]; then
             if [ "${REMOTE_TAG_SHA}" != "${EXPECTED_SHA}" ]; then
-              echo "Tag ${TAG} points at ${REMOTE_TAG_SHA}, expected ${EXPECTED_SHA}; refusing to rewrite it." >&2
-              exit 1
+              if [ "${PACKAGE_PUBLISHED}" = "true" ]; then
+                echo "Published tag ${TAG} points at ${REMOTE_TAG_SHA}, expected ${EXPECTED_SHA}; refusing to rewrite it." >&2
+                exit 1
+              fi
+              if ! git merge-base --is-ancestor "${REMOTE_TAG_SHA}" "${EXPECTED_SHA}"; then
+                echo "Unpublished tag ${TAG} does not point at an ancestor of ${EXPECTED_SHA}; refusing recovery." >&2
+                exit 1
+              fi
+
+              OLD_PACKAGE_METADATA="$(git show "${REMOTE_TAG_SHA}:package.json" | jq -er '[.name, .version] | @tsv')"
+              EXPECTED_PACKAGE_METADATA="${PACKAGE_NAME}"$'\t'"${PACKAGE_VERSION}"
+              if [ "${OLD_PACKAGE_METADATA}" != "${EXPECTED_PACKAGE_METADATA}" ]; then
+                echo "Unpublished tag ${TAG} does not have the expected package identity; refusing recovery." >&2
+                exit 1
+              fi
+
+              RELEASES="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")"
+              MATCHING_RELEASE_COUNT="$(jq --arg tag "${TAG}" '[.[] | select(.tag_name == $tag)] | length' <<<"${RELEASES}")"
+              if [ "${MATCHING_RELEASE_COUNT}" -gt 1 ]; then
+                echo "Multiple releases exist for unpublished tag ${TAG}; refusing recovery." >&2
+                exit 1
+              fi
+              if [ "${MATCHING_RELEASE_COUNT}" -eq 1 ]; then
+                RELEASE_METADATA="$(jq -er --arg tag "${TAG}" '.[] | select(.tag_name == $tag) | [.id, .draft] | @tsv' <<<"${RELEASES}")"
+                read -r RELEASE_ID RELEASE_IS_DRAFT <<<"${RELEASE_METADATA}"
+                if [ "${RELEASE_IS_DRAFT}" != "true" ]; then
+                  echo "A published GitHub release exists for unpublished npm tag ${TAG}; refusing recovery." >&2
+                  exit 1
+                fi
+                gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"
+              fi
+
+              git push origin ":refs/tags/${TAG}"
+              git tag -d "${TAG}"
+              REMOTE_TAG_SHA=""
+              echo "Removed recoverable unpublished release state for ${TAG}."
             fi
-            echo "Tag ${TAG} already points at ${EXPECTED_SHA}."
-            exit 0
+            if [ -n "${REMOTE_TAG_SHA}" ]; then
+              echo "Tag ${TAG} already points at ${EXPECTED_SHA}."
+              exit 0
+            fi
           fi
 
           if [ "${PACKAGE_PUBLISHED}" = "true" ]; then
@@ -822,6 +923,7 @@ jobs:
           TAG: ${{ steps.release.outputs.release_tag }}
           PREID: ${{ steps.release.outputs.effective_preid }}
           SBOM: ${{ steps.release.outputs.sbom_path }}
+          ZERO_THREE_EVIDENCE: ${{ steps.release.outputs.zero_three_evidence_path }}
         run: |
           set -euo pipefail
 
@@ -842,20 +944,14 @@ jobs:
               exit 0
             fi
 
-            if [ -s "${SBOM}" ]; then
-              gh release upload "${TAG}" "${SBOM}" --clobber
-            fi
+            gh release upload "${TAG}" "${SBOM}" "${ZERO_THREE_EVIDENCE}" --clobber
           else
             ARGS=(--title "Release ${TAG}" --generate-notes --verify-tag --draft)
             if [ -n "${PREID}" ]; then
               ARGS+=(--prerelease)
             fi
 
-            if [ -s "${SBOM}" ]; then
-              gh release create "${TAG}" "${SBOM}" "${ARGS[@]}"
-            else
-              gh release create "${TAG}" "${ARGS[@]}"
-            fi
+            gh release create "${TAG}" "${SBOM}" "${ZERO_THREE_EVIDENCE}" "${ARGS[@]}"
           fi
 
       - name: Attest immutable package tarball
@@ -868,6 +964,11 @@ jobs:
         with:
           subject-path: ${{ steps.release.outputs.sbom_path }}
 
+      - name: Attest immutable Zero-Three evidence
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.release.outputs.zero_three_evidence_path }}
+
       - name: Publish package through npm OIDC
         if: steps.release.outputs.should_publish_npm == 'true'
         env:
@@ -877,7 +978,7 @@ jobs:
           set -euo pipefail
 
           PUBLISH_ARGS=(--access public --provenance --registry https://registry.npmjs.org --tag "${DIST_TAG}")
-          npm publish "${TARBALL}" --ignore-scripts "${PUBLISH_ARGS[@]}"
+          npm publish "./${TARBALL}" --ignore-scripts "${PUBLISH_ARGS[@]}"
 
       - name: Skip duplicate npm publication
         if: steps.release.outputs.should_publish_npm != 'true'

@@ -78,12 +78,11 @@ dependency declaration checking possible without a broad `skipLibCheck`
 suppression. It is a type-only runtime dependency so packed-package consumers
 receive the WebXR globals required by the public `@plasius/gpu-xr` state
 contract. The renderer consumes only the focused
-`@plasius/gpu-shared/feedback-diagnostics` subpath. The shared package version
-that publishes this subpath must be released through protected CD before this
-task is merged. The renderer manifest and lock must then consume that published
-version and pass a clean `npm ci` plus the full validation matrix. No
-unpublished version or local package link may be committed; local package
-tarballs and worktree links are used only for pre-release validation.
+`@plasius/gpu-shared/feedback-diagnostics` subpath. Version 1.1.1, which
+publishes that subpath, was released through protected CD. The renderer
+manifest and lock consume that published version and a clean `npm ci` plus the
+full validation matrix run against the registry artifact. No unpublished
+version or local package link is committed.
 
 ## Rollout and rollback
 

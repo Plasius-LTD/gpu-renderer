@@ -1016,12 +1016,20 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly triangleBytes: number;
   readonly materialTableBytes: number;
   readonly bvhNodeBytes: number;
+  readonly bvhCombinedBytes: number;
   readonly bvhLeafReferenceBytes: number;
   readonly emissiveTriangleMetadataBytes: number;
+  readonly meshVertexBytes: number;
+  readonly meshIndexBytes: number;
+  readonly meshRangeBytes: number;
   readonly environmentPortalBytes: number;
   readonly configBytes: number;
+  readonly configBufferStride: number;
+  readonly frameConfigBytes: number;
+  readonly bvhBuildConfigBytes: number;
   readonly counterBytes: number;
   readonly indirectDispatchBytes: number;
+  readonly sceneStorageBufferBindingBytes: number;
   readonly totalHotBufferBytes: number;
 }
 
@@ -1043,6 +1051,7 @@ export interface WavefrontGpuParallelismDiagnostics {
     readonly maxComputeWorkgroupsPerDimension: number | null;
     readonly maxStorageBuffersPerShaderStage: number | null;
     readonly maxStorageBufferBindingSize: number | null;
+    readonly maxBufferSize: number | null;
   }>;
   readonly configuredWorkgroupSize: number;
   readonly directDispatches: number;
@@ -1067,6 +1076,8 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly navigator?: Navigator | { gpu?: GPU };
   readonly document?: Document;
   readonly deviceDescriptor?: GPUDeviceDescriptor;
+  /** Opportunistically request WebGPU timestamp-query support when exposed. Defaults to true. */
+  readonly gpuTimestamps?: boolean;
   readonly requiredLimits?: Partial<Record<string, number>>;
   readonly powerPreference?: GPUPowerPreference;
   readonly alpha?: boolean;
@@ -1178,6 +1189,31 @@ export interface WavefrontPathTracingComputeRenderer {
   destroy(): void;
 }
 
+export interface WavefrontRayCountTelemetry {
+  readonly status: "not-requested" | "available" | "unavailable" | "failed";
+  readonly source: "gpu-active-queue-readback" | null;
+  readonly expectedPrimaryRays: number | null;
+  readonly observedPrimaryRays: number | null;
+  readonly secondaryRays: number | null;
+  readonly totalPathSegments: number | null;
+  readonly bounceHistogram: readonly number[];
+  readonly capturedRayCounts: number;
+  readonly expectedRayCounts: number;
+  readonly reason: string | null;
+}
+
+export interface WavefrontFrameTimingTelemetry {
+  readonly status: "not-requested" | "available" | "fallback" | "unavailable" | "failed";
+  readonly source: "timestamp-query" | "queue-completion" | "cpu-submit" | null;
+  readonly timestampQueryStatus: "not-recorded" | "available" | "unsupported" | "failed";
+  readonly totalGpuTimeMs: number | null;
+  readonly totalRenderJobTimeMs: number;
+  readonly classificationTimeMs: number | null;
+  readonly compactionTimeMs: number | null;
+  readonly samplingTimeMs: number | null;
+  readonly reason: string | null;
+}
+
 export interface WavefrontPathTracingComputeFrameStats {
   readonly frame: number;
   readonly width: number;
@@ -1192,6 +1228,11 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly maxFramePassesPerSubmission: number;
   readonly screenRays: number;
   readonly primaryRays: number;
+  readonly secondaryRays: number | null;
+  readonly totalPathSegments: number | null;
+  readonly rayCounts: WavefrontRayCountTelemetry;
+  readonly timings: WavefrontFrameTimingTelemetry;
+  readonly telemetryMemoryBytes: number;
   readonly sceneObjectCount: number;
   readonly triangleCount: number;
   readonly emissiveTriangleCount: number;
@@ -1240,6 +1281,7 @@ export interface WavefrontPathTracingComputeFrameStats {
         invalidSamples: number;
         legacyClampEquivalentSamples: number;
       }>;
+      rayCountStatus: WavefrontRayCountTelemetry["status"];
       memory: Readonly<{
         totalBytes: number;
         breakdown: WavefrontPathTracingMemoryEstimate | null;
@@ -1302,12 +1344,27 @@ export function createWavefrontGpuMaterialSource(
 ): WavefrontGpuMaterialSource;
 export function createDefaultWavefrontSceneObjects(): readonly WavefrontSceneObject[];
 export function estimateWavefrontPathTracingMemory(options?: {
+  width?: number;
+  height?: number;
+  tileSize?: number;
+  samplesPerPixel?: number;
   tilePixelCapacity?: number;
+  maxDepth?: number;
   sceneObjectCapacity?: number;
   triangleCapacity?: number;
+  materialCapacity?: number;
   bvhNodeCapacity?: number;
   bvhLeafSortCapacity?: number;
   emissiveTriangleCapacity?: number;
+  environmentPortalCapacity?: number;
+  meshVertexCount?: number;
+  meshIndexCount?: number;
+  meshRangeCount?: number;
+  bvhSortStageCount?: number;
+  bvhBuildLevelCount?: number;
+  denoise?: boolean;
+  deferredPathResolve?: boolean;
+  minUniformBufferOffsetAlignment?: number;
 }): WavefrontPathTracingMemoryEstimate;
 export function normalizeWavefrontMesh(
   input: WavefrontMeshInput,
@@ -1474,6 +1531,7 @@ export const rendererWavefrontComputeStatsStride: 8;
 export const wavefrontPathTracingComputeLimits: Readonly<{
   workgroupSize: 64;
   traceStorageBufferBindings: number;
+  traceSampledTextureBindings: number;
   rayRecordBytes: 96;
   hitRecordBytes: 256;
   sceneObjectRecordBytes: 160;

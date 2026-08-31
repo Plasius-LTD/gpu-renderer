@@ -17,6 +17,82 @@ All notable changes to this project will be documented in this file.
     diagnostics packet for approved generator and GPU demo surfaces.
 
 - **Changed**
+  - Updated `@plasius/gpu-shared` to the protected-CD-published 1.1.1 release
+    that exposes the focused feedback-diagnostics contract, and revalidated
+    the renderer against the registry artifact.
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.43] - 2026-08-31
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Negotiated scene-derived `maxStorageBufferBindingSize` and, when required,
+    `maxBufferSize` before WebGPU device creation so large mesh/BVH scenes fail
+    early on unsupported adapters and render on adapters that expose sufficient
+    non-default limits.
+  - Corrected wavefront memory telemetry to match every persistent GPU buffer
+    descriptor exactly once, including placeholder records, combined BVH and
+    emissive metadata, mesh sources, and aligned frame/build config buffers,
+    while removing the nonexistent material-table allocation.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.42] - 2026-08-31
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - Made fixed-SPP ray-count reduction stack-safe for the supported
+    4K/eight-bounce/128-SPP envelope by replacing unbounded argument spreading
+    with a constant-stack linear maximum scan.
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.41] - 2026-08-30
+
+- **Added**
+  - Added opt-in fixed-SPP ray-count and timing telemetry to awaited
+    `renderFrame({ readStats: true })` results, including exact primary,
+    continuation, total path-segment, and per-bounce counts plus WebGPU
+    timestamp-query timing with an explicit queue-completion fallback.
+
+- **Changed**
+  - Switched WGSL preflight diagnostics to the standard
+    `GPUShaderModule.getCompilationInfo()` API and request the 21 sampled
+    textures already required by the final material shader when the adapter
+    exposes that limit.
+
+- **Fixed**
+  - Fixed final assembled WGSL compilation by making triangle initialization
+    resilient to record-field additions and aligning the trace bind-group
+    layout with all declared material-extension textures.
+
+- **Security**
+  - (placeholder)
+
+## [0.2.40] - 2026-08-30
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Updated internal GPU dependencies to their surviving clean lines and refreshed the esbuild resolution.
   - Bound diagnostics to the focused shared-package subpath and canonical
     contract-version export, and enabled complete declaration checking with the
@@ -33,6 +109,11 @@ All notable changes to this project will be documented in this file.
   - Kept feedback diagnostics separate from general renderer snapshots and
     excluded user-captured pixels, DOM, player data, URLs, filenames, exact
     measurements, adapter identity and raw warnings from the output contract.
+  - Added permanent fail-closed Zero-Three validation for manifests, source,
+    locks, installed dependency graphs, declarations, bundles, npm tarballs,
+    CycloneDX SBOMs, and active documentation, with digest-bound evidence
+    retained and attested by CI/CD.
+  - Pinned patched transitive npm dependencies to clear the current audit baseline.
   - Replaced token-based npm publication with a two-phase exact-main OIDC workflow, immutable tarball/SBOM hand-off, isolated pull-request validation, and fail-closed integrity checks.
   - Added fail-closed source and npm-package admission for the administrative contributor registry and pinned the CI/CD runtime to Node.js 24.18.0 LTS.
   - (placeholder)
@@ -590,6 +671,9 @@ All notable changes to this project will be documented in this file.
     contract used by the wavefront display-quality renderer.
 
 - **Fixed**
+  - Clamped wavefront tile capacity against the depth-scaled path-vertex
+    storage binding so supported high-depth reference renders stay within
+    `maxStorageBufferBindingSize`.
   - Raised the bounded wavefront `maxDepth` ceiling to 32 so offline/reference
     renders can request 20-bounce paths without being clamped by renderer
     configuration.
@@ -617,6 +701,9 @@ All notable changes to this project will be documented in this file.
     corruption and stalled validation captures on higher-SPP frames.
 
 - **Changed**
+  - Raised the bounded wavefront `maxDepth` ceiling to 32 so offline/reference
+    renders can request 20-bounce paths without being clamped by renderer
+    configuration.
   - Changed internal wavefront frame batching and dispatch-diagnostics plumbing
     to live in a dedicated runtime helper module so scheduling concerns stay
     separated from shader and pipeline assembly.
@@ -998,3 +1085,7 @@ All notable changes to this project will be documented in this file.
 [0.2.37]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.37
 [0.2.38]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.38
 [0.2.39]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.39
+[0.2.40]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.40
+[0.2.41]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.41
+[0.2.42]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.42
+[0.2.43]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.43

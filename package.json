@@ -1,6 +1,6 @@
 {
   "name": "@plasius/gpu-renderer",
-  "version": "0.2.39",
+  "version": "0.2.43",
   "description": "Framework-agnostic WebGPU renderer runtime for Plasius projects.",
   "type": "module",
   "sideEffects": false,
@@ -36,8 +36,11 @@
     "test": "npm run test:unit",
     "test:unit": "node --test",
     "test:coverage": "c8 --reporter=lcov --reporter=text node --test",
+    "zero-three": "node scripts/verify-zero-three.cjs --package --evidence-out release-artifacts/zero-three-evidence.json",
+    "zero-three:source": "node scripts/verify-zero-three.cjs --source-only",
+    "zero-three:test": "node --test tests/zero-three.test.cjs",
     "pack:check": "node scripts/verify-public-package.cjs",
-    "prepublishOnly": "npm run build && npm run pack:check"
+    "prepublishOnly": "npm run build && npm run pack:check && npm run zero-three"
   },
   "keywords": [
     "webgpu",
@@ -50,7 +53,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@plasius/gpu-camera": "^0.1.18",
-    "@plasius/gpu-shared": "^1.0.14",
+    "@plasius/gpu-shared": "^1.1.1",
     "@plasius/gpu-xr": "^0.1.17",
     "@types/webxr": "^0.5.24"
   },
@@ -84,7 +87,7 @@
     }
   ],
   "overrides": {
-    "brace-expansion": "^5.0.9",
+    "brace-expansion": "5.0.9",
     "esbuild": "^0.28.1",
     "minimatch": "^10.2.1"
   },

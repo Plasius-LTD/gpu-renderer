@@ -184,6 +184,14 @@ export function createWavefrontTransportGuardrailSummary(frameStats, options = {
     0,
     Number(frameStats?.radianceDiagnostics?.legacyClampEquivalentSamples ?? 0)
   )
+  const rayCountStatus =
+    typeof frameStats?.rayCounts?.status === "string"
+      ? frameStats.rayCounts.status
+      : "not-requested"
+  const rayCountReason =
+    typeof frameStats?.rayCounts?.reason === "string"
+      ? frameStats.rayCounts.reason
+      : null
   const memory = summarizeWavefrontMemory(frameStats?.memory)
   const checks = Object.freeze([
     createTransportGuardrailCheck(
@@ -226,6 +234,21 @@ export function createWavefrontTransportGuardrailSummary(frameStats, options = {
           ? `${legacyClampEquivalentSamples} weighted sample(s) exceeded the legacy 4.0 preview clamp threshold; convergence stayed unbiased, but review firefly diagnostics before rollout.`
           : "No invalid radiance samples or legacy-clamp-equivalent fireflies were recorded."
     ),
+    createTransportGuardrailCheck(
+      "ray-count-telemetry",
+      rayCountStatus === "failed"
+        ? "fail"
+        : rayCountStatus === "unavailable"
+          ? "warn"
+          : "pass",
+      rayCountStatus === "failed"
+        ? `Ray-count telemetry failed closed: ${rayCountReason ?? "unknown failure"}.`
+        : rayCountStatus === "unavailable"
+          ? `Ray-count telemetry was requested but unavailable: ${rayCountReason ?? "unknown reason"}.`
+          : rayCountStatus === "available"
+            ? "Primary, secondary, and total path-segment counts were captured."
+            : "Ray-count telemetry was not requested for this frame."
+    ),
   ])
   const status = checks.some((check) => check.status === "fail")
     ? "fail"
@@ -249,6 +272,7 @@ export function createWavefrontTransportGuardrailSummary(frameStats, options = {
         invalidSamples,
         legacyClampEquivalentSamples,
       }),
+      rayCountStatus,
       memory,
     }),
     checks,

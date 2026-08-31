@@ -15,12 +15,12 @@ import {
   createWavefrontMeshAcceleration,
 } from "./wavefront-scene-data.js";
 import {
+  estimateWavefrontPathTracingMemoryForConfig,
   createWavefrontPathTracingComputeConfig,
   packEnvironmentPortals,
   supportsWavefrontPathTracingCompute,
 } from "./wavefront-config.js";
 import {
-  alignTo,
   clampTileSizeForDevice,
   createAtlasTextureResource,
   createBrdfLutResource,
@@ -50,6 +50,11 @@ import {
   createWavefrontFrameStats,
   resolveWavefrontRenderedSamplesPerPixel,
 } from "./wavefront-frame-stats.js";
+import {
+  createWavefrontFrameTelemetryResources,
+  createWavefrontFrameTimingTelemetry,
+  createWavefrontRayCountTelemetry,
+} from "./wavefront-frame-telemetry.js";
 import { createWavefrontFrameEncoder } from "./wavefront-frame-encoder.js";
 import {
   dispatchWavefrontFrame,
@@ -71,11 +76,7 @@ import {
 } from "./wavefront-runtime-support.js";
 
 import {
-  ACCUMULATION_RECORD_BYTES,
-  BVH_LEAF_REF_RECORD_BYTES,
   BVH_NODE_RECORD_BYTES,
-  CONFIG_BUFFER_BYTES,
-  COUNTER_BUFFER_BYTES,
   DEFAULT_AMBIENT_COLOR,
   DEFAULT_BRDF_LUT_SAMPLE_COUNT,
   DEFAULT_BRDF_LUT_SIZE,
@@ -93,14 +94,11 @@ import {
   DEFAULT_WIDTH,
   EMISSIVE_TRIANGLE_INDEX_BYTES,
   EMPTY_TERMINATION_METRICS,
-  ENVIRONMENT_PORTAL_RECORD_BYTES,
   GPU_MATERIAL_RECORD_BYTES,
   GPU_MAX_SUBMITTED_WORK_DEADLINE_MS,
   GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS,
-  HIT_RECORD_BYTES,
   HIT_TYPE_EMISSIVE,
   HIT_TYPE_SURFACE,
-  INDIRECT_DISPATCH_ARGS_BYTES,
   MATERIAL_DIELECTRIC,
   MATERIAL_DIFFUSE,
   MATERIAL_EMISSIVE,
@@ -109,19 +107,13 @@ import {
   MAX_PATH_TRACING_DEPTH,
   MAX_SAMPLES_PER_PIXEL,
   MEDIUM_TABLE_ROWS,
-  MESH_RANGE_RECORD_BYTES,
-  MESH_VERTEX_RECORD_BYTES,
   OBJECT_KIND_BOX,
   OBJECT_KIND_SPHERE,
-  PATH_VERTEX_RECORD_BYTES,
-  RAY_RECORD_BYTES,
-  SCENE_OBJECT_RECORD_BYTES,
   TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH,
   TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW,
   TERMINAL_SOURCE_KIND_EMISSIVE,
   TERMINAL_SOURCE_KIND_ENVIRONMENT,
   TRACE_STORAGE_BUFFER_BINDINGS,
-  TRIANGLE_RECORD_BYTES,
   add,
   asColor,
   asUnitVec3,
@@ -196,7 +188,9 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     throw new Error("Unable to acquire a WebGPU adapter for wavefront path tracing.");
   }
 
-  const device = await adapter.requestDevice(createWavefrontDeviceDescriptor(adapter, options));
+  const device = await adapter.requestDevice(
+    createWavefrontDeviceDescriptor(adapter, options, initialConfig.memory)
+  );
   const gpuAdapterParallelism = createGpuAdapterParallelismDiagnostics(adapter, device);
   const context = canvas.getContext("webgpu");
   if (!context || typeof context.configure !== "function") {
@@ -217,8 +211,16 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       width: config.width,
       height: config.height,
       tileSize: safeTileSize,
+      tilePixelCapacity: Math.min(
+        config.tilePixelCapacity,
+        safeTileSize * safeTileSize
+      ),
     });
   }
+  config = Object.freeze({
+    ...config,
+    memory: estimateWavefrontPathTracingMemoryForConfig(config, device.limits),
+  });
   canvas.width = config.width;
   canvas.height = config.height;
   context.configure({
@@ -228,82 +230,72 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   });
 
   const bufferUsage = constants.buffer.STORAGE | constants.buffer.COPY_DST;
-  const rayQueueBytes = config.tilePixelCapacity * RAY_RECORD_BYTES;
-  const hitBytes = config.tilePixelCapacity * HIT_RECORD_BYTES;
-  const accumulationBytes = config.tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
-  const pathVertexBytes = config.tilePixelCapacity * (config.maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
-  const activeQueue = createBuffer(device, bufferUsage, rayQueueBytes, "plasius.wavefront.activeQueue");
-  const nextQueue = createBuffer(device, bufferUsage, rayQueueBytes, "plasius.wavefront.nextQueue");
-  const hitBuffer = createBuffer(device, bufferUsage, hitBytes, "plasius.wavefront.hitBuffer");
+  const memory = config.memory;
+  const activeQueue = createBuffer(device, bufferUsage, memory.queueBytes, "plasius.wavefront.activeQueue");
+  const nextQueue = createBuffer(device, bufferUsage, memory.queueBytes, "plasius.wavefront.nextQueue");
+  const hitBuffer = createBuffer(device, bufferUsage, memory.hitBytes, "plasius.wavefront.hitBuffer");
   const accumulationBuffer = createBuffer(
     device,
     bufferUsage,
-    accumulationBytes,
+    memory.accumulationBytes,
     "plasius.wavefront.accumulation"
   );
   const pathVertexBuffer = createBuffer(
     device,
     bufferUsage,
-    pathVertexBytes,
+    memory.pathVertexBytes,
     "plasius.wavefront.pathVertices"
   );
   const sceneObjectBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    config.sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES,
+    memory.sceneObjectBytes,
     "plasius.wavefront.sceneObjects"
   );
   const triangleBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.triangleCapacity) * TRIANGLE_RECORD_BYTES,
+    memory.triangleBytes,
     "plasius.wavefront.triangles"
   );
   const bvhNodeBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.bvhNodeCapacity + config.emissiveTriangleCapacity) *
-      BVH_NODE_RECORD_BYTES,
+    memory.bvhCombinedBytes,
     "plasius.wavefront.bvhNodes"
   );
   const meshVertexBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.gpuMeshSource.vertices.count) * MESH_VERTEX_RECORD_BYTES,
+    memory.meshVertexBytes,
     "plasius.wavefront.meshVertices"
   );
   const meshIndexBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.gpuMeshSource.indices.count) * 4,
+    memory.meshIndexBytes,
     "plasius.wavefront.meshIndices"
   );
   const meshRangeBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.gpuMeshSource.meshes.count) * MESH_RANGE_RECORD_BYTES,
+    memory.meshRangeBytes,
     "plasius.wavefront.meshRanges"
   );
   const environmentPortalBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.environmentPortalCapacity) * ENVIRONMENT_PORTAL_RECORD_BYTES,
+    memory.environmentPortalBytes,
     "plasius.wavefront.environmentPortals"
   );
   const bvhLeafRefBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST,
-    Math.max(1, config.bvhLeafSortCapacity) * BVH_LEAF_REF_RECORD_BYTES,
+    memory.bvhLeafReferenceBytes,
     "plasius.wavefront.bvhLeafRefs"
   );
   const tiles = createTiles(config.width, config.height, config.tileSize);
-  const uniformOffsetAlignment = Number(device?.limits?.minUniformBufferOffsetAlignment);
-  const configBufferStride = alignTo(
-    CONFIG_BUFFER_BYTES,
-    Number.isFinite(uniformOffsetAlignment) && uniformOffsetAlignment > 0
-      ? uniformOffsetAlignment
-      : CONFIG_BUFFER_BYTES
-  );
+  const configBufferStride = memory.configBufferStride;
   const outputConfigSlotCount = config.deferredPathResolve ? 0 : tiles.length;
   const frameConfigSlotCount = Math.max(
     1,
@@ -312,27 +304,25 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   const configBuffer = createBuffer(
     device,
     constants.buffer.UNIFORM | constants.buffer.COPY_DST,
-    frameConfigSlotCount * configBufferStride,
+    memory.frameConfigBytes,
     "plasius.wavefront.frameConfig"
   );
-  const bvhBuildConfigSlots =
-    1 + config.bvhSortStages.length + config.bvhBuildLevels.length;
   const bvhBuildConfigBuffer = createBuffer(
     device,
     constants.buffer.UNIFORM | constants.buffer.COPY_DST,
-    Math.max(1, bvhBuildConfigSlots) * configBufferStride,
+    memory.bvhBuildConfigBytes,
     "plasius.wavefront.bvhBuildConfig"
   );
   const counterBuffer = createBuffer(
     device,
     constants.buffer.STORAGE | constants.buffer.COPY_DST | constants.buffer.COPY_SRC,
-    COUNTER_BUFFER_BYTES,
+    memory.counterBytes,
     "plasius.wavefront.counters"
   );
   const activeDispatchBuffer = createBuffer(
     device,
     constants.buffer.INDIRECT | constants.buffer.COPY_DST,
-    INDIRECT_DISPATCH_ARGS_BYTES,
+    memory.indirectDispatchBytes,
     "plasius.wavefront.activeDispatchArgs"
   );
 
@@ -573,6 +563,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     outputView,
     sampler,
   });
+  let activeFrameTelemetry = null;
+  let frameTelemetryResources = null;
   const frameEncoder = createWavefrontFrameEncoder({
     getConfig: () => config,
     getBindGroups: () => bindGroups,
@@ -585,6 +577,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     presentPipeline,
     presentBindGroup,
     context,
+    getFrameTelemetry: () => activeFrameTelemetry,
   });
 
   let frame = 0;
@@ -599,6 +592,18 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   );
   const waitForSubmittedGpuWork = (waitOptions = {}) =>
     waitForSubmittedGpuWorkForDevice(device, waitOptions);
+
+  function ensureFrameTelemetryResources() {
+    if (!frameTelemetryResources) {
+      frameTelemetryResources = createWavefrontFrameTelemetryResources({
+        device,
+        constants,
+        maxRayCountRecords:
+          tiles.length * config.samplesPerPixel * config.maxDepth,
+      });
+    }
+    return frameTelemetryResources;
+  }
 
   function resolveRenderedSamplesPerPixel(renderOptions = {}, awaitGPUCompletion = true) {
     return resolveWavefrontRenderedSamplesPerPixel({
@@ -735,6 +740,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         frameTimeMs,
         false
       ),
+      timings: createWavefrontFrameTimingTelemetry({
+        status: "not-requested",
+        source: "cpu-submit",
+        timestampQueryStatus: "not-recorded",
+        totalRenderJobTimeMs: frameTimeMs,
+      }),
     });
   }
 
@@ -773,96 +784,160 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     const samplingPlan = resolveRenderedSamplesPerPixel(renderOptions, awaitGPUCompletion);
     const useThrottledHighSamplePath =
       awaitGPUCompletion && samplingPlan.renderedSamplesPerPixel >= 8;
+    const telemetryRequested = renderOptions.readStats === true;
+    const telemetryCanRecord = telemetryRequested && awaitGPUCompletion;
+    const telemetryResourcesForFrame = telemetryCanRecord
+      ? ensureFrameTelemetryResources()
+      : null;
+    if (telemetryResourcesForFrame?.available) {
+      telemetryResourcesForFrame.beginFrame();
+      activeFrameTelemetry = telemetryResourcesForFrame;
+    }
     const frameStartTimeMs = nowMs();
     let frameStats;
-    if (useThrottledHighSamplePath) {
-      frame += 1;
-      const frameIndex = frame + config.frameIndex;
-      const parallelismCounters = createGpuParallelismCounters();
-      const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
-      let frameSubmissionCount = 0;
-      let frameConfigSlot = 0;
-      if (accelerationBuildSubmitted) {
-        const accelerationWaitOptions = {
-          ...estimateSubmittedGpuWorkTiming(
-            { ...config, renderedSamplesPerPixel: 1 },
-            1,
-            renderOptions.submittedWorkTimeoutMs,
-            { includeAccelerationBuild: true }
-          ),
-          allowTimeout: false,
-        };
-        await waitForSubmittedGpuWork(accelerationWaitOptions);
-      }
-      for (let tileIndex = 0; tileIndex < tiles.length; tileIndex += 1) {
-        const tileRangeDispatch = dispatchFrameAwaitingGpu(
-          frameIndex,
-          parallelismCounters,
-          samplingPlan.renderedSamplesPerPixel,
-          {
-            sampleRangeStart: 0,
-            sampleRangeEnd: samplingPlan.renderedSamplesPerPixel,
-            tileStartIndex: tileIndex,
-            tileEndIndex: tileIndex + 1,
-            startingSubmissionCount: frameSubmissionCount,
-            startingSlot: frameConfigSlot,
-            includeDenoise: tileIndex + 1 >= tiles.length,
-            includePresent: tileIndex + 1 >= tiles.length,
-          }
-        );
-        frameSubmissionCount = tileRangeDispatch.submissionCount;
-        frameConfigSlot = tileRangeDispatch.slot;
-        const tileWaitOptions = {
-          ...estimateSubmittedGpuWorkTiming(
-            { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
-            1,
-            renderOptions.submittedWorkTimeoutMs,
+    try {
+      if (useThrottledHighSamplePath) {
+        frame += 1;
+        const frameIndex = frame + config.frameIndex;
+        const parallelismCounters = createGpuParallelismCounters();
+        const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
+        let frameSubmissionCount = 0;
+        let frameConfigSlot = 0;
+        if (accelerationBuildSubmitted) {
+          const accelerationWaitOptions = {
+            ...estimateSubmittedGpuWorkTiming(
+              { ...config, renderedSamplesPerPixel: 1 },
+              1,
+              renderOptions.submittedWorkTimeoutMs,
+              { includeAccelerationBuild: true }
+            ),
+            allowTimeout: false,
+          };
+          await waitForSubmittedGpuWork(accelerationWaitOptions);
+        }
+        for (let tileIndex = 0; tileIndex < tiles.length; tileIndex += 1) {
+          const tileRangeDispatch = dispatchFrameAwaitingGpu(
+            frameIndex,
+            parallelismCounters,
+            samplingPlan.renderedSamplesPerPixel,
             {
-              includeDenoise: tileIndex + 1 >= tiles.length && config.denoise,
+              sampleRangeStart: 0,
+              sampleRangeEnd: samplingPlan.renderedSamplesPerPixel,
+              tileStartIndex: tileIndex,
+              tileEndIndex: tileIndex + 1,
+              startingSubmissionCount: frameSubmissionCount,
+              startingSlot: frameConfigSlot,
+              includeDenoise: tileIndex + 1 >= tiles.length,
               includePresent: tileIndex + 1 >= tiles.length,
             }
-          ),
-          allowTimeout: false,
-        };
-        await waitForSubmittedGpuWork(tileWaitOptions);
-      }
-      frameStats = createFrameStats({
-        frameIndex,
-        accelerationBuildSubmitted,
-        frameSubmissionCount,
-        parallelismCounters,
-        renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel,
-        targetSamplesPerPixel: samplingPlan.targetSamplesPerPixel,
-        frameTimeBudgetMs: samplingPlan.frameTimeBudgetMs,
-        budgetConstrained: samplingPlan.budgetConstrained,
-      });
-    } else {
-      const submittedWorkTiming = estimateSubmittedGpuWorkTiming(
-        { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
-        tiles.length,
-        renderOptions.submittedWorkTimeoutMs,
-        { includeAccelerationBuild: config.gpuAccelerationBuildRequired && !accelerationBuilt }
-      );
-      const submissionWaitOptions = awaitGPUCompletion
-        ? {
-            timeoutMs: submittedWorkTiming.timeoutMs,
-            maxWaitMs: submittedWorkTiming.maxWaitMs,
+          );
+          frameSubmissionCount = tileRangeDispatch.submissionCount;
+          frameConfigSlot = tileRangeDispatch.slot;
+          const tileWaitOptions = {
+            ...estimateSubmittedGpuWorkTiming(
+              { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
+              1,
+              renderOptions.submittedWorkTimeoutMs,
+              {
+                includeDenoise: tileIndex + 1 >= tiles.length && config.denoise,
+                includePresent: tileIndex + 1 >= tiles.length,
+              }
+            ),
             allowTimeout: false,
-          }
-        : {
-            timeoutMs: submittedWorkTiming.timeoutMs,
-            maxWaitMs: submittedWorkTiming.maxWaitMs,
           };
-      frameStats = renderOnce(renderOptions, samplingPlan);
-      if (awaitGPUCompletion) {
-        await waitForSubmittedGpuWork(submissionWaitOptions);
+          await waitForSubmittedGpuWork(tileWaitOptions);
+        }
+        frameStats = createFrameStats({
+          frameIndex,
+          accelerationBuildSubmitted,
+          frameSubmissionCount,
+          parallelismCounters,
+          renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel,
+          targetSamplesPerPixel: samplingPlan.targetSamplesPerPixel,
+          frameTimeBudgetMs: samplingPlan.frameTimeBudgetMs,
+          budgetConstrained: samplingPlan.budgetConstrained,
+        });
+      } else {
+        const submittedWorkTiming = estimateSubmittedGpuWorkTiming(
+          { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
+          tiles.length,
+          renderOptions.submittedWorkTimeoutMs,
+          { includeAccelerationBuild: config.gpuAccelerationBuildRequired && !accelerationBuilt }
+        );
+        const submissionWaitOptions = awaitGPUCompletion
+          ? {
+              timeoutMs: submittedWorkTiming.timeoutMs,
+              maxWaitMs: submittedWorkTiming.maxWaitMs,
+              allowTimeout: false,
+            }
+          : {
+              timeoutMs: submittedWorkTiming.timeoutMs,
+              maxWaitMs: submittedWorkTiming.maxWaitMs,
+            };
+        frameStats = renderOnce(renderOptions, samplingPlan);
+        if (awaitGPUCompletion) {
+          await waitForSubmittedGpuWork(submissionWaitOptions);
+        }
       }
+    } finally {
+      activeFrameTelemetry = null;
     }
     const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
     if (awaitGPUCompletion) {
       lastCompletedFrameTimeMs = frameTimeMs;
       lastCompletedSamplesPerPixel = frameStats.renderedSamplesPerPixel ?? frameStats.samplesPerPixel;
     }
+    const expectedPrimaryRays =
+      config.width * config.height * samplingPlan.renderedSamplesPerPixel;
+    const expectedRayCounts =
+      tiles.length * samplingPlan.renderedSamplesPerPixel * config.maxDepth;
+    const telemetryReadback = telemetryCanRecord
+      ? await telemetryResourcesForFrame.readFrame({
+          expectedPrimaryRays,
+          expectedRayCounts,
+          waitForSubmittedGpuWork,
+        })
+      : null;
+    const rayCounts = !telemetryRequested
+      ? createWavefrontRayCountTelemetry()
+      : !awaitGPUCompletion
+        ? createWavefrontRayCountTelemetry({
+            status: "unavailable",
+            expectedPrimaryRays,
+            expectedRayCounts,
+            reason: "gpu-work-not-awaited",
+          })
+        : telemetryReadback.rayCounts;
+    const timings = !telemetryRequested
+      ? createWavefrontFrameTimingTelemetry({
+          status: "not-requested",
+          source: awaitGPUCompletion ? "queue-completion" : "cpu-submit",
+          timestampQueryStatus: "not-recorded",
+          totalRenderJobTimeMs: frameTimeMs,
+        })
+      : !awaitGPUCompletion
+        ? createWavefrontFrameTimingTelemetry({
+            status: "unavailable",
+            source: "cpu-submit",
+            timestampQueryStatus: "not-recorded",
+            totalRenderJobTimeMs: frameTimeMs,
+            reason: "gpu-work-not-awaited",
+          })
+        : telemetryReadback.timestampQueryStatus === "available"
+          ? createWavefrontFrameTimingTelemetry({
+              status: "available",
+              source: "timestamp-query",
+              timestampQueryStatus: "available",
+              totalGpuTimeMs: telemetryReadback.totalGpuTimeMs,
+              totalRenderJobTimeMs: frameTimeMs,
+            })
+          : createWavefrontFrameTimingTelemetry({
+              status: "fallback",
+              source: "queue-completion",
+              timestampQueryStatus: telemetryReadback.timestampQueryStatus,
+              totalRenderJobTimeMs: frameTimeMs,
+              reason: telemetryReadback.reason,
+            });
     const deviceLossStatus =
       awaitGPUCompletion
         ? "not-detected"
@@ -872,6 +947,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     frameStats = Object.freeze({
       ...frameStats,
       deviceLossStatus,
+      secondaryRays:
+        rayCounts.status === "available" ? rayCounts.secondaryRays : null,
+      totalPathSegments:
+        rayCounts.status === "available" ? rayCounts.totalPathSegments : null,
+      rayCounts,
+      timings,
+      telemetryMemoryBytes: telemetryResourcesForFrame?.memoryBytes ?? 0,
       gpuWorkerJobs: createGpuWorkerJobDiagnostics(
         frameStats.gpuParallelism,
         frameStats.commandSubmissions,
@@ -991,6 +1073,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function destroy() {
+    frameTelemetryResources?.destroy?.();
     activeQueue.destroy?.();
     nextQueue.destroy?.();
     hitBuffer.destroy?.();

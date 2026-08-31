@@ -58,6 +58,7 @@ export const COUNTER_TRANSPORT_RESIDUAL_LUMINANCE_OFFSET = 22;
 export const COUNTER_TRANSPORT_ZERO_TERMINATION_OFFSET = 23;
 export const COUNTER_TRANSPORT_CHECKSUM_OFFSET = 24;
 export const TRACE_STORAGE_BUFFER_BINDINGS = 10;
+export const TRACE_SAMPLED_TEXTURE_BINDINGS = 21;
 export const BRDF_LUT_UPLOAD_CACHE = new Map();
 export const HIT_TYPE_SURFACE = 0;
 export const HIT_TYPE_EMISSIVE = 1;
@@ -130,6 +131,7 @@ export const EMPTY_TERMINATION_METRICS = Object.freeze({
 export const wavefrontPathTracingComputeLimits = Object.freeze({
   workgroupSize: WORKGROUP_SIZE,
   traceStorageBufferBindings: TRACE_STORAGE_BUFFER_BINDINGS,
+  traceSampledTextureBindings: TRACE_SAMPLED_TEXTURE_BINDINGS,
   rayRecordBytes: RAY_RECORD_BYTES,
   hitRecordBytes: HIT_RECORD_BYTES,
   sceneObjectRecordBytes: SCENE_OBJECT_RECORD_BYTES,

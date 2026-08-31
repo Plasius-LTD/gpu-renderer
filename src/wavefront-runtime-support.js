@@ -3,11 +3,43 @@ import {
   GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS,
   GPU_READBACK_COMPLETION_TIMEOUT_MS,
   GPU_SUBMITTED_WORK_TIMEOUT_MS,
+  TRACE_SAMPLED_TEXTURE_BINDINGS,
   TRACE_STORAGE_BUFFER_BINDINGS,
   WORKGROUP_SIZE,
   readNonNegativeInteger,
   readPositiveInteger,
 } from "./wavefront-core.js";
+
+const WEBGPU_DEFAULT_MAX_STORAGE_BUFFER_BINDING_SIZE = 128 * 1024 * 1024;
+const WEBGPU_DEFAULT_MAX_BUFFER_SIZE = 256 * 1024 * 1024;
+
+function readRequestedDeviceLimit(source, name) {
+  const rawValue = source?.[name];
+  if (rawValue === undefined || rawValue === null) {
+    return 0;
+  }
+  const value = Number(rawValue);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative safe integer.`);
+  }
+  return value;
+}
+
+function assertAdapterSupportsRequiredLimit(adapter, name, requiredValue) {
+  const availableValue = Number(adapter?.limits?.[name]);
+  if (!Number.isFinite(availableValue)) {
+    throw new Error(
+      `Wavefront scene buffers require ${name}>=${requiredValue} bytes, ` +
+        "but this adapter does not expose that limit."
+    );
+  }
+  if (availableValue < requiredValue) {
+    throw new Error(
+      `Wavefront scene buffers require ${name}>=${requiredValue} bytes, ` +
+        `but this adapter exposes ${availableValue} bytes.`
+    );
+  }
+}
 
 export function getGpuUsageConstants() {
   if (
@@ -50,11 +82,11 @@ export function resolveCanvas(canvasOrSelector, documentRef = globalThis.documen
 }
 
 async function getPipelineDiagnostics(shaderModule) {
-  if (typeof shaderModule?.compilationInfo !== "function") {
+  if (typeof shaderModule?.getCompilationInfo !== "function") {
     return "";
   }
   try {
-    const info = await shaderModule.compilationInfo();
+    const info = await shaderModule.getCompilationInfo();
     const messages = info.messages ?? [];
     if (messages.length === 0) {
       return "";
@@ -96,10 +128,10 @@ export async function createComputePipeline(device, shaderModule, layout, entryP
 }
 
 export async function assertShaderModuleCompiles(shaderModule, label) {
-  if (typeof shaderModule?.compilationInfo !== "function") {
+  if (typeof shaderModule?.getCompilationInfo !== "function") {
     return;
   }
-  const info = await shaderModule.compilationInfo();
+  const info = await shaderModule.getCompilationInfo();
   const messages = Array.isArray(info?.messages) ? info.messages : [];
   const errors = messages.filter((message) => message?.type === "error");
   if (errors.length <= 0) {
@@ -122,8 +154,13 @@ export async function createRenderPipeline(device, descriptor) {
   return device.createRenderPipeline(descriptor);
 }
 
-export function createWavefrontDeviceDescriptor(adapter, options = {}) {
-  const requiredLimits = { ...(options.requiredLimits ?? {}) };
+export function createWavefrontDeviceDescriptor(adapter, options = {}, memory = null) {
+  const descriptor = { ...(options.deviceDescriptor ?? {}) };
+  const descriptorRequiredLimits = { ...(descriptor.requiredLimits ?? {}) };
+  const requiredLimits = {
+    ...descriptorRequiredLimits,
+    ...(options.requiredLimits ?? {}),
+  };
   const exposedStorageBufferLimit = Number(adapter?.limits?.maxStorageBuffersPerShaderStage);
   if (Number.isFinite(exposedStorageBufferLimit)) {
     if (exposedStorageBufferLimit < TRACE_STORAGE_BUFFER_BINDINGS) {
@@ -138,7 +175,72 @@ export function createWavefrontDeviceDescriptor(adapter, options = {}) {
     );
   }
 
-  const descriptor = { ...(options.deviceDescriptor ?? {}) };
+  const exposedSampledTextureLimit = Number(adapter?.limits?.maxSampledTexturesPerShaderStage);
+  if (Number.isFinite(exposedSampledTextureLimit)) {
+    if (exposedSampledTextureLimit < TRACE_SAMPLED_TEXTURE_BINDINGS) {
+      throw new Error(
+        `Wavefront material tracing requires maxSampledTexturesPerShaderStage>=${TRACE_SAMPLED_TEXTURE_BINDINGS}, ` +
+          `but this adapter exposes ${exposedSampledTextureLimit}.`
+      );
+    }
+    requiredLimits.maxSampledTexturesPerShaderStage = Math.max(
+      Number(requiredLimits.maxSampledTexturesPerShaderStage ?? 0),
+      TRACE_SAMPLED_TEXTURE_BINDINGS
+    );
+  }
+
+  const sceneStorageBufferBindingBytes = Number(
+    memory?.sceneStorageBufferBindingBytes ?? 0
+  );
+  const requestedStorageBufferBindingSize = Math.max(
+    readRequestedDeviceLimit(descriptorRequiredLimits, "maxStorageBufferBindingSize"),
+    readRequestedDeviceLimit(options.requiredLimits, "maxStorageBufferBindingSize"),
+    sceneStorageBufferBindingBytes > WEBGPU_DEFAULT_MAX_STORAGE_BUFFER_BINDING_SIZE
+      ? sceneStorageBufferBindingBytes
+      : 0
+  );
+  if (requestedStorageBufferBindingSize > 0) {
+    assertAdapterSupportsRequiredLimit(
+      adapter,
+      "maxStorageBufferBindingSize",
+      requestedStorageBufferBindingSize
+    );
+    requiredLimits.maxStorageBufferBindingSize = requestedStorageBufferBindingSize;
+  }
+
+  const requestedMaxBufferSize = Math.max(
+    readRequestedDeviceLimit(descriptorRequiredLimits, "maxBufferSize"),
+    readRequestedDeviceLimit(options.requiredLimits, "maxBufferSize"),
+    sceneStorageBufferBindingBytes > WEBGPU_DEFAULT_MAX_BUFFER_SIZE
+      ? sceneStorageBufferBindingBytes
+      : 0,
+    requestedStorageBufferBindingSize > WEBGPU_DEFAULT_MAX_BUFFER_SIZE
+      ? requestedStorageBufferBindingSize
+      : 0
+  );
+  if (requestedMaxBufferSize > 0) {
+    assertAdapterSupportsRequiredLimit(adapter, "maxBufferSize", requestedMaxBufferSize);
+    requiredLimits.maxBufferSize = requestedMaxBufferSize;
+  }
+
+  const requiredFeatures = Array.from(descriptor.requiredFeatures ?? []);
+  const adapterFeatures = adapter?.features;
+  const timestampQuerySupported =
+    typeof adapterFeatures?.has === "function"
+      ? adapterFeatures.has("timestamp-query")
+      : adapterFeatures && typeof adapterFeatures[Symbol.iterator] === "function"
+        ? Array.from(adapterFeatures).includes("timestamp-query")
+        : false;
+  if (
+    options.gpuTimestamps !== false &&
+    timestampQuerySupported &&
+    !requiredFeatures.includes("timestamp-query")
+  ) {
+    requiredFeatures.push("timestamp-query");
+  }
+  if (requiredFeatures.length > 0) {
+    descriptor.requiredFeatures = requiredFeatures;
+  }
   if (Object.keys(requiredLimits).length > 0) {
     descriptor.requiredLimits = {
       ...(descriptor.requiredLimits ?? {}),
@@ -184,6 +286,7 @@ export function createGpuAdapterParallelismDiagnostics(adapter, device) {
       maxComputeWorkgroupsPerDimension: readGpuLimit(adapter, device, "maxComputeWorkgroupsPerDimension"),
       maxStorageBuffersPerShaderStage: readGpuLimit(adapter, device, "maxStorageBuffersPerShaderStage"),
       maxStorageBufferBindingSize: readGpuLimit(adapter, device, "maxStorageBufferBindingSize"),
+      maxBufferSize: readGpuLimit(adapter, device, "maxBufferSize"),
     }),
     configuredWorkgroupSize: WORKGROUP_SIZE,
   });

@@ -16,7 +16,7 @@ an explicit WebGPU-first runtime that can be consumed from React, vanilla, or
 worker-driven app surfaces.
 
 The package targets Node.js 24, consumes the stable `@plasius/gpu-shared` 1.x
-runtime line (`^1.0.14`), and validates its development tooling against the
+runtime line (`^1.1.1`), and validates its development tooling against the
 current ESLint 10 and TypeScript 7 baselines.
 
 Apache-2.0. ESM + CJS builds.
@@ -65,6 +65,21 @@ reporting.
 ```sh
 npm install @plasius/gpu-renderer
 ```
+
+## Permanent Zero-Three boundary
+
+This WebGPU renderer and its complete production, development, test, tooling,
+peer, optional, and artifact dependency graphs permanently prohibit Three.js,
+R3F, TSL, their related packages, and any dependency path reaching them. There
+is no compatibility mode, fallback, waiver, or rollback to those renderers.
+
+Run `npm run zero-three:source` before installing dependencies, or run
+`npm run build && npm run zero-three` after `npm ci` for the installed graph,
+built bundle, actual npm tarball, and generated CycloneDX evidence. The full
+command writes digest-bound package/version evidence to
+`release-artifacts/zero-three-evidence.json`. CI retains it, and production CD
+passes it by immutable artifact ID, verifies it again, attaches it to the
+GitHub release, and attests it.
 
 ## Usage
 
@@ -453,6 +468,17 @@ without rebuilding scene buffers. `renderFrame(...)` also accepts an optional
 guarantees at least the minimum full-screen pass, and frame stats report both
 configured `samplesPerPixel` and actual `renderedSamplesPerPixel` so realtime
 callers can budget motion frames without overstating delivered quality.
+Before requesting a WebGPU device, the renderer derives the largest scene
+storage binding from the normalized scene, mesh, and BVH records. It requests
+the smallest sufficient `maxStorageBufferBindingSize` (and `maxBufferSize` only
+when the WebGPU default is also exceeded), preserves stricter caller limits,
+and rejects unsupported adapters before device creation. Default-sized scenes
+do not elevate either size limit. `config.memory` and snapshot memory telemetry
+describe the actual persistent GPU buffer descriptors: placeholder records,
+combined BVH/emissive storage, mesh source buffers, aligned frame/build uniform
+buffers, counters, and dispatch arguments are each counted exactly once;
+`materialTableBytes` is zero because material data is packed into mesh and
+triangle records rather than a standalone GPU buffer.
 For consumers that want to hand wavefront SPP adaptation to
 `@plasius/gpu-performance`, `createWavefrontAdaptiveSamplingLevels(...)` exposes
 a bounded low-to-high ladder of per-frame `samplesPerPixel`,
@@ -474,7 +500,50 @@ drop in jobs/submission or jobs/s versus the approved baseline as a
 release-validation failure unless a linked ticket explicitly approves the
 regression; `submission-batching` warns when the renderer falls back to roughly
 one GPU job per submission despite a higher pass ceiling.
-submitting work that can occupy more than one GPU execution unit. After each
+
+Awaited fixed-SPP renders can opt into exact ray and timing evidence:
+
+```js
+const frame = await renderer.renderFrame({
+  readStats: true,
+  readOutputProbe: false,
+});
+
+console.log({
+  primaryRays: frame.primaryRays,
+  secondaryRays: frame.secondaryRays,
+  totalPathSegments: frame.totalPathSegments,
+  bounceHistogram: frame.rayCounts.bounceHistogram,
+  gpuTimeMs: frame.timings.totalGpuTimeMs,
+  renderJobTimeMs: frame.timings.totalRenderJobTimeMs,
+  timingSource: frame.timings.source,
+});
+```
+
+`primaryRays` is the exact number of camera samples. `secondaryRays` is the
+sum of active continuation records intersected after bounce zero, including
+bounded reflection/transmission branches, and `totalPathSegments` is their sum.
+The renderer copies the existing active-queue counter once per bounce into a
+lazily allocated telemetry buffer; it does not add diagnostic shader atomics or
+change WGSL transport. `rayCounts.status` distinguishes available,
+unavailable, failed, and not-requested evidence. A mismatch between scheduled
+and observed primary rays fails the `ray-count-telemetry` transport guardrail.
+Ray-count reduction uses constant call-stack space, including the supported
+4K/eight-bounce/128-SPP stress envelope where hundreds of thousands of
+tile/sample/depth records collapse into a small per-bounce histogram.
+
+When the adapter exposes `timestamp-query`, the device requests it
+opportunistically and two timestamps measure the GPU span from the first
+primary pass through presentation. Set `gpuTimestamps: false` at renderer
+creation to prevent that optional feature request. Where timestamp queries are
+not exposed or fail, `timings` reports `source: "queue-completion"`, leaves
+`totalGpuTimeMs` null, and retains the awaited
+`totalRenderJobTimeMs`. Classification, compaction, and sampling sub-pass times
+remain null until the corresponding adaptive passes exist. Without
+`readStats: true`, and for `renderOnce()`, the fixed dispatcher creates no
+telemetry buffers, query sets, readbacks, or timestamped pass descriptors.
+
+After each
 primary-ray or compaction pass, the GPU writes the active-ray workgroup count
 into the counter buffer and the encoder copies it into an indirect-dispatch
 argument buffer. Intersection and surface-resolution passes therefore scale

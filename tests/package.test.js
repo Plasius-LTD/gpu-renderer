@@ -1305,11 +1305,46 @@ test("wavefront transport guardrails summarize throughput memory and queue healt
     invalidSamples: 0,
     legacyClampEquivalentSamples: 0,
   });
-  assert.equal(guardrails.checks.length, 4);
+  assert.equal(guardrails.current.rayCountStatus, "not-requested");
+  assert.equal(guardrails.checks.length, 5);
   assert.ok(guardrails.checks.every((check) => check.status === "pass"));
   assert.match(
     guardrails.checks.find((check) => check.id === "submission-batching").details,
     /9\.00 jobs\/submission/
+  );
+});
+
+test("wavefront transport guardrails fail closed on ray-count telemetry drift", () => {
+  const guardrails = createWavefrontTransportGuardrailSummary({
+    commandSubmissions: 1,
+    maxFramePassesPerSubmission: 4,
+    queueOverflow: 0,
+    rayCounts: {
+      status: "failed",
+      expectedPrimaryRays: 64,
+      observedPrimaryRays: 63,
+      reason: "primary-ray-count-mismatch:63/64",
+    },
+    gpuWorkerJobs: {
+      completedPerFrame: 4,
+      completedPerSecond: 80,
+      completedPerSubmission: 4,
+      directDispatchesCompleted: 4,
+      indirectDispatchesCompleted: 0,
+      frameTimeMs: 50,
+      awaitedGpuCompletion: true,
+    },
+  });
+
+  assert.equal(guardrails.status, "fail");
+  assert.equal(guardrails.current.rayCountStatus, "failed");
+  assert.ok(
+    guardrails.checks.some(
+      (check) =>
+        check.id === "ray-count-telemetry" &&
+        check.status === "fail" &&
+        /primary-ray-count-mismatch/.test(check.details)
+    )
   );
 });
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { Script } from "node:vm";
 
 const read = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
@@ -76,6 +77,43 @@ test("publication uses hosted npm OIDC without a write-token fallback", () => {
   assert.doesNotMatch(npmConfig, /NODE_AUTH_TOKEN/u);
 });
 
+test("publication treats the immutable tarball as an explicit local path", () => {
+  assert.match(
+    cdWorkflow,
+    /npm publish "\.\/\$\{TARBALL\}" --ignore-scripts/u,
+  );
+  assert.doesNotMatch(
+    cdWorkflow,
+    /npm publish "\$\{TARBALL\}" --ignore-scripts/u,
+  );
+});
+
+test("failed unpublished releases recover without rewriting published identity", () => {
+  const releaseTagJob = cdWorkflow.slice(
+    cdWorkflow.indexOf("- name: Ensure release tag points at exact main commit"),
+    cdWorkflow.indexOf("- name: Create GitHub Release draft"),
+  );
+  assert.match(cdWorkflow, /PACKAGE_PUBLISHED/u);
+  assert.match(cdWorkflow, /git merge-base --is-ancestor/u);
+  assert.match(cdWorkflow, /OLD_PACKAGE_METADATA/u);
+  assert.match(cdWorkflow, /RELEASE_IS_DRAFT/u);
+  assert.match(
+    cdWorkflow,
+    /A published GitHub release exists for unpublished npm tag/u,
+  );
+  assert.match(cdWorkflow, /gh api --method DELETE/u);
+  assert.match(cdWorkflow, /git push origin ":refs\/tags\/\$\{TAG\}"/u);
+  assert.match(releaseTagJob, /git tag -d "\$\{TAG\}"/u);
+  assert.ok(
+    releaseTagJob.indexOf('git push origin ":refs/tags/${TAG}"') <
+      releaseTagJob.indexOf('git tag -d "${TAG}"'),
+  );
+  assert.ok(
+    releaseTagJob.indexOf('git tag -d "${TAG}"') <
+      releaseTagJob.lastIndexOf('git tag "${TAG}" "${EXPECTED_SHA}"'),
+  );
+});
+
 test("dependency code cannot run inside the OIDC mutation job", () => {
   const validationJob = cdWorkflow.slice(
     cdWorkflow.indexOf("\n  validate_and_pack:"),
@@ -97,7 +135,23 @@ test("dependency code cannot run inside the OIDC mutation job", () => {
   assert.doesNotMatch(publishJob, /npm run /u);
 });
 
+test("tarball membership checks drain the archive listing under pipefail", () => {
+  assert.match(
+    cdWorkflow,
+    /tar -tzf "\$\{TARBALL\}" \| grep -E '\^package\/dist\(\/\|\$\)' >\/dev\/null/u,
+  );
+  assert.doesNotMatch(cdWorkflow, /tar -tzf "\$\{TARBALL\}" \| grep -Eq/u);
+});
+
 test("release metadata lands through a unique non-force-pushed PR", () => {
+  assert.match(
+    releasePrepareWorkflow,
+    /name: Checkout main[\s\S]*?persist-credentials: false/u,
+  );
+  assert.match(
+    releasePrepareWorkflow,
+    /git remote set-url origin "https:\/\/x-access-token:\$\{AUTH_TOKEN\}@github\.com\/\$\{GITHUB_REPOSITORY\}\.git"/u,
+  );
   assert.match(
     releasePrepareWorkflow,
     /BRANCH="release\/\$\{TAG\}-\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}"/u,
@@ -108,4 +162,20 @@ test("release metadata lands through a unique non-force-pushed PR", () => {
   );
   assert.doesNotMatch(releasePrepareWorkflow, /--force-with-lease/u);
   assert.doesNotMatch(releasePrepareWorkflow, /secrets: inherit/u);
+});
+
+test("release version selection remains syntactically executable", () => {
+  const embeddedScript = releasePrepareWorkflow.match(
+    /TARGET_VER=\$\(node -e '\n([\s\S]*?)\n\s+' "\$\{CURRENT_VER\}"/u,
+  )?.[1];
+  assert.ok(embeddedScript, "expected the embedded release version selection script");
+  assert.doesNotThrow(() => new Script(embeddedScript));
+});
+
+test("release prerelease identity selection remains syntactically executable", () => {
+  const embeddedScript = releasePrepareWorkflow.match(
+    /EFFECTIVE_PREID=\$\(TARGET_VER="\$\{MAIN_VERSION\}" node -e '\n([\s\S]*?)\n\s+'\)/u,
+  )?.[1];
+  assert.ok(embeddedScript, "expected the embedded prerelease identity script");
+  assert.doesNotThrow(() => new Script(embeddedScript));
 });

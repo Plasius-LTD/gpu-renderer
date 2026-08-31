@@ -4,6 +4,10 @@ import {
   clamp,
   readPositiveInteger,
 } from "./wavefront-core.js";
+import {
+  createWavefrontFrameTimingTelemetry,
+  createWavefrontRayCountTelemetry,
+} from "./wavefront-frame-telemetry.js";
 
 export function resolveWavefrontRenderedSamplesPerPixel({
   config,
@@ -107,6 +111,11 @@ export function createWavefrontFrameStats({
       maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
       screenRays: config.width * config.height,
       primaryRays: config.width * config.height * renderedSamplesPerPixel,
+      secondaryRays: null,
+      totalPathSegments: null,
+      rayCounts: createWavefrontRayCountTelemetry(),
+      timings: createWavefrontFrameTimingTelemetry(),
+      telemetryMemoryBytes: 0,
       sceneObjectCount: config.sceneObjectCount,
       triangleCount: config.triangleCount,
       emissiveTriangleCount: config.emissiveTriangleCount,
