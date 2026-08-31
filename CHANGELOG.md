@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.42] - 2026-08-31
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Made fixed-SPP ray-count reduction stack-safe for the supported
     4K/eight-bounce/128-SPP envelope by replacing unbounded argument spreading
     with a constant-stack linear maximum scan.
@@ -1032,3 +1046,4 @@ All notable changes to this project will be documented in this file.
 [0.2.39]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.39
 [0.2.40]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.40
 [0.2.41]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.41
+[0.2.42]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.42
