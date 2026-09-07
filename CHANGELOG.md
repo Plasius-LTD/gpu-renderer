@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
  - (placeholder)
 
 - **Fixed**
+  - Documented verified locked-branch runner admission for trusted push checks,
+    including exact-commit verification and removal before branch updates.
   - Restored trusted-push-only CI on explicit self-hosted runners, preserving
     required check names and excluding external fork execution; bounded scheduled
     dependency validation to self-hosted main runs.
