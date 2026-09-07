@@ -691,9 +691,23 @@ npm run pack:check
 ## Release integrity
 
 CI keeps the administrative contributor registry outside Git and npm package
-artifacts using exact, case-normalised path checks. External fork heads are
-rejected; same-repository pull requests validate on GitHub-hosted runners and
-main pushes validate on approved self-hosted runners. Release preparation and
+artifacts using exact, case-normalised path checks. CI runs only for pushes to
+repository-owned branches on explicit `[self-hosted, Linux, X64]` runners.
+External fork pull requests trigger no CI execution; a maintainer must review
+and move a contribution to a repository-owned branch to produce required checks.
+Before branch CI starts, an authorised maintainer reviews the exact commit and
+locks its repository branch as read-only, enforcing the lock for administrators
+and disabling force pushes, deletion, and fork syncing. After reading back the
+lock and commit SHA, admit only that branch's fully qualified workflow ref for
+`gpu-renderer/.github/workflows/ci.yml` in `Public CI - Quarantined`. Top-level
+push jobs identify their workflow by branch ref; SHA-only admission did not
+schedule the reviewed job. Remove the temporary workflow entry and verify its
+removal before unlocking or updating the branch, and after delivery. Preserve all
+other group restrictions. Never admit mutable branch or PR refs. See
+[ADR-0028](docs/adrs/adr-0028-locked-branch-runner-admission.md) for the procedure.
+The trusted admission, build-test, and artifact-integrity checks keep their
+existing names for branch protection. Scheduled dependency validation also uses
+bounded self-hosted capacity and accepts only `main`. Release preparation and
 publication use a two-run exact-main protocol on GitHub-hosted Node.js 24.18.0
 LTS. A read-only job seals the package tarball and SBOM before a dependency-free
 production job publishes that exact artifact through npm OIDC with provenance;

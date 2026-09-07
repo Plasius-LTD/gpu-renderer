@@ -242,7 +242,7 @@ test("package CI and production CD cannot skip permanent Zero-Three evidence", (
   assert.match(ci, /npm run zero-three:source/u);
   assert.match(ci, /npm run zero-three:test/u);
   assert.match(ci, /npm run zero-three[\s\S]*actions\/upload-artifact@/u);
-  assert.match(ci, /cache: \$\{\{ github\.event_name == 'pull_request' && 'npm' \|\| '' \}\}/u);
+  assert.doesNotMatch(ci, /^\s+cache:/mu);
   assert.match(ci, /package-manager-cache: false/u);
   assert.match(cd, /npm run zero-three/u);
   assert.match(cd, /zero-three-evidence\.json/u);
