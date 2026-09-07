@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: ["**"]
 permissions:
   actions: read
   contents: read
@@ -15,26 +13,17 @@ env:
 jobs:
   trusted_head:
     name: Trusted head admission
-    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 2
     permissions: {}
     steps:
-      - name: Reject external fork execution
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          if [ "${EVENT_NAME}" = "pull_request" ] && [ "${HEAD_REPOSITORY}" != "${BASE_REPOSITORY}" ]; then
-            echo "External fork pull requests cannot be merged until a maintainer moves the reviewed commit to a repository-owned branch." >&2
-            exit 1
-          fi
+      - name: Confirm trusted push admission
+        run: echo "Validation is admitted only from repository-owned branch pushes."
 
   build-test:
     needs: trusted_head
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -42,7 +31,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
-          cache: ${{ github.event_name == 'pull_request' && 'npm' || '' }}
           package-manager-cache: false
 
       - name: Enforce permanent Zero-Three install admission
@@ -142,8 +130,7 @@ jobs:
   public_artifact_integrity:
     name: Public artifact integrity
     needs: trusted_head
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["self-hosted","Linux","X64"]') }}
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     permissions:
       contents: read

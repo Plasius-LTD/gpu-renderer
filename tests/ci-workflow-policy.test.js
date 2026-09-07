@@ -11,36 +11,32 @@ const cdWorkflow = read(".github/workflows/cd.yml");
 const releasePrepareWorkflow = read(".github/workflows/release-prepare.yml");
 const npmConfig = read(".npmrc");
 
-test("pull-request validation admits only same-repository heads", () => {
-  assert.match(ciWorkflow, /pull_request:\s*\n\s+branches: \[main\]/u);
-  assert.doesNotMatch(ciWorkflow, /pull_request_target:/u);
+test("CI validates trusted repository pushes on explicit self-hosted runners", () => {
+  assert.match(ciWorkflow, /push:\s*\n\s+branches: \["\*\*"\]/u);
+  assert.doesNotMatch(ciWorkflow, /^\s*(?:pull_request|pull_request_target):/mu);
+  assert.doesNotMatch(ciWorkflow, /ubuntu-latest|fromJSON|inputs\./u);
+  assert.equal(
+    (ciWorkflow.match(/runs-on: \[self-hosted, Linux, X64\]/gu) ?? []).length,
+    3,
+  );
   assert.match(ciWorkflow, /name: Trusted head admission/u);
-  assert.match(
-    ciWorkflow,
-    /External fork pull requests cannot be merged/u,
-  );
+  assert.match(ciWorkflow, /if: \$\{\{ github\.event_name == 'push' \}\}/u);
   assert.equal((ciWorkflow.match(/needs: trusted_head/gu) ?? []).length, 2);
-  assert.equal(
-    (
-      ciWorkflow.match(
-        /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/gu,
-      ) ?? []
-    ).length,
-    2,
-  );
-  assert.equal(
-    (
-      ciWorkflow.match(
-        /runs-on: \$\{\{ fromJSON\(github\.event_name == 'pull_request' && '\["ubuntu-latest"\]' \|\| '\["self-hosted","Linux","X64"\]'\) \}\}/gu,
-      ) ?? []
-    ).length,
-    2,
-  );
   assert.match(ciWorkflow, /timeout-minutes: 30/u);
   assert.equal(
     (ciWorkflow.match(/package-manager-cache: false/gu) ?? []).length,
     2,
   );
+  assert.doesNotMatch(ciWorkflow, /cache:.*npm/u);
+});
+
+test("scheduled dependency validation uses bounded trusted self-hosted capacity", () => {
+  const auditWorkflow = read(".github/workflows/npm-audit-fix.yml");
+  assert.match(auditWorkflow, /runs-on: \[self-hosted, Linux, X64\]/u);
+  assert.match(auditWorkflow, /if: \$\{\{ github\.ref == 'refs\/heads\/main' \}\}/u);
+  assert.match(auditWorkflow, /timeout-minutes: 30/u);
+  assert.match(auditWorkflow, /package-manager-cache: false/u);
+  assert.doesNotMatch(auditWorkflow, /ubuntu-latest|pull_request_target:|^\s+pull_request:|cache: "npm"/mu);
 });
 
 test("publication binds a second run to exact main and successful CI", () => {

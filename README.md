@@ -691,9 +691,13 @@ npm run pack:check
 ## Release integrity
 
 CI keeps the administrative contributor registry outside Git and npm package
-artifacts using exact, case-normalised path checks. External fork heads are
-rejected; same-repository pull requests validate on GitHub-hosted runners and
-main pushes validate on approved self-hosted runners. Release preparation and
+artifacts using exact, case-normalised path checks. CI runs only for pushes to
+repository-owned branches on explicit `[self-hosted, Linux, X64]` runners.
+External fork pull requests trigger no CI execution; a maintainer must review
+and move a contribution to a repository-owned branch to produce required checks.
+The trusted admission, build-test, and artifact-integrity checks keep their
+existing names for branch protection. Scheduled dependency validation also uses
+bounded self-hosted capacity and accepts only `main`. Release preparation and
 publication use a two-run exact-main protocol on GitHub-hosted Node.js 24.18.0
 LTS. A read-only job seals the package tarball and SBOM before a dependency-free
 production job publishes that exact artifact through npm OIDC with provenance;
