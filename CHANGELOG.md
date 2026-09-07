@@ -15,7 +15,8 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
-  - (placeholder)
+  - Refreshed compatible @plasius/* lockfile resolutions to the latest published releases.
+ - (placeholder)
 
 - **Fixed**
   - Preserved hosted pull-request isolation, bounded validation runtime, and
