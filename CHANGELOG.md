@@ -15,6 +15,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.45] - 2026-09-07
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Refreshed compatible @plasius/* lockfile resolutions to the latest published releases.
  - (placeholder)
 
@@ -1112,3 +1126,4 @@ All notable changes to this project will be documented in this file.
 [0.2.42]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.42
 [0.2.43]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.43
 [0.2.44]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.44
+[0.2.45]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.45
