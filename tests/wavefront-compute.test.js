@@ -3729,6 +3729,52 @@ serialWebGpuTest("wavefront renderFrame can adapt high spp down to a single in-b
   });
 });
 
+serialWebGpuTest("zero frame budget schedules the same fixed-32 work as an omitted budget", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(),
+      navigator: createFakeWavefrontNavigator(device),
+      width: 8,
+      height: 8,
+      tileSize: 8,
+      maxDepth: 2,
+      samplesPerPixel: 32,
+      denoise: false,
+      deferredPathResolve: true,
+    });
+    const samplingUniforms = [];
+    const writeBuffer = device.queue.writeBuffer;
+    device.queue.writeBuffer = (buffer, offset, data) => {
+      if (buffer.descriptor.label === "plasius.wavefront.frameConfig") {
+        const view = new DataView(data.buffer ?? data, data.byteOffset ?? 0);
+        samplingUniforms.push([view.getFloat32(140, true), view.getFloat32(136, true)]);
+      }
+      writeBuffer(buffer, offset, data);
+    };
+    const fixed = await renderer.renderFrame({ readOutputProbe: false });
+    const fixedUniforms = samplingUniforms.splice(0);
+    const allocatedBuffers = device.buffers.length;
+    const allocatedTextures = device.textures.length;
+    const zero = await renderer.renderFrame({
+      readOutputProbe: false,
+      frameTimeBudgetMs: 0,
+      minimumSamplesPerPixel: 1,
+    });
+    assert.equal(fixed.renderedSamplesPerPixel, 32);
+    assert.equal(zero.renderedSamplesPerPixel, fixed.renderedSamplesPerPixel);
+    assert.equal(zero.samplesPerPixel, 32);
+    assert.equal(zero.primaryRays, 8 * 8 * 32);
+    assert.equal(zero.frameTimeBudgetMs, null);
+    assert.equal(zero.budgetConstrained, false);
+    assert.deepEqual(fixedUniforms, Array.from({ length: 32 }, (_, index) => [index, 1 / 32]));
+    assert.deepEqual(samplingUniforms, fixedUniforms);
+    assert.equal(device.buffers.length, allocatedBuffers);
+    assert.equal(device.textures.length, allocatedTextures);
+    renderer.destroy();
+  });
+});
+
 serialWebGpuTest("wavefront compute one-shot compatibility helper renders and always destroys", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();

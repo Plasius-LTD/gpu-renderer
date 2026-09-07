@@ -1143,6 +1143,7 @@ export interface WavefrontPathTracingComputeRenderer {
     submittedWorkTimeoutMs?: number;
     samplesPerPixel?: number;
     minimumSamplesPerPixel?: number;
+    /** Positive values enable whole-frame SPP reduction. Omitted or non-positive values keep the fixed target. */
     frameTimeBudgetMs?: number;
     probe?: { x?: number; y?: number };
   }): Promise<WavefrontPathTracingComputeFrameStats>;

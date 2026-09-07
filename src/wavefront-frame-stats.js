@@ -25,8 +25,8 @@ export function resolveWavefrontRenderedSamplesPerPixel({
     1,
     config.samplesPerPixel
   );
-  const frameTimeBudgetMs = Number.isFinite(renderOptions.frameTimeBudgetMs)
-    ? Math.max(0, Number(renderOptions.frameTimeBudgetMs))
+  const frameTimeBudgetMs = Number.isFinite(renderOptions.frameTimeBudgetMs) && renderOptions.frameTimeBudgetMs > 0
+    ? Number(renderOptions.frameTimeBudgetMs)
     : null;
   const minimumSamplesPerPixel = clamp(
     readPositiveInteger(

@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
  - (placeholder)
 
 - **Fixed**
+  - Treat omitted, zero, negative, and non-finite frame-time budgets as fixed-SPP
+    rendering, preserving the requested target even when a lower minimum is set.
   - Preserved hosted pull-request isolation, bounded validation runtime, and
     disabled package-manager cache finalization on self-hosted main validation.
   - (placeholder)
