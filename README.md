@@ -461,11 +461,17 @@ optional denoise, and presentation into bounded command submissions controlled
 by `maxFramePassesPerSubmission` to keep 4K/high-spp command buffers from
 becoming oversized. `updateCamera(...)` can update the per-frame camera uniforms
 without rebuilding scene buffers. `renderFrame(...)` also accepts an optional
-`frameTimeBudgetMs` plus `minimumSamplesPerPixel`: when present, configured
+`frameTimeBudgetMs` plus `minimumSamplesPerPixel`: with a positive finite budget, configured
 `samplesPerPixel` becomes a ceiling instead of a hard requirement, the renderer
 guarantees at least the minimum full-screen pass, and frame stats report both
 configured `samplesPerPixel` and actual `renderedSamplesPerPixel` so realtime
 callers can budget motion frames without overstating delivered quality.
+Omitting `frameTimeBudgetMs` or passing zero disables this whole-frame
+reduction; non-positive or non-finite budgets are reported as `null`. A minimum
+SPP setting alone never lowers a fixed target. For fixed-32 reference captures,
+configure 32 SPP, omit the budget (or use zero), disable denoise explicitly, and
+retain `renderedSamplesPerPixel` and independently captured ray counts. A
+positive budget may begin at one SPP even when the requested target is 32.
 Before requesting a WebGPU device, the renderer derives the largest scene
 storage binding from the normalized scene, mesh, and BVH records. It requests
 the smallest sufficient `maxStorageBufferBindingSize` (and `maxBufferSize` only
