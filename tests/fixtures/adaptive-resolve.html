@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Adaptive count resolve WebGPU validation</title>
+<h1>Adaptive count resolve WebGPU validation</h1>
+<p>Arithmetic and allocation qualification only. No adaptive scene, transport or performance claim.</p>
+<pre id="result" role="status">Running…</pre>
+<script type="module">
+import { ADAPTIVE_RESOLVE_WGSL } from "/src/wavefront-adaptive-resolve-shader.js";
+import { createAdaptiveResourceOwner, packAdaptivePixelState } from "/src/wavefront-adaptive-metadata.js";
+import { createAdaptiveResolvePipelines, packAdaptiveCameraSamples, packAdaptiveResolveConfig } from "/src/wavefront-adaptive-resolve.js";
+
+let device, owner, timer;
+let cancelled = false;
+const buffers = [];
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+function active() {
+  if (cancelled) { device?.destroy(); throw new Error("Validation cancelled"); }
+}
+function buffer(size, usage, label) {
+  const value = device.createBuffer({ size, usage, label });
+  buffers.push(value);
+  return value;
+}
+const run = async () => {
+  const adapter = await navigator.gpu?.requestAdapter();
+  active();
+  assert(adapter && adapter.info.isFallbackAdapter === false, "Physical adapter evidence unavailable");
+  device = await adapter.requestDevice();
+  active();
+  let lost = false;
+  const uncaptured = [];
+  device.lost.then(() => { lost = true; });
+  device.addEventListener("uncapturederror", (event) => uncaptured.push(event.error.message));
+  device.pushErrorScope("validation");
+  const pipelines = await createAdaptiveResolvePipelines(device, GPUShaderStage, { enabled: true });
+  active();
+  const storage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC;
+  const pixels = buffer(32 * 32 * 4, storage, "test-pixels");
+  const samples = buffer(256 * 32, storage, "test-samples");
+  const sums = buffer(256 * 16, storage, "test-sums");
+  const resolved = buffer(256 * 16, storage, "test-resolved");
+  const configs = buffer(256 * 256, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, "test-config-slots");
+  const readback = buffer(32 * 32 * 4 + 256 * 16 * 2, GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, "test-readback");
+  const group = device.createBindGroup({ layout: pipelines.layout, entries: [
+    { binding: 0, resource: { buffer: pixels } },
+    { binding: 1, resource: { buffer: samples } },
+    { binding: 2, resource: { buffer: sums } },
+    { binding: 3, resource: { buffer: resolved } },
+    { binding: 4, resource: { buffer: configs, size: 32 } },
+  ] });
+  const tile = { width: 32, height: 32, tileX: 4, tileY: 5, tileWidth: 16, tileHeight: 16, frameValid: true };
+  const pixelId = (id) => (5 + Math.floor(id / 16)) * 32 + 4 + id % 16;
+  const words = new Uint32Array(1024);
+  words.fill(packAdaptivePixelState({ requested: 32, flags: 7 }));
+  for (let id = 0; id < 256; id += 1) words[pixelId(id)] = packAdaptivePixelState({ requested: id + 1, flags: 3 });
+  device.queue.writeBuffer(pixels, 0, words);
+  const configBytes = new Uint8Array(256 * 256);
+  for (let ordinal = 0; ordinal < 256; ordinal += 1) configBytes.set(new Uint8Array(packAdaptiveResolveConfig({ ...tile, sampleOrdinal: ordinal })), ordinal * 256);
+  device.queue.writeBuffer(configs, 0, configBytes);
+  // Sentinel sums must be discarded at the first completed sample of a reused tile.
+  device.queue.writeBuffer(sums, 0, new Float32Array(256 * 4).fill(999999));
+  function dispatch(ordinal, commit = true) {
+    const encoder = device.createCommandEncoder();
+    if (commit) {
+      const pass = encoder.beginComputePass();
+      pass.setPipeline(pipelines.commit);
+      pass.setBindGroup(0, group, [ordinal * 256]);
+      pass.dispatchWorkgroups(5); // Includes an intentionally out-of-range workgroup.
+      pass.end();
+    }
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipelines.resolve);
+    pass.setBindGroup(0, group, [ordinal * 256]);
+    pass.dispatchWorkgroups(5);
+    pass.end();
+    encoder.copyBufferToBuffer(pixels, 0, readback, 0, 4096);
+    encoder.copyBufferToBuffer(sums, 0, readback, 4096, 4096);
+    encoder.copyBufferToBuffer(resolved, 0, readback, 8192, 4096);
+    device.queue.submit([encoder.finish()]);
+  }
+  async function read() {
+    await readback.mapAsync(GPUMapMode.READ);
+    active();
+    const copy = readback.getMappedRange().slice(0);
+    readback.unmap();
+    return { words: new Uint32Array(copy, 0, 1024), sums: new Float32Array(copy, 4096, 1024), resolved: new Float32Array(copy, 8192, 1024) };
+  }
+  for (let ordinal = 0; ordinal < 256; ordinal += 1) {
+    const values = Array.from({ length: 256 }, (_, id) => ({ sourcePixelId: pixelId(id), sampleOrdinal: ordinal, status: 1, radiance: [2 * (id + 1) + ordinal, 0.5, 131072] }));
+    device.queue.writeBuffer(samples, 0, packAdaptiveCameraSamples(values));
+    dispatch(ordinal);
+  }
+  let actual = await read();
+  for (let id = 0; id < 256; id += 1) {
+    const count = id + 1;
+    assert(actual.words[pixelId(id)] === packAdaptivePixelState({ requested: count, completed: count, flags: 3 }), `Count or flags mismatch ${id}`);
+    const mean = 2 * count + (count - 1) / 2;
+    assert(actual.sums[id * 4] === mean * count && actual.resolved[id * 4] === mean, `Unequal mean mismatch ${id}`);
+    assert(actual.resolved[id * 4 + 1] === 0.5 && actual.resolved[id * 4 + 2] === 131072 && actual.resolved[id * 4 + 3] === 1, `HDR or alpha mismatch ${id}`);
+  }
+  const owned = new Set(Array.from({ length: 256 }, (_, id) => pixelId(id)));
+  for (let id = 0; id < 1024; id += 1) if (!owned.has(id)) assert(actual.words[id] === words[id], `Non-tile pixel modified ${id}`);
+  const negativeCases = [];
+  for (const kind of ["partial", "producer-failed", "wrong-pixel", "wrong-ordinal", "duplicate", "out-of-order", "invalid-count", "zero-budget", "NaN", "infinity", "negative", "failed-frame"]) {
+    words.fill(packAdaptivePixelState({ requested: 32 }));
+    const values = Array.from({ length: 256 }, (_, id) => ({ sourcePixelId: pixelId(id), sampleOrdinal: 0, status: 1, radiance: [2, 4, 8] }));
+    if (kind === "partial") values[0].status = 0;
+    if (kind === "producer-failed") values[0].status = 2;
+    if (kind === "wrong-pixel") values[0].sourcePixelId += 1;
+    if (kind === "wrong-ordinal") values[0].sampleOrdinal = 1;
+    if (kind === "duplicate") words[pixelId(0)] = packAdaptivePixelState({ requested: 32, completed: 1 });
+    if (kind === "invalid-count") words[pixelId(0)] = 511;
+    if (kind === "zero-budget") words[pixelId(0)] = 0;
+    const sampleBytes = packAdaptiveCameraSamples(values);
+    if (["NaN", "infinity", "negative"].includes(kind)) new DataView(sampleBytes).setFloat32(0, kind === "NaN" ? NaN : kind === "infinity" ? Infinity : -1, true);
+    device.queue.writeBuffer(pixels, 0, words);
+    device.queue.writeBuffer(samples, 0, sampleBytes);
+    device.queue.writeBuffer(configs, 0, packAdaptiveResolveConfig({ ...tile, sampleOrdinal: kind === "out-of-order" ? 2 : 0, frameValid: kind !== "failed-frame" }));
+    dispatch(0);
+    actual = await read();
+    assert(actual.words[pixelId(0)] === ((words[pixelId(0)] | 0x80000000) >>> 0), `Failure was counted: ${kind}`);
+    assert(actual.resolved[3] === 0, `Failure resolved as valid: ${kind}`);
+    negativeCases.push(kind);
+  }
+  // A corrupt domain configuration cannot write any full-screen pixel.
+  const badTile = packAdaptiveResolveConfig({ ...tile, sampleOrdinal: 0 });
+  new DataView(badTile).setUint32(8, 0xffffffff, true);
+  device.queue.writeBuffer(pixels, 0, words);
+  device.queue.writeBuffer(configs, 0, badTile);
+  dispatch(0);
+  actual = await read();
+  assert(actual.words.every((word, index) => word === words[index]), "Invalid tile modified pixels");
+  assert(actual.resolved.every((value) => value === 0), "Invalid tile produced output");
+  await device.queue.onSubmittedWorkDone();
+  active();
+  assert(await device.popErrorScope() === null, "GPU validation error");
+  owner = createAdaptiveResourceOwner(device, GPUBufferUsage, { enabled: true, width: 3840, height: 2160, firstHitDistance: true, normalMaterialRisk: true, history: true, countResolve: true, resolveConfigSlots: 256 });
+  const allocation = await owner.acquire();
+  active();
+  assert(allocation.status === "ready", allocation.reason);
+  assert(!lost && uncaptured.length === 0, "GPU device failure");
+  const output = {
+    status: "pass", scope: "synthetic-complete-camera-sample-count-resolve", timestamp: new Date().toISOString(),
+    shaderSha256: Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ADAPTIVE_RESOLVE_WGSL))), (byte) => byte.toString(16).padStart(2, "0")).join(""),
+    adapter: { vendor: adapter.info.vendor, architecture: adapter.info.architecture, device: adapter.info.device, description: adapter.info.description, isFallbackAdapter: adapter.info.isFallbackAdapter },
+    userAgent: navigator.userAgent, unequalBudgetPixels: 256, completedCameraSamples: 32896, minimumSpp: 1, maximumSpp: 256,
+    negativeCases, invalidTileRejected: true, sentinelSumReset: true, nonTilePixelsPreserved: true,
+    compilerErrors: 0, validationErrors: 0, deviceLost: false,
+    allocated4kBytes: allocation.allocatedBytes, allocationClasses: owner.snapshot().plan.bytes,
+    limits: { maxBufferSize: device.limits.maxBufferSize, maxStorageBufferBindingSize: device.limits.maxStorageBufferBindingSize, minUniformBufferOffsetAlignment: device.limits.minUniformBufferOffsetAlignment },
+  };
+  owner.destroy();
+  assert(owner.snapshot().allocatedBytes === 0, "Resource ownership not released");
+  output.allocatedAfterDestroy = 0;
+  return output;
+};
+try {
+  const receipt = await Promise.race([run(), new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("WebGPU validation timeout")), 30000);
+  })]);
+  document.querySelector("#result").textContent = JSON.stringify(receipt, null, 2);
+} catch (error) {
+  document.querySelector("#result").textContent = JSON.stringify({ status: "fail", reason: String(error.message).slice(0, 200) }, null, 2);
+} finally {
+  cancelled = true;
+  clearTimeout(timer);
+  owner?.destroy();
+  for (const value of buffers) value.destroy();
+  device?.destroy();
+}
+</script>
+</html>
