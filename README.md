@@ -695,6 +695,9 @@ artifacts using exact, case-normalised path checks. CI runs only for pushes to
 repository-owned branches on explicit `[self-hosted, Linux, X64]` runners.
 External fork pull requests trigger no CI execution; a maintainer must review
 and move a contribution to a repository-owned branch to produce required checks.
+Before branch CI starts, an authorised maintainer admits that reviewed commit
+SHA for `gpu-renderer/.github/workflows/ci.yml` in the restricted
+`Public CI - Quarantined` runner group. Do not allow arbitrary branch or PR refs.
 The trusted admission, build-test, and artifact-integrity checks keep their
 existing names for branch protection. Scheduled dependency validation also uses
 bounded self-hosted capacity and accepts only `main`. Release preparation and

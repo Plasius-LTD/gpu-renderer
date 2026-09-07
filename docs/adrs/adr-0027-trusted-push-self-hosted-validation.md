@@ -20,6 +20,11 @@ Trigger CI exclusively on pushes to repository-owned branches, using literal
 admission dependency, timeouts, and disabled package-manager caching. A fork PR
 cannot trigger CI. Maintainers review contributions before moving them into a
 repository-owned branch; the resulting push creates the checks on that commit.
+The restricted runner group must admit the reviewed workflow by immutable commit
+SHA before branch jobs can start. Main remains admitted by its protected branch
+ref. Remove obsolete one-commit admissions after delivery; never admit arbitrary
+branch or PR refs. The scheduled audit workflow needs its own protected-main
+entry in the same group.
 
 The monthly dependency workflow also uses explicit self-hosted labels, a bounded
 timeout, disabled package-manager caching, and main-only admission. Release
