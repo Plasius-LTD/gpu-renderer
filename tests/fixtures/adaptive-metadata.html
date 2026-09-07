@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Adaptive metadata WebGPU validation</title>
+<h1>Adaptive metadata WebGPU validation</h1>
+<p>Buffer/ABI execution only. This does not render an adaptive image or measure performance.</p>
+<pre id="result" role="status">Running…</pre>
+<script type="module">
+import { ADAPTIVE_METADATA_WGSL } from "/src/wavefront-adaptive-shader.js";
+import { createAdaptiveResourceOwner, packAdaptivePixelState, unpackAdaptivePixelState } from "/src/wavefront-adaptive-metadata.js";
+
+const result = document.querySelector("#result");
+let device, owner, pixelBuffer, readback;
+let timer;
+let cancelled = false;
+function active() {
+  if (cancelled) { device?.destroy(); throw new Error("Validation cancelled"); }
+}
+const run = async () => {
+  const adapter = await navigator.gpu?.requestAdapter();
+  active();
+  if (!adapter || adapter.info.isFallbackAdapter === true) throw new Error("Physical WebGPU adapter unavailable");
+  device = await adapter.requestDevice();
+  active();
+  let lost = false;
+  device.lost.then(() => { lost = true; });
+  device.pushErrorScope("validation");
+  const module = device.createShaderModule({ code: ADAPTIVE_METADATA_WGSL });
+  const compilation = await module.getCompilationInfo();
+  active();
+  if (compilation.messages.some(({ type }) => type === "error")) throw new Error("Shader compilation failed");
+  const pipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "reset_adaptive_counts" } });
+  active();
+  const fixture = [];
+  for (let requested = 0; requested <= 256; requested += 1) {
+    for (let completed = 0; completed <= requested; completed += 1) {
+      for (const flags of [0, 1, 8192, 16383]) fixture.push(packAdaptivePixelState({ requested, completed, flags }));
+    }
+  }
+  const input = new Uint32Array(fixture);
+  pixelBuffer = device.createBuffer({ size: input.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+  readback = device.createBuffer({ size: input.byteLength, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  device.queue.writeBuffer(pixelBuffer, 0, input);
+  const bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: pixelBuffer } }] });
+  const encoder = device.createCommandEncoder();
+  const pass = encoder.beginComputePass();
+  pass.setPipeline(pipeline);
+  pass.setBindGroup(0, bindGroup);
+  pass.dispatchWorkgroups(Math.ceil(input.length / 64));
+  pass.end();
+  encoder.copyBufferToBuffer(pixelBuffer, 0, readback, 0, input.byteLength);
+  device.queue.submit([encoder.finish()]);
+  await device.queue.onSubmittedWorkDone();
+  active();
+  await readback.mapAsync(GPUMapMode.READ);
+  active();
+  const actual = new Uint32Array(readback.getMappedRange());
+  for (let index = 0; index < input.length; index += 1) {
+    const before = unpackAdaptivePixelState(input[index]);
+    const after = unpackAdaptivePixelState(actual[index]);
+    if (after.requested !== before.requested || after.completed !== 0 || after.flags !== before.flags) {
+      throw new Error(`GPU round trip mismatch at ${index}`);
+    }
+  }
+  readback.unmap();
+  if (await device.popErrorScope()) throw new Error("WebGPU validation error");
+  active();
+  owner = createAdaptiveResourceOwner(device, GPUBufferUsage, {
+    enabled: true, width: 3840, height: 2160, firstHitDistance: true, normalMaterialRisk: true, history: true,
+  });
+  const allocation = await owner.acquire();
+  active();
+  if (allocation.status !== "ready") throw new Error(allocation.reason);
+  if (lost) throw new Error("WebGPU device lost");
+  const output = {
+    status: "pass", scope: "adaptive-metadata-only", timestamp: new Date().toISOString(),
+    shaderSha256: Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ADAPTIVE_METADATA_WGSL))), (byte) => byte.toString(16).padStart(2, "0")).join(""),
+    adapter: { vendor: adapter.info.vendor, architecture: adapter.info.architecture, device: adapter.info.device, description: adapter.info.description, isFallbackAdapter: adapter.info.isFallbackAdapter ?? null },
+    userAgent: navigator.userAgent, recordsVerified: input.length,
+    compilerErrors: 0, validationErrors: 0, deviceLost: false,
+    allocated4kBytes: allocation.allocatedBytes, allocationClasses: owner.snapshot().plan.bytes,
+    limits: { maxBufferSize: device.limits.maxBufferSize, maxStorageBufferBindingSize: device.limits.maxStorageBufferBindingSize },
+  };
+  owner.destroy();
+  if (owner.snapshot().allocatedBytes !== 0) throw new Error("Resource ownership not released");
+  output.allocatedAfterDestroy = owner.snapshot().allocatedBytes;
+  return output;
+};
+
+try {
+  const receipt = await Promise.race([run(), new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("WebGPU validation timeout")), 20000);
+  })]);
+  result.textContent = JSON.stringify(receipt, null, 2);
+} catch (error) {
+  result.textContent = JSON.stringify({ status: "fail", reason: String(error.message).slice(0, 200) }, null, 2);
+} finally {
+  cancelled = true;
+  clearTimeout(timer);
+  owner?.destroy();
+  pixelBuffer?.destroy();
+  readback?.destroy();
+  device?.destroy();
+}
+</script>
+</html>
