@@ -59,6 +59,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@plasius/gpu-shader": "0.1.4",
     "c8": "^11.0.0",
     "eslint": "^10.9.1",
     "globals": "^17.11.0",

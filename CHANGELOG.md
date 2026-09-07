@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Internal reflected adaptive budget/count metadata, optional bounded classifier
+    and packed-history buffers, and lazy allocation admission with a 128 MiB cap.
+    This is infrastructure only; per-pixel dispatch and site controls remain pending.
   - (placeholder)
 
 - **Changed**
