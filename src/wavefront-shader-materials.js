@@ -190,27 +190,6 @@ fn strict_physical_low_spp_lighting_enabled() -> bool {
   return config.pathResolveSettings.z > 0.5;
 }
 
-fn path_vertex_count_per_ray() -> u32 {
-  return config.maxDepth + 1u;
-}
-
-fn path_vertex_index(rayId: u32, depth: u32) -> u32 {
-  return rayId * path_vertex_count_per_ray() + min(depth, config.maxDepth);
-}
-
-fn clear_deferred_path(rayId: u32) {
-  if (!deferred_path_resolve_enabled()) {
-    return;
-  }
-
-  for (var depth = 0u; depth <= config.maxDepth; depth = depth + 1u) {
-    pathVertices[path_vertex_index(rayId, depth)] = vec4<f32>(0.0);
-    if (depth == config.maxDepth) {
-      break;
-    }
-  }
-}
-
 fn sanitize_path_throughput_component(value: f32) -> f32 {
   if (value != value || value <= 0.0) {
     return 0.0;
@@ -226,19 +205,23 @@ fn sanitize_path_throughput(value: vec3<f32>) -> vec3<f32> {
   );
 }
 
-fn record_deferred_path_throughput(ray: RayRecord, throughput: vec3<f32>) {
-  if (!deferred_path_resolve_enabled() || ray.rayId >= config.tilePixelCount || ray.bounce >= config.maxDepth) {
-    return;
-  }
-  pathVertices[path_vertex_index(ray.rayId, ray.bounce)] =
-    vec4<f32>(sanitize_path_throughput(throughput), 1.0);
+fn record_deferred_terminal_source(ray: RayRecord, sourceRadiance: vec3<f32>, sourceKind: u32) {
+  // Preserve the existing deferred source/terminal clamp before fixed weighting.
+  // Changing the HDR storage/presentation policy is a separate qualification.
+  if (!path_radiance_valid(sourceRadiance)) { fail_path_node(ray); return; }
+  let rawTerminal = ray.throughput.xyz * sanitize_linear_radiance(sourceRadiance);
+  if (!path_radiance_valid(rawTerminal)) { fail_path_node(ray); return; }
+  record_weighted_terminal(ray, sanitize_linear_radiance(rawTerminal) * sample_weight(), sourceKind);
 }
 
-fn record_deferred_terminal_source(ray: RayRecord, sourceRadiance: vec3<f32>, sourceKind: u32) {
-  if (!deferred_path_resolve_enabled() || ray.rayId >= config.tilePixelCount) {
-    return;
+fn record_weighted_terminal(ray: RayRecord, rawRadiance: vec3<f32>, sourceKind: u32) {
+  record_radiance_diagnostics(rawRadiance);
+  if (!path_radiance_valid(rawRadiance)) { fail_path_node(ray); return; }
+  let radiance = sanitize_linear_radiance(rawRadiance);
+  record_path_terminal(ray, radiance, sourceKind);
+  record_termination_metrics(sourceKind, radiance);
+  if (deferred_path_resolve_enabled()) {
+    record_transport_contribution(TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL, radiance);
   }
-  pathVertices[path_vertex_index(ray.rayId, config.maxDepth)] =
-    vec4<f32>(sanitize_linear_radiance(sourceRadiance), f32(sourceKind));
 }
 `;

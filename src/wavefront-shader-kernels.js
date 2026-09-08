@@ -182,7 +182,9 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
     atomicStore(&counters.termination.transportZeroTerminationCount, 0u);
     atomicStore(&counters.termination.transportChecksum, 0u);
     atomicStore(&counters.termination.transportPad0, 0u);
-    atomicStore(&counters.termination.transportPad1, 0u);
+    if (config.tileX == 0u && config.tileY == 0u && u32(config.projectionAndSampling.w) == 0u) {
+      atomicStore(&counters.termination.transportPad1, 0u);
+    }
     atomicStore(&counters.termination.transportPad2, 0u);
     write_active_dispatch_args(config.tilePixelCount);
   }
@@ -190,7 +192,6 @@ fn generatePrimaryRays(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
   activeQueue[index] = make_ray(index);
-  clear_deferred_path(index);
   if (u32(config.projectionAndSampling.w) == 0u) {
     accumulation[index] = vec4<f32>(0.0);
   }
@@ -414,6 +415,22 @@ fn sample_environment_portal_direction(
   return safe_normalize(portalTarget - hit.position.xyz, fallback);
 }
 
+fn dielectric_event(hit: HitRecord) -> bool {
+  // Match scatter precedence: an ideal metal is reflective, never refractive.
+  if (hit.materialKind == 1u && clamp(hit.material.x, 0.0, 1.0) <= 0.02) { return false; }
+  return hit.materialKind == 2u || hit.materialKind == 3u || clamp(hit.materialExtension.z, 0.0, 1.0) > 0.001;
+}
+
+fn dielectric_eta(hit: HitRecord) -> f32 {
+  let ior = max(hit.material.w, 1.01);
+  return select(ior, 1.0 / ior, hit.frontFace == 1u);
+}
+
+fn dielectric_cannot_refract(ray: RayRecord, hit: HitRecord) -> bool {
+  let cosTheta = min(dot(-ray.direction.xyz, surface_shading_normal(hit)), 1.0);
+  return dielectric_eta(hit) * sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) > 1.0;
+}
+
 fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
   let normal = surface_shading_normal(hit);
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
@@ -429,12 +446,10 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
     );
   }
 
-  if (hit.materialKind == 2u || hit.materialKind == 3u || transmission > 0.001) {
-    let ior = max(hit.material.w, 1.01);
-    let etaRatio = select(ior, 1.0 / ior, hit.frontFace == 1u);
+  if (dielectric_event(hit)) {
+    let etaRatio = dielectric_eta(hit);
     let cosTheta = min(dot(-ray.direction.xyz, normal), 1.0);
-    let sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
-    let cannotRefract = etaRatio * sinTheta > 1.0;
+    let cannotRefract = dielectric_cannot_refract(ray, hit);
     let reflectChance = schlick(cosTheta, etaRatio);
     let transmissionReflectChance = select(
       reflectChance,
@@ -601,11 +616,10 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  let ray = activeQueue[index];
+  let ray = begin_path_node(activeQueue[index], index);
   let hit = hits[index];
   let segmentTransmittance = medium_transmittance(medium_stack_current_id(ray), hit.distance);
   let arrivingThroughput = ray.throughput.xyz * segmentTransmittance;
-  var contribution = vec3<f32>(0.0);
 
   if (hit.hitType == 1u) {
     let guidedLightWeight = select(1.0, 0.24, (ray.flags & RAY_FLAG_GUIDED_EMISSIVE) != 0u);
@@ -625,11 +639,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       );
     } else {
       let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
-      record_radiance_diagnostics(rawWeightedContribution);
-      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
-      record_termination_metrics(TERMINAL_SOURCE_KIND_EMISSIVE, weightedContribution);
-      accumulation[ray.rayId] =
-        accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
+      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_EMISSIVE);
     }
     atomicAdd(&counters.terminatedCount, 1u);
     return;
@@ -651,11 +661,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       );
     } else {
       let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
-      record_radiance_diagnostics(rawWeightedContribution);
-      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
-      record_termination_metrics(TERMINAL_SOURCE_KIND_ENVIRONMENT, weightedContribution);
-      accumulation[ray.rayId] =
-        accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
+      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_ENVIRONMENT);
     }
     atomicAdd(&counters.terminatedCount, 1u);
     return;
@@ -701,8 +707,8 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     record_radiance_diagnostics(rawDirectLight);
     let weightedDirectLight = sanitize_linear_radiance(rawDirectLight);
     record_transport_contribution(TRANSPORT_BUCKET_DIRECT_EXPLICIT, weightedDirectLight);
-    accumulation[ray.rayId] =
-      accumulation[ray.rayId] + vec4<f32>(weightedDirectLight, 0.0);
+    if (!path_radiance_valid(rawDirectLight)) { fail_path_node(ray); }
+    record_path_direct(ray, weightedDirectLight);
   }
 
   if (ray.bounce + 1u >= config.maxDepth) {
@@ -727,11 +733,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         hit
       );
       let rawWeightedContribution = terminalEnvironment * sample_weight();
-      record_radiance_diagnostics(rawWeightedContribution);
-      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
-      record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH, weightedContribution);
-      accumulation[ray.rayId] =
-        accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
+      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH);
     }
     atomicAdd(&counters.terminatedCount, 1u);
     return;
@@ -747,7 +749,21 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     continuationLightDirection,
     scatter
   ) * segmentTransmittance;
-  if (max_component(continuationThroughput) <= 0.000001) {
+  let transmissionBranch = scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION;
+  let totalInternalReflection = dielectric_event(hit) && dielectric_cannot_refract(ray, hit);
+  let splitDielectric = dielectric_event(hit) && !totalInternalReflection;
+  var secondaryThroughput = vec3<f32>(0.0);
+  if (totalInternalReflection) {
+    continuationThroughput = segmentTransmittance;
+  }
+  if (splitDielectric) {
+    secondaryThroughput = select(
+      surface_delta_transmission_throughput(hit, continuationViewDirection),
+      surface_delta_reflection_throughput(hit, continuationViewDirection),
+      transmissionBranch
+    ) * segmentTransmittance;
+  }
+  if (max(max_component(continuationThroughput), max_component(secondaryThroughput)) <= 0.000001) {
     if (deferred_path_resolve_enabled()) {
       if (strict_physical_low_spp_lighting_enabled()) {
         record_deferred_terminal_source(
@@ -769,11 +785,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         hit
       );
       let rawWeightedContribution = terminalEnvironment * sample_weight();
-      record_radiance_diagnostics(rawWeightedContribution);
-      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
-      record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH, weightedContribution);
-      accumulation[ray.rayId] =
-        accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
+      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH);
     }
     atomicAdd(&counters.terminatedCount, 1u);
     return;
@@ -785,7 +797,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       config.samplesPerPixel <= 8u
   );
   if (strict_physical_low_spp_lighting_enabled() && ray.bounce >= rouletteStartBounce) {
-    let survivalProbability = clamp(max_component(continuationThroughput), 0.05, 0.95);
+    let survivalProbability = clamp(max(max_component(continuationThroughput), max_component(secondaryThroughput)), 0.05, 0.95);
     let roulette = sample_dimension_1d(
       ray.sourcePixelId,
       ray.sampleId,
@@ -801,57 +813,23 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
           TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE
         );
       } else {
-        record_termination_metrics(TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE, vec3<f32>(0.0));
+        record_weighted_terminal(ray, vec3<f32>(0.0), TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE);
       }
       atomicAdd(&counters.terminatedCount, 1u);
       return;
     }
     continuationThroughput = continuationThroughput / survivalProbability;
+    secondaryThroughput = secondaryThroughput / survivalProbability;
   }
   let nextIndex = atomicAdd(&counters.nextCount, 1u);
   if (nextIndex >= config.tilePixelCount) {
-    if (deferred_path_resolve_enabled()) {
-      if (strict_physical_low_spp_lighting_enabled()) {
-        record_deferred_terminal_source(
-          ray,
-          vec3<f32>(0.0),
-          TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW
-        );
-      } else {
-        record_deferred_terminal_source(
-          ray,
-          terminal_surface_environment_source(ray, hit),
-          TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW
-        );
-      }
-    } else {
-      var rawWeightedContribution = vec3<f32>(0.0);
-      if (
-        !strict_physical_low_spp_lighting_enabled() ||
-        !transport_experiment_enabled(TRANSPORT_EXPERIMENT_STRICT_ZERO_OVERFLOW)
-      ) {
-        let overflowEnvironment = terminal_surface_environment_contribution(
-          ray,
-          arrivingThroughput,
-          hit
-        );
-        rawWeightedContribution = overflowEnvironment * sample_weight();
-      }
-      record_radiance_diagnostics(rawWeightedContribution);
-      let weightedContribution = sanitize_linear_radiance(rawWeightedContribution);
-      record_termination_metrics(
-        TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW,
-        weightedContribution
-      );
-      accumulation[ray.rayId] =
-        accumulation[ray.rayId] + vec4<f32>(weightedContribution, 1.0);
-    }
+    fail_path_node(ray);
+    record_weighted_terminal(ray, vec3<f32>(0.0), TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW);
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
-  record_deferred_path_throughput(ray, continuationThroughput);
+  link_path_child(ray, nextIndex, false);
   let throughput = ray.throughput.xyz * continuationThroughput;
-  let transmissionBranch = scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION;
   let nextMediumStack = select(
     transitioned_medium_stack(ray, hit),
     ray.mediumStack,
@@ -869,7 +847,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   );
   nextQueue[nextIndex] = RayRecord(
     ray.rayId,
-    ray.rayId,
+    ray.parentRayId,
     ray.sourcePixelId,
     ray.sampleId,
     ray.bounce + 1u,
@@ -890,27 +868,18 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     nextMediumStack
   );
 
-  // Keep both sides of a dielectric event when queue capacity permits. The
-  // selected continuation remains the primary sample; this bounded second
-  // record preserves a reflected/transmitted branch for explicit transport.
-  if (
-    scatter.lobeKind == SCATTER_LOBE_DELTA_REFLECTION ||
-    scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION
-  ) {
+  // Both non-TIR dielectric branches belong to the same camera sample.
+  // Capacity failure rejects the sample rather than losing a weighted branch.
+  if (splitDielectric) {
     let secondaryIndex = atomicAdd(&counters.nextCount, 1u);
     if (secondaryIndex < config.tilePixelCount) {
       let secondaryIsReflection = transmissionBranch;
       let secondaryDirection = select(
         refract_direction(ray.direction.xyz, surface_shading_normal(hit),
-          select(1.0 / max(hit.material.w, 1.01), max(hit.material.w, 1.01), hit.frontFace == 1u)),
+          dielectric_eta(hit)),
         reflect(ray.direction.xyz, surface_shading_normal(hit)),
         secondaryIsReflection
       );
-      let secondaryThroughput = select(
-        surface_delta_transmission_throughput(hit, continuationViewDirection),
-        surface_delta_reflection_throughput(hit, continuationViewDirection),
-        secondaryIsReflection
-      ) * segmentTransmittance;
       let secondaryStack = select(
         transitioned_medium_stack(ray, hit),
         ray.mediumStack,
@@ -928,7 +897,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
       );
       nextQueue[secondaryIndex] = RayRecord(
         ray.rayId,
-        ray.rayId,
+        ray.parentRayId,
         ray.sourcePixelId,
         ray.sampleId,
         ray.bounce + 1u,
@@ -948,6 +917,11 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
         vec4<f32>(ray.throughput.xyz * secondaryThroughput, scatter.pdf),
         secondaryStack
       );
+      link_path_child(ray, secondaryIndex, true);
+    } else {
+      fail_path_node(ray);
+      record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW, vec3<f32>(0.0));
+      atomicAdd(&counters.terminatedCount, 1u);
     }
   }
 }
@@ -964,53 +938,32 @@ fn compactAndSwapQueues(@builtin(global_invocation_id) globalId: vec3<u32>) {
   write_active_dispatch_args(activeCount);
 }
 
-fn resolve_deferred_path_radiance(rayId: u32) -> vec3<f32> {
-  let terminal = pathVertices[path_vertex_index(rayId, config.maxDepth)];
-  if (terminal.w <= 0.0) {
-    return vec3<f32>(0.0);
-  }
-
-  var radiance = terminal.xyz;
-  var depth = config.maxDepth;
-  loop {
-    if (depth == 0u) {
-      break;
-    }
-    depth = depth - 1u;
-    let throughput = pathVertices[path_vertex_index(rayId, depth)];
-    if (throughput.w > 0.0) {
-      radiance = radiance * throughput.xyz;
-    }
-  }
-  return sanitize_linear_radiance(radiance);
-}
-
 @compute @workgroup_size(64)
 fn accumulateTerminalRadiance(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let index = globalId.x;
-  if (index >= config.tilePixelCount) {
-    return;
-  }
+  if (index >= config.tilePixelCount) { return; }
   let localX = index % config.tileWidth;
   let localY = index / config.tileWidth;
   let pixel = vec2<i32>(i32(config.tileX + localX), i32(config.tileY + localY));
-  var radiance = max(accumulation[index].xyz, vec3<f32>(0.0));
-  if (deferred_path_resolve_enabled()) {
-    let terminal = pathVertices[path_vertex_index(index, config.maxDepth)];
-    let resolved = resolve_deferred_path_radiance(index) * sample_weight();
-    record_radiance_diagnostics(resolved);
-    let safeResolved = sanitize_linear_radiance(resolved);
-    record_transport_contribution(TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL, safeResolved);
-    record_termination_metrics(u32(terminal.w), safeResolved);
-    radiance = sanitize_linear_radiance(radiance + safeResolved);
-    accumulation[index] = vec4<f32>(radiance, 1.0);
+  let sourcePixelId = (config.tileY + localY) * config.canvasWidth + config.tileX + localX;
+  let sampleId = u32(config.projectionAndSampling.w);
+  let completed = resolve_complete_path_tree(index, sourcePixelId, sampleId);
+  let failed = completed.w != 1.0 || accumulation[index].w < 0.0;
+  if (failed) {
+    // Sticky across all samples of this tile. Invalid paths never become an
+    // accepted darker camera sample, even if subsequent samples succeed.
+    accumulation[index] = vec4<f32>(0.0, 0.0, 0.0, -1.0);
+    atomicStore(&counters.termination.transportPad1, 1u);
+    textureStore(radianceImage, pixel, vec4<f32>(0.0));
+    textureStore(outputImage, pixel, vec4<f32>(1.0, 0.0, 1.0, 0.0));
+    return;
   }
-
-  let linearOutput = sanitize_linear_radiance(radiance);
-  record_transport_checksum(index, linearOutput);
-  textureStore(radianceImage, pixel, vec4<f32>(linearOutput, 1.0));
+  let radiance = sanitize_linear_radiance(accumulation[index].xyz + completed.xyz);
+  accumulation[index] = vec4<f32>(radiance, accumulation[index].w + 1.0);
+  record_transport_checksum(index, radiance);
+  textureStore(radianceImage, pixel, vec4<f32>(radiance, 1.0));
   if (config.denoise == 0u) {
-    textureStore(outputImage, pixel, vec4<f32>(present_radiance(linearOutput), 1.0));
+    textureStore(outputImage, pixel, vec4<f32>(present_radiance(radiance), 1.0));
   }
 }
 
@@ -1023,7 +976,12 @@ fn denoiseLinearRadiance(@builtin(global_invocation_id) globalId: vec3<u32>) {
   }
 
   let pixel = vec2<i32>(i32(x), i32(y));
-  let center = textureLoad(denoiseInputRadiance, pixel, 0).xyz;
+  let centerSample = textureLoad(denoiseInputRadiance, pixel, 0);
+  if (centerSample.w == 0.0) {
+    textureStore(denoisedRadianceImage, pixel, vec4<f32>(0.0));
+    return;
+  }
+  let center = centerSample.xyz;
   let strength = denoise_strength();
   let kernelRadius = denoise_kernel_radius();
   let centerWeight = 1.7 - strength * 0.35;
@@ -1041,7 +999,9 @@ fn denoiseLinearRadiance(@builtin(global_invocation_id) globalId: vec3<u32>) {
       }
       let sx = clamp(i32(x) + ox, 0i, i32(config.canvasWidth) - 1i);
       let sy = clamp(i32(y) + oy, 0i, i32(config.canvasHeight) - 1i);
-      let sampleColor = textureLoad(denoiseInputRadiance, vec2<i32>(sx, sy), 0).xyz;
+      let neighbour = textureLoad(denoiseInputRadiance, vec2<i32>(sx, sy), 0);
+      if (neighbour.w == 0.0) { continue; }
+      let sampleColor = neighbour.xyz;
       let colorDistance = length(denoise_range_space(sampleColor) - centerRange);
       let rangeWeight = 1.0 / (1.0 + colorDistance * (11.0 + strength * 6.0));
       let distanceWeight = 1.0 / (1.0 + f32(ox * ox + oy * oy) * (0.62 + strength * 0.24));
@@ -1068,7 +1028,12 @@ fn resolveDenoisedOutputImage(@builtin(global_invocation_id) globalId: vec3<u32>
   }
 
   let pixel = vec2<i32>(i32(x), i32(y));
-  let center = textureLoad(finalDenoiseInputRadiance, pixel, 0).xyz;
+  let centerSample = textureLoad(finalDenoiseInputRadiance, pixel, 0);
+  if (centerSample.w == 0.0) {
+    textureStore(denoisedOutputImage, pixel, vec4<f32>(1.0, 0.0, 1.0, 0.0));
+    return;
+  }
+  let center = centerSample.xyz;
   let strength = denoise_strength();
   let centerWeight = 1.35 - strength * 0.25;
   var sum = center * centerWeight;
@@ -1082,7 +1047,9 @@ fn resolveDenoisedOutputImage(@builtin(global_invocation_id) globalId: vec3<u32>
       }
       let sx = clamp(i32(x) + ox, 0i, i32(config.canvasWidth) - 1i);
       let sy = clamp(i32(y) + oy, 0i, i32(config.canvasHeight) - 1i);
-      let sampleColor = textureLoad(finalDenoiseInputRadiance, vec2<i32>(sx, sy), 0).xyz;
+      let neighbour = textureLoad(finalDenoiseInputRadiance, vec2<i32>(sx, sy), 0);
+      if (neighbour.w == 0.0) { continue; }
+      let sampleColor = neighbour.xyz;
       let colorDistance = length(denoise_range_space(sampleColor) - centerRange);
       let rangeWeight = 1.0 / (1.0 + colorDistance * (12.0 + strength * 8.0));
       let distanceWeight = 1.0 / (1.0 + f32(ox * ox + oy * oy) * (0.82 + strength * 0.28));

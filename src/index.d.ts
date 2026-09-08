@@ -1333,6 +1333,8 @@ export interface WavefrontPathTracingComputeFrameStats {
     deterministicChecksum: number;
   }>;
   readonly queueOverflow?: number;
+  /** Null when completion integrity was not read back; false rejects the frame. */
+  readonly pathCompletionValid?: boolean | null;
 }
 
 export function normalizeWavefrontSceneObject(

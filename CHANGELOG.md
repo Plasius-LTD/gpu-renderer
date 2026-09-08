@@ -21,6 +21,14 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - Replace shared sibling radiance/throughput addresses with tile/depth-owned
+    path nodes and a single complete-camera-sample reduction in both resolve modes.
+    Reject incomplete/overflowing paths visibly and expose optional completion
+    integrity readback; retain failure status through denoise and subsequent samples.
+  - Exclude ideal metals from dielectric splitting, share entering/exiting
+    refraction ratios, retain total-internal-reflection energy and compensate
+    both siblings for a shared roulette decision. Focused physical checks are
+    retained; broad transport/image/performance qualification remains outstanding.
   - (placeholder)
 
 - **Security**
