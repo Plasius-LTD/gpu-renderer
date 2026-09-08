@@ -1,0 +1,39 @@
+{
+  "provenance": {
+    "implementationCommit": "b912b9ad02ac48efc43b0040e760f76862bab378",
+    "fixtureCommit": "6ea18361f14077afa1b65e29826e8ddd2eced2cf",
+    "fixtureSha256": "1eddc903bdec8be9997fbcc21387c6c3e81d1f525c81609de57558f13be7a260",
+    "accuracyOracleSha256": "4d6d725adee4cd6de9acb1b6a30912b0095e1828e9235840b133ac3c85e55b64",
+    "captureMethod": "Visible in-app browser fixture result; receipt transcribed without altering values",
+    "notQualified": ["live transport", "split-path estimator", "adaptive scene images", "performance", "net memory savings"]
+  },
+  "receipt": {
+    "status": "pass",
+    "scope": "synthetic-complete-camera-sample-count-resolve",
+    "timestamp": "2026-09-08T09:24:48.676Z",
+    "shaderSha256": "edde6c39c87de207809be810d866afded7580aba1337d938cc52f14d16b45d70",
+    "adapter": { "vendor": "apple", "architecture": "metal-3", "device": "", "description": "", "isFallbackAdapter": false },
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "unequalBudgetPixels": 256,
+    "completedCameraSamples": 32896,
+    "minimumSpp": 1,
+    "maximumSpp": 256,
+    "divisionToleranceUlps": 2.5,
+    "maximumDivisionErrorUlps": 2,
+    "negativeCases": ["partial", "producer-failed", "wrong-pixel", "wrong-ordinal", "duplicate", "out-of-order", "invalid-count", "zero-budget", "NaN", "infinity", "negative", "failed-frame"],
+    "invalidTileRejected": true,
+    "sentinelSumReset": true,
+    "nonTilePixelsPreserved": true,
+    "compilerErrors": 0,
+    "validationErrors": 0,
+    "deviceLost": false,
+    "allocated4kBytes": 102786060,
+    "allocationClasses": {
+      "pixelState": 33177600, "firstHitDistance": 33177600, "normalMaterialRisk": 33177600,
+      "worklist": 65536, "dispatch": 12, "history": 2073600, "total": 102786060,
+      "cameraSamples": 524288, "radianceSums": 262144, "resolvedRadiance": 262144, "resolveConfig": 65536
+    },
+    "limits": { "maxBufferSize": 268435456, "maxStorageBufferBindingSize": 134217728, "minUniformBufferOffsetAlignment": 256 },
+    "allocatedAfterDestroy": 0
+  }
+}

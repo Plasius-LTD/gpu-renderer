@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Internal complete-camera-sample commit and float32 sum/actual-count resolve,
+    reflected packing/layout checks, invalid-sample rejection, and capped tile
+    scratch/configuration allocation. Not connected to live transport; adaptive
+    image, split-path and performance qualification remain pending.
   - Internal reflected adaptive budget/count metadata, optional bounded classifier
     and packed-history buffers, and lazy allocation admission with a 128 MiB cap.
     This is infrastructure only; per-pixel dispatch and site controls remain pending.
@@ -21,6 +25,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - Corrected the internal count-resolve physical fixture to use WGSL's specified
+    division accuracy instead of bit-exact CPU/GPU equality; exact count and sum
+    checks remain enforced, with no transport or image-tolerance changes.
   - (placeholder)
 
 - **Security**
