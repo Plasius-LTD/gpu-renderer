@@ -9,6 +9,7 @@
 import { ADAPTIVE_RESOLVE_WGSL } from "/src/wavefront-adaptive-resolve-shader.js";
 import { createAdaptiveResourceOwner, packAdaptivePixelState } from "/src/wavefront-adaptive-metadata.js";
 import { createAdaptiveResolvePipelines, packAdaptiveCameraSamples, packAdaptiveResolveConfig } from "/src/wavefront-adaptive-resolve.js";
+import { divisionErrorUlps, WGSL_F32_DIVISION_MAX_ULPS } from "/tests/fixtures/adaptive-accuracy.js";
 
 let device, owner, timer;
 let cancelled = false;
@@ -92,12 +93,18 @@ const run = async () => {
     dispatch(ordinal);
   }
   let actual = await read();
+  let maximumDivisionErrorUlps = 0;
   for (let id = 0; id < 256; id += 1) {
     const count = id + 1;
     assert(actual.words[pixelId(id)] === packAdaptivePixelState({ requested: count, completed: count, flags: 3 }), `Count or flags mismatch ${id}`);
     const mean = 2 * count + (count - 1) / 2;
-    assert(actual.sums[id * 4] === mean * count && actual.resolved[id * 4] === mean, `Unequal mean mismatch ${id}`);
-    assert(actual.resolved[id * 4 + 1] === 0.5 && actual.resolved[id * 4 + 2] === 131072 && actual.resolved[id * 4 + 3] === 1, `HDR or alpha mismatch ${id}`);
+    for (const [channel, expected] of [mean, 0.5, 131072].entries()) {
+      assert(actual.sums[id * 4 + channel] === expected * count, `Exact radiance sum mismatch ${id}:${channel}`);
+      const error = divisionErrorUlps(actual.resolved[id * 4 + channel], expected);
+      maximumDivisionErrorUlps = Math.max(maximumDivisionErrorUlps, error);
+      assert(error <= WGSL_F32_DIVISION_MAX_ULPS, `Division accuracy mismatch ${id}:${channel}: ${error} ULP`);
+    }
+    assert(actual.resolved[id * 4 + 3] === 1, `Validity alpha mismatch ${id}`);
   }
   const owned = new Set(Array.from({ length: 256 }, (_, id) => pixelId(id)));
   for (let id = 0; id < 1024; id += 1) if (!owned.has(id)) assert(actual.words[id] === words[id], `Non-tile pixel modified ${id}`);
@@ -145,6 +152,7 @@ const run = async () => {
     shaderSha256: Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ADAPTIVE_RESOLVE_WGSL))), (byte) => byte.toString(16).padStart(2, "0")).join(""),
     adapter: { vendor: adapter.info.vendor, architecture: adapter.info.architecture, device: adapter.info.device, description: adapter.info.description, isFallbackAdapter: adapter.info.isFallbackAdapter },
     userAgent: navigator.userAgent, unequalBudgetPixels: 256, completedCameraSamples: 32896, minimumSpp: 1, maximumSpp: 256,
+    divisionToleranceUlps: WGSL_F32_DIVISION_MAX_ULPS, maximumDivisionErrorUlps,
     negativeCases, invalidTileRejected: true, sentinelSumReset: true, nonTilePixelsPreserved: true,
     compilerErrors: 0, validationErrors: 0, deviceLost: false,
     allocated4kBytes: allocation.allocatedBytes, allocationClasses: owner.snapshot().plan.bytes,

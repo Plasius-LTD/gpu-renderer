@@ -25,6 +25,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - Corrected the internal count-resolve physical fixture to use WGSL's specified
+    division accuracy instead of bit-exact CPU/GPU equality; exact count and sum
+    checks remain enforced, with no transport or image-tolerance changes.
   - (placeholder)
 
 - **Security**

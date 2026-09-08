@@ -65,6 +65,11 @@ reference samples, duplicate or out-of-order commits, invalid identities,
 float32 HDR and overflow, inactive budgets, reset/tile reuse, failure flags,
 configuration packing, generated reflection and lazy allocation. Execute the
 final WGSL on physical WebGPU with float32 output/count readback and tile edges.
+The arithmetic fixture requires exact packed counts and exactly representable
+sums. Division uses the [WGSL 15.7.4 accuracy bound](https://www.w3.org/TR/WGSL/#floating-point-accuracy)
+of 2.5 ULP, with minimum adjacent spacing at powers of two; it is not required to
+be bit-identical to JavaScript division. This test-only bound is not an image
+tolerance and does not alter the frozen image-quality programme.
 Assert the fixed assembled shader's immutable hash and run the whole package
 suite/LCOV, lint, types, build, pack, Zero-Three and post-push CI.
 
