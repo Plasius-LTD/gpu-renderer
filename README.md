@@ -256,11 +256,9 @@ requirement and route segment. The current surface establishes the WebGPU
 lifecycle and validation boundary for the PBR animation path; shader-level
 textured character and environment drawing builds on this boundary.
 
-The production transport rollout remains gated by
-`renderer.transport.physicalEstimator`. With the flag enabled, deferred
-continuation vertices carry sanitized physical throughput segments instead of a
-heuristic material-response tint, while the older fallback path remains the
-rollback route during validation.
+The physical material functions are shared by both resolve modes. Transport
+rollout controls do not permit the former sibling-address race to return:
+rollback requires a separately qualified GPU-native release.
 Low-SPP physical lighting hardening is separately controlled by the boolean
 `renderer.transport.strictPhysicalLowSppLighting` flag, passed either as
 `strictPhysicalLowSppLighting: true` or through `featureFlags`. When enabled,
@@ -435,16 +433,28 @@ separate shadow/direct-light pass: the active ray still has to hit emissive
 geometry or miss into the environment before radiance is committed. Guided
 emissive hits carry a bounded estimator weight so finite light guidance does not
 over-expose low-sample renders before full material PDFs/MIS are implemented.
-By default, `deferredPathResolve` records
-per-bounce material responses in a tile-bounded path buffer and records the
-terminal emissive/HDRI/environment source in the final path slot. The output
-pass then resolves that recorded path backward and adds the weighted sample to
-the pixel accumulation, so unresolved continuation light is still deferred until
-a terminal source is known. Surface resolution may still add a small
-shadow-tested direct-light term immediately when it has an explicit source and
-visibility result, which keeps true occlusion shadows possible without falling
-back to broad per-bounce ambient fill. Set `deferredPathResolve: false` only
-for legacy forward-accumulation comparison.
+Both resolve modes now retain branch-owned direct and terminal radiance in
+64-byte, tile/depth-bounded path nodes. After the bounce passes, one root
+invocation reduces the complete sibling tree and commits one weighted camera
+sample. Fixed rendering still uses a weight of `1 / renderedSamplesPerPixel`;
+this is not yet per-pixel adaptive normalization. The
+`deferredPathResolve: false` comparison retains its terminal-policy differences,
+but no longer performs unsafe concurrent writes to pixel accumulation.
+
+`renderFrame({ readStats: true })` reports `pathCompletionValid`: `true` for
+complete lineage, `false` when any sample failed, and `null` when integrity was
+not read back. Reject false/unknown results for qualification. Overflow or
+invalid lineage is sticky for the frame; affected pixels carry invalid alpha
+and a magenta diagnostic, including through denoise. A new frame resets the
+failure state. Full-screen refractive scenes can still exceed bounded queue
+capacity and are rejected, not silently rendered with missing siblings.
+
+At a 128 × 128 tile and depth eight, the actual node allocation is 9 MiB
+(eight usable depth levels plus the retained guard level), versus 2.25 MiB for
+the former shared-chain storage. This is allocated buffer memory, not physical
+VRAM residency. The [ownership design](docs/design/split-path-ownership.md) and
+[evidence ledger](docs/evidence/task-210-path-ownership.md) distinguish focused
+physical checks from the outstanding image, variance, stress and release gates.
 When an `environmentMap` is provided, the wavefront trace shader samples it as
 an equirectangular radiance source for environment misses and uses the same
 mapped radiance for terminal residuals before falling back to static ambient.
