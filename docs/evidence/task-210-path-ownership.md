@@ -3,6 +3,15 @@
 Status: experimental, not release-qualified; Task 210 remains In Progress.
 No adaptive mode, noise improvement or speedup is claimed.
 
+The [physical receipt](task-210-physical-webgpu-2026-09-08.json) is bound to
+implementation/fixture commit d3a5741031afa73dcb2f87a6add3565777c84c99 and the
+final assembled shader hash. Local validation passed 212 tests, lint, type
+checks, clean packed consumer, build, package checks, dependency audit
+(zero vulnerabilities), and all package Zero-Three checks including installed
+dependencies, bundles, tarball and SBOM. Combined line coverage is 95.39%;
+all changed runtime JS files are in LCOV and at least 90% line covered.
+Overall branch coverage is 75.52%, not an asserted 80% branch-coverage pass.
+
 ## Supported, narrowly
 
 - The old assembled terminal helper aliases sibling storage: eight physical
@@ -44,6 +53,13 @@ ownership fixture omits that option, the existing unambiguous fixed dispatcher.
 Its initial attempt to copy a storage-only buffer was also corrected to use
 a test-only bit-preserving GPU storage copy; renderer allocation usage is
 unchanged. Neither failed attempt is qualification evidence.
+
+The uniform-white camera-miss probe returns 0.993707537651062 per channel,
+not 1.0, in both resolve modes. This is not accepted as correct scene energy.
+The existing terminal MIS condition includes primary camera rays despite no
+competing camera-sample NEE estimator. Keep this discrepancy separate from
+the ownership pass. [Task 212](https://github.com/Plasius-LTD/gpu-renderer/issues/212)
+tracks its correction before freezing a baseline.
 
 ## Reproduce
 
