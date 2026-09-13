@@ -8,6 +8,7 @@ import {
   ADAPTIVE_HISTORY_WORD_BYTE_SIZE, ADAPTIVE_DISPATCH_ARGUMENTS_BYTE_SIZE,
 } from "./wavefront-adaptive-byte-constants.js";
 import { ADAPTIVE_CAMERA_SAMPLE_BYTE_SIZE, ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE } from "./wavefront-adaptive-resolve-constants.js";
+import { ADAPTIVE_PRIMARY_CONFIG_BYTE_SIZE, ADAPTIVE_PRIMARY_CONTROL_BYTE_SIZE } from "./wavefront-adaptive-primary-constants.js";
 import { ACCUMULATION_RECORD_BYTES } from "./wavefront-core.js";
 
 export const DEFAULT_ADAPTIVE_ALLOCATION_CAP_BYTES = 128 * 1024 ** 2;
@@ -55,11 +56,11 @@ function admitDevice(plan, limits) {
   if (plan.buffers.some(({ size, uniform }) => size > maxBufferSize || (!uniform && size > maxBindingSize))) {
     return refuse(plan, "adaptive-device-buffer-limit");
   }
-  if (plan.bytes.resolveConfig > 0) {
+  if (plan.bytes.resolveConfig > 0 || plan.bytes.primaryConfig > 0) {
     const alignment = limits?.minUniformBufferOffsetAlignment;
     const bindingSize = limits?.maxUniformBufferBindingSize;
     if (!Number.isSafeInteger(alignment) || alignment <= 0 || ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES % alignment !== 0
-      || !Number.isSafeInteger(bindingSize) || bindingSize < ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE) {
+      || !Number.isSafeInteger(bindingSize) || bindingSize < Math.max(ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE, ADAPTIVE_PRIMARY_CONFIG_BYTE_SIZE)) {
       return refuse(plan, "adaptive-device-uniform-limits");
     }
   }
@@ -71,12 +72,13 @@ export function planAdaptiveResources(options = {}, limits) {
     pixelState: 0, firstHitDistance: 0, normalMaterialRisk: 0,
     worklist: 0, dispatch: 0, history: 0, total: 0,
     cameraSamples: 0, radianceSums: 0, resolvedRadiance: 0, resolveConfig: 0,
+    primaryControl: 0, primaryConfig: 0,
   };
   if (options.enabled !== true) {
     return Object.freeze({ enabled: false, reason: "adaptive-disabled",
       bytes: Object.freeze(bytes), buffers: Object.freeze([]) });
   }
-  for (const key of ["firstHitDistance", "normalMaterialRisk", "history", "countResolve"]) {
+  for (const key of ["firstHitDistance", "normalMaterialRisk", "history", "countResolve", "primaryWorklist"]) {
     if (options[key] !== undefined && typeof options[key] !== "boolean") {
       throw new TypeError(`${key} must be a boolean.`);
     }
@@ -101,10 +103,15 @@ export function planAdaptiveResources(options = {}, limits) {
     bytes.resolvedRadiance = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
     bytes.resolveConfig = slots * ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES;
   }
+  if (options.primaryWorklist === true) {
+    const slots = integer("primaryConfigSlots", options.primaryConfigSlots === undefined ? 1 : options.primaryConfigSlots, 1, 1_000_000);
+    bytes.primaryControl = ADAPTIVE_PRIMARY_CONTROL_BYTE_SIZE;
+    bytes.primaryConfig = slots * ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES;
+  }
   bytes.total = Object.values(bytes).reduce((sum, value) => sum + value, 0);
-  const buffers = ["pixelState", "firstHitDistance", "normalMaterialRisk", "worklist", "dispatch", "cameraSamples", "radianceSums", "resolvedRadiance", "resolveConfig"]
+  const buffers = ["pixelState", "firstHitDistance", "normalMaterialRisk", "worklist", "dispatch", "cameraSamples", "radianceSums", "resolvedRadiance", "resolveConfig", "primaryControl", "primaryConfig"]
     .filter((key) => bytes[key] > 0)
-    .map((key) => Object.freeze({ key, size: bytes[key], indirect: key === "dispatch", uniform: key === "resolveConfig" }));
+    .map((key) => Object.freeze({ key, size: bytes[key], indirect: key === "dispatch", uniform: key === "resolveConfig" || key === "primaryConfig" }));
   if (bytes.history) {
     for (const key of ["previousHistory", "currentHistory"]) {
       buffers.push(Object.freeze({ key, size: bytes.history / 2, indirect: false }));
@@ -148,7 +155,7 @@ export function createAdaptiveResourceOwner(device, usage, options = {}) {
     let failed = false;
     try {
       for (const key of ["STORAGE", "COPY_DST", "INDIRECT"]) integer(`GPUBufferUsage.${key}`, usage?.[key], 1, U32_MAX);
-      if (plan.bytes.resolveConfig) integer("GPUBufferUsage.UNIFORM", usage?.UNIFORM, 1, U32_MAX);
+      if (plan.bytes.resolveConfig || plan.bytes.primaryConfig) integer("GPUBufferUsage.UNIFORM", usage?.UNIFORM, 1, U32_MAX);
       device.pushErrorScope("out-of-memory");
       scopeCount += 1;
       device.pushErrorScope("validation");

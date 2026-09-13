@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Internal tile/tier primary-pixel compaction with workgroup scans, indirect
+    arguments, failure/overflow veto and cap-accounted immutable config slots.
+    This is not connected to camera-ray generation or live adaptive rendering;
+    hardware, transport, image and performance qualification remain pending.
   - Internal complete-camera-sample commit and float32 sum/actual-count resolve,
     reflected packing/layout checks, invalid-sample rejection, and capped tile
     scratch/configuration allocation. Not connected to live transport; adaptive
