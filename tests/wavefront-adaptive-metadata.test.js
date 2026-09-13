@@ -83,6 +83,7 @@ test("4K admission accounts for bounded worklists, optional classifiers and two 
   assert.deepEqual(base.bytes, {
     pixelState: 33177600, firstHitDistance: 0, normalMaterialRisk: 0,
     worklist: 65536, dispatch: 12, history: 0, total: 33243148,
+    primaryControl: 0, primaryConfig: 0,
     cameraSamples: 0, radianceSums: 0, resolvedRadiance: 0, resolveConfig: 0,
   });
   const full = planAdaptiveResources({ ...options, firstHitDistance: true, normalMaterialRisk: true, history: true });
