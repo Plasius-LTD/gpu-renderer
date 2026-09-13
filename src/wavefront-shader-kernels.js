@@ -608,6 +608,12 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
   return ScatterResult(vec4<f32>(lightDirection, 0.0), pdf, ray.mediumRefId, 0u, lobeKind);
 }
 
+// Camera visibility has no competing next-event sample. Preserve the existing
+// terminal MIS only for non-delta secondary rays.
+fn terminal_mis_enabled(ray: RayRecord) -> bool {
+  return ray.bounce > 0u && (ray.flags & RAY_FLAG_DELTA_SAMPLE) == 0u;
+}
+
 @compute @workgroup_size(64)
 fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let index = globalId.x;
@@ -624,7 +630,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   if (hit.hitType == 1u) {
     let guidedLightWeight = select(1.0, 0.24, (ray.flags & RAY_FLAG_GUIDED_EMISSIVE) != 0u);
     var sourceRadiance = max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight;
-    if ((ray.flags & RAY_FLAG_DELTA_SAMPLE) == 0u) {
+    if (terminal_mis_enabled(ray)) {
       let bsdfPdf = max(ray.throughput.w, 0.000001);
       let lightPdf = terminal_emissive_light_pdf(ray, hit);
       if (lightPdf > 0.000001) {
@@ -647,7 +653,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   if (hit.hitType == 2u) {
     var sourceRadiance = hit.color.xyz;
-    if ((ray.flags & RAY_FLAG_DELTA_SAMPLE) == 0u) {
+    if (terminal_mis_enabled(ray)) {
       let bsdfPdf = max(ray.throughput.w, 0.000001);
       let lightPdf = environment_direction_pdf(ray.direction.xyz);
       let misWeight = power_heuristic(bsdfPdf, lightPdf);
