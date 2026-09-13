@@ -455,6 +455,18 @@ the former shared-chain storage. This is allocated buffer memory, not physical
 VRAM residency. The [ownership design](docs/design/split-path-ownership.md) and
 [evidence ledger](docs/evidence/task-210-path-ownership.md) distinguish focused
 physical checks from the outstanding image, variance, stress and release gates.
+
+Primary camera visibility of environment and emissive sources now bypasses
+terminal MIS: no competing next-event sample exists at bounce zero. Non-delta
+secondary rays retain the existing PDF/weight calculation; delta paths retain
+unit MIS weight. This narrow fixed-renderer correction adds no buffers or
+dispatches. The [Task 212 design](docs/design/primary-terminal-mis.md) and
+[evidence status](docs/evidence/task-212-primary-terminal-mis.md) separate local
+checks from pending physical qualification. Serve the repository's `src/` and
+`tests/fixtures/` paths on loopback and open
+`tests/fixtures/primary-terminal-mis.html` to run the focused linear-HDR probes.
+This does not enable adaptive sampling or establish a new quality baseline.
+
 When an `environmentMap` is provided, the wavefront trace shader samples it as
 an equirectangular radiance source for environment misses and uses the same
 mapped radiance for terminal residuals before falling back to static ambient.

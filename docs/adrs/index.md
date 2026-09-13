@@ -29,3 +29,4 @@
 - [ADR 0027: Lazy fixed-SPP ray and timing telemetry](./adr-0027-lazy-fixed-spp-ray-and-timing-telemetry.md)
 - [ADR 0029: Reflected adaptive metadata and allocation admission](./adr-0029-reflected-adaptive-metadata-admission.md)
 - [ADR 0031: Branch-owned complete camera samples](./adr-0031-branch-owned-complete-camera-samples.md)
+- [ADR 0032: Primary visibility MIS eligibility](./adr-0032-primary-visibility-mis-eligibility.md)

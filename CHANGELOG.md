@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - Exclude primary camera environment/emissive visibility from terminal MIS
+    without changing secondary non-delta or delta weighting. Add fixed
+    1/32/128-SPP linear-HDR/count probes; physical qualification remains pending.
   - Replace shared sibling radiance/throughput addresses with tile/depth-owned
     path nodes and a single complete-camera-sample reduction in both resolve modes.
     Reject incomplete/overflowing paths visibly and expose optional completion
