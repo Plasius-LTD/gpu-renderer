@@ -1,9 +1,9 @@
 import { WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL, WAVEFRONT_MAKE_CAMERA_RAY_WGSL, WAVEFRONT_SAFE_NORMALIZE_WGSL } from "./wavefront-camera-shared-shader.js";
-import { WAVEFRONT_SAMPLE_DIMENSIONS_WGSL } from "./wavefront-sampling-dimensions.js";
+import { WAVEFRONT_SAMPLE_DIMENSIONS_WGSL, WAVEFRONT_SAMPLE_SEQUENCE_WGSL, WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL } from "./wavefront-sampling-dimensions.js";
 
 // Internal camera bridge only. The fixed shader and its sampling function are
 // shared verbatim; no bounce coordinator, radiance or completed count is run.
-export const ADAPTIVE_CAMERA_WGSL = [WAVEFRONT_SAMPLE_DIMENSIONS_WGSL,
+export const ADAPTIVE_CAMERA_WGSL = [WAVEFRONT_SAMPLE_DIMENSIONS_WGSL, WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL, WAVEFRONT_SAMPLE_SEQUENCE_WGSL,
   WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL,
   WAVEFRONT_SAFE_NORMALIZE_WGSL, WAVEFRONT_MAKE_CAMERA_RAY_WGSL].join("\n") + `
 @group(0) @binding(0) var<storage, read_write> activeQueue: array<RayRecord>;

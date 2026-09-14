@@ -3,6 +3,7 @@ import test from "node:test";
 import { createHash } from "node:crypto";
 import { WAVEFRONT_COMPUTE_WGSL } from "../src/wavefront-shaders.js";
 import { WAVEFRONT_MAKE_CAMERA_RAY_WGSL } from "../src/wavefront-camera-shared-shader.js";
+import { WAVEFRONT_SAMPLE_SEQUENCE_WGSL, WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL } from "../src/wavefront-sampling-dimensions.js";
 import { ADAPTIVE_CAMERA_WGSL } from "../src/wavefront-adaptive-camera-shader.js";
 import { createAdaptiveCameraRayPipeline, encodeAdaptiveCameraRays } from "../src/wavefront-adaptive-camera.js";
 import { reflectAdaptiveCameraInterface } from "../scripts/adaptive-camera-interface.js";
@@ -12,6 +13,11 @@ import { CONFIG_BUFFER_BYTES, RAY_RECORD_BYTES } from "../src/wavefront-core.js"
 test("compacted camera rays reuse camera WGSL without changing fixed transport or make_ray", () => {
   assert.ok(ADAPTIVE_CAMERA_WGSL.includes(WAVEFRONT_MAKE_CAMERA_RAY_WGSL));
   assert.ok(WAVEFRONT_COMPUTE_WGSL.includes(WAVEFRONT_MAKE_CAMERA_RAY_WGSL));
+  for (const shader of [ADAPTIVE_CAMERA_WGSL, WAVEFRONT_COMPUTE_WGSL]) {
+    assert.ok(shader.includes(WAVEFRONT_SAMPLE_SEQUENCE_WGSL));
+    assert.ok(shader.includes(WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL));
+    assert.equal(shader.match(/fn sample_dimension_2d\(/g)?.length, 1);
+  }
   assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0");
   const entry = ADAPTIVE_CAMERA_WGSL.slice(ADAPTIVE_CAMERA_WGSL.indexOf("fn generateCompactedCameraRays"));
   assert.match(entry, /activeQueue\[slot\] = make_ray\(localPixelId\);/);
