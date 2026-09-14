@@ -7,6 +7,7 @@
 <pre id="result" role="status">Running…</pre>
 <script type="module">
 import { ADAPTIVE_RESOLVE_WGSL } from "/src/wavefront-adaptive-resolve-shader.js";
+import { ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE, ADAPTIVE_RESOLVE_CONFIG_SELECTED_TIER_OFFSET } from "/src/wavefront-adaptive-resolve-constants.js";
 import { createAdaptiveResourceOwner, packAdaptivePixelState } from "/src/wavefront-adaptive-metadata.js";
 import { createAdaptiveResolvePipelines, packAdaptiveCameraSamples, packAdaptiveResolveConfig } from "/src/wavefront-adaptive-resolve.js";
 import { divisionErrorUlps, WGSL_F32_DIVISION_MAX_ULPS } from "/tests/fixtures/adaptive-accuracy.js";
@@ -48,7 +49,7 @@ const run = async () => {
     { binding: 1, resource: { buffer: samples } },
     { binding: 2, resource: { buffer: sums } },
     { binding: 3, resource: { buffer: resolved } },
-    { binding: 4, resource: { buffer: configs, size: 32 } },
+    { binding: 4, resource: { buffer: configs, size: ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE } },
   ] });
   const tile = { width: 32, height: 32, tileX: 4, tileY: 5, tileWidth: 16, tileHeight: 16, frameValid: true };
   const pixelId = (id) => (5 + Math.floor(id / 16)) * 32 + 4 + id % 16;
@@ -108,6 +109,36 @@ const run = async () => {
   }
   const owned = new Set(Array.from({ length: 256 }, (_, id) => pixelId(id)));
   for (let id = 0; id < 1024; id += 1) if (!owned.has(id)) assert(actual.words[id] === words[id], `Non-tile pixel modified ${id}`);
+  const tierOrders = [];
+  for (const order of [[1, 3, 8, 256], [256, 8, 3, 1]]) {
+    const budgets = Array.from({ length: 256 }, (_, id) => [1, 3, 8, 256][id % 4]);
+    const completed = new Uint32Array(256);
+    words.fill(packAdaptivePixelState({ requested: 32, flags: 7 }));
+    for (let id = 0; id < 256; id += 1) words[pixelId(id)] = packAdaptivePixelState({ requested: budgets[id], flags: 3 });
+    device.queue.writeBuffer(pixels, 0, words);
+    device.queue.writeBuffer(sums, 0, new Float32Array(1024));
+    for (const selectedTier of order) {
+      for (let ordinal = 0; ordinal < selectedTier; ordinal += 1) {
+        configBytes.set(new Uint8Array(packAdaptiveResolveConfig({ ...tile, sampleOrdinal: ordinal, selectedTier })), ordinal * 256);
+      }
+      device.queue.writeBuffer(configs, 0, configBytes);
+      for (let ordinal = 0; ordinal < selectedTier; ordinal += 1) {
+        const values = budgets.map((budget, id) => ({ sourcePixelId: pixelId(id), sampleOrdinal: ordinal,
+          status: budget === selectedTier ? 1 : 0, radiance: budget === selectedTier ? [2, 4, 8] : [0, 0, 0] }));
+        device.queue.writeBuffer(samples, 0, packAdaptiveCameraSamples(values));
+        dispatch(ordinal);
+      }
+      actual = await read();
+      budgets.forEach((budget, id) => {
+        if (budget === selectedTier) completed[id] = selectedTier;
+        assert(actual.words[pixelId(id)] === packAdaptivePixelState({ requested: budget, completed: completed[id], flags: 3 }), `Tier ${selectedTier} changed another tier's count ${id}`);
+        [2, 4, 8].forEach((value, channel) => assert(actual.sums[id * 4 + channel] === completed[id] * value, `Tier sum mismatch ${id}:${channel}`));
+        assert(actual.resolved[id * 4 + 3] === (completed[id] ? 1 : 0), `Whole-tile resolve filtered by tier ${selectedTier}:${id}`);
+      });
+      for (let id = 0; id < 1024; id += 1) if (!owned.has(id)) assert(actual.words[id] === words[id], `Tier modified non-tile pixel ${id}`);
+    }
+    tierOrders.push({ order, completedCameraSamples: completed.reduce((sum, count) => sum + count, 0), pixels: 256, passed: true });
+  }
   const negativeCases = [];
   for (const kind of ["partial", "producer-failed", "wrong-pixel", "wrong-ordinal", "duplicate", "out-of-order", "invalid-count", "zero-budget", "NaN", "infinity", "negative", "failed-frame"]) {
     words.fill(packAdaptivePixelState({ requested: 32 }));
@@ -131,14 +162,21 @@ const run = async () => {
     negativeCases.push(kind);
   }
   // A corrupt domain configuration cannot write any full-screen pixel.
-  const badTile = packAdaptiveResolveConfig({ ...tile, sampleOrdinal: 0 });
-  new DataView(badTile).setUint32(8, 0xffffffff, true);
-  device.queue.writeBuffer(pixels, 0, words);
-  device.queue.writeBuffer(configs, 0, badTile);
-  dispatch(0);
-  actual = await read();
-  assert(actual.words.every((word, index) => word === words[index]), "Invalid tile modified pixels");
-  assert(actual.resolved.every((value) => value === 0), "Invalid tile produced output");
+  for (const invalid of ["tile", "tier-range", "tier-ordinal"]) {
+    const badTile = packAdaptiveResolveConfig({ ...tile, sampleOrdinal: 0 });
+    const view = new DataView(badTile);
+    if (invalid === "tile") view.setUint32(8, 0xffffffff, true);
+    else {
+      view.setUint32(ADAPTIVE_RESOLVE_CONFIG_SELECTED_TIER_OFFSET, invalid === "tier-range" ? 257 : 1, true);
+      if (invalid === "tier-ordinal") view.setUint32(24, 1, true);
+    }
+    device.queue.writeBuffer(pixels, 0, words);
+    device.queue.writeBuffer(configs, 0, badTile);
+    dispatch(0);
+    actual = await read();
+    assert(actual.words.every((word, index) => word === words[index]), `Invalid ${invalid} modified pixels`);
+    assert(actual.resolved.every((value) => value === 0), `Invalid ${invalid} produced output`);
+  }
   await device.queue.onSubmittedWorkDone();
   active();
   assert(await device.popErrorScope() === null, "GPU validation error");
@@ -154,6 +192,7 @@ const run = async () => {
     userAgent: navigator.userAgent, unequalBudgetPixels: 256, completedCameraSamples: 32896, minimumSpp: 1, maximumSpp: 256,
     divisionToleranceUlps: WGSL_F32_DIVISION_MAX_ULPS, maximumDivisionErrorUlps,
     negativeCases, invalidTileRejected: true, sentinelSumReset: true, nonTilePixelsPreserved: true,
+    tierOrders, invalidTierRejected: true, tierResolveCoversAllCompletedPixels: true,
     compilerErrors: 0, validationErrors: 0, deviceLost: false,
     allocated4kBytes: allocation.allocatedBytes, allocationClasses: owner.snapshot().plan.bytes,
     limits: { maxBufferSize: device.limits.maxBufferSize, maxStorageBufferBindingSize: device.limits.maxStorageBufferBindingSize, minUniformBufferOffsetAlignment: device.limits.minUniformBufferOffsetAlignment },

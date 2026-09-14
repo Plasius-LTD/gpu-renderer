@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Tier-qualified internal camera-sample commits for compacted scheduling, with
+    a reflected 48-byte version-2 configuration in unchanged 256-byte slots.
+    Unselected tiers retain counts/sums; whole-tile actual-count resolve and fixed
+    transport are unchanged. Public adaptive rendering remains disabled.
   - Internal compacted camera-ray generation reusing canonical fixed camera WGSL,
     with reflected interfaces, immutable config validation and indirect dispatch.
     Fixed assembled transport remains byte-identical; bounce/resolve and site

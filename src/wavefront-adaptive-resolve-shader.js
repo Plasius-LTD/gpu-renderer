@@ -27,6 +27,10 @@ struct AdaptiveResolveConfig {
   tileHeight: u32,
   sampleOrdinal: u32,
   frameValid: u32,
+  selectedTier: u32,
+  reserved0: u32,
+  reserved1: u32,
+  reserved2: u32,
 };
 @group(0) @binding(0) var<storage, read_write> pixels: AdaptivePixels;
 @group(0) @binding(1) var<storage, read> samples: AdaptiveSamples;
@@ -41,6 +45,7 @@ fn valid_tile() -> bool {
   if (config.tileWidth == 0u || config.tileHeight == 0u) { return false; }
   if (config.tileWidth > config.canvasWidth - config.tileX || config.tileHeight > config.canvasHeight - config.tileY) { return false; }
   if (config.tileHeight > 16384u / config.tileWidth || config.sampleOrdinal > 255u) { return false; }
+  if (config.selectedTier > 256u || (config.selectedTier > 0u && config.sampleOrdinal >= config.selectedTier)) { return false; }
   return true;
 }
 fn source_pixel(localId: u32) -> u32 {
@@ -67,6 +72,7 @@ fn commit_adaptive_sample(@builtin(global_invocation_id) id: vec3<u32>) {
   let word = pixels.records[pixelId].word;
   let requested = word & ADAPTIVE_COUNT_MASK;
   let completed = (word >> ADAPTIVE_COUNT_SHIFT) & ADAPTIVE_COUNT_MASK;
+  if (config.selectedTier > 0u && requested != config.selectedTier) { return; }
   if (!valid_counts(word)) { pixels.records[pixelId].word = word | ADAPTIVE_FAILURE_MASK; return; }
   if (config.sampleOrdinal >= requested) { return; }
   if (config.frameValid != 1u || localId >= arrayLength(&samples.records) || localId >= arrayLength(&sums.records)) {

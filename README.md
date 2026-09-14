@@ -93,6 +93,12 @@ Tile-local sample/sum/output scratch adds at most 1 MiB, plus bounded immutable
 configuration slots, all included in the existing allocation cap. The highest
 packed flag bit now marks invalid sample/count evidence.
 
+The version-2 internal resolve ABI adds an exact selected-tier filter, so a
+compacted pass cannot count or poison pixels assigned to another tier. Zero
+retains the dense internal commit mode. Final resolve still covers the whole
+tile. The 48-byte payload fits the same 256-byte slots; allocated memory and
+fixed transport are unchanged. See [ADR 0035](docs/adrs/adr-0035-tier-qualified-camera-sample-commit.md).
+
 The fixed renderer and its whole-frame budget adjustment are unchanged. The new
 stage is not wired to transport or exposed through package exports. Race-free
 split-path production, compact primary scheduling, foveation and shared
