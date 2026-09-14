@@ -59,8 +59,48 @@ not independently retained. This is physical worklist/indirect execution evidenc
 not transport, rendered-image, performance or exact physical VRAM evidence.
 
 Task 169 stays In Progress. Remaining: qualified producer integration (#210 and
-#212), primary-ray generation from the compact list, sample-ordinal/sequence
-preservation, per-sample commit and resolve integration, public options/focus,
+#212), camera bridge/bounce coordination and per-sample commit/resolve integration, public options/focus,
 GPU-shared/site forwarding, HDR/image/stability/performance evidence and CI/CD.
 No adaptive enablement, speedup, memory saving or release is claimed.
 Three.js remains permanently prohibited.
+
+## Compacted camera generation on 2026-09-14
+
+The new internal camera bridge shares canonical camera and sampling WGSL with
+fixed generation. Its complete camera-only module is reflected and the fixed
+assembled shader remains SHA-256
+`6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0`.
+
+The first physical run at `c49841dd9303f5ef8203025a4a0aa95e7f0505fa` failed
+compilation because the camera module omitted the sampling helper body. This is
+retained as [rejected evidence](task-169-camera-rejected-2026-09-14.json), not a pass.
+The fix shares the entire canonical sequence helper block; it changes neither
+the original sequence nor the fixed assembled shader. No tolerance was relaxed.
+
+At clean revision `ac1bd4cc89ec27a3520f7681541d9ee5d2e6ab71`, all 49 physical
+cases passed on non-fallback Apple Metal-3. The GPU-generated compacted records
+matched 18,594 dense production-camera records bit-for-bit, across tiers 1..256,
+epochs 0/7, ordinals through 255, mixed/full/empty tiles and 13 veto cases. Padding
+was untouched; there were zero WebGPU validation errors or unexpected device
+losses. The [observed receipt](task-169-camera-physical-webgpu-2026-09-14.json)
+records the shader/fixture hashes and each case. It is identity evidence, not
+bounce/radiance/image or speedup evidence.
+
+The bridge itself allocates no buffers. The fixture's reused adaptive owner
+allocated 214,560 bytes for its 257x129 state and 64 configuration slots, returning
+to zero on cleanup. Additional test-owned queue/reference/staging buffers totaled
+6,455,328 bytes, separately reported. These are allocated bytes, not exact VRAM.
+
+The [count-resolve recapture](task-169-count-resolve-physical-webgpu-2026-09-14.json)
+also passed on the preceding worklist revision: 32,896 synthetic complete samples
+across 1..256 SPP, twelve rejection cases and 102,786,060-byte 4K allocation with
+zero bytes after destruction. It does not exercise the real transport producer.
+
+Local final validation: 229 tests, zero failures/skips; coverage above 95% lines.
+Every changed runtime file appears in LCOV; the camera runtime/shared shader,
+assembled camera source and modified layout/BVH sources have 100% lines. Existing
+sampling-dimension code has 98.77% lines. Lint, types including a clean packed
+consumer, build, package checks, all nine Zero-Three gates and production dependency
+audit passed (zero reported vulnerabilities). CI/release qualification remains
+pending. The full-transport reflection identifier defect is tracked in gpu-shader#31;
+the camera-only reflection pass is not a substitute for fixing it.

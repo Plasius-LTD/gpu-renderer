@@ -1,6 +1,6 @@
 # ADR 0034: Share camera WGSL with compacted primary generation
 
-- Status: Internal implementation; physical qualification and integration pending
+- Status: Internal implementation and bounded physical identity checks passed; integration pending
 - Date: 2026-09-14
 - Task: gpu-renderer#169; Story: plasius-ltd-site#2119; Feature: #2114
 - Flag: `renderer.sampling.adaptivePerPixel.enabled` (off)

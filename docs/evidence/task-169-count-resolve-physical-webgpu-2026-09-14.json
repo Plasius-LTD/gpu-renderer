@@ -1,0 +1,72 @@
+{
+  "provenance": {
+    "repository": "https://github.com/Plasius-LTD/gpu-renderer",
+    "implementationCommit": "f593fda9e7aa9e20474c3d637d58b21936b8483f",
+    "worktreeCleanAtCapture": true,
+    "captureMethod": "Unmodified completed JSON from browser-native accessibility snapshot.",
+    "servedSources": "Immutable in-memory snapshot loaded before execution.",
+    "limitations": "Bounded fixture evidence only. No live adaptive scene, radiance baseline or performance claim."
+  },
+  "observed": {
+    "status": "pass",
+    "scope": "synthetic-complete-camera-sample-count-resolve",
+    "timestamp": "2026-09-14T09:17:31.042Z",
+    "shaderSha256": "edde6c39c87de207809be810d866afded7580aba1337d938cc52f14d16b45d70",
+    "adapter": {
+      "vendor": "apple",
+      "architecture": "metal-3",
+      "device": "",
+      "description": "",
+      "isFallbackAdapter": false
+    },
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "unequalBudgetPixels": 256,
+    "completedCameraSamples": 32896,
+    "minimumSpp": 1,
+    "maximumSpp": 256,
+    "divisionToleranceUlps": 2.5,
+    "maximumDivisionErrorUlps": 2,
+    "negativeCases": [
+      "partial",
+      "producer-failed",
+      "wrong-pixel",
+      "wrong-ordinal",
+      "duplicate",
+      "out-of-order",
+      "invalid-count",
+      "zero-budget",
+      "NaN",
+      "infinity",
+      "negative",
+      "failed-frame"
+    ],
+    "invalidTileRejected": true,
+    "sentinelSumReset": true,
+    "nonTilePixelsPreserved": true,
+    "compilerErrors": 0,
+    "validationErrors": 0,
+    "deviceLost": false,
+    "allocated4kBytes": 102786060,
+    "allocationClasses": {
+      "pixelState": 33177600,
+      "firstHitDistance": 33177600,
+      "normalMaterialRisk": 33177600,
+      "worklist": 65536,
+      "dispatch": 12,
+      "history": 2073600,
+      "total": 102786060,
+      "cameraSamples": 524288,
+      "radianceSums": 262144,
+      "resolvedRadiance": 262144,
+      "resolveConfig": 65536,
+      "primaryControl": 0,
+      "primaryConfig": 0
+    },
+    "limits": {
+      "maxBufferSize": 268435456,
+      "maxStorageBufferBindingSize": 134217728,
+      "minUniformBufferOffsetAlignment": 256
+    },
+    "allocatedAfterDestroy": 0
+  }
+}
