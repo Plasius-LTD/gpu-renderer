@@ -462,7 +462,9 @@ secondary rays retain the existing PDF/weight calculation; delta paths retain
 unit MIS weight. This narrow fixed-renderer correction adds no buffers or
 dispatches. The [Task 212 design](docs/design/primary-terminal-mis.md) and
 [evidence status](docs/evidence/task-212-primary-terminal-mis.md) separate local
-checks from pending physical qualification. Serve the repository's `src/` and
+checks from bounded physical evidence and outstanding full-scene qualification.
+All 24 controlled 1/32/128-SPP lanes passed on Apple Metal-3 on 2026-09-14.
+Serve the repository's `src/` and
 `tests/fixtures/` paths on loopback and open
 `tests/fixtures/primary-terminal-mis.html` to run the focused linear-HDR probes.
 This does not enable adaptive sampling or establish a new quality baseline.

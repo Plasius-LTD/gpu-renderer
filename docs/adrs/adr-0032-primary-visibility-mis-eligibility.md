@@ -1,6 +1,6 @@
 # ADR 0032: Primary visibility has no competing NEE estimator
 
-- Status: Implemented, physical qualification pending
+- Status: Implemented, bounded physical probes passed; full-scene qualification pending
 - Date: 2026-09-13
 - Task: gpu-renderer#212; Story: plasius-ltd-site#2168; Feature: #2114
 
