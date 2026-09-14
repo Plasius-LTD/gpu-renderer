@@ -104,3 +104,28 @@ consumer, build, package checks, all nine Zero-Three gates and production depend
 audit passed (zero reported vulnerabilities). CI/release qualification remains
 pending. The full-transport reflection identifier defect is tracked in gpu-shader#31;
 the camera-only reflection pass is not a substitute for fixing it.
+
+## Tier-qualified sample commit, 14 September 2026
+
+Two new requirements-first tests reproduced the dense-commit integration gap:
+unselected pixels were poisoned when a compacted pass had no sample for them,
+and tier configuration was not validated. The version-2 internal count ABI now
+selects exact-budget pixels before consuming samples. The payload grows from 32
+to 48 bytes inside unchanged 256-byte allocations. Full-tile resolve still covers
+every valid completed pixel; fixed assembled transport remains byte-identical.
+
+At clean commit `ec6176de8d02e2ca6e9e6a3d7f9ac5172f1bd2e0`, Apple Metal-3
+executed ascending and descending mixed tiers [1,3,8,256], with 17,152 synthetic
+completed records in each order. Unselected counts/sums and non-tile pixels were
+preserved; all-tier resolve and invalid-tier/ordinal rejection passed. The
+existing 32,896-record dense arithmetic, twelve failure cases and 4K allocation
+checks also passed. There were no validation errors or device loss, and allocated
+bytes returned to zero. The [revision-bound receipt](task-169-tier-resolve-physical-webgpu-2026-09-14.json)
+retains the observed values. These are synthetic complete samples, not traced rays.
+
+Local unit suite: 231 tests pass. Overall line coverage is 95.55%; overall branch
+coverage is 76.42%, not an 80% branch claim. The changed resolve runtime, shader
+and generated ABI have 100% lines in LCOV; the runtime has 97% branches. Lint,
+types/clean packed consumer, build, public package, all nine Zero-Three checks
+and production audit pass (zero vulnerabilities). CI/CD and full real-producer,
+adaptive scheduler, site, image and performance qualification remain outstanding.
