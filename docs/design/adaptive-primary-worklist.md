@@ -38,7 +38,30 @@ disabled no-touch, pipeline failures, byte admission and immutable slots. Build
 a physical fixture before claiming WebGPU execution. CPU/reference or reflection
 success does not establish GPU execution, transport correctness or faster frames.
 
-No contributing sample is drawn by this stage. Actual ray generation, count
+No contributing sample is drawn by the compaction stage. Actual ray generation, count
 commit/resolve, focus policy, diagnostics and site integration remain to be
 connected under the same Task hierarchy. Three.js cannot be a fallback. No local
 publication or production/CI gate bypass is permitted.
+
+## Camera-ray bridge (next independently qualified slice)
+
+Build an internal camera-only module from shared canonical ray/frame records,
+sampling dimensions, normalization and `make_ray(tileLocalPixelId)`. Its full
+assembled module is reflected. Fixed and compacted generation import the same
+definitions, and the fixed assembled shader remains byte-identical. Read the validated
+worklist into dense queue slots; retain the original tile-local ray ID, full-screen
+source ID and absolute sample ordinal. The frame config carries the configured
+maximum sequence period, never the selected tier. Reuse existing queue, frame,
+control and tile-config buffers; this stage owns no allocations and is absent
+from the fixed dispatcher.
+
+Before integration, require final-module reflection and physical bitwise equality
+against dense GPU `make_ray` records at multiple epochs, tiers and ordinals through
+255. Require matching frame/tile configuration, selected-tier and sequence bounds,
+capacity/failure rejection, and untouched padded output. The worklist must come
+from the validated compaction pass and remain immutable through consumption.
+No CPU-generated camera rays or alternate jitter sequence is permitted.
+
+This bridge does not initialize bounce counters/path nodes or commit radiance.
+Only the future coordinator may combine it with qualified producer/resolve work;
+the presence of a generated ray does not constitute a completed camera sample.

@@ -1,0 +1,204 @@
+{
+  "provenance": {
+    "repository": "https://github.com/Plasius-LTD/gpu-renderer",
+    "implementationCommit": "f593fda9e7aa9e20474c3d637d58b21936b8483f",
+    "worktreeCleanAtCapture": true,
+    "servedSources": "Immutable in-memory snapshot of src/*.js and tests/fixtures/*.{js,html} loaded before browser execution.",
+    "captureMethod": "Browser-native accessibility snapshot of completed on-page JSON, parsed without altering values.",
+    "retainedScope": "Compact visible receipt only. Full downloaded raw arrays were not independently retained or verified; no baseline or image qualification is claimed."
+  },
+  "observed": {
+    "status": "passed",
+    "timestamp": "2026-09-14T09:11:27.034Z",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "shaderSha256": "3e81bf23c8f30f2bc7d7a62faf4837153eebfaec0c94daf84d60bf0a875fea75",
+    "fixtureSha256": "9f4e3ae13d035156e080c1509cd950301d4745e3bef0955509c9b4382a8f71d6",
+    "results": [
+      {
+        "name": "full-1",
+        "count": 16384,
+        "failure": 0,
+        "dispatch": [
+          256,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 16384
+      },
+      {
+        "name": "full-2",
+        "count": 16384,
+        "failure": 0,
+        "dispatch": [
+          256,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 16384
+      },
+      {
+        "name": "full-4",
+        "count": 16384,
+        "failure": 0,
+        "dispatch": [
+          256,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 16384
+      },
+      {
+        "name": "full-8",
+        "count": 16384,
+        "failure": 0,
+        "dispatch": [
+          256,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 16384
+      },
+      {
+        "name": "full-16",
+        "count": 16384,
+        "failure": 0,
+        "dispatch": [
+          256,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 16384
+      },
+      {
+        "name": "full-32",
+        "count": 16384,
+        "failure": 0,
+        "dispatch": [
+          256,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 16384
+      },
+      {
+        "name": "full-64",
+        "count": 16384,
+        "failure": 0,
+        "dispatch": [
+          256,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 16384
+      },
+      {
+        "name": "full-128",
+        "count": 16384,
+        "failure": 0,
+        "dispatch": [
+          256,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 16384
+      },
+      {
+        "name": "full-256",
+        "count": 16384,
+        "failure": 0,
+        "dispatch": [
+          256,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 16384
+      },
+      {
+        "name": "empty",
+        "count": 0,
+        "failure": 0,
+        "dispatch": [
+          0,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 0
+      },
+      {
+        "name": "mixed-edge-tile",
+        "count": 51,
+        "failure": 0,
+        "dispatch": [
+          1,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 51
+      },
+      {
+        "name": "zero-budget",
+        "count": 16383,
+        "failure": 2,
+        "dispatch": [
+          0,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 0
+      },
+      {
+        "name": "failed-pixel",
+        "count": 16383,
+        "failure": 2,
+        "dispatch": [
+          0,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 0
+      },
+      {
+        "name": "reused-tier",
+        "count": 16383,
+        "failure": 2,
+        "dispatch": [
+          0,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 0
+      },
+      {
+        "name": "overflow",
+        "count": 16384,
+        "failure": 4,
+        "dispatch": [
+          0,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 0
+      },
+      {
+        "name": "invalid-gpu-config",
+        "count": 0,
+        "failure": 1,
+        "dispatch": [
+          0,
+          1,
+          1
+        ],
+        "uniqueVisitedPixels": 0
+      }
+    ],
+    "scope": "worklist-compaction-and-indirect-identity-only",
+    "adapter": {
+      "vendor": "apple",
+      "architecture": "metal-3",
+      "isFallbackAdapter": false
+    },
+    "adaptiveAllocatedBytes": 139292,
+    "validationErrors": 0,
+    "allocatedBytesAfterCleanup": 0
+  }
+}

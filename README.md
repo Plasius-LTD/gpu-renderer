@@ -66,10 +66,17 @@ now compacts preselected tile/tier budgets into dense local pixel IDs and builds
 indirect dispatch arguments. Invalid counts, failed pixels and overflow veto the
 dispatch. It adds a 16-byte control record and 256 bytes per immutable config
 slot to the existing capped allocation owner, only when `primaryWorklist` is
-requested internally. It does not generate rays or change the fixed dispatcher.
-The physical `tests/fixtures/adaptive-primary.html` identity/indirect probe is
-prepared but not yet executed; [Task 169 evidence](docs/evidence/task-169-primary-worklist.md)
-separates local tests from missing hardware and scene qualification.
+requested internally. It does not change the fixed dispatcher. The physical
+`tests/fixtures/adaptive-primary.html` identity/indirect probe passed all 16 cases
+on Apple Metal-3; [Task 169 evidence](docs/evidence/task-169-primary-worklist.md)
+records its bounded scope separately from outstanding scene qualification.
+
+A separate internal camera-ray bridge consumes those worklists and reuses the
+fixed renderer's camera WGSL and maximum-period sampling sequence. Its final
+camera-only module is reflected; fixed transport remains byte-identical. Run
+`tests/fixtures/adaptive-camera.html` for dense/compacted GPU RayRecord comparisons.
+It does not initialize bounces, contribute radiance, count completed samples or
+enable site adaptation. See [ADR 0034](docs/adrs/adr-0034-shared-compacted-camera-rays.md).
 
 The internal [metadata foundation](docs/design/adaptive-metadata.md) now provides
 reflected requested/completed count storage and lazy, bounded allocation.

@@ -45,9 +45,18 @@ invalid GPU configuration, failed/reused counts and overflow. The receipt
 separates GPU-read local IDs from CPU-expected full-screen mappings and records
 cleanup. It draws no rays and is not a render or benchmark.
 
-The Mac was locked during this work; this fixture has **not** been compiled or
-executed on physical WebGPU. Hardware uniformity/bounds/indirect qualification
-must pass before integration. Do not treat reflection or mocks as that evidence.
+The Mac was locked on 2026-09-13. On 2026-09-14 the fixture compiled and executed
+on a non-fallback Apple Metal-3 adapter: all 16 cases passed. Every full-tier
+case visited exactly 16,384 unique pixels; the mixed edge tile visited 51 and
+the empty tier visited zero. Invalid state/configuration and overflow produced
+zero indirect dispatch and no visited pixels. No WebGPU validation errors were
+reported. Adaptive buffers allocated 139,292 bytes and returned to zero on cleanup.
+
+The [revision-bound observed receipt](task-169-physical-webgpu-2026-09-14.json)
+retains the unmodified compact on-page results, source/fixture hashes and clean
+implementation commit. Full per-pixel arrays offered by the download link were
+not independently retained. This is physical worklist/indirect execution evidence,
+not transport, rendered-image, performance or exact physical VRAM evidence.
 
 Task 169 stays In Progress. Remaining: qualified producer integration (#210 and
 #212), primary-ray generation from the compact list, sample-ordinal/sequence

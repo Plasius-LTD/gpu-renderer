@@ -12,20 +12,7 @@ const SCATTER_LOBE_DELTA_REFLECTION: u32 = 4u;
 const SCATTER_LOBE_DELTA_TRANSMISSION: u32 = 5u;
 ${WAVEFRONT_SAMPLE_DIMENSIONS_WGSL}
 
-struct RayRecord {
-  rayId: u32,
-  parentRayId: u32,
-  sourcePixelId: u32,
-  sampleId: u32,
-  bounce: u32,
-  mediumRefId: u32,
-  flags: u32,
-  mediumStackDepth: u32,
-  origin: vec4<f32>,
-  direction: vec4<f32>,
-  throughput: vec4<f32>,
-  mediumStack: vec4<u32>,
-};
+${WAVEFRONT_CAMERA_RAY_RECORD_WGSL}
 
 struct HitRecord {
   rayId: u32,
@@ -177,46 +164,7 @@ struct MeshRange {
   textureSettings: vec4<f32>,
 };
 
-struct FrameConfig {
-  canvasWidth: u32,
-  canvasHeight: u32,
-  tileX: u32,
-  tileY: u32,
-  tileWidth: u32,
-  tileHeight: u32,
-  tilePixelCount: u32,
-  maxDepth: u32,
-  sceneObjectCount: u32,
-  frameIndex: u32,
-  denoise: u32,
-  triangleCount: u32,
-  bvhNodeCount: u32,
-  displayQuality: u32,
-  meshSourceCount: u32,
-  bvhNodeCapacity: u32,
-  cameraPosition: vec4<f32>,
-  cameraForward: vec4<f32>,
-  cameraRight: vec4<f32>,
-  cameraUp: vec4<f32>,
-  projectionAndSampling: vec4<f32>,
-  environmentColor: vec4<f32>,
-  ambientColor: vec4<f32>,
-  environmentHorizonColor: vec4<f32>,
-  environmentZenithColor: vec4<f32>,
-  environmentSunDirectionIntensity: vec4<f32>,
-  environmentSunColor: vec4<f32>,
-  bvhBuildNodeStart: u32,
-  bvhBuildNodeCount: u32,
-  bvhSortItemCount: u32,
-  emissiveTriangleCount: u32,
-  environmentPortalCount: u32,
-  environmentPortalMode: u32,
-  samplesPerPixel: u32,
-  transportExperimentFlags: u32,
-  environmentMapSettings: vec4<f32>,
-  pathResolveSettings: vec4<f32>,
-  environmentMapMeta: vec4<f32>,
-};
+${WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL}
 
 struct TerminationMetrics {
   emissiveCount: atomic<u32>,
@@ -417,13 +365,7 @@ fn sample_dimension_2d(
   return vec2<f32>(stratified, lowDiscrepancy);
 }
 
-fn safe_normalize(value: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
-  let len = length(value);
-  if (len <= 0.000001) {
-    return fallback;
-  }
-  return value / len;
-}
+${WAVEFRONT_SAFE_NORMALIZE_WGSL}
 
 struct TangentBasis {
   tangent: vec3<f32>,
@@ -441,3 +383,4 @@ struct SurfaceMaterialSample {
   occlusion: f32,
 };
 `;
+import { WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL, WAVEFRONT_SAFE_NORMALIZE_WGSL } from "./wavefront-camera-shared-shader.js";

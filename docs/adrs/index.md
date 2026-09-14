@@ -29,3 +29,4 @@
 - [ADR 0027: Lazy fixed-SPP ray and timing telemetry](./adr-0027-lazy-fixed-spp-ray-and-timing-telemetry.md)
 - [ADR 0029: Reflected adaptive metadata and allocation admission](./adr-0029-reflected-adaptive-metadata-admission.md)
 - [ADR 0033: Staged primary-worklist compaction](./adr-0033-staged-primary-worklist-compaction.md)
+- [ADR 0034: Shared compacted camera rays](adr-0034-shared-compacted-camera-rays.md)
