@@ -1,3 +1,4 @@
+import { WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL } from "./wavefront-primary-shared-shader.js";
 import { WAVEFRONT_SAMPLE_DIMENSIONS_WGSL, WAVEFRONT_SAMPLE_SEQUENCE_WGSL, WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL } from "./wavefront-sampling-dimensions.js";
 
 export const WAVEFRONT_SHADER_LAYOUT_WGSL = `
@@ -166,28 +167,7 @@ struct MeshRange {
 
 ${WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL}
 
-struct TerminationMetrics {
-  emissiveCount: atomic<u32>,
-  environmentCount: atomic<u32>,
-  ambientMaxDepthCount: atomic<u32>,
-  ambientQueueOverflowCount: atomic<u32>,
-  ambientResidualLuminanceScaled: atomic<u32>,
-  totalTerminalLuminanceScaled: atomic<u32>,
-  invalidSampleCount: atomic<u32>,
-  legacyClampEquivalentCount: atomic<u32>,
-  absorptionNullCount: atomic<u32>,
-  russianRouletteCount: atomic<u32>,
-  strictMaxDepthCount: atomic<u32>,
-  deterministicResidualZeroCount: atomic<u32>,
-  transportDirectExplicitLuminanceScaled: atomic<u32>,
-  transportCachedIndirectLuminanceScaled: atomic<u32>,
-  transportResidualLuminanceScaled: atomic<u32>,
-  transportZeroTerminationCount: atomic<u32>,
-  transportChecksum: atomic<u32>,
-  transportPad0: atomic<u32>,
-  transportPad1: atomic<u32>,
-  transportPad2: atomic<u32>,
-};
+${WAVEFRONT_TERMINATION_METRICS_WGSL}
 
 const TERMINAL_SOURCE_KIND_EMISSIVE = 1u;
 const TERMINAL_SOURCE_KIND_ENVIRONMENT = 2u;
@@ -210,17 +190,7 @@ const TRANSPORT_EXPERIMENT_PRODUCT_TRANSPORT_TELEMETRY = 32u;
 const TRANSPORT_EXPERIMENT_SOURCE_STABLE_DIRECT_LIGHTING = 64u;
 const TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT = 128u;
 
-struct Counters {
-  activeCount: atomic<u32>,
-  nextCount: atomic<u32>,
-  terminatedCount: atomic<u32>,
-  hitCount: atomic<u32>,
-  dispatchX: u32,
-  dispatchY: u32,
-  dispatchZ: u32,
-  dispatchPad: u32,
-  termination: TerminationMetrics,
-};
+${WAVEFRONT_COUNTERS_WGSL}
 
 struct Candidate {
   hit: u32,

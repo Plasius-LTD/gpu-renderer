@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Internal compacted-sample bootstrap validating worklists before resetting
+    counters and selected per-sample path/accumulation records. Reuses existing
+    buffers and canonical shader fragments; fixed shader bytes remain unchanged.
+    Public adaptive rendering and performance claims remain disabled.
   - Internal prepared-primary frame-encoder entry sharing the unchanged continuation
     command loop with fixed rendering. No adaptive dispatcher, GPU allocation or
     public enablement is introduced; fixed command traces remain equivalent.

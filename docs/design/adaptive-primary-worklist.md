@@ -83,3 +83,37 @@ configuration offsets and ping-pong bindings, and propagate failures. Its caller
 is responsible for a validated queue, initialized counters, cleared path records
 and unweighted complete-sample production before this entry can be connected to
 the live renderer. Physical combined qualification remains outstanding.
+
+## Compacted sample bootstrap
+
+Add an internal, default-disabled two-pass preparation module before compacted
+camera generation and the prepared continuation entry. Reuse the existing frame,
+ray queue, counter, tile accumulation and deferred-path buffers plus immutable
+worklist/control/tile slots. Do not allocate new GPU storage.
+
+Clear the existing counter buffer, then validate the complete selected worklist
+in a separate pass. Validate canvas/tile agreement, queue/worklist/path capacities,
+depth 1..32, maximum-period/ordinal bounds, zero reserved fields, unweighted sample
+weight of 1 and enabled deferred resolve. Invalid evidence sets a sticky failure
+bit in the existing worklist control. After the pass boundary, initialize the
+active count and fixed-format indirect arguments only if validation succeeded;
+clear selected tile-local path rows and per-camera-sample accumulation. Empty or
+failed worklists leave zero active rays. Keep the fixed pipeline's one empty
+workgroup convention for bounce dispatch. Unselected pixels and queue storage
+remain untouched. The original camera pass then consumes the same control and
+worklist, so failed preparation cannot generate rays.
+
+The worklist must be produced by the existing validated compaction pass and remain
+immutable: arbitrary caller-provided or duplicate lists are not an accepted API.
+Shared counter declarations and path-clear helpers must remain verbatim in both
+executed modules; fixed assembled WGSL must retain its existing hash. Reflect the
+actual bootstrap module, not a synthetic simplified transport module.
+
+Tests defined before implementation: disabled GPU no-touch; explicit layouts;
+immutable offsets and command order; compiled final-module ABI; empty/full/mixed
+tiers; repeated ordinals/tile reuse; selected-only reset; all counter reset;
+invalid bounds/capacity/ordinal/weight/deferred state; sticky upstream failures;
+padding/sentinels; pipeline/device errors and cleanup. A physical fixture must
+combine compaction, bootstrap and canonical camera generation before claiming
+this hand-off executes on WebGPU. This stage does not commit radiance, resolve
+split paths, connect live adaptation, or qualify image quality/performance.
