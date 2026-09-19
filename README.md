@@ -79,6 +79,13 @@ camera-only module is reflected; fixed transport remains byte-identical. Run
 It does not initialize bounces, contribute radiance, count completed samples or
 enable site adaptation. See [ADR 0034](docs/adrs/adr-0034-shared-compacted-camera-rays.md).
 
+The internal frame encoder also has a prepared-primary entry that reuses the exact
+existing bounce command loop without repeating dense primary generation. Its future
+coordinator must initialize and validate the queue, counters and path records first.
+The fixed dispatcher still uses its existing entry. Command-trace equivalence is
+unit-tested; this seam alone does not enable or qualify live adaptive transport.
+See [ADR 0036](docs/adrs/adr-0036-shared-continuation-command-encoding.md).
+
 The internal [metadata foundation](docs/design/adaptive-metadata.md) now provides
 reflected requested/completed count storage and lazy, bounded allocation.
 `@plasius/gpu-shader` validates the final initialization WGSL in development;

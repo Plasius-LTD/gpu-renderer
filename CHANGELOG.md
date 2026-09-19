@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Internal prepared-primary frame-encoder entry sharing the unchanged continuation
+    command loop with fixed rendering. No adaptive dispatcher, GPU allocation or
+    public enablement is introduced; fixed command traces remain equivalent.
   - Tier-qualified internal camera-sample commits for compacted scheduling, with
     a reflected 48-byte version-2 configuration in unchanged 256-byte slots.
     Unselected tiers retain counts/sums; whole-tile actual-count resolve and fixed

@@ -65,3 +65,21 @@ No CPU-generated camera rays or alternate jitter sequence is permitted.
 This bridge does not initialize bounce counters/path nodes or commit radiance.
 Only the future coordinator may combine it with qualified producer/resolve work;
 the presence of a generated ray does not constitute a completed camera sample.
+
+## Shared continuation encoder
+
+Expose an internal prepared-primary entry to the existing frame encoder so the
+future adaptive coordinator can reuse the exact bounce command sequence without
+running dense primary generation again. Both entries must call one implementation
+of counter-copy, intersection, shading, queue swap and telemetry ordering. This
+does not select budgets, prepare counters/path records, commit completed samples,
+allocate buffers or expose a public adaptive option. The fixed dispatcher keeps
+its existing entry and identical GPU commands. No transport WGSL changes.
+
+Requirements-first tests must compare fixed command traces and parallelism
+accounting at depths 1, 4 and 8, with/without telemetry and for padded tiles. The
+prepared entry must emit only that same continuation suffix, preserve immutable
+configuration offsets and ping-pong bindings, and propagate failures. Its caller
+is responsible for a validated queue, initialized counters, cleared path records
+and unweighted complete-sample production before this entry can be connected to
+the live renderer. Physical combined qualification remains outstanding.
