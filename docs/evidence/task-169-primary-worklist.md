@@ -129,3 +129,27 @@ and generated ABI have 100% lines in LCOV; the runtime has 97% branches. Lint,
 types/clean packed consumer, build, public package, all nine Zero-Three checks
 and production audit pass (zero vulnerabilities). CI/CD and full real-producer,
 adaptive scheduler, site, image and performance qualification remain outstanding.
+
+## Prepared-primary continuation entry, 19 September 2026
+
+Implementation `5f4f5ece1d24f449720ce4102ce8a03654b8bae8` shares one bounce-command
+implementation between fixed generation and the new internal prepared-primary
+entry. Seven requirements-first tests failed for the missing entry, then passed:
+depths 1/4/8, telemetry on/off, padded tiles, immutable offsets, ping-pong bindings,
+refreshed frame state and propagated encoder failures. Fixed command traces and
+the assembled transport shader hash are unchanged. No buffers or pipelines were
+added. Workgroup accounting remains an upper bound, not an actual-ray counter.
+
+All 238 unit tests pass. Coverage is 95.56% lines / 76.44% branches overall;
+the changed encoder appears in LCOV with 98.81% lines / 90.48% branches. Lint,
+types/clean packed consumer, build, package, all nine Zero-Three checks and
+production audit pass. No full image or new physical combined-transport test was
+run for this internal seam. Queue/counter/path initialization, complete-sample
+production and live dispatch integration remain outstanding.
+
+The earlier full-module reflection blocker has an independently tested fix in
+[gpu-shader PR 32](https://github.com/Plasius-LTD/gpu-shader/pull/32), which now has
+passing GitHub CI. It reflects the unchanged complete renderer source with 18
+records, 45 bindings and all 11 compute entries. The renderer still pins the
+released shader package; no local dependency replacement or publication occurred.
+This interface evidence is not physical renderer or performance qualification.
