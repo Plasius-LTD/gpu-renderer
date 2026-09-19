@@ -32,3 +32,4 @@
 - [ADR 0036: Shared continuation command encoding](./adr-0036-shared-continuation-command-encoding.md)
 - [ADR 0034: Shared compacted camera rays](adr-0034-shared-compacted-camera-rays.md)
 - [ADR 0037: Compacted sample bootstrap](adr-0037-compacted-sample-bootstrap.md)
+- [ADR 0038: Prepared-sample command coordinator](adr-0038-prepared-sample-command-coordinator.md)

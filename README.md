@@ -95,6 +95,14 @@ IDs or upstream failures veto the sample. The physical probe is
 not completed transport, image quality or speed. Live integration remains off.
 See [ADR 0037](docs/adrs/adr-0037-compacted-sample-bootstrap.md).
 
+The internal prepared-sample coordinator orders that bootstrap, compacted camera
+generation and the shared bounce encoder, using existing pipelines and storage.
+It does not submit, present or commit completed counts. Optional command totals
+include preparation overhead and remain invocation upper bounds, not ray counts.
+`tests/fixtures/adaptive-prepared-sample.html` compares production mesh-BVH miss
+path records with dense dispatch; this is not a complete adaptive image test.
+See [ADR 0038](docs/adrs/adr-0038-prepared-sample-command-coordinator.md).
+
 The internal [metadata foundation](docs/design/adaptive-metadata.md) now provides
 reflected requested/completed count storage and lazy, bounded allocation.
 `@plasius/gpu-shader` validates the final initialization WGSL in development;

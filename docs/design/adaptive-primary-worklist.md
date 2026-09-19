@@ -117,3 +117,24 @@ padding/sentinels; pipeline/device errors and cleanup. A physical fixture must
 combine compaction, bootstrap and canonical camera generation before claiming
 this hand-off executes on WebGPU. This stage does not commit radiance, resolve
 split paths, connect live adaptation, or qualify image quality/performance.
+
+## Prepared-sample command coordinator
+
+Add an internal default-off coordinator for one already-compacted tile/tier
+camera sample. Snapshot its current bindings once, validate host tile/offset
+inputs before recording commands, and encode bootstrap, canonical camera rays,
+then the existing prepared continuation entry in that order. Never invoke dense
+primary generation, submit work, read back results, commit a count or present an
+image from this coordinator. A failed encoder call must propagate so the caller
+discards the unfinished command buffer. The worklist must remain immutable until
+all samples in its tier finish; frame configuration uses a fresh immutable slot
+per absolute sample ordinal with weight 1 and the maximum sequence period.
+
+Reuse existing pipelines and buffer owners; disabled creation reads only its
+enable bit and allocates nothing. Include both preparation dispatches and the
+indirect camera dispatch in optional command accounting, explicitly as invocation
+upper bounds rather than measured rays. Tests must cover disabled no-touch,
+fresh bindings, validation before commands, the exact stage order, all supported
+depths, pipeline failures, and the unchanged fixed entry. Physical continuation
+comparison is separate from complete-camera-sample and image qualification; the
+known transport fixes in Tasks 210/212 remain prerequisites for public enablement.

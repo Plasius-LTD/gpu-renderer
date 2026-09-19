@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Internal default-off prepared-sample coordinator composing validated bootstrap,
+    compacted camera generation and the unchanged shared bounce command loop.
+    Counts preparation dispatch overhead without claiming actual-ray telemetry;
+    completed-count production, public enablement and qualification remain open.
   - Internal compacted-sample bootstrap validating worklists before resetting
     counters and selected per-sample path/accumulation records. Reuses existing
     buffers and canonical shader fragments; fixed shader bytes remain unchanged.
