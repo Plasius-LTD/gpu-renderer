@@ -80,8 +80,8 @@ It does not initialize bounces, contribute radiance, count completed samples or
 enable site adaptation. See [ADR 0034](docs/adrs/adr-0034-shared-compacted-camera-rays.md).
 
 The internal frame encoder also has a prepared-primary entry that reuses the exact
-existing bounce command loop without repeating dense primary generation. Its future
-coordinator must initialize and validate the queue, counters and path records first.
+existing bounce command loop without repeating dense primary generation. Its caller
+must initialize and validate the queue, counters and path records first.
 The fixed dispatcher still uses its existing entry. Command-trace equivalence is
 unit-tested; this seam alone does not enable or qualify live adaptive transport.
 See [ADR 0036](docs/adrs/adr-0036-shared-continuation-command-encoding.md).
@@ -101,6 +101,9 @@ It does not submit, present or commit completed counts. Optional command totals
 include preparation overhead and remain invocation upper bounds, not ray counts.
 `tests/fixtures/adaptive-prepared-sample.html` compares production mesh-BVH miss
 path records with dense dispatch; this is not a complete adaptive image test.
+All 11 cases passed on Apple Metal-3: 65 selected paths versus 195 dense paths per
+positive case, with bitwise-identical selected deferred records. These controlled
+counts demonstrate dispatch selection, not a measured performance improvement.
 See [ADR 0038](docs/adrs/adr-0038-prepared-sample-command-coordinator.md).
 
 The internal [metadata foundation](docs/design/adaptive-metadata.md) now provides

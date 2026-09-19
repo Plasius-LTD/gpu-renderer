@@ -187,3 +187,45 @@ dependency audit pass (zero vulnerabilities). This probe does not execute
 continuation transport or produce an image. Complete-sample production, combined
 dispatch, site wiring and matched-quality performance qualification remain open;
 there is no adaptive public enablement or speedup claim.
+
+## Prepared-sample coordinator, 19 September 2026
+
+Implementation `0c34f838eec3c4761d7216517c2249e22385a7be` connects the internal
+bootstrap, compacted camera generator and shared continuation encoder. Seven
+requirements-first unit tests failed before the module existed, then passed for
+disabled behavior, stage ordering at depths 1/4/8/32, refreshed bindings, invalid
+host inputs and error propagation. It does not submit, present, allocate GPU
+resources or commit a completed count. Fixed shader bytes remain unchanged.
+
+Physical capture at `5df216cc09553ce83c88c13d321ef47d9218904f` passed all 11 cases
+on non-fallback Apple Metal-3. The actual production renderer created native
+resources, layouts and complete shader pipelines; the fixture observed them
+without replacing descriptors or GPU objects. A CPU-uploaded mesh BVH containing
+a triangle behind the camera provided primary misses. Maximum depths 1/4/8 and
+ordinals 0/31/127 exercised the shared command sequence. These are not eight
+surface interactions: paths terminate on their primary environment miss.
+
+Each positive case recorded 195 terminated paths for dense dispatch and 65 for
+the preselected compacted worklist. The selected deferred path records matched
+bit-for-bit; unselected and padded records remained unchanged. Empty and rejected
+worklists terminated zero paths. The [receipt](task-169-prepared-physical-webgpu-2026-09-19.json)
+contains observed counter values, command upper bounds, hashes and the earlier
+rejected probe attempt (test-only readback shader validation failed before cases
+ran; its corrected helper does not alter production shaders or the coordinator).
+No validation errors or unexpected device losses occurred in the passing run.
+
+The reused adaptive owner allocated 202,272 bytes for the 257x129 frame with 16
+config slots, returning to zero on cleanup. Production buffers allocated
+10,379,928 bytes and test readback buffers 56,192 bytes. This is a buffer census,
+not total renderer memory: textures/assets are not included, and none of these
+figures claim physical VRAM residency or memory reduction. Two bootstrap passes
+and the indirect camera pass are included in optional command accounting.
+
+All 249 unit tests pass, with no failures or skips. Overall coverage is 95.60%
+lines / 76.88% branches; all source files changed in the bootstrap/coordinator
+slices appear in LCOV with 100% lines. Lint, types/clean packed consumer, build,
+public package, all nine Zero-Three checks and full dependency audit pass (zero
+vulnerabilities). The controlled 195-to-65 selection is not a 66.7% GPU-time
+improvement or matched-image-quality result. Split-path completion, selected
+radiance resolve/count commit, site integration, independent importance modes,
+matched-quality benchmarks, approved dependency release and CI/CD remain gates.
