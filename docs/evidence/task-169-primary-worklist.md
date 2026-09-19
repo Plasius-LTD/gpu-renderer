@@ -153,3 +153,37 @@ passing GitHub CI. It reflects the unchanged complete renderer source with 18
 records, 45 bindings and all 11 compute entries. The renderer still pins the
 released shader package; no local dependency replacement or publication occurred.
 This interface evidence is not physical renderer or performance qualification.
+
+## Compacted sample bootstrap, 19 September 2026
+
+Implementation `8e36254c09873d1de6a7524dbeaf535859e6ff53` adds two ordered
+preparation passes using shared canonical counter/path fragments. The fixed
+assembled shader retains SHA-256
+`6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0`.
+Four requirements-first tests initially failed for the missing module, then
+passed for actual-module reflection, disabled no-touch creation, explicit layouts,
+pipeline failures, command ordering and immutable offsets.
+
+The clean committed source was served directly from immutable Git objects, not
+mutable files. On non-fallback Apple Metal-3, all 41 physical cases passed:
+depths 1/4/8/32, tiers 1..256, ordinals through 255, empty/full/padded tiles and
+22 failure cases. The GPU generated 17,489 camera rays with correct local/full
+pixel ownership and ordinals. Counter reset, selected-only scratch clearing,
+untouched padding, sticky failure and zero active work after rejection passed.
+There were no validation errors or unexpected device losses. The
+[observed receipt](task-169-bootstrap-physical-webgpu-2026-09-19.json) retains
+per-case observations and shader/fixture hashes.
+
+Bootstrap adds no buffers. Reused adaptive state allocated 214,560 bytes for the
+fixture's 257x129 frame and 64 config slots, returning to zero on cleanup.
+Test-only buffers/staging used another 8,945,952 bytes. These are application
+allocations, not exact VRAM residency or a memory-saving claim. Two preparation
+dispatches per sample must be included in later performance measurements.
+
+All 242 unit tests pass; coverage is 95.59% lines overall. Every source changed
+in this slice appears in LCOV with 100% lines. Lint, type checks/clean packed
+consumer, build, public-package checks, all nine Zero-Three checks and the full
+dependency audit pass (zero vulnerabilities). This probe does not execute
+continuation transport or produce an image. Complete-sample production, combined
+dispatch, site wiring and matched-quality performance qualification remain open;
+there is no adaptive public enablement or speedup claim.
