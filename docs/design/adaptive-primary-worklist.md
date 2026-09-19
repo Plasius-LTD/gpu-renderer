@@ -1,0 +1,140 @@
+# Internal compacted primary worklists
+
+Task gpu-renderer#169; Story plasius-ltd-site#2119; Feature #2114.
+Parent flag `renderer.sampling.adaptivePerPixel.enabled` stays off.
+
+## Local staging boundary
+
+Build an internal, independently testable compaction stage on Task 168's
+count/metadata resources. Do not wire it into the fixed dispatcher or expose a
+live adaptive renderer until the race-free producer (#210), primary MIS (#212)
+and baseline/image prerequisites are qualified. The current work is not a site
+preview, primary-ray transport integration or a performance claim.
+
+## Contract and tests defined before implementation
+
+For each validated tile/tier, read immutable preselected budgets and compact
+tile-local pixel IDs whose budget equals that tier. The selected tier must not
+have started contributing samples. Completed counts belonging to earlier tiers
+remain valid. Preserve full-screen ownership through the explicit tile mapping;
+a queue slot is never a pixel or camera-sample ID.
+
+Use 64-lane workgroup prefix scans and one atomic reservation per workgroup,
+followed by a separate indirect-argument finalization pass. Queue order between
+workgroups is unspecified; the resulting set must be exact and duplicate-free.
+Zero selected pixels produces zero X dispatch groups. Last-workgroup padding
+uses an invalid-ID sentinel. Invalid budget/count/failure evidence or capacity
+overflow vetoes all primary dispatch rather than accepting a partial workload.
+
+Reserve a 16-byte control record and 256-byte-aligned immutable configuration
+slots through the existing lazy resource owner/cap. All allocations and pipelines
+remain absent when disabled. Configuration is 32 bytes; indirect arguments remain
+12 bytes. Do not overwrite one slot for multiple in-flight tile/tier commands.
+
+Tests: final assembled WGSL reflection/generated constants, explicit layouts,
+configuration limits, tile edges, empty/full/mixed worklists, all tiers through
+256, sentinel/bounds/overflow behavior, zero/invalid counts, source ownership,
+disabled no-touch, pipeline failures, byte admission and immutable slots. Build
+a physical fixture before claiming WebGPU execution. CPU/reference or reflection
+success does not establish GPU execution, transport correctness or faster frames.
+
+No contributing sample is drawn by the compaction stage. Actual ray generation, count
+commit/resolve, focus policy, diagnostics and site integration remain to be
+connected under the same Task hierarchy. Three.js cannot be a fallback. No local
+publication or production/CI gate bypass is permitted.
+
+## Camera-ray bridge (next independently qualified slice)
+
+Build an internal camera-only module from shared canonical ray/frame records,
+sampling dimensions, normalization and `make_ray(tileLocalPixelId)`. Its full
+assembled module is reflected. Fixed and compacted generation import the same
+definitions, and the fixed assembled shader remains byte-identical. Read the validated
+worklist into dense queue slots; retain the original tile-local ray ID, full-screen
+source ID and absolute sample ordinal. The frame config carries the configured
+maximum sequence period, never the selected tier. Reuse existing queue, frame,
+control and tile-config buffers; this stage owns no allocations and is absent
+from the fixed dispatcher.
+
+Before integration, require final-module reflection and physical bitwise equality
+against dense GPU `make_ray` records at multiple epochs, tiers and ordinals through
+255. Require matching frame/tile configuration, selected-tier and sequence bounds,
+capacity/failure rejection, and untouched padded output. The worklist must come
+from the validated compaction pass and remain immutable through consumption.
+No CPU-generated camera rays or alternate jitter sequence is permitted.
+
+This bridge does not initialize bounce counters/path nodes or commit radiance.
+Only the future coordinator may combine it with qualified producer/resolve work;
+the presence of a generated ray does not constitute a completed camera sample.
+
+## Shared continuation encoder
+
+Expose an internal prepared-primary entry to the existing frame encoder so the
+future adaptive coordinator can reuse the exact bounce command sequence without
+running dense primary generation again. Both entries must call one implementation
+of counter-copy, intersection, shading, queue swap and telemetry ordering. This
+does not select budgets, prepare counters/path records, commit completed samples,
+allocate buffers or expose a public adaptive option. The fixed dispatcher keeps
+its existing entry and identical GPU commands. No transport WGSL changes.
+
+Requirements-first tests must compare fixed command traces and parallelism
+accounting at depths 1, 4 and 8, with/without telemetry and for padded tiles. The
+prepared entry must emit only that same continuation suffix, preserve immutable
+configuration offsets and ping-pong bindings, and propagate failures. Its caller
+is responsible for a validated queue, initialized counters, cleared path records
+and unweighted complete-sample production before this entry can be connected to
+the live renderer. Physical combined qualification remains outstanding.
+
+## Compacted sample bootstrap
+
+Add an internal, default-disabled two-pass preparation module before compacted
+camera generation and the prepared continuation entry. Reuse the existing frame,
+ray queue, counter, tile accumulation and deferred-path buffers plus immutable
+worklist/control/tile slots. Do not allocate new GPU storage.
+
+Clear the existing counter buffer, then validate the complete selected worklist
+in a separate pass. Validate canvas/tile agreement, queue/worklist/path capacities,
+depth 1..32, maximum-period/ordinal bounds, zero reserved fields, unweighted sample
+weight of 1 and enabled deferred resolve. Invalid evidence sets a sticky failure
+bit in the existing worklist control. After the pass boundary, initialize the
+active count and fixed-format indirect arguments only if validation succeeded;
+clear selected tile-local path rows and per-camera-sample accumulation. Empty or
+failed worklists leave zero active rays. Keep the fixed pipeline's one empty
+workgroup convention for bounce dispatch. Unselected pixels and queue storage
+remain untouched. The original camera pass then consumes the same control and
+worklist, so failed preparation cannot generate rays.
+
+The worklist must be produced by the existing validated compaction pass and remain
+immutable: arbitrary caller-provided or duplicate lists are not an accepted API.
+Shared counter declarations and path-clear helpers must remain verbatim in both
+executed modules; fixed assembled WGSL must retain its existing hash. Reflect the
+actual bootstrap module, not a synthetic simplified transport module.
+
+Tests defined before implementation: disabled GPU no-touch; explicit layouts;
+immutable offsets and command order; compiled final-module ABI; empty/full/mixed
+tiers; repeated ordinals/tile reuse; selected-only reset; all counter reset;
+invalid bounds/capacity/ordinal/weight/deferred state; sticky upstream failures;
+padding/sentinels; pipeline/device errors and cleanup. A physical fixture must
+combine compaction, bootstrap and canonical camera generation before claiming
+this hand-off executes on WebGPU. This stage does not commit radiance, resolve
+split paths, connect live adaptation, or qualify image quality/performance.
+
+## Prepared-sample command coordinator
+
+Add an internal default-off coordinator for one already-compacted tile/tier
+camera sample. Snapshot its current bindings once, validate host tile/offset
+inputs before recording commands, and encode bootstrap, canonical camera rays,
+then the existing prepared continuation entry in that order. Never invoke dense
+primary generation, submit work, read back results, commit a count or present an
+image from this coordinator. A failed encoder call must propagate so the caller
+discards the unfinished command buffer. The worklist must remain immutable until
+all samples in its tier finish; frame configuration uses a fresh immutable slot
+per absolute sample ordinal with weight 1 and the maximum sequence period.
+
+Reuse existing pipelines and buffer owners; disabled creation reads only its
+enable bit and allocates nothing. Include both preparation dispatches and the
+indirect camera dispatch in optional command accounting, explicitly as invocation
+upper bounds rather than measured rays. Tests must cover disabled no-touch,
+fresh bindings, validation before commands, the exact stage order, all supported
+depths, pipeline failures, and the unchanged fixed entry. Physical continuation
+comparison is separate from complete-camera-sample and image qualification; the
+known transport fixes in Tasks 210/212 remain prerequisites for public enablement.

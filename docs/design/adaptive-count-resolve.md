@@ -35,6 +35,16 @@ non-finite sum or count-order defect sets the highest reserved metadata flag and
 does not commit radiance or advance the count. No retries or partial-frame
 acceptance occur. Exhausted budgets are inactive, not erroneous.
 
+For integration with Task 169, an immutable `selectedTier` selects exact-budget
+pixels before reading camera sample records. Zero retains the existing dense
+internal mode. Other tiers retain their counts and sums even when no record was
+produced for them; they are not failed samples. A selected tier is an integer
+1..256 and its ordinal must be below that tier. The GPU independently rejects
+invalid selection. Final whole-tile resolve still reads all completed pixels;
+it does not filter output by selected tier. The coordinator must resolve only
+after all tiers have successfully completed. Tests must run mixed tiers in both
+orders and preserve duplicate/missing-sample rejection within the selected tier.
+
 A separate resolve pass computes sum / actual completed count into a tile-local
 float32 output. Zero, corrupt or poisoned counts produce invalid alpha (zero),
 not a supposedly completed black pixel. Valid output has alpha one. Resolve
@@ -46,14 +56,17 @@ No temporal radiance, optional stopping, transport changes or HDR clamp is added
 
 Task 167's owner optionally admits three tile-local buffers: 32-byte sample
 records, 16-byte sums and 16-byte normalized output, totalling 1 MiB at 16,384
-pixels. It also admits 256-byte-aligned immutable configuration slots (32 bytes
+pixels. It also admits 256-byte-aligned immutable configuration slots (48 bytes
 of payload each), default one. The scheduler must provision a distinct slot for
 every in-flight tile/sample configuration; overwriting one slot while encoding
 multiple configurations is prohibited. Additional slots count against the
 existing 128 MiB cap before allocation. Device uniform limits are checked too.
 
 Configuration carries canvas dimensions, tile origin/extent, sample ordinal and
-frame-valid state. CPU configuration packing uses generated reflected offsets.
+frame-valid state plus the selected tier and reserved padding. The internal
+reflected interface is version 2.0.0; old 32-byte configurations cannot be bound
+to the new 48-byte interface. Allocated 256-byte slots are unchanged. CPU
+configuration packing uses generated reflected offsets.
 The GPU independently validates bounds, buffer lengths and ordinal range. All
 pipeline/buffer work is absent when this internal stage is not requested.
 No full-frame radiance allocation or duplicate budget governor is introduced.

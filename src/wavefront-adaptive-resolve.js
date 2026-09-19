@@ -18,6 +18,8 @@ function validCounts(word) {
 function validateConfig(config) {
   for (const key of ["width", "height", "tileX", "tileY", "tileWidth", "tileHeight"]) uint(key, config[key]);
   uint("sampleOrdinal", config.sampleOrdinal, 255);
+  const selectedTier = uint("selectedTier", config.selectedTier === undefined ? 0 : config.selectedTier, 256);
+  if (selectedTier > 0 && config.sampleOrdinal >= selectedTier) throw new RangeError("Ordinal exceeds the selected tier.");
   if (!config.width || !config.height || config.width * config.height > 0xffffffff || !config.tileWidth || !config.tileHeight
     || config.tileWidth * config.tileHeight > 16384 || config.tileX + config.tileWidth > config.width
     || config.tileY + config.tileHeight > config.height || typeof config.frameValid !== "boolean") throw new RangeError("Invalid adaptive resolve configuration.");
@@ -29,6 +31,7 @@ export function packAdaptiveResolveConfig(config) {
     CANVAS_WIDTH: config.width, CANVAS_HEIGHT: config.height, TILE_X: config.tileX, TILE_Y: config.tileY,
     TILE_WIDTH: config.tileWidth, TILE_HEIGHT: config.tileHeight, SAMPLE_ORDINAL: config.sampleOrdinal,
     FRAME_VALID: config.frameValid ? 1 : 0,
+    SELECTED_TIER: config.selectedTier ?? 0,
   };
   const buffer = new ArrayBuffer(abi.ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE);
   const view = new DataView(buffer);
@@ -80,6 +83,7 @@ export function commitAdaptiveSampleReference(state, sample, config, localId) {
   const { word } = state;
   const requested = word & 511;
   const completed = (word >>> 9) & 511;
+  if (config.selectedTier > 0 && requested !== config.selectedTier) return state;
   const failed = () => ({ word: (word | ADAPTIVE_SAMPLE_FAILURE_MASK) >>> 0, sum: state.sum });
   if (!validCounts(word)) return failed();
   if (config.sampleOrdinal >= requested) return state;

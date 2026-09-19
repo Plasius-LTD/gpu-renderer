@@ -1,4 +1,5 @@
-import { WAVEFRONT_SAMPLE_DIMENSIONS_WGSL } from "./wavefront-sampling-dimensions.js";
+import { WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL } from "./wavefront-primary-shared-shader.js";
+import { WAVEFRONT_SAMPLE_DIMENSIONS_WGSL, WAVEFRONT_SAMPLE_SEQUENCE_WGSL, WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL } from "./wavefront-sampling-dimensions.js";
 
 export const WAVEFRONT_SHADER_LAYOUT_WGSL = `
 const RAY_FLAG_GUIDED_EMISSIVE: u32 = 1u;
@@ -12,20 +13,7 @@ const SCATTER_LOBE_DELTA_REFLECTION: u32 = 4u;
 const SCATTER_LOBE_DELTA_TRANSMISSION: u32 = 5u;
 ${WAVEFRONT_SAMPLE_DIMENSIONS_WGSL}
 
-struct RayRecord {
-  rayId: u32,
-  parentRayId: u32,
-  sourcePixelId: u32,
-  sampleId: u32,
-  bounce: u32,
-  mediumRefId: u32,
-  flags: u32,
-  mediumStackDepth: u32,
-  origin: vec4<f32>,
-  direction: vec4<f32>,
-  throughput: vec4<f32>,
-  mediumStack: vec4<u32>,
-};
+${WAVEFRONT_CAMERA_RAY_RECORD_WGSL}
 
 struct HitRecord {
   rayId: u32,
@@ -177,69 +165,9 @@ struct MeshRange {
   textureSettings: vec4<f32>,
 };
 
-struct FrameConfig {
-  canvasWidth: u32,
-  canvasHeight: u32,
-  tileX: u32,
-  tileY: u32,
-  tileWidth: u32,
-  tileHeight: u32,
-  tilePixelCount: u32,
-  maxDepth: u32,
-  sceneObjectCount: u32,
-  frameIndex: u32,
-  denoise: u32,
-  triangleCount: u32,
-  bvhNodeCount: u32,
-  displayQuality: u32,
-  meshSourceCount: u32,
-  bvhNodeCapacity: u32,
-  cameraPosition: vec4<f32>,
-  cameraForward: vec4<f32>,
-  cameraRight: vec4<f32>,
-  cameraUp: vec4<f32>,
-  projectionAndSampling: vec4<f32>,
-  environmentColor: vec4<f32>,
-  ambientColor: vec4<f32>,
-  environmentHorizonColor: vec4<f32>,
-  environmentZenithColor: vec4<f32>,
-  environmentSunDirectionIntensity: vec4<f32>,
-  environmentSunColor: vec4<f32>,
-  bvhBuildNodeStart: u32,
-  bvhBuildNodeCount: u32,
-  bvhSortItemCount: u32,
-  emissiveTriangleCount: u32,
-  environmentPortalCount: u32,
-  environmentPortalMode: u32,
-  samplesPerPixel: u32,
-  transportExperimentFlags: u32,
-  environmentMapSettings: vec4<f32>,
-  pathResolveSettings: vec4<f32>,
-  environmentMapMeta: vec4<f32>,
-};
+${WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL}
 
-struct TerminationMetrics {
-  emissiveCount: atomic<u32>,
-  environmentCount: atomic<u32>,
-  ambientMaxDepthCount: atomic<u32>,
-  ambientQueueOverflowCount: atomic<u32>,
-  ambientResidualLuminanceScaled: atomic<u32>,
-  totalTerminalLuminanceScaled: atomic<u32>,
-  invalidSampleCount: atomic<u32>,
-  legacyClampEquivalentCount: atomic<u32>,
-  absorptionNullCount: atomic<u32>,
-  russianRouletteCount: atomic<u32>,
-  strictMaxDepthCount: atomic<u32>,
-  deterministicResidualZeroCount: atomic<u32>,
-  transportDirectExplicitLuminanceScaled: atomic<u32>,
-  transportCachedIndirectLuminanceScaled: atomic<u32>,
-  transportResidualLuminanceScaled: atomic<u32>,
-  transportZeroTerminationCount: atomic<u32>,
-  transportChecksum: atomic<u32>,
-  transportPad0: atomic<u32>,
-  transportPad1: atomic<u32>,
-  transportPad2: atomic<u32>,
-};
+${WAVEFRONT_TERMINATION_METRICS_WGSL}
 
 const TERMINAL_SOURCE_KIND_EMISSIVE = 1u;
 const TERMINAL_SOURCE_KIND_ENVIRONMENT = 2u;
@@ -253,7 +181,7 @@ const TERMINATION_LUMINANCE_SCALE = 1000000.0;
 const TRANSPORT_BUCKET_DIRECT_EXPLICIT = 1u;
 const TRANSPORT_BUCKET_CACHED_INDIRECT = 2u;
 const TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL = 3u;
-const TRANSPORT_EXPERIMENT_STABLE_SAMPLE_ROUTING = 1u;
+${WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL}
 const TRANSPORT_EXPERIMENT_STRICT_ZERO_OVERFLOW = 2u;
 const TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE = 4u;
 const TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING = 8u;
@@ -262,17 +190,7 @@ const TRANSPORT_EXPERIMENT_PRODUCT_TRANSPORT_TELEMETRY = 32u;
 const TRANSPORT_EXPERIMENT_SOURCE_STABLE_DIRECT_LIGHTING = 64u;
 const TRANSPORT_EXPERIMENT_DETERMINISTIC_LOW_SPP_INDIRECT = 128u;
 
-struct Counters {
-  activeCount: atomic<u32>,
-  nextCount: atomic<u32>,
-  terminatedCount: atomic<u32>,
-  hitCount: atomic<u32>,
-  dispatchX: u32,
-  dispatchY: u32,
-  dispatchZ: u32,
-  dispatchPad: u32,
-  termination: TerminationMetrics,
-};
+${WAVEFRONT_COUNTERS_WGSL}
 
 struct Candidate {
   hit: u32,
@@ -346,84 +264,9 @@ struct EnvironmentPortal {
 @group(0) @binding(43) var iridescenceThicknessAtlasTexture: texture_2d<f32>;
 @group(0) @binding(44) var anisotropyAtlasTexture: texture_2d<f32>;
 
-fn hash_u32(value: u32) -> u32 {
-  var x = value;
-  x = ((x >> 16u) ^ x) * 0x45d9f3bu;
-  x = ((x >> 16u) ^ x) * 0x45d9f3bu;
-  x = (x >> 16u) ^ x;
-  return x;
-}
+${WAVEFRONT_SAMPLE_SEQUENCE_WGSL}
 
-fn mix_seed(pixelId: u32, sampleId: u32, bounce: u32, frameIndex: u32, dimension: u32) -> u32 {
-  var x =
-    (pixelId * 747796405u) ^
-    (sampleId * 2891336453u) ^
-    (bounce * 277803737u) ^
-    (frameIndex * 1442695041u) ^
-    (dimension * 1597334677u);
-  x = x ^ (x >> 16u);
-  x = x * 0x7feb352du;
-  x = x ^ (x >> 15u);
-  x = x * 0x846ca68bu;
-  x = x ^ (x >> 16u);
-  return x;
-}
-
-fn random01(seed: u32) -> f32 {
-  return f32(hash_u32(seed) & 0x00ffffffu) / 16777215.0;
-}
-
-fn transport_experiment_enabled(bit: u32) -> bool {
-  return (config.transportExperimentFlags & bit) != 0u;
-}
-
-fn sample_frame_index(frameIndex: u32) -> u32 {
-  return select(frameIndex, 0u, transport_experiment_enabled(TRANSPORT_EXPERIMENT_STABLE_SAMPLE_ROUTING));
-}
-
-fn radical_inverse_vdc(bits: u32) -> f32 {
-  var value = bits;
-  value = (value << 16u) | (value >> 16u);
-  value = ((value & 0x55555555u) << 1u) | ((value & 0xaaaaaaaau) >> 1u);
-  value = ((value & 0x33333333u) << 2u) | ((value & 0xccccccccu) >> 2u);
-  value = ((value & 0x0f0f0f0fu) << 4u) | ((value & 0xf0f0f0f0u) >> 4u);
-  value = ((value & 0x00ff00ffu) << 8u) | ((value & 0xff00ff00u) >> 8u);
-  return f32(value) * 2.3283064365386963e-10;
-}
-
-fn sample_dimension_1d(
-  pixelId: u32,
-  sampleId: u32,
-  bounce: u32,
-  frameIndex: u32,
-  dimension: u32
-) -> f32 {
-  return random01(mix_seed(pixelId, sampleId, bounce, sample_frame_index(frameIndex), dimension));
-}
-
-fn sample_dimension_2d(
-  pixelId: u32,
-  sampleId: u32,
-  bounce: u32,
-  frameIndex: u32,
-  dimension: u32,
-  strataCount: u32
-) -> vec2<f32> {
-  let strata = max(strataCount, 1u);
-  let jitter = sample_dimension_1d(pixelId, sampleId, bounce, frameIndex, dimension);
-  let scramble = hash_u32(mix_seed(pixelId, sampleId, bounce, sample_frame_index(frameIndex), dimension));
-  let stratified = fract((f32(sampleId % strata) + jitter) / f32(strata));
-  let lowDiscrepancy = fract(radical_inverse_vdc(sampleId ^ scramble) + jitter);
-  return vec2<f32>(stratified, lowDiscrepancy);
-}
-
-fn safe_normalize(value: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
-  let len = length(value);
-  if (len <= 0.000001) {
-    return fallback;
-  }
-  return value / len;
-}
+${WAVEFRONT_SAFE_NORMALIZE_WGSL}
 
 struct TangentBasis {
   tangent: vec3<f32>,
@@ -441,3 +284,4 @@ struct SurfaceMaterialSample {
   occlusion: f32,
 };
 `;
+import { WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL, WAVEFRONT_SAFE_NORMALIZE_WGSL } from "./wavefront-camera-shared-shader.js";

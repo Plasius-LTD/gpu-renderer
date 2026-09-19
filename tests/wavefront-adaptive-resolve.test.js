@@ -15,6 +15,43 @@ const tile = { width: 8, height: 8, tileX: 2, tileY: 3, tileWidth: 2, tileHeight
 const sample = (sourcePixelId, sampleOrdinal, radiance = [2, 4, 8]) => ({ sourcePixelId, sampleOrdinal, radiance, status: 1 });
 const state = (requested = 32, completed = 0, flags = 0, sum = [0, 0, 0]) => ({ word: packAdaptivePixelState({ requested, completed, flags }), sum });
 
+test("tier commits touch only eligible pixels and preserve absolute per-pixel ordinals", () => {
+  for (const order of [[1, 3, 8, 256], [256, 8, 3, 1]]) {
+    const budgets = [1, 3, 8, 256];
+    let states = budgets.map((budget) => state(budget, 0, 17));
+    for (const selectedTier of order) {
+      for (let sampleOrdinal = 0; sampleOrdinal < selectedTier; sampleOrdinal += 1) {
+        states = states.map((before, localId) => {
+          const eligible = budgets[localId] === selectedTier;
+          const sourcePixelId = (tile.tileY + Math.floor(localId / tile.tileWidth)) * tile.width + tile.tileX + localId % tile.tileWidth;
+          const result = commitAdaptiveSampleReference(before, eligible ? sample(sourcePixelId, sampleOrdinal) : null,
+            { ...tile, selectedTier, sampleOrdinal }, localId);
+          if (!eligible) assert.strictEqual(result, before);
+          return result;
+        });
+      }
+    }
+    states.forEach((result, index) => {
+      assert.equal(unpackAdaptivePixelState(result.word).completed, budgets[index]);
+      assert.equal(unpackAdaptivePixelState(result.word).flags, 17);
+      assert.deepEqual(resolveAdaptiveRadianceReference(result), [2, 4, 8, 1]);
+    });
+  }
+});
+
+test("tier selection rejects invalid configuration and still poisons selected missing or duplicate records", () => {
+  for (const selectedTier of [-1, 257, 1.5, "8", null, NaN, Infinity]) {
+    assert.throws(() => packAdaptiveResolveConfig({ ...tile, selectedTier }));
+  }
+  assert.throws(() => packAdaptiveResolveConfig({ ...tile, selectedTier: 8, sampleOrdinal: 8 }));
+  for (const before of [state(8), state(8, 1)]) {
+    const after = commitAdaptiveSampleReference(before, before.word === state(8).word ? null : sample(26, 0), { ...tile, selectedTier: 8 }, 0);
+    assert.equal(after.word >>> 31, 1);
+    assert.deepEqual(after.sum, before.sum);
+    assert.equal((after.word >>> 9) & 511, (before.word >>> 9) & 511);
+  }
+});
+
 test("unequal completed counts preserve the unweighted linear HDR mean up to 256 SPP", () => {
   for (const budget of [1, 2, 4, 32, 128, 256]) {
     let current = state(budget);
@@ -93,10 +130,15 @@ test("configuration and sample packers match the final reflected codecs", async 
   const manifest = await reflectAdaptiveResolveInterface();
   const record = manifest.records.find(({ name }) => name === "AdaptiveResolveConfig");
   const camera = manifest.records.find(({ name }) => name === "AdaptiveCameraSample");
-  assert.equal(record.byteSize, 32);
+  assert.equal(record.byteSize, 48);
   assert.equal(camera.byteSize, 32);
   assert.deepEqual(packAdaptiveResolveConfig(tile), createGpuRecordCodec(record, manifest.records).encode({
     canvasWidth: 8, canvasHeight: 8, tileX: 2, tileY: 3, tileWidth: 2, tileHeight: 2, sampleOrdinal: 0, frameValid: 1,
+    selectedTier: 0, reserved0: 0, reserved1: 0, reserved2: 0,
+  }));
+  assert.deepEqual(packAdaptiveResolveConfig({ ...tile, selectedTier: 8 }), createGpuRecordCodec(record, manifest.records).encode({
+    canvasWidth: 8, canvasHeight: 8, tileX: 2, tileY: 3, tileWidth: 2, tileHeight: 2, sampleOrdinal: 0, frameValid: 1,
+    selectedTier: 8, reserved0: 0, reserved1: 0, reserved2: 0,
   }));
   const sampleBytes = createGpuRecordCodec(camera, manifest.records).encode({ radiance: [2, 4, 8], sourcePixelId: 26, sampleOrdinal: 0, status: 1, reserved0: 0, reserved1: 0 });
   assert.deepEqual(packAdaptiveCameraSamples([sample(26, 0)]), sampleBytes);
@@ -139,7 +181,7 @@ test("disabled pipelines perform no GPU access; enabled pipelines use explicit l
   assert.equal(resources.resolve.compute.entryPoint, "resolve_adaptive_radiance");
   const config = resources.layout.entries.find(({ binding }) => binding === 4);
   assert.equal(config.buffer.hasDynamicOffset, true);
-  assert.equal(config.buffer.minBindingSize, 32);
+  assert.equal(config.buffer.minBindingSize, 48);
   const manifest = await reflectAdaptiveResolveInterface();
   assert.deepEqual(resources.layout.entries, manifest.bindings.map(({ binding, resource }) => ({
     binding, visibility: 4,

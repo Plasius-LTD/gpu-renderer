@@ -7,13 +7,13 @@ export async function reflectAdaptiveResolveInterface() {
     [1, "storage", "read", "AdaptiveSamples", 32],
     [2, "storage", "read_write", "AdaptiveRadiance", 16],
     [3, "storage", "read_write", "AdaptiveRadiance", 16],
-    [4, "uniform", "read", "AdaptiveResolveConfig", 32],
+    [4, "uniform", "read", "AdaptiveResolveConfig", 48],
   ].map(([binding, addressSpace, access, recordName, minimumBindingSize]) => ({
     group: 0, binding, visibility: ["compute"],
     resource: { kind: "buffer", addressSpace, access, recordName, minimumBindingSize },
   }));
   return reflectGpuInterface({
-    interfaceId: "plasius.renderer.adaptive-resolve", interfaceVersion: "1.0.0",
+    interfaceId: "plasius.renderer.adaptive-resolve", interfaceVersion: "2.0.0",
     modules: [{ moduleId: "adaptive-resolve", source: ADAPTIVE_RESOLVE_WGSL }],
     pipelines: ["commit_adaptive_sample", "resolve_adaptive_radiance"].map((entryPoint) => ({
       kind: "compute", pipelineId: entryPoint,

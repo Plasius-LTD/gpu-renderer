@@ -89,3 +89,75 @@ export function sampleWavefrontDimension2D(
   const lowDiscrepancy = fract(radicalInverseVdc((sampleId >>> 0) ^ scramble) + jitter);
   return Object.freeze([stratified, lowDiscrepancy]);
 }
+// Canonical GPU sequence helpers shared by fixed and compacted camera stages.
+export const WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL = `const TRANSPORT_EXPERIMENT_STABLE_SAMPLE_ROUTING = 1u;`;
+export const WAVEFRONT_SAMPLE_SEQUENCE_WGSL = `fn hash_u32(value: u32) -> u32 {
+  var x = value;
+  x = ((x >> 16u) ^ x) * 0x45d9f3bu;
+  x = ((x >> 16u) ^ x) * 0x45d9f3bu;
+  x = (x >> 16u) ^ x;
+  return x;
+}
+
+fn mix_seed(pixelId: u32, sampleId: u32, bounce: u32, frameIndex: u32, dimension: u32) -> u32 {
+  var x =
+    (pixelId * 747796405u) ^
+    (sampleId * 2891336453u) ^
+    (bounce * 277803737u) ^
+    (frameIndex * 1442695041u) ^
+    (dimension * 1597334677u);
+  x = x ^ (x >> 16u);
+  x = x * 0x7feb352du;
+  x = x ^ (x >> 15u);
+  x = x * 0x846ca68bu;
+  x = x ^ (x >> 16u);
+  return x;
+}
+
+fn random01(seed: u32) -> f32 {
+  return f32(hash_u32(seed) & 0x00ffffffu) / 16777215.0;
+}
+
+fn transport_experiment_enabled(bit: u32) -> bool {
+  return (config.transportExperimentFlags & bit) != 0u;
+}
+
+fn sample_frame_index(frameIndex: u32) -> u32 {
+  return select(frameIndex, 0u, transport_experiment_enabled(TRANSPORT_EXPERIMENT_STABLE_SAMPLE_ROUTING));
+}
+
+fn radical_inverse_vdc(bits: u32) -> f32 {
+  var value = bits;
+  value = (value << 16u) | (value >> 16u);
+  value = ((value & 0x55555555u) << 1u) | ((value & 0xaaaaaaaau) >> 1u);
+  value = ((value & 0x33333333u) << 2u) | ((value & 0xccccccccu) >> 2u);
+  value = ((value & 0x0f0f0f0fu) << 4u) | ((value & 0xf0f0f0f0u) >> 4u);
+  value = ((value & 0x00ff00ffu) << 8u) | ((value & 0xff00ff00u) >> 8u);
+  return f32(value) * 2.3283064365386963e-10;
+}
+
+fn sample_dimension_1d(
+  pixelId: u32,
+  sampleId: u32,
+  bounce: u32,
+  frameIndex: u32,
+  dimension: u32
+) -> f32 {
+  return random01(mix_seed(pixelId, sampleId, bounce, sample_frame_index(frameIndex), dimension));
+}
+
+fn sample_dimension_2d(
+  pixelId: u32,
+  sampleId: u32,
+  bounce: u32,
+  frameIndex: u32,
+  dimension: u32,
+  strataCount: u32
+) -> vec2<f32> {
+  let strata = max(strataCount, 1u);
+  let jitter = sample_dimension_1d(pixelId, sampleId, bounce, frameIndex, dimension);
+  let scramble = hash_u32(mix_seed(pixelId, sampleId, bounce, sample_frame_index(frameIndex), dimension));
+  let stratified = fract((f32(sampleId % strata) + jitter) / f32(strata));
+  let lowDiscrepancy = fract(radical_inverse_vdc(sampleId ^ scramble) + jitter);
+  return vec2<f32>(stratified, lowDiscrepancy);
+}`;

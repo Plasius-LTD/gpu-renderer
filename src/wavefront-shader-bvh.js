@@ -265,46 +265,7 @@ fn buildBvhInternalLevel(@builtin(global_invocation_id) globalId: vec3<u32>) {
   );
 }
 
-fn make_ray(pixelIndex: u32) -> RayRecord {
-  let localX = pixelIndex % config.tileWidth;
-  let localY = pixelIndex / config.tileWidth;
-  let px = config.tileX + localX;
-  let py = config.tileY + localY;
-  let sampleId = u32(config.projectionAndSampling.w);
-  let sourcePixelId = py * config.canvasWidth + px;
-  let jitter = sample_dimension_2d(
-    sourcePixelId,
-    sampleId,
-    0u,
-    config.frameIndex,
-    SAMPLE_DIM_CAMERA_JITTER,
-    config.samplesPerPixel
-  ) - vec2<f32>(0.5);
-  let jitterX = jitter.x;
-  let jitterY = jitter.y;
-  let ndcX = ((f32(px) + 0.5 + jitterX * 0.35) / f32(config.canvasWidth)) * 2.0 - 1.0;
-  let ndcY = 1.0 - ((f32(py) + 0.5 + jitterY * 0.35) / f32(config.canvasHeight)) * 2.0;
-  let viewX = ndcX * config.projectionAndSampling.x * config.projectionAndSampling.y;
-  let viewY = ndcY * config.projectionAndSampling.x;
-  let direction = safe_normalize(
-    config.cameraForward.xyz + config.cameraRight.xyz * viewX + config.cameraUp.xyz * viewY,
-    config.cameraForward.xyz
-  );
-  return RayRecord(
-    pixelIndex,
-    0xffffffffu,
-    sourcePixelId,
-    sampleId,
-    0u,
-    0u,
-    0u,
-    0u,
-    vec4<f32>(config.cameraPosition.xyz, 1.0),
-    vec4<f32>(direction, 0.0),
-    vec4<f32>(1.0, 1.0, 1.0, 1.0),
-    vec4<u32>(0u)
-  );
-}
+${WAVEFRONT_MAKE_CAMERA_RAY_WGSL}
 
 fn make_miss(ray: RayRecord) -> HitRecord {
   let radiance = gated_environment_radiance(ray.origin.xyz, ray.direction.xyz);
@@ -597,3 +558,4 @@ fn intersect_bvh(ray: RayRecord, initialNearest: f32) -> Candidate {
   return best;
 }
 `;
+import { WAVEFRONT_MAKE_CAMERA_RAY_WGSL } from "./wavefront-camera-shared-shader.js";

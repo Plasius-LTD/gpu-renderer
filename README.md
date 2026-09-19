@@ -61,6 +61,51 @@ reporting.
 ## Adaptive per-pixel implementation status
 
 Per-pixel adaptive rendering is not yet exposed by the public renderer API.
+An internal [primary-worklist stage](docs/design/adaptive-primary-worklist.md)
+now compacts preselected tile/tier budgets into dense local pixel IDs and builds
+indirect dispatch arguments. Invalid counts, failed pixels and overflow veto the
+dispatch. It adds a 16-byte control record and 256 bytes per immutable config
+slot to the existing capped allocation owner, only when `primaryWorklist` is
+requested internally. It does not change the fixed dispatcher. The physical
+`tests/fixtures/adaptive-primary.html` identity/indirect probe passed all 16 cases
+on Apple Metal-3; [Task 169 evidence](docs/evidence/task-169-primary-worklist.md)
+records its bounded scope separately from outstanding scene qualification.
+
+A separate internal camera-ray bridge consumes those worklists and reuses the
+fixed renderer's camera WGSL and maximum-period sampling sequence. Its final
+camera-only module is reflected; fixed transport remains byte-identical. Run
+`tests/fixtures/adaptive-camera.html` for dense/compacted GPU RayRecord comparisons
+(49 cases and 18,594 bitwise-matching rays passed on Apple Metal-3).
+It does not initialize bounces, contribute radiance, count completed samples or
+enable site adaptation. See [ADR 0034](docs/adrs/adr-0034-shared-compacted-camera-rays.md).
+
+The internal frame encoder also has a prepared-primary entry that reuses the exact
+existing bounce command loop without repeating dense primary generation. Its caller
+must initialize and validate the queue, counters and path records first.
+The fixed dispatcher still uses its existing entry. Command-trace equivalence is
+unit-tested; this seam alone does not enable or qualify live adaptive transport.
+See [ADR 0036](docs/adrs/adr-0036-shared-continuation-command-encoding.md).
+
+An internal two-pass bootstrap validates compacted worklists, resets counters and
+clears only selected pixels' per-sample accumulation/path records before camera
+generation. It reuses existing tile buffers and canonical WGSL declarations;
+fixed assembled shader bytes remain unchanged. Invalid configuration, storage,
+IDs or upstream failures veto the sample. The physical probe is
+`tests/fixtures/adaptive-bootstrap.html`; it tests preparation and camera rays,
+not completed transport, image quality or speed. Live integration remains off.
+See [ADR 0037](docs/adrs/adr-0037-compacted-sample-bootstrap.md).
+
+The internal prepared-sample coordinator orders that bootstrap, compacted camera
+generation and the shared bounce encoder, using existing pipelines and storage.
+It does not submit, present or commit completed counts. Optional command totals
+include preparation overhead and remain invocation upper bounds, not ray counts.
+`tests/fixtures/adaptive-prepared-sample.html` compares production mesh-BVH miss
+path records with dense dispatch; this is not a complete adaptive image test.
+All 11 cases passed on Apple Metal-3: 65 selected paths versus 195 dense paths per
+positive case, with bitwise-identical selected deferred records. These controlled
+counts demonstrate dispatch selection, not a measured performance improvement.
+See [ADR 0038](docs/adrs/adr-0038-prepared-sample-command-coordinator.md).
+
 The internal [metadata foundation](docs/design/adaptive-metadata.md) now provides
 reflected requested/completed count storage and lazy, bounded allocation.
 `@plasius/gpu-shader` validates the final initialization WGSL in development;
@@ -74,6 +119,12 @@ partial, duplicate, invalid or out-of-order records cannot advance the count.
 Tile-local sample/sum/output scratch adds at most 1 MiB, plus bounded immutable
 configuration slots, all included in the existing allocation cap. The highest
 packed flag bit now marks invalid sample/count evidence.
+
+The version-2 internal resolve ABI adds an exact selected-tier filter, so a
+compacted pass cannot count or poison pixels assigned to another tier. Zero
+retains the dense internal commit mode. Final resolve still covers the whole
+tile. The 48-byte payload fits the same 256-byte slots; allocated memory and
+fixed transport are unchanged. See [ADR 0035](docs/adrs/adr-0035-tier-qualified-camera-sample-commit.md).
 
 The fixed renderer and its whole-frame budget adjustment are unchanged. The new
 stage is not wired to transport or exposed through package exports. Race-free

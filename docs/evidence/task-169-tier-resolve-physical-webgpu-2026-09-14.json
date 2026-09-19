@@ -1,0 +1,47 @@
+{
+  "provenance": {
+    "repository": "https://github.com/Plasius-LTD/gpu-renderer",
+    "implementationCommit": "ec6176de8d02e2ca6e9e6a3d7f9ac5172f1bd2e0",
+    "worktreeCleanAtCapture": true,
+    "captureMethod": "Completed JSON observed through browser-native accessibility state.",
+    "servedSources": "Immutable in-memory source snapshot loaded before execution.",
+    "fixtureSha256": "e6af8990757dc0e0027979f0e2d8e67c931c90ad341c28de10e2457adc9db815",
+    "limitations": "Synthetic sample/count arithmetic only; not real rays, transport, images or performance."
+  },
+  "observed": {
+    "status": "pass",
+    "scope": "synthetic-complete-camera-sample-count-resolve",
+    "timestamp": "2026-09-14T10:34:23.859Z",
+    "shaderSha256": "95036703da4331972b3c7a3f0df525b81f2ad93194d87d43e88e29caf981502a",
+    "adapter": { "vendor": "apple", "architecture": "metal-3", "device": "", "description": "", "isFallbackAdapter": false },
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "unequalBudgetPixels": 256,
+    "completedCameraSamples": 32896,
+    "minimumSpp": 1,
+    "maximumSpp": 256,
+    "divisionToleranceUlps": 2.5,
+    "maximumDivisionErrorUlps": 2,
+    "negativeCases": ["partial", "producer-failed", "wrong-pixel", "wrong-ordinal", "duplicate", "out-of-order", "invalid-count", "zero-budget", "NaN", "infinity", "negative", "failed-frame"],
+    "invalidTileRejected": true,
+    "sentinelSumReset": true,
+    "nonTilePixelsPreserved": true,
+    "tierOrders": [
+      { "order": [1, 3, 8, 256], "completedCameraSamples": 17152, "pixels": 256, "passed": true },
+      { "order": [256, 8, 3, 1], "completedCameraSamples": 17152, "pixels": 256, "passed": true }
+    ],
+    "invalidTierRejected": true,
+    "tierResolveCoversAllCompletedPixels": true,
+    "compilerErrors": 0,
+    "validationErrors": 0,
+    "deviceLost": false,
+    "allocated4kBytes": 102786060,
+    "allocationClasses": {
+      "pixelState": 33177600, "firstHitDistance": 33177600, "normalMaterialRisk": 33177600,
+      "worklist": 65536, "dispatch": 12, "history": 2073600, "total": 102786060,
+      "cameraSamples": 524288, "radianceSums": 262144, "resolvedRadiance": 262144,
+      "resolveConfig": 65536, "primaryControl": 0, "primaryConfig": 0
+    },
+    "limits": { "maxBufferSize": 268435456, "maxStorageBufferBindingSize": 134217728, "minUniformBufferOffsetAlignment": 256 },
+    "allocatedAfterDestroy": 0
+  }
+}

@@ -1,3 +1,4 @@
+import { WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL, WAVEFRONT_CLEAR_DEFERRED_PATH_WGSL } from "./wavefront-primary-shared-shader.js";
 export const WAVEFRONT_SHADER_MATERIALS_WGSL = `
 fn srgb_to_linear_channel(value: f32) -> f32 {
   if (value <= 0.04045) {
@@ -182,34 +183,13 @@ fn environment_map_enabled() -> bool {
   return config.environmentMapSettings.x > 0.5;
 }
 
-fn deferred_path_resolve_enabled() -> bool {
-  return config.pathResolveSettings.x > 0.5;
-}
+${WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL}
 
 fn strict_physical_low_spp_lighting_enabled() -> bool {
   return config.pathResolveSettings.z > 0.5;
 }
 
-fn path_vertex_count_per_ray() -> u32 {
-  return config.maxDepth + 1u;
-}
-
-fn path_vertex_index(rayId: u32, depth: u32) -> u32 {
-  return rayId * path_vertex_count_per_ray() + min(depth, config.maxDepth);
-}
-
-fn clear_deferred_path(rayId: u32) {
-  if (!deferred_path_resolve_enabled()) {
-    return;
-  }
-
-  for (var depth = 0u; depth <= config.maxDepth; depth = depth + 1u) {
-    pathVertices[path_vertex_index(rayId, depth)] = vec4<f32>(0.0);
-    if (depth == config.maxDepth) {
-      break;
-    }
-  }
-}
+${WAVEFRONT_CLEAR_DEFERRED_PATH_WGSL}
 
 fn sanitize_path_throughput_component(value: f32) -> f32 {
   if (value != value || value <= 0.0) {

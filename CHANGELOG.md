@@ -12,6 +12,30 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Internal default-off prepared-sample coordinator composing validated bootstrap,
+    compacted camera generation and the unchanged shared bounce command loop.
+    Counts preparation dispatch overhead without claiming actual-ray telemetry;
+    completed-count production, public enablement and qualification remain open.
+  - Internal compacted-sample bootstrap validating worklists before resetting
+    counters and selected per-sample path/accumulation records. Reuses existing
+    buffers and canonical shader fragments; fixed shader bytes remain unchanged.
+    Public adaptive rendering and performance claims remain disabled.
+  - Internal prepared-primary frame-encoder entry sharing the unchanged continuation
+    command loop with fixed rendering. No adaptive dispatcher, GPU allocation or
+    public enablement is introduced; fixed command traces remain equivalent.
+  - Tier-qualified internal camera-sample commits for compacted scheduling, with
+    a reflected 48-byte version-2 configuration in unchanged 256-byte slots.
+    Unselected tiers retain counts/sums; whole-tile actual-count resolve and fixed
+    transport are unchanged. Public adaptive rendering remains disabled.
+  - Internal compacted camera-ray generation reusing canonical fixed camera WGSL,
+    with reflected interfaces, immutable config validation and indirect dispatch.
+    Fixed assembled transport remains byte-identical; bounce/resolve and site
+    integration are not enabled by this stage.
+  - Internal tile/tier primary-pixel compaction with workgroup scans, indirect
+    arguments, failure/overflow veto and cap-accounted immutable config slots.
+    This is not connected to live adaptive rendering;
+    bounded Apple Metal-3 worklist checks passed; transport, image and performance
+    qualification remain pending.
   - Internal complete-camera-sample commit and float32 sum/actual-count resolve,
     reflected packing/layout checks, invalid-sample rejection, and capped tile
     scratch/configuration allocation. Not connected to live transport; adaptive
