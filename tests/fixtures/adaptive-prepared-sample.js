@@ -8,6 +8,7 @@ import { createAdaptiveBootstrapPipelines } from "/src/wavefront-adaptive-bootst
 import { createAdaptiveCameraRayPipeline } from "/src/wavefront-adaptive-camera.js";
 import { createAdaptivePreparedSampleEncoder } from "/src/wavefront-adaptive-prepared-sample.js";
 import { WAVEFRONT_COMPUTE_WGSL } from "/src/wavefront-shaders.js";
+import { assertShaderModuleCompiles } from "/src/wavefront-runtime-support.js";
 
 const check = (value, message) => { if (!value) throw new Error(message); };
 const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -78,11 +79,12 @@ button.addEventListener("click", async () => {
       const copyBytes = (195 * 9 + 1) * 16;
       const copied = createBuffer(copyBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
       const staging = createBuffer(copyBytes, GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ);
-      const module = device.createShaderModule({ code: `@group(0) @binding(0) var<storage,read> source: array<u32>;
-        @group(0) @binding(1) var<storage,read_write> target: array<u32>;
+      const module = device.createShaderModule({ code: `@group(0) @binding(0) var<storage,read> copyInput: array<u32>;
+        @group(0) @binding(1) var<storage,read_write> copyOutput: array<u32>;
         @compute @workgroup_size(64) fn read_words(@builtin(global_invocation_id) id: vec3<u32>) {
-          if (id.x < arrayLength(&source)) { target[id.x] = source[id.x]; }
+          if (id.x < arrayLength(&copyInput)) { copyOutput[id.x] = copyInput[id.x]; }
         }` });
+      await assertShaderModuleCompiles(module, "prepared-probe-readback"); active();
       const readPipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "read_words" } }); active();
       const read = async (buffer, bytes) => {
         const encoder = device.createCommandEncoder(), pass = encoder.beginComputePass();
