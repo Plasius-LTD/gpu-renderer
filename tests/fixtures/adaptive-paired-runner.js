@@ -15,10 +15,12 @@ import { assertShaderModuleCompiles } from "/src/wavefront-runtime-support.js";
 import { createPairedProbeScene, createPairedProbeBudgets } from "/lighting/demo/eames-environments/paired-adaptive-scenes.js";
 import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 import { createSharedSampleRanges, packSharedPhase, createSharedAdaptivePipelines, encodeSharedPhase, encodeSharedSample } from "/src/wavefront-adaptive-shared.js";
+import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continuations.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-export async function createPairedProbeRunner(scene, signal) {
+export async function createPairedProbeRunner(scene, signal, {pruningVariants=false}={}) {
   let device, renderer, owner, telemetry, lost = false, disposed = false;
+  let tracePipelineLayout, activePreparedPipelines=null;
   const timestampPairs = [];
   const extras = [], errors = [], buffers = new Map(), bindings = new Map(), descriptors = new Map(), pipelines = {}, textures = [];
   const active = () => check(!signal.aborted && !lost && !disposed, "Probe cancelled or device lost");
@@ -48,7 +50,8 @@ export async function createPairedProbeRunner(scene, signal) {
         const createTexture=device.createTexture.bind(device);
         device.createTexture=descriptor=>{textures.push(descriptor); return createTexture(descriptor);};
         const createPipeline=device.createComputePipelineAsync.bind(device);
-        device.createComputePipelineAsync=async descriptor=>{const value=await createPipeline(descriptor);pipelines[descriptor.compute.entryPoint]=value;return value;};
+        device.createComputePipelineAsync=async descriptor=>{const value=await createPipeline(descriptor);
+          if(!Object.hasOwn(pipelines,descriptor.compute.entryPoint)){pipelines[descriptor.compute.entryPoint]=value;if(descriptor.compute.entryPoint==="intersectActiveQueue")tracePipelineLayout=descriptor.layout;}return value;};
         return device;
       } };
     const width=128,height=128,pixels=width*height,tile={x:0,y:0,width,height},sceneConfig=typeof scene==="string"?createPairedProbeScene(scene):scene;
@@ -68,6 +71,8 @@ export async function createPairedProbeRunner(scene, signal) {
     const producer=await wait(createAdaptiveCompletionPipeline(device,GPUShaderStage,{enabled:true}));
     const resolve=await wait(createAdaptiveResolvePipelines(device,GPUShaderStage,{enabled:true}));
     const shared=await wait(createSharedAdaptivePipelines(device,GPUShaderStage,{enabled:true}));
+    const variants={};
+    if(pruningVariants)for(const [name,options] of Object.entries({zero:{zeroEmptyDispatch:true},fused:{fusedHits:true},combined:{fusedHits:true,zeroEmptyDispatch:true}}))variants[name]=await wait(createPrunedContinuationPipelines(device,tracePipelineLayout,options));
     const group=(layout,entries)=>device.createBindGroup({layout,entries:entries.map(([binding,buffer,size])=>({binding,resource:{buffer,...(size?{size}:{})}}))});
     const compactGroup=group(compact.layout,[[0,b.pixelState],[1,b.worklist],[2,b.primaryControl],[3,b.dispatch],[4,b.primaryConfig,32]]);
     const producerGroup=group(producer.layout,[[0,frame,320],[1,paths],[2,b.pixelState],[3,b.cameraSamples],[4,b.primaryControl],[5,counters],[6,b.resolveConfig,48]]);
@@ -81,7 +86,7 @@ export async function createPairedProbeRunner(scene, signal) {
     check(telemetry.available,"Ray telemetry unavailable");
     let config=renderer.config;
     const frameEncoder=createWavefrontFrameEncoder({getConfig:()=>config,getBindGroups:()=>[bindings.get("plasius.wavefront.bind.activeNext"),bindings.get("plasius.wavefront.bind.nextActive")],
-      pipelines,counterBuffer:counters,activeDispatchBuffer:get("activeDispatchArgs"),getFrameTelemetry:()=>telemetry});
+      pipelines,counterBuffer:counters,activeDispatchBuffer:get("activeDispatchArgs"),getFrameTelemetry:()=>telemetry,getPreparedContinuationPipelines:()=>activePreparedPipelines});
     const prepared=createAdaptivePreparedSampleEncoder({enabled:true,bootstrapPipelines:bootstrap,cameraPipeline:camera,frameEncoder,counterBuffer:counters,primaryDispatchBuffer:b.dispatch,getBindGroups:()=>preparedBindings});
     const makeBuffer=(size,usage)=>{const value=device.createBuffer({size,usage});extras.push(value);return value;};
     const copied=makeBuffer(pixels*16,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC), staging=makeBuffer(pixels*16,GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST);
@@ -114,10 +119,11 @@ export async function createPairedProbeRunner(scene, signal) {
     const setupError=await wait(device.popErrorScope());check(!setupError,setupError?.message);device.pushErrorScope("validation");
     return { adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
       memory:{rendererBufferBytes,textureInventory,adaptiveBufferBytes:resources.allocatedBytes,telemetryBufferBytes:telemetry.memoryBytes,fixtureStagingBytes:extras.reduce((sum,item)=>sum+item.size,0)},
-      async run(mode, samples=32, fault=null) {
+      async run(mode, samples=32, fault=null, pruning="off") {
         active();check(["fixed","uniform","reduced","uniform-shared","reduced-shared"].includes(mode),"Invalid probe mode");
         check(mode==="fixed" || samples===maximum,"Adaptive ceiling must match the probe");
         const useShared=mode.endsWith("-shared"),budgetMode=mode.replace("-shared","");
+        check(pruning==="off"||(useShared&&Object.hasOwn(variants,pruning)),"Pruning requires an admitted shared variant");activePreparedPipelines=pruning==="off"?null:variants[pruning];
         check(!fault || useShared,"Fault injection requires shared mode");
         check(!fault || ["stale-count","failed-pixel","uncovered-budget","weighted","skipped-phase","duplicate-ordinal","pending","overflow","lineage"].includes(fault),"Unknown shared fault");
         if(["pending","overflow","lineage"].includes(fault) && !faultWord){faultWord=makeBuffer(4,GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST);device.queue.writeBuffer(faultWord,0,new Uint32Array([1]));await wait(device.queue.onSubmittedWorkDone());}
@@ -191,7 +197,7 @@ export async function createPairedProbeRunner(scene, signal) {
           if(counts) check(!(counts[id]&0x80000000) && ((counts[id]>>>9)&511)===budgets[id] && image[id*4+3]===1,`Incomplete adaptive pixel ${id}`);
           else {check(image[id*4+3]===samples,`Incomplete fixed pixel ${id}: ${image[id*4+3]} of ${samples}; timestamp ${measured.reason}; raw ${timestampPairs.at(-1)}`);image[id*4+3]=1;}
         }
-        return {image,mode,samples,actualSamples:expectedPrimaryRays,sampleIterations,linearOutputJobMs,
+        return {image,mode,pruning,samples,actualSamples:expectedPrimaryRays,sampleIterations,linearOutputJobMs,
           completedCountMin:counts?Math.min(...counts.map(word=>(word>>>9)&511)):samples,
           completedCountMax:counts?Math.max(...counts.map(word=>(word>>>9)&511)):samples,
           gpuMs:measured.totalGpuTimeMs,timestampStatus:measured.timestampQueryStatus,timestampReason:measured.reason,rawTimestampPair:timestampPairs.at(-1)??null,rayCounts:measured.rayCounts};

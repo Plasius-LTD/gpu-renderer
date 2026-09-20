@@ -1,3 +1,417 @@
+// Canonical bodies shared by staged and experimental immediate-hit execution.
+export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
+  var hitObject = SceneObject(
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    0u,
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(0.0),
+    vec4<f32>(1.0, 0.0, 1.0, 1.0),
+    vec4<f32>(0.0, 0.0, 0.0, 0.08),
+    vec4<f32>(0.08, 1.0, 0.0, 0.0),
+    vec4<f32>(1.0, 1.0, 1.0, 1.0)
+  );
+  var candidate = no_candidate();
+  var hitTriangle = TriangleRecord();
+
+  for (var objectIndex = 0u; objectIndex < config.sceneObjectCount; objectIndex = objectIndex + 1u) {
+    let object = sceneObjects[objectIndex];
+    var current = no_candidate();
+    if (object.kind == 1u) {
+      current = intersect_sphere(ray, object);
+    } else if (object.kind == 2u) {
+      current = intersect_box(ray, object);
+    }
+    if (current.hit == 1u && current.distance < nearest) {
+      nearest = current.distance;
+      hitObject = object;
+      candidate = current;
+    }
+  }
+
+  let meshCandidate = intersect_bvh(ray, nearest);
+  if (meshCandidate.hit == 1u && meshCandidate.distance < nearest) {
+    nearest = meshCandidate.distance;
+    candidate = meshCandidate;
+    hitTriangle = triangles[meshCandidate.triangleIndex];
+  }
+
+  if (candidate.hit == 0u) {
+    hits[index] = make_miss(ray);
+    return;
+  }
+
+  let position = ray.origin.xyz + ray.direction.xyz * candidate.distance;
+  let hitMaterialKind = select(hitObject.materialKind, hitTriangle.materialKind, candidate.triangleIndex != 0xffffffffu);
+  let hitObjectId = select(hitObject.objectId, hitTriangle.meshId, candidate.triangleIndex != 0xffffffffu);
+  let meshSurface = sample_surface_material(
+    hitTriangle,
+    candidate.uv,
+    candidate.geometricNormal,
+    candidate.shadingNormal
+  );
+  let hitColor = select(hitObject.color, meshSurface.color, candidate.triangleIndex != 0xffffffffu);
+  let hitEmission = select(hitObject.emission, meshSurface.emission, candidate.triangleIndex != 0xffffffffu);
+  let hitMaterial = select(hitObject.material, meshSurface.material, candidate.triangleIndex != 0xffffffffu);
+  let hitMaterialResponse = select(hitObject.materialResponse, meshSurface.materialResponse, candidate.triangleIndex != 0xffffffffu);
+  let hitMaterialExtension = select(hitObject.materialExtension, meshSurface.materialExtension, candidate.triangleIndex != 0xffffffffu);
+  let hitSpecularColor = select(hitObject.specularColor, meshSurface.specularColor, candidate.triangleIndex != 0xffffffffu);
+  let hitShadingNormal = select(candidate.shadingNormal, meshSurface.shadingNormal, candidate.triangleIndex != 0xffffffffu);
+  let hitPrimitiveId = select(candidate.primitiveId, hitTriangle.triangleId, candidate.triangleIndex != 0xffffffffu);
+  let hitMaterialRefId = select(candidate.materialRefId, hitTriangle.materialRefId, candidate.triangleIndex != 0xffffffffu);
+  let hitMediumRefId = select(candidate.mediumRefId, hitTriangle.mediumRefId, candidate.triangleIndex != 0xffffffffu);
+  let hitMaterialSlot = select(0u, hitTriangle.materialSlot, candidate.triangleIndex != 0xffffffffu);
+  let hitOcclusion = select(1.0, meshSurface.occlusion, candidate.triangleIndex != 0xffffffffu);
+  var hitType = 0u;
+  if (hitMaterialKind == 4u || emission_power(hitEmission) > 0.0001) {
+    hitType = 1u;
+  } else if (hitMaterialKind == 3u || hitMaterial.z < 0.999 || hitMaterialExtension.z > 0.001) {
+    hitType = 3u;
+  }
+  atomicAdd(&counters.hitCount, 1u);
+  hits[index] = HitRecord(
+    ray.rayId,
+    ray.sourcePixelId,
+    hitType,
+    hitObjectId,
+    hitMaterialKind,
+    candidate.frontFace,
+    hitPrimitiveId,
+    hitMaterialRefId,
+    hitMediumRefId,
+    hitMaterialSlot,
+    0u,
+    0u,
+    candidate.distance,
+    hitOcclusion,
+    vec2<f32>(0.0),
+    vec4<f32>(position, 1.0),
+    vec4<f32>(candidate.geometricNormal, 0.0),
+    vec4<f32>(hitShadingNormal, 0.0),
+    vec4<f32>(candidate.barycentric, 0.0),
+    vec4<f32>(candidate.uv, 0.0, 0.0),
+    hitColor,
+    hitEmission,
+    hitMaterial,
+    hitMaterialResponse,
+    hitMaterialExtension,
+    hitSpecularColor
+  );`;
+
+export const WAVEFRONT_SURFACE_BODY_WGSL = `  let segmentTransmittance = medium_transmittance(medium_stack_current_id(ray), hit.distance);
+  let arrivingThroughput = ray.throughput.xyz * segmentTransmittance;
+
+  if (hit.hitType == 1u) {
+    let guidedLightWeight = select(1.0, 0.24, (ray.flags & RAY_FLAG_GUIDED_EMISSIVE) != 0u);
+    var sourceRadiance = max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight;
+    if (terminal_mis_enabled(ray)) {
+      let bsdfPdf = max(ray.throughput.w, 0.000001);
+      let lightPdf = terminal_emissive_light_pdf(ray, hit);
+      if (lightPdf > 0.000001) {
+        sourceRadiance = sourceRadiance * power_heuristic(bsdfPdf, lightPdf);
+      }
+    }
+    if (deferred_path_resolve_enabled()) {
+      record_deferred_terminal_source(
+        ray,
+        sourceRadiance * segmentTransmittance,
+        TERMINAL_SOURCE_KIND_EMISSIVE
+      );
+    } else {
+      let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
+      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_EMISSIVE);
+    }
+    atomicAdd(&counters.terminatedCount, 1u);
+    return;
+  }
+
+  if (hit.hitType == 2u) {
+    var sourceRadiance = hit.color.xyz;
+    if (terminal_mis_enabled(ray)) {
+      let bsdfPdf = max(ray.throughput.w, 0.000001);
+      let lightPdf = environment_direction_pdf(ray.direction.xyz);
+      let misWeight = power_heuristic(bsdfPdf, lightPdf);
+      sourceRadiance = sourceRadiance * misWeight;
+    }
+    if (deferred_path_resolve_enabled()) {
+      record_deferred_terminal_source(
+        ray,
+        sourceRadiance * segmentTransmittance,
+        TERMINAL_SOURCE_KIND_ENVIRONMENT
+      );
+    } else {
+      let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
+      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_ENVIRONMENT);
+    }
+    atomicAdd(&counters.terminatedCount, 1u);
+    return;
+  }
+
+  let shouldEstimateDirectLight = surface_supports_direct_lighting(hit);
+  if (shouldEstimateDirectLight) {
+    let directLight = surface_direct_light_contribution(
+      RayRecord(
+        ray.rayId,
+        ray.parentRayId,
+        ray.sourcePixelId,
+        ray.sampleId,
+        ray.bounce,
+        ray.mediumRefId,
+        ray.flags,
+        ray.mediumStackDepth,
+        ray.origin,
+        ray.direction,
+        vec4<f32>(arrivingThroughput, ray.throughput.w),
+        ray.mediumStack
+      ),
+      hit
+    );
+    let sunLight = surface_procedural_sun_contribution(
+      RayRecord(
+        ray.rayId,
+        ray.parentRayId,
+        ray.sourcePixelId,
+        ray.sampleId,
+        ray.bounce,
+        ray.mediumRefId,
+        ray.flags,
+        ray.mediumStackDepth,
+        ray.origin,
+        ray.direction,
+        vec4<f32>(arrivingThroughput, ray.throughput.w),
+        ray.mediumStack
+      ),
+      hit
+    );
+    let rawDirectLight = (directLight + sunLight) * sample_weight();
+    record_radiance_diagnostics(rawDirectLight);
+    let weightedDirectLight = sanitize_linear_radiance(rawDirectLight);
+    record_transport_contribution(TRANSPORT_BUCKET_DIRECT_EXPLICIT, weightedDirectLight);
+    if (!path_radiance_valid(rawDirectLight)) { fail_path_node(ray); }
+    record_path_direct(ray, weightedDirectLight);
+  }
+
+  if (ray.bounce + 1u >= config.maxDepth) {
+    if (deferred_path_resolve_enabled()) {
+      if (strict_physical_low_spp_lighting_enabled()) {
+        record_deferred_terminal_source(
+          ray,
+          vec3<f32>(0.0),
+          TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT
+        );
+      } else {
+        record_deferred_terminal_source(
+          ray,
+          terminal_surface_environment_source(ray, hit),
+          TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH
+        );
+      }
+    } else {
+      let terminalEnvironment = terminal_surface_environment_contribution(
+        ray,
+        arrivingThroughput,
+        hit
+      );
+      let rawWeightedContribution = terminalEnvironment * sample_weight();
+      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH);
+    }
+    atomicAdd(&counters.terminatedCount, 1u);
+    return;
+  }
+
+  let scatter = scatter_direction(ray, hit);
+  let continuationNormal = surface_shading_normal(hit);
+  let continuationViewDirection = safe_normalize(-ray.direction.xyz, continuationNormal);
+  let continuationLightDirection = safe_normalize(scatter.direction.xyz, continuationNormal);
+  var continuationThroughput = surface_continuation_throughput(
+    hit,
+    continuationViewDirection,
+    continuationLightDirection,
+    scatter
+  ) * segmentTransmittance;
+  let transmissionBranch = scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION;
+  let totalInternalReflection = dielectric_event(hit) && dielectric_cannot_refract(ray, hit);
+  let splitDielectric = dielectric_event(hit) && !totalInternalReflection;
+  var secondaryThroughput = vec3<f32>(0.0);
+  if (totalInternalReflection) {
+    continuationThroughput = segmentTransmittance;
+  }
+  if (splitDielectric) {
+    secondaryThroughput = select(
+      surface_delta_transmission_throughput(hit, continuationViewDirection),
+      surface_delta_reflection_throughput(hit, continuationViewDirection),
+      transmissionBranch
+    ) * segmentTransmittance;
+  }
+  if (max(max_component(continuationThroughput), max_component(secondaryThroughput)) <= 0.000001) {
+    if (deferred_path_resolve_enabled()) {
+      if (strict_physical_low_spp_lighting_enabled()) {
+        record_deferred_terminal_source(
+          ray,
+          vec3<f32>(0.0),
+          TERMINAL_SOURCE_KIND_ABSORPTION_NULL
+        );
+      } else {
+        record_deferred_terminal_source(
+          ray,
+          terminal_surface_environment_source(ray, hit),
+          TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH
+        );
+      }
+    } else {
+      let terminalEnvironment = terminal_surface_environment_contribution(
+        ray,
+        arrivingThroughput,
+        hit
+      );
+      let rawWeightedContribution = terminalEnvironment * sample_weight();
+      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH);
+    }
+    atomicAdd(&counters.terminatedCount, 1u);
+    return;
+  }
+  let rouletteStartBounce = select(
+    2u,
+    6u,
+    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE) &&
+      config.samplesPerPixel <= 8u
+  );
+  if (strict_physical_low_spp_lighting_enabled() && ray.bounce >= rouletteStartBounce) {
+    let survivalProbability = clamp(max(max_component(continuationThroughput), max_component(secondaryThroughput)), 0.05, 0.95);
+    let roulette = sample_dimension_1d(
+      ray.sourcePixelId,
+      ray.sampleId,
+      ray.bounce,
+      config.frameIndex,
+      SAMPLE_DIM_RUSSIAN_ROULETTE
+    );
+    if (roulette > survivalProbability) {
+      if (deferred_path_resolve_enabled()) {
+        record_deferred_terminal_source(
+          ray,
+          vec3<f32>(0.0),
+          TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE
+        );
+      } else {
+        record_weighted_terminal(ray, vec3<f32>(0.0), TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE);
+      }
+      atomicAdd(&counters.terminatedCount, 1u);
+      return;
+    }
+    continuationThroughput = continuationThroughput / survivalProbability;
+    secondaryThroughput = secondaryThroughput / survivalProbability;
+  }
+  let nextIndex = atomicAdd(&counters.nextCount, 1u);
+  if (nextIndex >= config.tilePixelCount) {
+    fail_path_node(ray);
+    record_weighted_terminal(ray, vec3<f32>(0.0), TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW);
+    atomicAdd(&counters.terminatedCount, 1u);
+    return;
+  }
+  link_path_child(ray, nextIndex, false);
+  let throughput = ray.throughput.xyz * continuationThroughput;
+  let nextMediumStack = select(
+    transitioned_medium_stack(ray, hit),
+    ray.mediumStack,
+    scatter.lobeKind != SCATTER_LOBE_DELTA_TRANSMISSION
+  );
+  let nextMediumStackDepth = select(
+    transitioned_medium_stack_depth(ray, hit),
+    ray.mediumStackDepth,
+    scatter.lobeKind != SCATTER_LOBE_DELTA_TRANSMISSION
+  );
+  let nextMediumRefId = select(
+    transmitted_medium_ref_id(ray, hit),
+    ray.mediumRefId,
+    scatter.lobeKind != SCATTER_LOBE_DELTA_TRANSMISSION
+  );
+  nextQueue[nextIndex] = RayRecord(
+    ray.rayId,
+    ray.parentRayId,
+    ray.sourcePixelId,
+    ray.sampleId,
+    ray.bounce + 1u,
+    nextMediumRefId,
+    scatter.flags,
+    nextMediumStackDepth,
+    vec4<f32>(
+      offset_origin(
+        hit.position.xyz,
+        hit.geometricNormal.xyz,
+        hit.shadingNormal.xyz,
+        scatter.direction.xyz
+      ),
+      1.0
+    ),
+    scatter.direction,
+    vec4<f32>(throughput, scatter.pdf),
+    nextMediumStack
+  );
+
+  // Both non-TIR dielectric branches belong to the same camera sample.
+  // Capacity failure rejects the sample rather than losing a weighted branch.
+  if (splitDielectric) {
+    let secondaryIndex = atomicAdd(&counters.nextCount, 1u);
+    if (secondaryIndex < config.tilePixelCount) {
+      let secondaryIsReflection = transmissionBranch;
+      let secondaryDirection = select(
+        refract_direction(ray.direction.xyz, surface_shading_normal(hit),
+          dielectric_eta(hit)),
+        reflect(ray.direction.xyz, surface_shading_normal(hit)),
+        secondaryIsReflection
+      );
+      let secondaryStack = select(
+        transitioned_medium_stack(ray, hit),
+        ray.mediumStack,
+        secondaryIsReflection
+      );
+      let secondaryDepth = select(
+        transitioned_medium_stack_depth(ray, hit),
+        ray.mediumStackDepth,
+        secondaryIsReflection
+      );
+      let secondaryMedium = select(
+        transmitted_medium_ref_id(ray, hit),
+        ray.mediumRefId,
+        secondaryIsReflection
+      );
+      nextQueue[secondaryIndex] = RayRecord(
+        ray.rayId,
+        ray.parentRayId,
+        ray.sourcePixelId,
+        ray.sampleId,
+        ray.bounce + 1u,
+        secondaryMedium,
+        scatter.flags,
+        secondaryDepth,
+        vec4<f32>(
+          offset_origin(
+            hit.position.xyz,
+            hit.geometricNormal.xyz,
+            hit.shadingNormal.xyz,
+            secondaryDirection
+          ),
+          1.0
+        ),
+        vec4<f32>(secondaryDirection, 0.0),
+        vec4<f32>(ray.throughput.xyz * secondaryThroughput, scatter.pdf),
+        secondaryStack
+      );
+      link_path_child(ray, secondaryIndex, true);
+    } else {
+      fail_path_node(ray);
+      record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW, vec3<f32>(0.0));
+      atomicAdd(&counters.terminatedCount, 1u);
+    }
+  }`;
+
 export const WAVEFRONT_SHADER_KERNELS_WGSL = `
 fn emission_power(emission: vec4<f32>) -> f32 {
   return emission.x + emission.y + emission.z;
@@ -205,111 +619,7 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
   let ray = activeQueue[index];
-  var nearest = 1000000.0;
-  var hitObject = SceneObject(
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    0u,
-    vec4<f32>(0.0),
-    vec4<f32>(0.0),
-    vec4<f32>(0.0),
-    vec4<f32>(0.0),
-    vec4<f32>(1.0, 0.0, 1.0, 1.0),
-    vec4<f32>(0.0, 0.0, 0.0, 0.08),
-    vec4<f32>(0.08, 1.0, 0.0, 0.0),
-    vec4<f32>(1.0, 1.0, 1.0, 1.0)
-  );
-  var candidate = no_candidate();
-  var hitTriangle = TriangleRecord();
-
-  for (var objectIndex = 0u; objectIndex < config.sceneObjectCount; objectIndex = objectIndex + 1u) {
-    let object = sceneObjects[objectIndex];
-    var current = no_candidate();
-    if (object.kind == 1u) {
-      current = intersect_sphere(ray, object);
-    } else if (object.kind == 2u) {
-      current = intersect_box(ray, object);
-    }
-    if (current.hit == 1u && current.distance < nearest) {
-      nearest = current.distance;
-      hitObject = object;
-      candidate = current;
-    }
-  }
-
-  let meshCandidate = intersect_bvh(ray, nearest);
-  if (meshCandidate.hit == 1u && meshCandidate.distance < nearest) {
-    nearest = meshCandidate.distance;
-    candidate = meshCandidate;
-    hitTriangle = triangles[meshCandidate.triangleIndex];
-  }
-
-  if (candidate.hit == 0u) {
-    hits[index] = make_miss(ray);
-    return;
-  }
-
-  let position = ray.origin.xyz + ray.direction.xyz * candidate.distance;
-  let hitMaterialKind = select(hitObject.materialKind, hitTriangle.materialKind, candidate.triangleIndex != 0xffffffffu);
-  let hitObjectId = select(hitObject.objectId, hitTriangle.meshId, candidate.triangleIndex != 0xffffffffu);
-  let meshSurface = sample_surface_material(
-    hitTriangle,
-    candidate.uv,
-    candidate.geometricNormal,
-    candidate.shadingNormal
-  );
-  let hitColor = select(hitObject.color, meshSurface.color, candidate.triangleIndex != 0xffffffffu);
-  let hitEmission = select(hitObject.emission, meshSurface.emission, candidate.triangleIndex != 0xffffffffu);
-  let hitMaterial = select(hitObject.material, meshSurface.material, candidate.triangleIndex != 0xffffffffu);
-  let hitMaterialResponse = select(hitObject.materialResponse, meshSurface.materialResponse, candidate.triangleIndex != 0xffffffffu);
-  let hitMaterialExtension = select(hitObject.materialExtension, meshSurface.materialExtension, candidate.triangleIndex != 0xffffffffu);
-  let hitSpecularColor = select(hitObject.specularColor, meshSurface.specularColor, candidate.triangleIndex != 0xffffffffu);
-  let hitShadingNormal = select(candidate.shadingNormal, meshSurface.shadingNormal, candidate.triangleIndex != 0xffffffffu);
-  let hitPrimitiveId = select(candidate.primitiveId, hitTriangle.triangleId, candidate.triangleIndex != 0xffffffffu);
-  let hitMaterialRefId = select(candidate.materialRefId, hitTriangle.materialRefId, candidate.triangleIndex != 0xffffffffu);
-  let hitMediumRefId = select(candidate.mediumRefId, hitTriangle.mediumRefId, candidate.triangleIndex != 0xffffffffu);
-  let hitMaterialSlot = select(0u, hitTriangle.materialSlot, candidate.triangleIndex != 0xffffffffu);
-  let hitOcclusion = select(1.0, meshSurface.occlusion, candidate.triangleIndex != 0xffffffffu);
-  var hitType = 0u;
-  if (hitMaterialKind == 4u || emission_power(hitEmission) > 0.0001) {
-    hitType = 1u;
-  } else if (hitMaterialKind == 3u || hitMaterial.z < 0.999 || hitMaterialExtension.z > 0.001) {
-    hitType = 3u;
-  }
-  atomicAdd(&counters.hitCount, 1u);
-  hits[index] = HitRecord(
-    ray.rayId,
-    ray.sourcePixelId,
-    hitType,
-    hitObjectId,
-    hitMaterialKind,
-    candidate.frontFace,
-    hitPrimitiveId,
-    hitMaterialRefId,
-    hitMediumRefId,
-    hitMaterialSlot,
-    0u,
-    0u,
-    candidate.distance,
-    hitOcclusion,
-    vec2<f32>(0.0),
-    vec4<f32>(position, 1.0),
-    vec4<f32>(candidate.geometricNormal, 0.0),
-    vec4<f32>(hitShadingNormal, 0.0),
-    vec4<f32>(candidate.barycentric, 0.0),
-    vec4<f32>(candidate.uv, 0.0, 0.0),
-    hitColor,
-    hitEmission,
-    hitMaterial,
-    hitMaterialResponse,
-    hitMaterialExtension,
-    hitSpecularColor
-  );
+${WAVEFRONT_INTERSECTION_BODY_WGSL}
 }
 
 fn surface_shading_normal(hit: HitRecord) -> vec3<f32> {
@@ -624,312 +934,7 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
 
   let ray = begin_path_node(activeQueue[index], index);
   let hit = hits[index];
-  let segmentTransmittance = medium_transmittance(medium_stack_current_id(ray), hit.distance);
-  let arrivingThroughput = ray.throughput.xyz * segmentTransmittance;
-
-  if (hit.hitType == 1u) {
-    let guidedLightWeight = select(1.0, 0.24, (ray.flags & RAY_FLAG_GUIDED_EMISSIVE) != 0u);
-    var sourceRadiance = max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight;
-    if (terminal_mis_enabled(ray)) {
-      let bsdfPdf = max(ray.throughput.w, 0.000001);
-      let lightPdf = terminal_emissive_light_pdf(ray, hit);
-      if (lightPdf > 0.000001) {
-        sourceRadiance = sourceRadiance * power_heuristic(bsdfPdf, lightPdf);
-      }
-    }
-    if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(
-        ray,
-        sourceRadiance * segmentTransmittance,
-        TERMINAL_SOURCE_KIND_EMISSIVE
-      );
-    } else {
-      let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
-      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_EMISSIVE);
-    }
-    atomicAdd(&counters.terminatedCount, 1u);
-    return;
-  }
-
-  if (hit.hitType == 2u) {
-    var sourceRadiance = hit.color.xyz;
-    if (terminal_mis_enabled(ray)) {
-      let bsdfPdf = max(ray.throughput.w, 0.000001);
-      let lightPdf = environment_direction_pdf(ray.direction.xyz);
-      let misWeight = power_heuristic(bsdfPdf, lightPdf);
-      sourceRadiance = sourceRadiance * misWeight;
-    }
-    if (deferred_path_resolve_enabled()) {
-      record_deferred_terminal_source(
-        ray,
-        sourceRadiance * segmentTransmittance,
-        TERMINAL_SOURCE_KIND_ENVIRONMENT
-      );
-    } else {
-      let rawWeightedContribution = arrivingThroughput * sourceRadiance * sample_weight();
-      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_ENVIRONMENT);
-    }
-    atomicAdd(&counters.terminatedCount, 1u);
-    return;
-  }
-
-  let shouldEstimateDirectLight = surface_supports_direct_lighting(hit);
-  if (shouldEstimateDirectLight) {
-    let directLight = surface_direct_light_contribution(
-      RayRecord(
-        ray.rayId,
-        ray.parentRayId,
-        ray.sourcePixelId,
-        ray.sampleId,
-        ray.bounce,
-        ray.mediumRefId,
-        ray.flags,
-        ray.mediumStackDepth,
-        ray.origin,
-        ray.direction,
-        vec4<f32>(arrivingThroughput, ray.throughput.w),
-        ray.mediumStack
-      ),
-      hit
-    );
-    let sunLight = surface_procedural_sun_contribution(
-      RayRecord(
-        ray.rayId,
-        ray.parentRayId,
-        ray.sourcePixelId,
-        ray.sampleId,
-        ray.bounce,
-        ray.mediumRefId,
-        ray.flags,
-        ray.mediumStackDepth,
-        ray.origin,
-        ray.direction,
-        vec4<f32>(arrivingThroughput, ray.throughput.w),
-        ray.mediumStack
-      ),
-      hit
-    );
-    let rawDirectLight = (directLight + sunLight) * sample_weight();
-    record_radiance_diagnostics(rawDirectLight);
-    let weightedDirectLight = sanitize_linear_radiance(rawDirectLight);
-    record_transport_contribution(TRANSPORT_BUCKET_DIRECT_EXPLICIT, weightedDirectLight);
-    if (!path_radiance_valid(rawDirectLight)) { fail_path_node(ray); }
-    record_path_direct(ray, weightedDirectLight);
-  }
-
-  if (ray.bounce + 1u >= config.maxDepth) {
-    if (deferred_path_resolve_enabled()) {
-      if (strict_physical_low_spp_lighting_enabled()) {
-        record_deferred_terminal_source(
-          ray,
-          vec3<f32>(0.0),
-          TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT
-        );
-      } else {
-        record_deferred_terminal_source(
-          ray,
-          terminal_surface_environment_source(ray, hit),
-          TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH
-        );
-      }
-    } else {
-      let terminalEnvironment = terminal_surface_environment_contribution(
-        ray,
-        arrivingThroughput,
-        hit
-      );
-      let rawWeightedContribution = terminalEnvironment * sample_weight();
-      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH);
-    }
-    atomicAdd(&counters.terminatedCount, 1u);
-    return;
-  }
-
-  let scatter = scatter_direction(ray, hit);
-  let continuationNormal = surface_shading_normal(hit);
-  let continuationViewDirection = safe_normalize(-ray.direction.xyz, continuationNormal);
-  let continuationLightDirection = safe_normalize(scatter.direction.xyz, continuationNormal);
-  var continuationThroughput = surface_continuation_throughput(
-    hit,
-    continuationViewDirection,
-    continuationLightDirection,
-    scatter
-  ) * segmentTransmittance;
-  let transmissionBranch = scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION;
-  let totalInternalReflection = dielectric_event(hit) && dielectric_cannot_refract(ray, hit);
-  let splitDielectric = dielectric_event(hit) && !totalInternalReflection;
-  var secondaryThroughput = vec3<f32>(0.0);
-  if (totalInternalReflection) {
-    continuationThroughput = segmentTransmittance;
-  }
-  if (splitDielectric) {
-    secondaryThroughput = select(
-      surface_delta_transmission_throughput(hit, continuationViewDirection),
-      surface_delta_reflection_throughput(hit, continuationViewDirection),
-      transmissionBranch
-    ) * segmentTransmittance;
-  }
-  if (max(max_component(continuationThroughput), max_component(secondaryThroughput)) <= 0.000001) {
-    if (deferred_path_resolve_enabled()) {
-      if (strict_physical_low_spp_lighting_enabled()) {
-        record_deferred_terminal_source(
-          ray,
-          vec3<f32>(0.0),
-          TERMINAL_SOURCE_KIND_ABSORPTION_NULL
-        );
-      } else {
-        record_deferred_terminal_source(
-          ray,
-          terminal_surface_environment_source(ray, hit),
-          TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH
-        );
-      }
-    } else {
-      let terminalEnvironment = terminal_surface_environment_contribution(
-        ray,
-        arrivingThroughput,
-        hit
-      );
-      let rawWeightedContribution = terminalEnvironment * sample_weight();
-      record_weighted_terminal(ray, rawWeightedContribution, TERMINAL_SOURCE_KIND_AMBIENT_MAX_DEPTH);
-    }
-    atomicAdd(&counters.terminatedCount, 1u);
-    return;
-  }
-  let rouletteStartBounce = select(
-    2u,
-    6u,
-    transport_experiment_enabled(TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE) &&
-      config.samplesPerPixel <= 8u
-  );
-  if (strict_physical_low_spp_lighting_enabled() && ray.bounce >= rouletteStartBounce) {
-    let survivalProbability = clamp(max(max_component(continuationThroughput), max_component(secondaryThroughput)), 0.05, 0.95);
-    let roulette = sample_dimension_1d(
-      ray.sourcePixelId,
-      ray.sampleId,
-      ray.bounce,
-      config.frameIndex,
-      SAMPLE_DIM_RUSSIAN_ROULETTE
-    );
-    if (roulette > survivalProbability) {
-      if (deferred_path_resolve_enabled()) {
-        record_deferred_terminal_source(
-          ray,
-          vec3<f32>(0.0),
-          TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE
-        );
-      } else {
-        record_weighted_terminal(ray, vec3<f32>(0.0), TERMINAL_SOURCE_KIND_RUSSIAN_ROULETTE);
-      }
-      atomicAdd(&counters.terminatedCount, 1u);
-      return;
-    }
-    continuationThroughput = continuationThroughput / survivalProbability;
-    secondaryThroughput = secondaryThroughput / survivalProbability;
-  }
-  let nextIndex = atomicAdd(&counters.nextCount, 1u);
-  if (nextIndex >= config.tilePixelCount) {
-    fail_path_node(ray);
-    record_weighted_terminal(ray, vec3<f32>(0.0), TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW);
-    atomicAdd(&counters.terminatedCount, 1u);
-    return;
-  }
-  link_path_child(ray, nextIndex, false);
-  let throughput = ray.throughput.xyz * continuationThroughput;
-  let nextMediumStack = select(
-    transitioned_medium_stack(ray, hit),
-    ray.mediumStack,
-    scatter.lobeKind != SCATTER_LOBE_DELTA_TRANSMISSION
-  );
-  let nextMediumStackDepth = select(
-    transitioned_medium_stack_depth(ray, hit),
-    ray.mediumStackDepth,
-    scatter.lobeKind != SCATTER_LOBE_DELTA_TRANSMISSION
-  );
-  let nextMediumRefId = select(
-    transmitted_medium_ref_id(ray, hit),
-    ray.mediumRefId,
-    scatter.lobeKind != SCATTER_LOBE_DELTA_TRANSMISSION
-  );
-  nextQueue[nextIndex] = RayRecord(
-    ray.rayId,
-    ray.parentRayId,
-    ray.sourcePixelId,
-    ray.sampleId,
-    ray.bounce + 1u,
-    nextMediumRefId,
-    scatter.flags,
-    nextMediumStackDepth,
-    vec4<f32>(
-      offset_origin(
-        hit.position.xyz,
-        hit.geometricNormal.xyz,
-        hit.shadingNormal.xyz,
-        scatter.direction.xyz
-      ),
-      1.0
-    ),
-    scatter.direction,
-    vec4<f32>(throughput, scatter.pdf),
-    nextMediumStack
-  );
-
-  // Both non-TIR dielectric branches belong to the same camera sample.
-  // Capacity failure rejects the sample rather than losing a weighted branch.
-  if (splitDielectric) {
-    let secondaryIndex = atomicAdd(&counters.nextCount, 1u);
-    if (secondaryIndex < config.tilePixelCount) {
-      let secondaryIsReflection = transmissionBranch;
-      let secondaryDirection = select(
-        refract_direction(ray.direction.xyz, surface_shading_normal(hit),
-          dielectric_eta(hit)),
-        reflect(ray.direction.xyz, surface_shading_normal(hit)),
-        secondaryIsReflection
-      );
-      let secondaryStack = select(
-        transitioned_medium_stack(ray, hit),
-        ray.mediumStack,
-        secondaryIsReflection
-      );
-      let secondaryDepth = select(
-        transitioned_medium_stack_depth(ray, hit),
-        ray.mediumStackDepth,
-        secondaryIsReflection
-      );
-      let secondaryMedium = select(
-        transmitted_medium_ref_id(ray, hit),
-        ray.mediumRefId,
-        secondaryIsReflection
-      );
-      nextQueue[secondaryIndex] = RayRecord(
-        ray.rayId,
-        ray.parentRayId,
-        ray.sourcePixelId,
-        ray.sampleId,
-        ray.bounce + 1u,
-        secondaryMedium,
-        scatter.flags,
-        secondaryDepth,
-        vec4<f32>(
-          offset_origin(
-            hit.position.xyz,
-            hit.geometricNormal.xyz,
-            hit.shadingNormal.xyz,
-            secondaryDirection
-          ),
-          1.0
-        ),
-        vec4<f32>(secondaryDirection, 0.0),
-        vec4<f32>(ray.throughput.xyz * secondaryThroughput, scatter.pdf),
-        secondaryStack
-      );
-      link_path_child(ray, secondaryIndex, true);
-    } else {
-      fail_path_node(ray);
-      record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW, vec3<f32>(0.0));
-      atomicAdd(&counters.terminatedCount, 1u);
-    }
-  }
+${WAVEFRONT_SURFACE_BODY_WGSL}
 }
 
 @compute @workgroup_size(1)
