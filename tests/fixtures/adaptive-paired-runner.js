@@ -17,10 +17,11 @@ import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 export async function createPairedProbeRunner(scene, signal) {
-  let device, renderer, owner, telemetry, lost = false;
+  let device, renderer, owner, telemetry, lost = false, disposed = false;
+  const timestampPairs = [];
   const extras = [], errors = [], buffers = new Map(), bindings = new Map(), descriptors = new Map(), pipelines = {}, textures = [];
-  const active = () => check(!signal.aborted && !lost, "Probe cancelled or device lost");
-  const destroy = () => { telemetry?.destroy(); owner?.destroy(); renderer?.destroy(); extras.forEach(buffer=>buffer.destroy()); device?.destroy(); };
+  const active = () => check(!signal.aborted && !lost && !disposed, "Probe cancelled or device lost");
+  const destroy = () => { disposed=true;telemetry?.destroy(); owner?.destroy(); renderer?.destroy(); extras.forEach(buffer=>buffer.destroy()); device?.destroy(); };
   const wait = async promise => {
     let timer;
     try { const value = await Promise.race([promise, new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("GPU operation exceeded 30 seconds")),30000);})]); active(); return value; }
@@ -31,13 +32,17 @@ export async function createPairedProbeRunner(scene, signal) {
     check(adapter?.info.isFallbackAdapter === false, "Physical WebGPU unavailable");
     const observedAdapter = { limits:adapter.limits, features:adapter.features, info:adapter.info,
       requestDevice: async descriptor => {
-        device = await adapter.requestDevice(descriptor); active();
+        device = await adapter.requestDevice(descriptor); if(disposed || signal.aborted)device.destroy();active();
         device.lost.then(({reason})=>{if(reason!=="destroyed") lost=true;});
         device.addEventListener("uncapturederror",event=>errors.push(event.error.message));
         device.pushErrorScope("validation");
         for(const [method,map] of [["createBuffer",buffers],["createBindGroup",bindings]]) {
           const original=device[method].bind(device);
-          device[method]=descriptor=>{const result=original(descriptor); if(descriptor.label){map.set(descriptor.label,result); if(method==="createBindGroup") descriptors.set(descriptor.label,descriptor);} return result;};
+          device[method]=descriptor=>{const result=original(descriptor); if(descriptor.label){map.set(descriptor.label,result); if(method==="createBindGroup") descriptors.set(descriptor.label,descriptor);}
+            if(method==="createBuffer" && descriptor.label==="plasius.wavefront.timestamps.readback"){
+              const mapped=result.getMappedRange.bind(result);result.getMappedRange=(...args)=>{const value=mapped(...args);timestampPairs.push(Array.from(new BigUint64Array(value.slice(0,16)),String));return value;};
+            }
+            return result;};
         }
         const createTexture=device.createTexture.bind(device);
         device.createTexture=descriptor=>{textures.push(descriptor); return createTexture(descriptor);};
@@ -149,7 +154,7 @@ export async function createPairedProbeRunner(scene, signal) {
         }
         const error=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!error && !errors.length,error?.message??errors[0]);
         return {image,mode,samples,actualSamples:expectedPrimaryRays,sampleIterations,linearOutputJobMs,
-          gpuMs:measured.totalGpuTimeMs,timestampStatus:measured.timestampQueryStatus,timestampReason:measured.reason,rayCounts:measured.rayCounts};
+          gpuMs:measured.totalGpuTimeMs,timestampStatus:measured.timestampQueryStatus,timestampReason:measured.reason,rawTimestampPair:timestampPairs.at(-1)??null,rayCounts:measured.rayCounts};
       },
       destroy(){destroy();check(owner.snapshot().allocatedBytes===0,"Adaptive cleanup failed");},
     };
