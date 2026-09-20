@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
     completed-count normalization, using existing capped storage. Bootstrap now
     binds 64-byte PathNode roots. Public adaptation and performance claims remain
     off; fixed equivalence is against the separately corrected PR 214 baseline.
+    Retained physical complete-sample, diffuse same-prefix and failure evidence
+    with a dated publication-readiness ledger; no matched-quality speedup claim.
   - Internal default-off prepared-sample coordinator composing validated bootstrap,
     compacted camera generation and the unchanged shared bounce command loop.
     Counts preparation dispatch overhead without claiming actual-ray telemetry;

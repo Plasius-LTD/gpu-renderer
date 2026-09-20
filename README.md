@@ -77,7 +77,11 @@ See [integration design](docs/design/adaptive-complete-sample-integration.md) an
 [ADR 0039](docs/adrs/adr-0039-adaptive-complete-camera-sample-integration.md).
 The physical probe is `tests/fixtures/adaptive-complete-sample.html`; it connects
 real transport with unequal-budget count/resolve, not a synthetic radiance source.
-Small analytic probes are not matched-quality performance or site qualification.
+On Apple Metal-3, 14 small-scene/order cases passed, including diffuse same-sample
+prefix agreement with the fixed dispatcher, plus 11 fail-closed cases. These are
+not matched-quality performance or site qualification. See the
+[dated publication-readiness ledger](docs/evidence/adaptive-publication-readiness-2026-09-20.md)
+for source-bound receipts, actual sample counts and outstanding claim gates.
 
 Per-pixel adaptive rendering is not yet exposed by the public renderer API.
 An internal [primary-worklist stage](docs/design/adaptive-primary-worklist.md)
@@ -145,13 +149,14 @@ retains the dense internal commit mode. Final resolve still covers the whole
 tile. The 48-byte payload fits the same 256-byte slots; allocated memory and
 fixed transport are unchanged. See [ADR 0035](docs/adrs/adr-0035-tier-qualified-camera-sample-commit.md).
 
-The fixed renderer and its whole-frame budget adjustment are unchanged. The new
-stage is not wired to transport or exposed through package exports. Race-free
-split-path production, compact primary scheduling, foveation and shared
-integration remain prerequisites for a site comparison. The validation fixtures
-under `tests/fixtures/adaptive-*.html` test arithmetic/ABI and resource ownership,
-not adaptive images, transport correctness, performance or net memory savings.
-Physical execution status is recorded in the [Task 168 evidence](docs/evidence/task-168-adaptive-count-resolve.md).
+The earlier metadata/count-resolve foundation did not connect to transport; its
+physical execution is recorded in [Task 168 evidence](docs/evidence/task-168-adaptive-count-resolve.md).
+The experimental integration described above now connects real transport in a
+physical fixture, while the public renderer remains fixed-dispatch only. Its
+whole-frame budget policy is unchanged. The separate prerequisite transport fixes,
+production adaptive scheduler/presentation, importance controllers and shared/site
+integration still require qualification before a site comparison. No fixture here
+establishes matched-quality performance, full-scene noise or net memory savings.
 See [ADR 0029](docs/adrs/adr-0029-reflected-adaptive-metadata-admission.md) and
 [ADR 0030](docs/adrs/adr-0030-complete-camera-sample-resolve.md).
 
