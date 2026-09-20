@@ -192,6 +192,8 @@ export async function createPairedProbeRunner(scene, signal) {
           else {check(image[id*4+3]===samples,`Incomplete fixed pixel ${id}: ${image[id*4+3]} of ${samples}; timestamp ${measured.reason}; raw ${timestampPairs.at(-1)}`);image[id*4+3]=1;}
         }
         return {image,mode,samples,actualSamples:expectedPrimaryRays,sampleIterations,linearOutputJobMs,
+          completedCountMin:counts?Math.min(...counts.map(word=>(word>>>9)&511)):samples,
+          completedCountMax:counts?Math.max(...counts.map(word=>(word>>>9)&511)):samples,
           gpuMs:measured.totalGpuTimeMs,timestampStatus:measured.timestampQueryStatus,timestampReason:measured.reason,rawTimestampPair:timestampPairs.at(-1)??null,rayCounts:measured.rayCounts};
       },
       destroy(){destroy();check(owner.snapshot().allocatedBytes===0,"Adaptive cleanup failed");},

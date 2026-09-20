@@ -23,6 +23,8 @@ button.addEventListener("click",async()=>{
       for(const mode of ["fixed","uniform-shared","reduced","reduced-shared"]){const frame=await runner.run(mode,maximum);images[mode]=frame.image;
         // Alpha is normalized by the runner only after every real completed count is checked.
         const analyticCheck=verifyPrimaryMisPixels(frame.image,1,name==="black"?[0,0,0]:analytic.expected);
+        // The helper examines normalized alpha here, not the camera sample count.
+        delete analyticCheck.actualCountMin;delete analyticCheck.actualCountMax;analyticCheck.normalizedAlpha=1;
         lane.frames.push({...frame,image:undefined,imageHash:await hash(frame.image.buffer),analyticCheck});}
       for(const [a,b] of [["fixed","uniform-shared"],["reduced","reduced-shared"]]){const identity=compareLinearImages(images[a],images[b]);lane.identity[`${a}/${b}`]=identity;check(identity.maxAbsoluteError<=PAIRED_PROBE_LIMITS.identityAbsoluteError,`${name} identity mismatch`);}
       runner.destroy();runner=null;
