@@ -1,5 +1,5 @@
 import { ADAPTIVE_BOOTSTRAP_WGSL } from "./wavefront-adaptive-bootstrap-shader.js";
-import { CONFIG_BUFFER_BYTES, COUNTER_BUFFER_BYTES, RAY_RECORD_BYTES } from "./wavefront-core.js";
+import { CONFIG_BUFFER_BYTES, COUNTER_BUFFER_BYTES, RAY_RECORD_BYTES, PATH_VERTEX_RECORD_BYTES } from "./wavefront-core.js";
 import { ADAPTIVE_PRIMARY_CONFIG_BYTE_SIZE, ADAPTIVE_PRIMARY_CONTROL_BYTE_SIZE } from "./wavefront-adaptive-primary-constants.js";
 import { assertShaderModuleCompiles, createComputePipeline } from "./wavefront-runtime-support.js";
 
@@ -12,7 +12,7 @@ export async function createAdaptiveBootstrapPipelines(device, shaderStage, { en
   });
   const frameLayout = device.createBindGroupLayout({ label: "adaptive-bootstrap-frame", entries: [
     entry(0, "read-only-storage", RAY_RECORD_BYTES), entry(3, "storage", 16),
-    entry(5, "uniform", CONFIG_BUFFER_BYTES), entry(6, "storage", COUNTER_BUFFER_BYTES), entry(22, "storage", 16),
+    entry(5, "uniform", CONFIG_BUFFER_BYTES), entry(6, "storage", COUNTER_BUFFER_BYTES), entry(22, "storage", PATH_VERTEX_RECORD_BYTES),
   ] });
   const worklistLayout = device.createBindGroupLayout({ label: "adaptive-bootstrap-worklist", entries: [
     entry(0, "read-only-storage", 4), entry(1, "storage", ADAPTIVE_PRIMARY_CONTROL_BYTE_SIZE),

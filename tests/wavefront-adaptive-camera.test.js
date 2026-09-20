@@ -18,7 +18,8 @@ test("compacted camera rays reuse camera WGSL without changing fixed transport o
     assert.ok(shader.includes(WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL));
     assert.equal(shader.match(/fn sample_dimension_2d\(/g)?.length, 1);
   }
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0");
+  // Byte-identical to PR 214's separately tracked corrected fixed baseline.
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb");
   const entry = ADAPTIVE_CAMERA_WGSL.slice(ADAPTIVE_CAMERA_WGSL.indexOf("fn generateCompactedCameraRays"));
   assert.match(entry, /activeQueue\[slot\] = make_ray\(localPixelId\);/);
   assert.doesNotMatch(entry, /sample_dimension_2d\(/);

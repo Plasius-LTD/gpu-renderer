@@ -60,6 +60,25 @@ reporting.
 
 ## Adaptive per-pixel implementation status
 
+This experimental integration branch combines the separately tracked split-path
+ownership and primary-visibility MIS fixes with adaptive scheduling infrastructure.
+Its fixed shader matches PR 214's corrected baseline, **not** the earlier released
+shader. The earlier receipts below remain evidence for their stated revisions.
+No prerequisite PR, public renderer option or site flag is enabled by this branch.
+
+An internal complete-camera-sample producer now reduces the canonical branch tree
+into the existing sample record before selected-tier count commit. Unweighted
+radiance is normalized by actual completed samples; sibling branches cannot count
+as separate camera samples. Invalid worklists, pending paths, overflow, bad lineage
+or stale identities reject completion. It reuses capped buffers without new GPU
+storage. Bootstrap uses the 64-byte PathNode ABI and invalidates selected roots;
+the shared bounce code owns initialization of every child node.
+See [integration design](docs/design/adaptive-complete-sample-integration.md) and
+[ADR 0039](docs/adrs/adr-0039-adaptive-complete-camera-sample-integration.md).
+The physical probe is `tests/fixtures/adaptive-complete-sample.html`; it connects
+real transport with unequal-budget count/resolve, not a synthetic radiance source.
+Small analytic probes are not matched-quality performance or site qualification.
+
 Per-pixel adaptive rendering is not yet exposed by the public renderer API.
 An internal [primary-worklist stage](docs/design/adaptive-primary-worklist.md)
 now compacts preselected tile/tier budgets into dense local pixel IDs and builds

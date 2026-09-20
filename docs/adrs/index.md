@@ -35,3 +35,4 @@
 - [ADR 0038: Prepared-sample command coordinator](adr-0038-prepared-sample-command-coordinator.md)
 - [ADR 0031: Branch-owned complete camera samples](./adr-0031-branch-owned-complete-camera-samples.md)
 - [ADR 0032: Primary visibility MIS eligibility](./adr-0032-primary-visibility-mis-eligibility.md)
+- [ADR 0039: Adaptive complete-camera-sample integration](./adr-0039-adaptive-complete-camera-sample-integration.md)

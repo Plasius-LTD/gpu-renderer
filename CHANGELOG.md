@@ -12,6 +12,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Experimental integration of branch-owned transport with compacted sampling:
+    canonical complete-tree camera-sample production followed by selected-tier
+    completed-count normalization, using existing capped storage. Bootstrap now
+    binds 64-byte PathNode roots. Public adaptation and performance claims remain
+    off; fixed equivalence is against the separately corrected PR 214 baseline.
   - Internal default-off prepared-sample coordinator composing validated bootstrap,
     compacted camera generation and the unchanged shared bounce command loop.
     Counts preparation dispatch overhead without claiming actual-ray telemetry;

@@ -1,16 +1,17 @@
 import { WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL } from "./wavefront-camera-shared-shader.js";
 import { WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL,
-  WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL, WAVEFRONT_CLEAR_DEFERRED_PATH_WGSL } from "./wavefront-primary-shared-shader.js";
+  WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL } from "./wavefront-primary-shared-shader.js";
+import { PATH_NODE_STRUCT_WGSL } from "./wavefront-path-tree-shader.js";
 import { MAX_PATH_TRACING_DEPTH } from "./wavefront-core.js";
 
 export const ADAPTIVE_BOOTSTRAP_WGSL = [WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL,
   WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL,
-  WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL, WAVEFRONT_CLEAR_DEFERRED_PATH_WGSL].join("\n") + `
+  WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL, PATH_NODE_STRUCT_WGSL].join("\n") + `
 @group(0) @binding(0) var<storage, read> bootstrapRays: array<RayRecord>;
 @group(0) @binding(3) var<storage, read_write> accumulation: array<vec4<f32>>;
 @group(0) @binding(5) var<uniform> config: FrameConfig;
 @group(0) @binding(6) var<storage, read_write> counters: Counters;
-@group(0) @binding(22) var<storage, read_write> pathVertices: array<vec4<f32>>;
+@group(0) @binding(22) var<storage, read_write> pathNodes: array<PathNode>;
 struct AdaptiveBootstrapIds { words: array<u32>, };
 struct AdaptiveBootstrapControl { count: atomic<u32>, failure: atomic<u32>, reserved0: u32, reserved1: u32, };
 struct AdaptiveBootstrapTile {
@@ -34,7 +35,7 @@ fn bootstrap_config_valid(groups: vec3<u32>) -> bool {
     || bootstrapTile.tileWidth != config.tileWidth || bootstrapTile.tileHeight != config.tileHeight) { return false; }
   let count = atomicLoad(&bootstrapControl.count);
   if (count > config.tilePixelCount || count > arrayLength(&bootstrapIds.words) || count > arrayLength(&bootstrapRays)) { return false; }
-  if (config.tilePixelCount > arrayLength(&accumulation) || config.tilePixelCount > arrayLength(&pathVertices) / (config.maxDepth + 1u)) { return false; }
+  if (config.tilePixelCount > arrayLength(&accumulation) || config.tilePixelCount > arrayLength(&pathNodes) / (config.maxDepth + 1u)) { return false; }
   if (!deferred_path_resolve_enabled() || config.projectionAndSampling.z != 1.0) { return false; }
   if (config.samplesPerPixel < 1u || config.samplesPerPixel > 256u || bootstrapTile.tier < 1u || bootstrapTile.tier > config.samplesPerPixel) { return false; }
   let ordinal = config.projectionAndSampling.w;
@@ -69,7 +70,9 @@ fn initialize_compacted_sample(@builtin(global_invocation_id) id: vec3<u32>, @bu
   let localPixelId = bootstrapIds.words[id.x];
   // Worklist/control remain immutable between validation and consumption.
   if (localPixelId >= config.tilePixelCount) { return; }
-  clear_deferred_path(localPixelId);
+  // Each bounce initializes its own depth/queue-owned node. Invalidate the root
+  // here so a missing primary cannot reuse a complete tree from an earlier sample.
+  pathNodes[localPixelId] = PathNode();
   accumulation[localPixelId] = vec4<f32>(0.0);
 }
 `;
