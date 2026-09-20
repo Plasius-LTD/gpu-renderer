@@ -14,6 +14,7 @@ import { WAVEFRONT_SHADER_KERNELS_WGSL } from "/src/wavefront-shader-kernels.js"
 import { assertShaderModuleCompiles } from "/src/wavefront-runtime-support.js";
 import { createPairedProbeScene, createPairedProbeBudgets } from "/lighting/demo/eames-environments/paired-adaptive-scenes.js";
 import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
+import { createSharedSampleRanges, packSharedPhase, createSharedAdaptivePipelines, encodeSharedPhase, encodeSharedSample } from "/src/wavefront-adaptive-shared.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 export async function createPairedProbeRunner(scene, signal) {
@@ -65,10 +66,12 @@ export async function createPairedProbeRunner(scene, signal) {
     const camera=await wait(createAdaptiveCameraRayPipeline(device,GPUShaderStage,{enabled:true}));
     const producer=await wait(createAdaptiveCompletionPipeline(device,GPUShaderStage,{enabled:true}));
     const resolve=await wait(createAdaptiveResolvePipelines(device,GPUShaderStage,{enabled:true}));
+    const shared=await wait(createSharedAdaptivePipelines(device,GPUShaderStage,{enabled:true}));
     const group=(layout,entries)=>device.createBindGroup({layout,entries:entries.map(([binding,buffer,size])=>({binding,resource:{buffer,...(size?{size}:{})}}))});
     const compactGroup=group(compact.layout,[[0,b.pixelState],[1,b.worklist],[2,b.primaryControl],[3,b.dispatch],[4,b.primaryConfig,32]]);
     const producerGroup=group(producer.layout,[[0,frame,320],[1,paths],[2,b.pixelState],[3,b.cameraSamples],[4,b.primaryControl],[5,counters],[6,b.resolveConfig,48]]);
     const resolveGroup=group(resolve.layout,[[0,b.pixelState],[1,b.cameraSamples],[2,b.radianceSums],[3,b.resolvedRadiance],[4,b.resolveConfig,48]]);
+    const sharedGroup=group(shared.layout,[[0,frame,320],[1,b.primaryConfig,32],[2,b.pixelState],[3,b.worklist],[4,b.primaryControl],[5,b.dispatch],[6,queue],[7,paths],[8,counters],[9,b.radianceSums],[10,b.resolvedRadiance]]);
     const preparedBindings={ bootstrapFrame:group(bootstrap.frameLayout,[[0,queue],[3,accumulation],[5,frame,320],[6,counters],[22,paths]]),
       bootstrapWorklist:group(bootstrap.worklistLayout,[[0,b.worklist],[1,b.primaryControl],[2,b.primaryConfig,32]]),
       cameraFrame:group(camera.rayLayout,[[0,queue],[5,frame,320]]),cameraWorklist:group(camera.worklistLayout,[[0,b.worklist],[1,b.primaryControl],[2,b.primaryConfig,32]]) };
@@ -108,26 +111,45 @@ export async function createPairedProbeRunner(scene, signal) {
     const setupError=await wait(device.popErrorScope());check(!setupError,setupError?.message);device.pushErrorScope("validation");
     return { adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
       memory:{rendererBufferBytes,textureInventory,adaptiveBufferBytes:resources.allocatedBytes,telemetryBufferBytes:telemetry.memoryBytes,fixtureStagingBytes:extras.reduce((sum,item)=>sum+item.size,0)},
-      async run(mode, samples=32) {
-        active();check(["fixed","uniform","reduced"].includes(mode),"Invalid probe mode");
+      async run(mode, samples=32, fault=null) {
+        active();check(["fixed","uniform","reduced","uniform-shared","reduced-shared"].includes(mode),"Invalid probe mode");
         check(mode==="fixed" || samples===32,"Adaptive ceiling must stay 32");
+        const useShared=mode.endsWith("-shared"),budgetMode=mode.replace("-shared","");
+        check(!fault || useShared,"Fault injection requires shared mode");
         const started=performance.now();config={...renderer.config,samplesPerPixel:samples};
-        const budgets=mode==="fixed"?null:createPairedProbeBudgets(width,height,mode);
-        const tiers=mode==="uniform"?[32]:[2,8,32];
+        const budgets=mode==="fixed"?null:createPairedProbeBudgets(width,height,budgetMode);
+        const tiers=budgetMode==="uniform"?[32]:[2,8,32],ranges=createSharedSampleRanges(tiers);
         const expectedPrimaryRays=budgets?budgets.reduce((sum,value)=>sum+value,0):pixels*samples;
-        if(budgets) device.queue.writeBuffer(b.pixelState,0,Uint32Array.from(budgets,requested=>packAdaptivePixelState({requested})));
-        for(let ordinal=0;ordinal<samples;ordinal+=1) device.queue.writeBuffer(frame,ordinal*config.memory.configBufferStride,createConfigPayload(config,tile,7,{sampleIndex:ordinal,sampleWeight:mode==="fixed"?1/samples:1}));
+        if(budgets) {const words=Uint32Array.from(budgets,requested=>packAdaptivePixelState({requested}));
+          if(fault==="stale-count")words[0]|=1<<9;
+          if(fault==="failed-pixel")words[0]|=0x80000000;
+          if(fault==="uncovered-budget")words[0]=packAdaptivePixelState({requested:3});
+          device.queue.writeBuffer(b.pixelState,0,words);}
+        const frameBatch=useShared?new Uint8Array(samples*config.memory.configBufferStride):null;
+        for(let ordinal=0;ordinal<samples;ordinal+=1) {const payload=createConfigPayload(config,tile,7,{sampleIndex:ordinal,sampleWeight:mode==="fixed"?1/samples:fault==="weighted"?0.5:1});
+          if(frameBatch)frameBatch.set(new Uint8Array(payload),ordinal*config.memory.configBufferStride);
+          else device.queue.writeBuffer(frame,ordinal*config.memory.configBufferStride,payload);}
+        if(frameBatch)device.queue.writeBuffer(frame,0,frameBatch);
         let slot=0;
-        if(budgets) for(const [tierIndex,tier] of tiers.entries()) {
+        if(budgets && !useShared) for(const [tierIndex,tier] of tiers.entries()) {
           device.queue.writeBuffer(b.primaryConfig,tierIndex*256,packAdaptivePrimaryConfig(tileConfig(tier)));
           for(let ordinal=0;ordinal<tier;ordinal+=1,slot+=1) device.queue.writeBuffer(b.resolveConfig,slot*256,packAdaptiveResolveConfig(sampleConfig(tier,ordinal)));
         }
-        if(budgets)device.queue.writeBuffer(b.resolveConfig,slot*256,packAdaptiveResolveConfig(sampleConfig(0,0)));
+        if(budgets && !useShared)device.queue.writeBuffer(b.resolveConfig,slot*256,packAdaptiveResolveConfig(sampleConfig(0,0)));
+        if(useShared){const phaseBatch=new Uint8Array(ranges.length*256);for(const [index,range] of ranges.entries())phaseBatch.set(new Uint8Array(packSharedPhase({...tileConfig(0),...range,...(fault==="skipped-phase"&&index===1?{firstSample:3}:{})})),index*256);device.queue.writeBuffer(b.primaryConfig,0,phaseBatch);}
         telemetry.beginFrame();const encoder=createTimestampSpanEncoder(device.createCommandEncoder(),telemetry),parallelism=createGpuParallelismCounters();
         if(mode==="fixed") for(let ordinal=0;ordinal<samples;ordinal+=1) {
           frameEncoder.encodeTileSample(encoder,tile,ordinal*config.memory.configBufferStride,parallelism);
           if(ordinal===samples-1)encoder.closeNextPass();
           frameEncoder.encodeTileOutput(encoder,tile,ordinal*config.memory.configBufferStride,parallelism);
+        } else if(useShared) {
+          const sharedRequest={pipelines:shared,bindGroup:sharedGroup,tile,dispatchBuffer:b.dispatch,counterBuffer:counters,frameEncoder,parallelism};
+          for(const [index,range] of ranges.entries()) {
+            encodeSharedPhase(encoder,{...sharedRequest,frameOffset:range.firstSample*config.memory.configBufferStride,phaseOffset:index*256});
+            for(let ordinal=range.firstSample;ordinal<range.sampleLimit;ordinal++)encodeSharedSample(encoder,{...sharedRequest,frameOffset:ordinal*config.memory.configBufferStride,phaseOffset:index*256});
+          }
+          const pass=encoder.beginComputePass();pass.setPipeline(shared.resolve);pass.setBindGroup(0,sharedGroup,[(samples-1)*config.memory.configBufferStride,(ranges.length-1)*256]);pass.dispatchWorkgroups(pixels/64);pass.end();
+          encoder.closeNextPass();const outputPass=encoder.beginComputePass();outputPass.setPipeline(output);outputPass.setBindGroup(0,outputGroup);outputPass.dispatchWorkgroups(pixels/64);outputPass.end();
         } else {
           let resolveSlot=0;
           for(const [tierIndex,tier] of tiers.entries()) {
@@ -143,7 +165,7 @@ export async function createPairedProbeRunner(scene, signal) {
         }
         device.queue.submit([encoder.finish()]);await wait(device.queue.onSubmittedWorkDone());
         const linearOutputJobMs=performance.now()-started;
-        const sampleIterations=mode==="fixed"?samples:tiers.reduce((sum,value)=>sum+value,0);
+        const sampleIterations=mode==="fixed"||useShared?samples:tiers.reduce((sum,value)=>sum+value,0);
         const measured=await wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:sampleIterations*4,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}));
         check(measured.rayCounts.status==="available",measured.rayCounts.reason);
         const image=new Float32Array(await read(budgets?b.resolvedRadiance:accumulation,pixels*16));

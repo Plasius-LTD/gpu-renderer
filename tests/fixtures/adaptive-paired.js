@@ -3,6 +3,8 @@ import { compareLinearImages, assessPairedTimings, assessQuality, PAIRED_PROBE_L
 import { createPairedProbeBudgets } from "/lighting/demo/eames-environments/paired-adaptive-scenes.js";
 import { WAVEFRONT_COMPUTE_WGSL } from "/src/wavefront-shaders.js";
 import { ADAPTIVE_COMPLETION_WGSL } from "/src/wavefront-adaptive-completion-shader.js";
+import { SHARED_ADAPTIVE_WGSL } from "/src/wavefront-adaptive-shared-shader.js";
+const sharedComparison=location.pathname.endsWith("adaptive-shared.html");
 
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",typeof bytes==="string"?new TextEncoder().encode(bytes):bytes)),byte=>byte.toString(16).padStart(2,"0")).join("");
 const check=(condition,message)=>{if(!condition)throw new Error(message);};
@@ -32,7 +34,8 @@ button.addEventListener("click",async()=>{
   let runner;
   try{
     receipt.provenance=await (await fetch("/__provenance")).json();
-    receipt.hashes={fixedShader:await hash(WAVEFRONT_COMPUTE_WGSL),completionShader:await hash(ADAPTIVE_COMPLETION_WGSL)};
+    receipt.hashes={fixedShader:await hash(WAVEFRONT_COMPUTE_WGSL),completionShader:await hash(ADAPTIVE_COMPLETION_WGSL),sharedShader:await hash(SHARED_ADAPTIVE_WGSL)};
+    receipt.sharedComparison=sharedComparison;
     for(const file of [import.meta.url,"/tests/fixtures/adaptive-paired-runner.js","/lighting/demo/eames-environments/paired-adaptive-metrics.js","/lighting/demo/eames-environments/paired-adaptive-scenes.js"]){receipt.hashes[new URL(file,location.href).pathname]=await hash(await (await fetch(file)).text());}
     for(const scene of ["smooth-environment","diffuse-silhouette"]){
       progress.textContent=`Preparing ${scene}`;runner=await createPairedProbeRunner(scene,cancellation.signal);
@@ -43,7 +46,7 @@ button.addEventListener("click",async()=>{
       lane.referenceConvergence=compareLinearImages(reference128.image,reference256.image);
       lane.referenceMeasurements=[{...reference128,image:undefined},{...reference256,image:undefined}];
       lane.imageHashes.reference128=await hash(reference128.image.buffer);lane.imageHashes.reference256=await hash(reference256.image.buffer);
-      const modes=["fixed","uniform","reduced"],images={reference:reference256.image};
+      const modes=sharedComparison?["fixed","uniform-shared","reduced","reduced-shared"]:["fixed","uniform","reduced"],images={reference:reference256.image};
       for(let round=0;round<PAIRED_PROBE_LIMITS.warmups+PAIRED_PROBE_LIMITS.rounds;round+=1){
         for(let offset=0;offset<modes.length;offset+=1){const mode=modes[(round+offset)%modes.length];
           progress.textContent=`${scene}: ${round<2?"warmup":"measurement"} ${round<2?round+1:round-1}, ${mode}`;
@@ -55,19 +58,22 @@ button.addEventListener("click",async()=>{
           lane.measurements.push(measurement);
         }
       }
-      lane.identity=compareLinearImages(images.uniform,images.fixed);
+      lane.identity=compareLinearImages(images[sharedComparison?"uniform-shared":"uniform"],images.fixed);
       check(lane.identity.maxAbsoluteError<=PAIRED_PROBE_LIMITS.identityAbsoluteError,"Equal-budget identity regression");
-      lane.reducedQuality=assessQuality(lane.quality.reduced,lane.quality.fixed,lane.referenceConvergence);
+      if(sharedComparison){lane.schedulingIdentity=compareLinearImages(images["reduced-shared"],images.reduced);check(lane.schedulingIdentity.maxAbsoluteError<=PAIRED_PROBE_LIMITS.identityAbsoluteError,"Shared scheduling changed the image");}
+      const reducedMode=sharedComparison?"reduced-shared":"reduced";
+      lane.reducedQuality=assessQuality(lane.quality[reducedMode],lane.quality.fixed,lane.referenceConvergence);
       const times=(mode,field)=>lane.measurements.filter(row=>row.mode===mode).sort((a,b)=>a.round-b.round).map(row=>row[field]);
-      lane.timing={};for(const mode of ["uniform","reduced"]){lane.timing[mode]={linearOutputJob:assessPairedTimings(times("fixed","linearOutputJobMs"),times(mode,"linearOutputJobMs"))};
+      lane.timing={};for(const mode of modes.filter(mode=>mode!=="fixed")){lane.timing[mode]={linearOutputJob:assessPairedTimings(times("fixed","linearOutputJobMs"),times(mode,"linearOutputJobMs"))};
         lane.timing[mode].gpu=times(mode,"gpuMs").every(value=>Number.isFinite(value)&&value>0)&&times("fixed","gpuMs").every(value=>Number.isFinite(value)&&value>0)
           ?assessPairedTimings(times("fixed","gpuMs"),times(mode,"gpuMs")):null;}
-      lane.diagnosticImprovementPassed=lane.reducedQuality.passed&&lane.timing.reduced.gpu?.timingPassed===true;
-      const board=preview(scene,images);runner.destroy();runner=null;
+      if(sharedComparison)lane.schedulerTiming={gpu:assessPairedTimings(times("reduced","gpuMs"),times("reduced-shared","gpuMs")),linearOutputJob:assessPairedTimings(times("reduced","linearOutputJobMs"),times("reduced-shared","linearOutputJobMs"))};
+      lane.diagnosticImprovementPassed=lane.reducedQuality.passed&&lane.timing[reducedMode].gpu?.timingPassed===true;
+      const board=preview(scene,sharedComparison?{...images,uniform:images["uniform-shared"],reduced:images["reduced-shared"]}:images);runner.destroy();runner=null;
       const artifactPath=`output/playwright/eames-environments/${receipt.provenance.captureId}/${scene}.png`;
       const uploaded=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({path:artifactPath,dataUrl:board.toDataURL("image/png"),result:{receipt:{...receipt,scenes:[lane]},linearImages:Object.fromEntries(Object.entries(images).map(([name,image])=>[name,Array.from(image)])),reference128:Array.from(reference128.image)}})});
       check(uploaded.ok,"Evidence retention failed");lane.artifact=await uploaded.json();
-      const note=document.createElement("p");note.textContent=`${scene}: equal-budget identity passed; reduced quality ${lane.reducedQuality.passed?"passed":"FAILED"}; diagnostic GPU-time gate ${lane.timing.reduced.gpu?.timingPassed?"passed":"not passed"}.`;previews.append(note);
+      const note=document.createElement("p");note.textContent=`${scene}: equal-budget identity passed${sharedComparison?"; shared/legacy reduced identity passed":""}; reduced quality ${lane.reducedQuality.passed?"passed":"FAILED"}; diagnostic GPU-time gate ${lane.timing[reducedMode].gpu?.timingPassed?"passed":"not passed"}.`;previews.append(note);
     }
     receipt.status="measured";progress.textContent="Measurements complete. Read quality and timing gates separately; this does not approve production claims.";
   }catch(error){receipt.status="failed";receipt.failures.push(String(error.message));progress.textContent=`Measurement failed: ${error.message}`;}
