@@ -12,6 +12,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Independent experimental prepared-path options for immediate hit consumption
+    and zero-work empty queues. Reuse canonical traversal/shading bodies, preserve
+    fixed shader bytes and command order, and retain source-bound paired/physical
+    safety evidence. No temporal ray cache, allocation saving, public enablement
+    or matched-quality performance claim.
   - Experimental shared-round adaptive scheduler: range-based GPU worklists,
     compacted fused prepare/commit, reflected phase ABI and batched configuration
     uploads around unchanged transport. Adds paired image/timing and physical

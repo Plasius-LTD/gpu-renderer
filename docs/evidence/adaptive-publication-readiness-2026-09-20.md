@@ -7,6 +7,15 @@ site white paper and not approval to publish performance claims.
 
 ## Subsequent paired measurement (same date)
 
+The subsequent [early-pruning experiment](adaptive-pruning-2026-09-20.md) removes
+one-use global hit scratch traffic and independently permits zero-work empty
+queues. Fixed shader bytes, same-budget pixels and ray counts remain unchanged.
+Immediate-hit geometry means improve 11.954→9.667 ms GPU / 20.40→16.58 ms job
+against same-run ordinary shared scheduling. Empty-only and combined effects are
+not uniformly better. All confidence gates and reduced-budget quality gates
+remain unpassed; these are internal efficiency observations, not publication
+approval or temporal cache/memory-saving claims.
+
 Later scheduler refinement: the [shared-round report](shared-adaptive-rounds-2026-09-20.md)
 retains two new paired captures and physical safety tests. Rounds fall 42→32 and
 compute passes 389→206, with bit-identical fixed/shared-uniform and legacy/shared

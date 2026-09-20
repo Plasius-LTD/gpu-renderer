@@ -107,6 +107,16 @@ diagnostics, not a public adaptive option. See [ADR 0040](docs/adrs/adr-0040-sha
 and the [source-bound results](docs/evidence/shared-adaptive-rounds-2026-09-20.md)
 for measured trade-offs and outstanding quality/confidence gates.
 
+`tests/fixtures/adaptive-pruning.html` independently compares zero-work empty
+queues, immediate hit consumption, and both together against the shared-round
+baseline. Internal default-off options omit the global hit-record round-trip
+and/or guarded empty workgroups; they add no temporal cache and preserve the
+fixed shader and command trace. Allocation capacity is retained, so this is not
+a memory-saving claim. See [ADR 0041](docs/adrs/adr-0041-immediate-hit-consumption-and-empty-queue-pruning.md)
+and [pruning evidence](docs/evidence/adaptive-pruning-2026-09-20.md). Physical image,
+ray and count identity passes these bounded scenes; timing confidence and the
+preassigned budgets' image-quality gates still do not qualify a public rollout.
+
 Per-pixel adaptive rendering is not yet exposed by the public renderer API.
 An internal [primary-worklist stage](docs/design/adaptive-primary-worklist.md)
 now compacts preselected tile/tier budgets into dense local pixel IDs and builds

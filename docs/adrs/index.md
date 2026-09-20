@@ -37,3 +37,4 @@
 - [ADR 0032: Primary visibility MIS eligibility](./adr-0032-primary-visibility-mis-eligibility.md)
 - [ADR 0039: Adaptive complete-camera-sample integration](./adr-0039-adaptive-complete-camera-sample-integration.md)
 - [ADR 0040: Shared adaptive sampling rounds](./adr-0040-shared-adaptive-sampling-rounds.md)
+- [ADR 0041: Immediate hit consumption and empty-queue pruning](./adr-0041-immediate-hit-consumption-and-empty-queue-pruning.md)
