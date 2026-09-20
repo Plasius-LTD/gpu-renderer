@@ -978,6 +978,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           })
         : null,
       bounces: [],
+      pathCompletionValid: terminationMetrics.pathCompletionValid,
       termination: terminationMetrics.termination,
       terminalRadiance: terminationMetrics.terminalRadiance,
       radianceDiagnostics: terminationMetrics.radianceDiagnostics,

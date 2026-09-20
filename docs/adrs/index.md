@@ -33,3 +33,5 @@
 - [ADR 0034: Shared compacted camera rays](adr-0034-shared-compacted-camera-rays.md)
 - [ADR 0037: Compacted sample bootstrap](adr-0037-compacted-sample-bootstrap.md)
 - [ADR 0038: Prepared-sample command coordinator](adr-0038-prepared-sample-command-coordinator.md)
+- [ADR 0031: Branch-owned complete camera samples](./adr-0031-branch-owned-complete-camera-samples.md)
+- [ADR 0032: Primary visibility MIS eligibility](./adr-0032-primary-visibility-mis-eligibility.md)

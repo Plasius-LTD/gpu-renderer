@@ -52,6 +52,18 @@ All notable changes to this project will be documented in this file.
   - Corrected the internal count-resolve physical fixture to use WGSL's specified
     division accuracy instead of bit-exact CPU/GPU equality; exact count and sum
     checks remain enforced, with no transport or image-tolerance changes.
+  - Exclude primary camera environment/emissive visibility from terminal MIS
+    without changing secondary non-delta or delta weighting. Add fixed
+    1/32/128-SPP linear-HDR/count probes. All 24 controlled Apple Metal-3 lanes
+    passed; full-scene/noise/baseline qualification remains pending.
+  - Replace shared sibling radiance/throughput addresses with tile/depth-owned
+    path nodes and a single complete-camera-sample reduction in both resolve modes.
+    Reject incomplete/overflowing paths visibly and expose optional completion
+    integrity readback; retain failure status through denoise and subsequent samples.
+  - Exclude ideal metals from dielectric splitting, share entering/exiting
+    refraction ratios, retain total-internal-reflection energy and compensate
+    both siblings for a shared roulette decision. Focused physical checks are
+    retained; broad transport/image/performance qualification remains outstanding.
   - (placeholder)
 
 - **Security**
