@@ -71,7 +71,8 @@ export async function createPairedProbeRunner(scene, signal) {
     const compactGroup=group(compact.layout,[[0,b.pixelState],[1,b.worklist],[2,b.primaryControl],[3,b.dispatch],[4,b.primaryConfig,32]]);
     const producerGroup=group(producer.layout,[[0,frame,320],[1,paths],[2,b.pixelState],[3,b.cameraSamples],[4,b.primaryControl],[5,counters],[6,b.resolveConfig,48]]);
     const resolveGroup=group(resolve.layout,[[0,b.pixelState],[1,b.cameraSamples],[2,b.radianceSums],[3,b.resolvedRadiance],[4,b.resolveConfig,48]]);
-    const sharedGroup=group(shared.layout,[[0,frame,320],[1,b.primaryConfig,32],[2,b.pixelState],[3,b.worklist],[4,b.primaryControl],[5,b.dispatch],[6,queue],[7,paths],[8,counters],[9,b.radianceSums],[10,b.resolvedRadiance]]);
+    const sharedEntries=[[0,frame,320],[1,b.primaryConfig,32],[2,b.pixelState],[3,b.worklist],[4,b.primaryControl],[5,b.dispatch],[6,queue],[7,paths],[8,counters],[9,b.radianceSums],[10,b.resolvedRadiance]];
+    const sharedGroup=group(shared.layout,sharedEntries.filter(([binding])=>binding!==5)),sharedPhaseGroup=group(shared.phaseLayout,sharedEntries);
     const preparedBindings={ bootstrapFrame:group(bootstrap.frameLayout,[[0,queue],[3,accumulation],[5,frame,320],[6,counters],[22,paths]]),
       bootstrapWorklist:group(bootstrap.worklistLayout,[[0,b.worklist],[1,b.primaryControl],[2,b.primaryConfig,32]]),
       cameraFrame:group(camera.rayLayout,[[0,queue],[5,frame,320]]),cameraWorklist:group(camera.worklistLayout,[[0,b.worklist],[1,b.primaryControl],[2,b.primaryConfig,32]]) };
@@ -143,7 +144,7 @@ export async function createPairedProbeRunner(scene, signal) {
           if(ordinal===samples-1)encoder.closeNextPass();
           frameEncoder.encodeTileOutput(encoder,tile,ordinal*config.memory.configBufferStride,parallelism);
         } else if(useShared) {
-          const sharedRequest={pipelines:shared,bindGroup:sharedGroup,tile,dispatchBuffer:b.dispatch,counterBuffer:counters,frameEncoder,parallelism};
+          const sharedRequest={pipelines:shared,bindGroup:sharedGroup,phaseBindGroup:sharedPhaseGroup,tile,dispatchBuffer:b.dispatch,counterBuffer:counters,frameEncoder,parallelism};
           for(const [index,range] of ranges.entries()) {
             encodeSharedPhase(encoder,{...sharedRequest,frameOffset:range.firstSample*config.memory.configBufferStride,phaseOffset:index*256});
             for(let ordinal=range.firstSample;ordinal<range.sampleLimit;ordinal++)encodeSharedSample(encoder,{...sharedRequest,frameOffset:ordinal*config.memory.configBufferStride,phaseOffset:index*256});

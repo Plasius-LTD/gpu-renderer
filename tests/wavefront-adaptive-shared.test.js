@@ -43,6 +43,8 @@ test("shared pipelines reuse canonical camera and path reduction, default off an
   assert.equal(p.prepare.compute.entryPoint,"prepare_shared_sample");
   assert.equal(p.commit.compute.entryPoint,"commit_shared_sample");
   assert.equal(p.layout.entries.filter(e=>e.buffer.hasDynamicOffset).length,2);
+  assert.ok(!p.layout.entries.some(e=>e.binding===5),"Indirect execution cannot bind its argument buffer as writable storage");
+  assert.ok(p.phaseLayout.entries.some(e=>e.binding===5));
   await assert.rejects(createSharedAdaptivePipelines({...device,createComputePipelineAsync(){throw Error("pipeline");}},{COMPUTE:4},{enabled:true}),/pipeline/);
   await assert.rejects(createSharedAdaptivePipelines({...device,createShaderModule:()=>({getCompilationInfo:async()=>({messages:[{type:"error",message:"shader"}]})})},{COMPUTE:4},{enabled:true}),/shader/);
 });
@@ -51,7 +53,7 @@ test("shared scheduling uses compacted preparation/commit around unchanged bounc
   const calls=[];const encoder={clearBuffer:(...a)=>calls.push(["clear",...a]),copyBufferToBuffer:()=>{},beginComputePass:()=>({setPipeline:p=>calls.push(["pipeline",p]),setBindGroup:(...a)=>calls.push(["group",...a]),dispatchWorkgroups:n=>calls.push(["direct",n]),dispatchWorkgroupsIndirect:(...a)=>calls.push(["indirect",...a]),end(){}})};
   const p={initialize:"init",compact:"compact",finalize:"finalize",validate:"validate",prepare:"prepare",commit:"commit"};
   const frameEncoder=createWavefrontFrameEncoder({getConfig:{maxDepth:4},getBindGroups:[{},{}],pipelines:{intersectActiveQueue:"intersect",resolveSurfaceRecords:"shade",compactAndSwapQueues:"swap"},counterBuffer:{},activeDispatchBuffer:{}});
-  const options={pipelines:p,bindGroup:"bindings",frameOffset:512,phaseOffset:256,tile:{x:0,y:0,width:128,height:128},dispatchBuffer:"dispatch",counterBuffer:"counters",frameEncoder,parallelism:createGpuParallelismCounters()};
+  const options={pipelines:p,bindGroup:"bindings",phaseBindGroup:"phase-bindings",frameOffset:512,phaseOffset:256,tile:{x:0,y:0,width:128,height:128},dispatchBuffer:"dispatch",counterBuffer:"counters",frameEncoder,parallelism:createGpuParallelismCounters()};
   encodeSharedPhase(encoder,options);encodeSharedSample(encoder,options);
   assert.deepEqual(calls.filter(c=>c[0]==="pipeline").map(c=>c[1]),["init","compact","finalize","validate","prepare",...Array.from({length:4},()=>["intersect","shade","swap"]).flat(),"commit"]);
   assert.equal(calls.filter(c=>c[0]==="indirect"&&c[1]==="dispatch").length,3);

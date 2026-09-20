@@ -25,10 +25,13 @@ export async function createSharedAdaptivePipelines(device, shaderStage, {enable
   if(!enabled)return null;
   const module=device.createShaderModule({label:"adaptive-shared-rounds",code:SHARED_ADAPTIVE_WGSL});
   await assertShaderModuleCompiles(module,"adaptive-shared-rounds");
-  const layout=device.createBindGroupLayout({label:"adaptive-shared-rounds",entries:SHARED_ADAPTIVE_BINDING_SIZES.map((minBindingSize,binding)=>({binding,visibility:shaderStage.COMPUTE,
-    buffer:{type:binding<2?"uniform":"storage",minBindingSize,...(binding<2?{hasDynamicOffset:true}:{})}}))});
-  const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),result={layout};
-  for(const [key,entry] of Object.entries(SHARED_ADAPTIVE_ENTRIES))result[key]=await createComputePipeline(device,module,pipelineLayout,entry,`adaptive-shared-${key}`);
+  const entries=SHARED_ADAPTIVE_BINDING_SIZES.map((minBindingSize,binding)=>({binding,visibility:shaderStage.COMPUTE,
+    buffer:{type:binding<2?"uniform":"storage",minBindingSize,...(binding<2?{hasDynamicOffset:true}:{})}}));
+  const phaseLayout=device.createBindGroupLayout({label:"adaptive-shared-worklist",entries});
+  // An indirect argument buffer must not also be bound writable in that pass.
+  const layout=device.createBindGroupLayout({label:"adaptive-shared-execution",entries:entries.filter(e=>e.binding!==5)});
+  const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),phasePipelineLayout=device.createPipelineLayout({bindGroupLayouts:[phaseLayout]}),result={layout,phaseLayout};
+  for(const [key,entry] of Object.entries(SHARED_ADAPTIVE_ENTRIES))result[key]=await createComputePipeline(device,module,["initialize","compact","finalize"].includes(key)?phasePipelineLayout:pipelineLayout,entry,`adaptive-shared-${key}`);
   return Object.freeze(result);
 }
 
@@ -38,7 +41,7 @@ function validateRequest({tile,frameOffset,phaseOffset}) {
   for(const offset of [frameOffset,phaseOffset])if(!Number.isSafeInteger(offset)||offset<0||offset>0xffffffff||offset%256)throw new RangeError("Invalid immutable shared offset.");
 }
 function pass(encoder,options,key,indirect,groups) {
-  const p=encoder.beginComputePass({label:`adaptive-shared-${key}`});p.setPipeline(options.pipelines[key]);p.setBindGroup(0,options.bindGroup,[options.frameOffset,options.phaseOffset]);
+  const p=encoder.beginComputePass({label:`adaptive-shared-${key}`});p.setPipeline(options.pipelines[key]);p.setBindGroup(0,["initialize","compact","finalize"].includes(key)?options.phaseBindGroup:options.bindGroup,[options.frameOffset,options.phaseOffset]);
   if(indirect){p.dispatchWorkgroupsIndirect(options.dispatchBuffer,0);recordIndirectDispatch(options.parallelism,groups,64);}
   else {p.dispatchWorkgroups(groups);recordDirectDispatch(options.parallelism,[groups],key==="finalize"?1:64);}
   p.end();
