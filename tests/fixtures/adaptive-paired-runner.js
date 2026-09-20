@@ -148,11 +148,11 @@ export async function createPairedProbeRunner(scene, signal) {
         check(measured.rayCounts.status==="available",measured.rayCounts.reason);
         const image=new Float32Array(await read(budgets?b.resolvedRadiance:accumulation,pixels*16));
         const counts=budgets?new Uint32Array(await read(b.pixelState,pixels*4)):null;
+        const error=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!error && !errors.length,error?.message??errors[0]);
         for(let id=0;id<pixels;id+=1) {
           if(counts) check(!(counts[id]&0x80000000) && ((counts[id]>>>9)&511)===budgets[id] && image[id*4+3]===1,`Incomplete adaptive pixel ${id}`);
-          else {check(image[id*4+3]===samples,`Incomplete fixed pixel ${id}`);image[id*4+3]=1;}
+          else {check(image[id*4+3]===samples,`Incomplete fixed pixel ${id}: ${image[id*4+3]} of ${samples}; timestamp ${measured.reason}; raw ${timestampPairs.at(-1)}`);image[id*4+3]=1;}
         }
-        const error=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!error && !errors.length,error?.message??errors[0]);
         return {image,mode,samples,actualSamples:expectedPrimaryRays,sampleIterations,linearOutputJobMs,
           gpuMs:measured.totalGpuTimeMs,timestampStatus:measured.timestampQueryStatus,timestampReason:measured.reason,rawTimestampPair:timestampPairs.at(-1)??null,rayCounts:measured.rayCounts};
       },
