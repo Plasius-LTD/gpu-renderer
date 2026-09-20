@@ -1,5 +1,6 @@
 import { createWavefrontPathTracingComputeRenderer } from "/src/wavefront-compute.js";
 import { createWavefrontFrameEncoder } from "/src/wavefront-frame-encoder.js";
+import { createGpuParallelismCounters } from "/src/wavefront-frame-runtime.js";
 import { createConfigPayload } from "/src/wavefront-packers.js";
 import { createAdaptiveResourceOwner, packAdaptivePixelState } from "/src/wavefront-adaptive-metadata.js";
 import { createAdaptivePrimaryPipelines, packAdaptivePrimaryConfig, encodeAdaptivePrimaryWorklist } from "/src/wavefront-adaptive-primary.js";
@@ -29,7 +30,7 @@ button.addEventListener("click", async () => {
   const cleanup = () => { owner?.destroy(); renderer?.destroy(); fixtureBuffers.forEach((buffer) => buffer.destroy()); fixtureBuffers = []; device?.destroy(); };
   try {
     await Promise.race([(async () => {
-      for (const name of ["environment", "black", "emissive", "metal", "dielectric", "environment-128"]) {
+      for (const name of ["environment", "black", "emissive", "metal", "dielectric", "environment-128", "diffuse"]) {
         const maximum = name === "environment-128" ? 128 : 32, tiers = maximum === 128 ? [2, 8, 32, 128] : [2, 4, 8, 32];
         const slots = tiers.reduce((sum, tier) => sum + tier, 0) + 1;
         const adapter = await navigator.gpu?.requestAdapter(); active(); check(adapter?.info.isFallbackAdapter === false, "Physical adapter unavailable");
@@ -48,7 +49,8 @@ button.addEventListener("click", async () => {
             device.createComputePipelineAsync = async (descriptor) => { const value = await original(descriptor); pipelines[descriptor.compute.entryPoint] = value; return value; };
             return device;
           } };
-        const analytic = primaryMisCase(["black", "environment-128"].includes(name) ? "environment" : name);
+        const analytic = primaryMisCase(name === "diffuse" ? "metal" : ["black", "environment-128"].includes(name) ? "environment" : name);
+        if (name === "diffuse") Object.assign(analytic.scene.meshes[0], { materialKind: "diffuse", metallic: 0, roughness: 1, color: [0.7, 0.3, 0.1, 1] });
         const expected = name === "black" ? [0, 0, 0] : analytic.expected;
         // Use a real uploaded mesh BVH for environment misses, not analytic defaults.
         const scene = ["environment", "black", "environment-128"].includes(name)
@@ -58,7 +60,8 @@ button.addEventListener("click", async () => {
         renderer = await createWavefrontPathTracingComputeRenderer({ ...scene, width: 16, height: 16, tileSize: 16, maxDepth: 8,
           canvas: new OffscreenCanvas(16, 16), samplesPerPixel: maximum, denoise: false, deferredPathResolve: true, strictPhysicalLowSppLighting: true,
           camera: { position: [0, 0, 3], target: [0, 0, 0], fovYDegrees: 46 },
-          environmentLighting: { horizonColor: sky, zenithColor: sky, sunColor: [0, 0, 0, 1], intensity: 1 },
+          environmentLighting: { horizonColor: name === "diffuse" ? [0.5, 0.6, 0.8, 1] : sky,
+            zenithColor: name === "diffuse" ? [2, 0.8, 0.3, 1] : sky, sunColor: [0, 0, 0, 1], intensity: 1 },
           navigator: { gpu: { requestAdapter: async () => observedAdapter, getPreferredCanvasFormat: () => navigator.gpu.getPreferredCanvasFormat() } },
         }); active();
         const config = renderer.config, tile = { x: 0, y: 0, width: 16, height: 16 }, pixels = 256;
@@ -109,6 +112,27 @@ button.addEventListener("click", async () => {
         const sampleConfig = (selectedTier, sampleOrdinal) => ({ ...tileConfig(selectedTier), selectedTier, sampleOrdinal, frameValid: true });
         const resolveFrame = (offset) => { const encoder = device.createCommandEncoder(), pass = encoder.beginComputePass(); pass.setPipeline(resolve.resolve);
           pass.setBindGroup(0, resolveGroup, [offset]); pass.dispatchWorkgroups(4); pass.end(); device.queue.submit([encoder.finish()]); };
+        // An independent fixed-dispatch/output reference at each selected prefix.
+        // Do not compare a noisy 2-sample pixel with a different 32-sample estimator
+        // or mislabel equal-sequence agreement as convergence/image quality.
+        let densePrefix = null;
+        if (name === "diffuse") {
+          densePrefix = new Float32Array(pixels * 3);
+          for (let ordinal = 0; ordinal < maximum; ordinal += 1) {
+            device.queue.writeBuffer(frame, ordinal * config.memory.configBufferStride, createConfigPayload(config, tile, 7, { sampleIndex: ordinal, sampleWeight: 1 }));
+            const encoder = device.createCommandEncoder(), parallelism = createGpuParallelismCounters();
+            frameEncoder.encodeTileSample(encoder, tile, ordinal * config.memory.configBufferStride, parallelism);
+            frameEncoder.encodeTileOutput(encoder, tile, ordinal * config.memory.configBufferStride, parallelism);
+            device.queue.submit([encoder.finish()]);
+            if (!tiers.includes(ordinal + 1)) continue;
+            const values = new Float32Array((await read(accumulation, pixels * 16)).buffer); active();
+            for (let id = 0; id < pixels; id += 1) {
+              check(values[id * 4 + 3] === ordinal + 1, "Dense prefix failed completion");
+              if (tiers[id % 4] !== ordinal + 1) continue;
+              for (let channel = 0; channel < 3; channel += 1) densePrefix[id * 3 + channel] = values[id * 4 + channel] / (ordinal + 1);
+            }
+          }
+        }
         for (const order of [tiers, [...tiers].reverse()]) {
           status.textContent = `Running ${name}, tiers ${order.join("/")}`;
           const budgets = Uint32Array.from({ length: pixels }, (_, id) => packAdaptivePixelState({ requested: tiers[id % 4] }));
@@ -138,13 +162,14 @@ button.addEventListener("click", async () => {
             check(!(state[id] & 0x80000000) && completed === requested && values[id * 4 + 3] === 1, `${name}: incomplete pixel ${id}`);
             actualSamples += completed; histogram[completed] = (histogram[completed] ?? 0) + 1;
             for (let channel = 0; channel < 3; channel += 1) {
-              const value = values[id * 4 + channel], error = Math.abs(value - expected[channel]);
+              const value = values[id * 4 + channel], error = Math.abs(value - (densePrefix ? densePrefix[id * 3 + channel] : expected[channel]));
               check(Number.isFinite(value) && error <= PRIMARY_MIS_TOLERANCE, `${name}: linear HDR mismatch ${id}/${channel}: ${value}`);
               maxError = Math.max(maxError, error); squareError += error * error; luminance += value * [0.2126, 0.7152, 0.0722][channel] / pixels;
             }
           }
           for (let i = 0; i < slot; i += 1) { terminalPaths += traces[i * 4]; check(traces[i * 4 + 1] === 0, "Queue overflow"); }
           cases.push({ name, tierOrder: order, sequencePeriod: maximum, pixels, actualSamples, fixedPrimaryReference: pixels * maximum,
+            ...(densePrefix ? { reference: "fixed-dispatch same-ordinal prefix, not a converged image", denseReferenceCameraSamples: pixels * maximum } : {}),
             actualAverageSpp: actualSamples / pixels, histogram, terminalPaths, maxAbsoluteError: maxError, rgbRmse: Math.sqrt(squareError / (pixels * 3)),
             meanLuminance: luminance, adaptiveAllocatedBytes: resources.allocatedBytes, rendererBufferBytes, fixtureReadbackBytes: fixtureBuffers.reduce((sum, value) => sum + value.size, 0) });
         }

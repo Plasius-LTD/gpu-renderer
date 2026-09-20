@@ -52,6 +52,10 @@ missing samples, poisoned lineage, queue failure, tile reuse, and cleanup.
 Use linear float32 readback with denoise disabled; retain hashes, counts, energy,
 failures and allocation bytes separately from fixture staging. A controlled white
 environment is an analytic correctness probe, not a matched-quality benchmark.
+For diffuse shading under a nonuniform environment, compare each selected pixel
+with the same absolute sample prefix from the independent fixed dispatcher/output
+path, at the pre-existing absolute tolerance of `1e-5`. This verifies scheduling
+and normalization equivalence, not convergence against a high-SPP reference.
 Do not infer noise reduction, speedup, total-memory savings or Eames qualification.
 README, Unreleased CHANGELOG, ADR and evidence must state these boundaries.
 CI/CD, full reflection tooling release, broad physical/image/stress qualification
