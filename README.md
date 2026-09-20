@@ -19,6 +19,11 @@ current ESLint 10 and TypeScript 7 baselines.
 
 Apache-2.0. ESM + CJS builds.
 
+The paired adaptive diagnostic uses an internal opt-in four-query timestamp span
+on actual first/final compute work. Normal renderer telemetry retains its existing
+two-query descriptors and allocation; unavailable/invalid timestamps never become
+GPU performance evidence. See the lighting-owned paired diagnostic protocol.
+
 ## Privacy-Safe Feedback Diagnostics
 
 Approved in-game viewers can explicitly convert a small set of current renderer

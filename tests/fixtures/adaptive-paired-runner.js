@@ -40,7 +40,7 @@ export async function createPairedProbeRunner(scene, signal) {
           const original=device[method].bind(device);
           device[method]=descriptor=>{const result=original(descriptor); if(descriptor.label){map.set(descriptor.label,result); if(method==="createBindGroup") descriptors.set(descriptor.label,descriptor);}
             if(method==="createBuffer" && descriptor.label==="plasius.wavefront.timestamps.readback"){
-              const mapped=result.getMappedRange.bind(result);result.getMappedRange=(...args)=>{const value=mapped(...args);timestampPairs.push(Array.from(new BigUint64Array(value.slice(0,16)),String));return value;};
+              const mapped=result.getMappedRange.bind(result);result.getMappedRange=(...args)=>{const value=mapped(...args);timestampPairs.push(Array.from(new BigUint64Array(value.slice(0,descriptor.size)),String));return value;};
             }
             return result;};
         }
@@ -72,7 +72,7 @@ export async function createPairedProbeRunner(scene, signal) {
     const preparedBindings={ bootstrapFrame:group(bootstrap.frameLayout,[[0,queue],[3,accumulation],[5,frame,320],[6,counters],[22,paths]]),
       bootstrapWorklist:group(bootstrap.worklistLayout,[[0,b.worklist],[1,b.primaryControl],[2,b.primaryConfig,32]]),
       cameraFrame:group(camera.rayLayout,[[0,queue],[5,frame,320]]),cameraWorklist:group(camera.worklistLayout,[[0,b.worklist],[1,b.primaryControl],[2,b.primaryConfig,32]]) };
-    telemetry=createWavefrontFrameTelemetryResources({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},maxRayCountRecords:256*4});
+    telemetry=createWavefrontFrameTelemetryResources({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},maxRayCountRecords:256*4,timestampPassPairs:true});
     check(telemetry.available,"Ray telemetry unavailable");
     let config=renderer.config;
     const frameEncoder=createWavefrontFrameEncoder({getConfig:()=>config,getBindGroups:()=>[bindings.get("plasius.wavefront.bind.activeNext"),bindings.get("plasius.wavefront.bind.nextActive")],

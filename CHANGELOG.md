@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Internal opt-in complete compute-pass timestamp pairs for physical diagnostics;
+    default public telemetry descriptors and memory remain unchanged.
   - Before/after physical diagnostic fixture with equal-budget identity control,
     preassigned reduced tiers, reference images, actual queue/timestamp telemetry
     and lighting-owned quality/timing gates. No rollout or claimed speedup.

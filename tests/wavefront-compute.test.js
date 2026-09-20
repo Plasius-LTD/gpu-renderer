@@ -3527,6 +3527,48 @@ test("wavefront telemetry resources fail closed when readback is unavailable or 
   overflow.destroy();
 });
 
+test("opt-in paired compute timestamps span first beginning to final end", async () => {
+  const device = new FakeWavefrontDevice();
+  device.features = new Set(["timestamp-query"]);
+  device.timestampReadbackValues = [1_000_000n, 2_000_000n, 4_000_000n, 7_000_000n];
+  const telemetry = createWavefrontFrameTelemetryResources({
+    device, constants: gpuConstants, maxRayCountRecords: 1, timestampPassPairs: true,
+  });
+  assert.equal(telemetry.memoryBytes, 8 + 64);
+  telemetry.beginFrame();
+  const first = telemetry.decorateFirstPass({ label: "first" }).timestampWrites;
+  const last = telemetry.decorateFinalPass({ label: "last" }).timestampWrites;
+  assert.equal(first.beginningOfPassWriteIndex, 0);
+  assert.equal(first.endOfPassWriteIndex, 1);
+  assert.equal(last.beginningOfPassWriteIndex, 2);
+  assert.equal(last.endOfPassWriteIndex, 3);
+  const encoder = device.createCommandEncoder();
+  telemetry.recordActiveRayCount(encoder, device.createBuffer({size: 4, usage: gpuConstants.buffer.COPY_SRC}), 0);
+  const result = await telemetry.readFrame({ expectedPrimaryRays: 64, expectedRayCounts: 1, waitForSubmittedGpuWork: async () => true });
+  assert.equal(result.totalGpuTimeMs, 6);
+  assert.equal(result.timestampQueryStatus, "available");
+  telemetry.destroy();
+});
+
+test("paired timestamp measurement rejects a missing final query without losing ray evidence", async () => {
+  const device = new FakeWavefrontDevice();
+  device.features = new Set(["timestamp-query"]);
+  device.timestampReadbackValues = [1_000_000n, 2_000_000n, 4_000_000n, 0n];
+  const telemetry = createWavefrontFrameTelemetryResources({
+    device, constants: gpuConstants, maxRayCountRecords: 1, timestampPassPairs: true,
+  });
+  telemetry.beginFrame();
+  telemetry.decorateFirstPass({});
+  telemetry.decorateFinalPass({});
+  telemetry.recordActiveRayCount(device.createCommandEncoder(), device.createBuffer({size: 4, usage: gpuConstants.buffer.COPY_SRC}), 0);
+  const result = await telemetry.readFrame({ expectedPrimaryRays: 64, expectedRayCounts: 1, waitForSubmittedGpuWork: async () => true });
+  assert.equal(result.totalGpuTimeMs, null);
+  assert.equal(result.timestampQueryStatus, "failed");
+  assert.equal(result.reason, "timestamp-query-returned-invalid-range");
+  assert.equal(result.rayCounts.status, "available");
+  telemetry.destroy();
+});
+
 test("wavefront telemetry reduces stress-scale ray records without call-stack growth", async () => {
   const recordsPerBounce = 17_280;
   const bounceCount = 8;
