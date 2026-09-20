@@ -83,6 +83,14 @@ not matched-quality performance or site qualification. See the
 [dated publication-readiness ledger](docs/evidence/adaptive-publication-readiness-2026-09-20.md)
 for source-bound receipts, actual sample counts and outstanding claim gates.
 
+The additional `tests/fixtures/adaptive-paired.html` diagnostic connects the same
+real pipeline to the lighting-owned paired protocol and image metrics. It compares
+fixed32, equal-budget adaptive32 and preassigned 2/8/32 budgets, with 128/256-SPP
+references, two warmups, ten rotated timing rounds, native queue/timestamp telemetry
+and retained linear pixels/previews. It requires the pinned lighting fixture
+modules under `/lighting/` and the existing loopback capture bridge. It is not a
+live adaptive importance policy, Eames benchmark, or public site integration.
+
 Per-pixel adaptive rendering is not yet exposed by the public renderer API.
 An internal [primary-worklist stage](docs/design/adaptive-primary-worklist.md)
 now compacts preselected tile/tier budgets into dense local pixel IDs and builds
