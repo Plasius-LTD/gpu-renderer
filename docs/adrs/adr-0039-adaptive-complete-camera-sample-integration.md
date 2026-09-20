@@ -44,3 +44,14 @@ Small analytic scenes do not qualify Eames, broad diffuse/indirect transport,
 noise reduction, stress stability or speedups. Full programme, approved dependency
 and CI/CD gates still apply. Flags remain default off and site integration is
 separate. Three.js is prohibited; rollback uses fixed GPU-native rendering only.
+
+## Diagnostic instrumentation refinement
+
+The paired physical fixture reuses frame telemetry with an internal opt-in
+four-query span: first compute begin/end, final compute begin/end, total measured
+from first beginning to final end. End-only compute timestamps produced rejected
+incomplete references on the tested runtime; no driver root cause is claimed.
+Default public telemetry remains two queries, and feature-off behavior is unchanged.
+Ray counts and invalid timestamps remain independently reported; no wall time is
+substituted as GPU time. The retained before/after report shows failed reduced-tier
+quality/performance gates, not approval to enable or publish the adaptive work.

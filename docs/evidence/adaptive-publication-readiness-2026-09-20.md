@@ -5,6 +5,23 @@ Feature [site#2114](https://github.com/Plasius-LTD/plasius-ltd-site/issues/2114)
 This is internal engineering evidence, not a replacement edition of the canonical
 site white paper and not approval to publish performance claims.
 
+## Subsequent paired measurement (same date)
+
+The lighting-owned [before/after report](https://github.com/Plasius-LTD/gpu-lighting/blob/b23af8d4c79ce23c28c5134886569b84a73c9079/docs/evidence/paired-adaptive-2026-09-20.md)
+retains two 128×128 physical scenes, fixed32/adaptive32 identity controls and
+preassigned 2/8/32 budgets with fixed128/256 references. Renderer capture commit
+`c6d490a7bc8a04122a784f8146cb6e547d0c3902` leaves the corrected fixed shader unchanged.
+Equal-budget images match bit-for-bit; reduced primary rays fall by 72.4045%.
+However, reduced diffuse RGB RMSE increases 3.37× and energy differs by +1.77%.
+GPU mean time is 14.031 ms fixed versus 17.013 ms reduced; environment is 9.634
+versus 13.068 ms. Both reduced quality and timing gates fail. The report retains
+high variance, confidence bounds, all raw images/queries and failed instrumentation
+attempts. Fewer rays have not established matched-quality speed or memory savings.
+This does not diagnose the site's Eames noise or qualify production controllers.
+
+The older small-probe sections below retain their original scope; their statements
+about no timing refer only to those fixtures, not the subsequent paired probe.
+
 ## Implemented and physically exercised
 
 The isolated integration combines the still-unapproved prerequisites from PRs
