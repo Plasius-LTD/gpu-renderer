@@ -2,6 +2,7 @@ import { SHARED_ADAPTIVE_WGSL } from "./wavefront-adaptive-shared-shader.js";
 import { assertShaderModuleCompiles, createComputePipeline } from "./wavefront-runtime-support.js";
 import { CONFIG_BUFFER_BYTES, COUNTER_BUFFER_BYTES, RAY_RECORD_BYTES, PATH_VERTEX_RECORD_BYTES } from "./wavefront-core.js";
 import { recordDirectDispatch, recordIndirectDispatch, createGpuParallelismCounters } from "./wavefront-frame-runtime.js";
+import * as abi from "./wavefront-adaptive-shared-constants.js";
 
 export function createSharedSampleRanges(tiers) {
   if (!Array.isArray(tiers) || !tiers.length || tiers.some(n=>!Number.isSafeInteger(n)||n<1||n>256)) throw new RangeError("Invalid shared sample tiers.");
@@ -14,11 +15,12 @@ export function packSharedPhase(phase) {
   if(fields.some(n=>!Number.isSafeInteger(n)||n<0||n>0xffffffff) || !phase.width || !phase.height || phase.width*phase.height>0xffffffff
     || !phase.tileWidth || !phase.tileHeight || phase.tileWidth*phase.tileHeight>16384 || phase.tileX+phase.tileWidth>phase.width || phase.tileY+phase.tileHeight>phase.height
     || phase.firstSample>=phase.sampleLimit || phase.sampleLimit>256)throw new RangeError("Invalid shared phase.");
-  const bytes=new ArrayBuffer(32),view=new DataView(bytes);
-  fields.forEach((value,index)=>view.setUint32(index*4,value,true));return bytes;
+  const bytes=new ArrayBuffer(abi.SHARED_PHASE_BYTE_SIZE),view=new DataView(bytes);
+  const names=["CANVAS_WIDTH","CANVAS_HEIGHT","TILE_X","TILE_Y","TILE_WIDTH","TILE_HEIGHT","FIRST_SAMPLE","SAMPLE_LIMIT"];
+  fields.forEach((value,index)=>view.setUint32(abi[`SHARED_PHASE_${names[index]}_OFFSET`],value,true));return bytes;
 }
 
-export const SHARED_ADAPTIVE_BINDING_SIZES = Object.freeze([CONFIG_BUFFER_BYTES,32,4,4,16,12,RAY_RECORD_BYTES,PATH_VERTEX_RECORD_BYTES,COUNTER_BUFFER_BYTES,16,16]);
+export const SHARED_ADAPTIVE_BINDING_SIZES = Object.freeze([CONFIG_BUFFER_BYTES,abi.SHARED_PHASE_MINIMUM_BYTE_SIZE,4,4,16,12,RAY_RECORD_BYTES,PATH_VERTEX_RECORD_BYTES,COUNTER_BUFFER_BYTES,16,16]);
 export const SHARED_ADAPTIVE_ENTRIES = Object.freeze({initialize:"initialize_shared_phase",compact:"compact_shared_phase",finalize:"finalize_shared_phase",validate:"validate_shared_phase",prepare:"prepare_shared_sample",commit:"commit_shared_sample",resolve:"resolve_shared_frame"});
 
 export async function createSharedAdaptivePipelines(device, shaderStage, {enabled=false}={}) {

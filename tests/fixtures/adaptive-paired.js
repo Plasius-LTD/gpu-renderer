@@ -67,7 +67,7 @@ button.addEventListener("click",async()=>{
       lane.timing={};for(const mode of modes.filter(mode=>mode!=="fixed")){lane.timing[mode]={linearOutputJob:assessPairedTimings(times("fixed","linearOutputJobMs"),times(mode,"linearOutputJobMs"))};
         lane.timing[mode].gpu=times(mode,"gpuMs").every(value=>Number.isFinite(value)&&value>0)&&times("fixed","gpuMs").every(value=>Number.isFinite(value)&&value>0)
           ?assessPairedTimings(times("fixed","gpuMs"),times(mode,"gpuMs")):null;}
-      if(sharedComparison)lane.schedulerTiming={gpu:assessPairedTimings(times("reduced","gpuMs"),times("reduced-shared","gpuMs")),linearOutputJob:assessPairedTimings(times("reduced","linearOutputJobMs"),times("reduced-shared","linearOutputJobMs"))};
+      if(sharedComparison)lane.schedulerTiming={gpu:lane.timing.reduced.gpu&&lane.timing["reduced-shared"].gpu?assessPairedTimings(times("reduced","gpuMs"),times("reduced-shared","gpuMs")):null,linearOutputJob:assessPairedTimings(times("reduced","linearOutputJobMs"),times("reduced-shared","linearOutputJobMs"))};
       lane.diagnosticImprovementPassed=lane.reducedQuality.passed&&lane.timing[reducedMode].gpu?.timingPassed===true;
       const board=preview(scene,sharedComparison?{...images,uniform:images["uniform-shared"],reduced:images["reduced-shared"]}:images);runner.destroy();runner=null;
       const artifactPath=`output/playwright/eames-environments/${receipt.provenance.captureId}/${scene}.png`;

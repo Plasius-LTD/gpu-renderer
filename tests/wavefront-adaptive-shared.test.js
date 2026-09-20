@@ -7,11 +7,14 @@ import { PATH_TREE_WGSL } from "../src/wavefront-path-tree-shader.js";
 import { createWavefrontFrameEncoder } from "../src/wavefront-frame-encoder.js";
 import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
 import { reflectSharedAdaptiveInterface } from "../scripts/adaptive-shared-interface.js";
+import { generateSharedPhaseConstants } from "../scripts/adaptive-shared-interface.js";
+import { readFile } from "node:fs/promises";
 
 test("final shared module reflects every executed stage and preserves canonical records",async()=>{
   const manifest=await reflectSharedAdaptiveInterface();
   for(const [name,size] of [["SharedPhase",32],["SharedControl",16],["SharedDispatch",12],["FrameConfig",320],["RayRecord",96],["PathNode",64],["Counters",112]])assert.equal(manifest.records.find(r=>r.name===name).byteSize,size);
   assert.equal(manifest.entryPoints.length,7);
+  assert.equal(await readFile(new URL("../src/wavefront-adaptive-shared-constants.js",import.meta.url),"utf8"),await generateSharedPhaseConstants());
 });
 
 test("shared ranges preserve every absolute pixel sample without summing tier rounds", () => {
@@ -24,13 +27,19 @@ test("shared ranges preserve every absolute pixel sample without summing tier ro
     }
   }
   assert.equal(rounds,32); assert.equal(seen.size,42);
-  for(const tiers of [[],[0],[257],[1.5],[NaN]]) assert.throws(()=>createSharedSampleRanges(tiers),RangeError);
+  for(const tiers of [null,{},[],[0],[257],[1.5],[NaN]]) assert.throws(()=>createSharedSampleRanges(tiers),RangeError);
+  for(const maximum of [1,4,32,128,256]){
+    const tiers=[...new Set([1,2,4,8,32,128,256].filter(n=>n<=maximum).concat(maximum))];
+    const actual=tiers.map(()=>[]);let rounds=0;
+    for(const range of createSharedSampleRanges(tiers))for(let n=range.firstSample;n<range.sampleLimit;n++,rounds++)tiers.forEach((budget,pixel)=>{if(budget>=range.sampleLimit)actual[pixel].push(n);});
+    assert.equal(rounds,maximum);tiers.forEach((budget,pixel)=>assert.deepEqual(actual[pixel],Array.from({length:budget},(_,i)=>i)));
+  }
 });
 
 const phase={width:128,height:128,tileX:0,tileY:0,tileWidth:128,tileHeight:128,firstSample:2,sampleLimit:8};
 test("shared phase has a separate compact immutable ABI and validates host bounds",()=>{
   assert.deepEqual([...new Uint32Array(packSharedPhase(phase))],[128,128,0,0,128,128,2,8]);
-  for(const patch of [{firstSample:8},{firstSample:-1},{sampleLimit:257},{tileWidth:129},{width:0},{tileHeight:0},{tileX:1}])assert.throws(()=>packSharedPhase({...phase,...patch}),RangeError);
+  for(const patch of [{firstSample:8},{firstSample:-1},{sampleLimit:257},{tileWidth:129},{width:0},{height:0},{tileWidth:0},{tileHeight:0},{tileX:1},{tileY:1},{width:65536,height:65536},{width:1024,tileWidth:1024},{width:Infinity},{width:0x100000000}])assert.throws(()=>packSharedPhase({...phase,...patch}),RangeError);
 });
 
 test("shared pipelines reuse canonical camera and path reduction, default off and propagate errors",async()=>{
@@ -61,4 +70,19 @@ test("shared scheduling uses compacted preparation/commit around unchanged bounc
   for(const patch of [{frameOffset:1},{phaseOffset:-1},{tile:{x:0,y:0,width:0,height:1}},{tile:{x:0,y:0,width:16385,height:1}}])assert.throws(()=>encodeSharedSample(encoder,{...options,...patch}),RangeError);
   assert.equal(calls.length,before);
   assert.throws(()=>encodeSharedSample({...encoder,clearBuffer(){throw Error("encoder");}},options),/encoder/);
+});
+
+test("complete 2/8/32 shared schedule bounds command overhead at 206 passes and 462 dispatches",()=>{
+  let passes=0,dispatches=0,clears=0;
+  const encoder={clearBuffer(){clears++;},copyBufferToBuffer(){},beginComputePass(){passes++;return{setPipeline(){},setBindGroup(){},dispatchWorkgroups(){dispatches++;},dispatchWorkgroupsIndirect(){dispatches++;},end(){}};}};
+  const frameEncoder=createWavefrontFrameEncoder({getConfig:{maxDepth:4},getBindGroups:[{},{}],pipelines:{intersectActiveQueue:{},resolveSurfaceRecords:{},compactAndSwapQueues:{}},counterBuffer:{},activeDispatchBuffer:{}});
+  const request={pipelines:{},bindGroup:{},phaseBindGroup:{},tile:{x:0,y:0,width:128,height:128},dispatchBuffer:{},counterBuffer:{},frameEncoder,frameOffset:0,phaseOffset:0};
+  for(const [index,range] of createSharedSampleRanges([2,8,32]).entries()){
+    encodeSharedPhase(encoder,{...request,phaseOffset:index*256,frameOffset:range.firstSample*512});
+    for(let n=range.firstSample;n<range.sampleLimit;n++)encodeSharedSample(encoder,{...request,phaseOffset:index*256,frameOffset:n*512});
+  }
+  // Resolve and the same texture-output stage as the physical fixture.
+  for(let i=0;i<2;i++){const pass=encoder.beginComputePass();pass.dispatchWorkgroups(256);pass.end();}
+  assert.equal(passes,206);assert.equal(dispatches,462);assert.equal(clears,32);
+  for(const patch of [{tile:null},{tile:{x:0xffffffff,y:0,width:1,height:1}},{tile:{x:0,y:0xffffffff,width:1,height:1}},{frameOffset:NaN},{phaseOffset:0x100000000}])assert.throws(()=>encodeSharedPhase(encoder,{...request,...patch}),RangeError);
 });

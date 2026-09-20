@@ -1,4 +1,4 @@
-import { reflectGpuInterface } from "@plasius/gpu-shader/node";
+import { reflectGpuInterface, generateGpuInterfaceArtifacts } from "@plasius/gpu-shader/node";
 import { SHARED_ADAPTIVE_WGSL } from "../src/wavefront-adaptive-shared-shader.js";
 import { SHARED_ADAPTIVE_BINDING_SIZES, SHARED_ADAPTIVE_ENTRIES } from "../src/wavefront-adaptive-shared.js";
 
@@ -10,4 +10,11 @@ export function reflectSharedAdaptiveInterface() {
   return reflectGpuInterface({interfaceId:"plasius.renderer.adaptive-shared",interfaceVersion:"1.0.0",modules:[{moduleId:"shared",source:SHARED_ADAPTIVE_WGSL}],
     pipelines:Object.values(SHARED_ADAPTIVE_ENTRIES).map(entryPoint=>({kind:"compute",pipelineId:entryPoint,layout:{bindGroups:[{group:0,entries:entries.filter(e=>used[entryPoint].includes(e.binding))}]},compute:{moduleId:"shared",entryPoint,constants:{}}})),
     modelFacingRecordNames:["SharedPhase","SharedControl","SharedDispatch","FrameConfig","RayRecord","PathNode","Counters"],modelFacingBindings:[],semantics:[]});
+}
+
+export async function generateSharedPhaseConstants() {
+  const manifest=await reflectSharedAdaptiveInterface();
+  return "// Generated from final shared-round WGSL; checked by tests.\n"
+    + `// Source SHA-256: ${manifest.modules[0].sha256}\n`
+    + generateGpuInterfaceArtifacts(manifest).byteConstants.replaceAll(" as const", "").split("\n").filter(line=>line.includes("export const SHARED_PHASE_")).join("\n")+"\n";
 }
