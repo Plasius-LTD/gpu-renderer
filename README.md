@@ -96,6 +96,17 @@ and retained linear pixels/previews. It requires the pinned lighting fixture
 modules under `/lighting/` and the existing loopback capture bridge. It is not a
 live adaptive importance policy, Eames benchmark, or public site integration.
 
+The internal [shared-round scheduler](docs/design/adaptive-shared-rounds.md) adds
+an independently selectable comparison in `tests/fixtures/adaptive-shared.html`.
+It shares absolute sampling rounds across tiers, batches immutable uploads, and
+prepares/commits only compacted pixels around the unchanged bounce pipeline.
+For 2/8/32 budgets at four bounces, rounds fall from 42 to 32 and compute passes
+from 389 to 206. `tests/fixtures/adaptive-shared-safety.html` checks analytic
+images, split paths, 128 SPP and malformed-state rejection. These are internal
+diagnostics, not a public adaptive option. See [ADR 0040](docs/adrs/adr-0040-shared-adaptive-sampling-rounds.md)
+and the [source-bound results](docs/evidence/shared-adaptive-rounds-2026-09-20.md)
+for measured trade-offs and outstanding quality/confidence gates.
+
 Per-pixel adaptive rendering is not yet exposed by the public renderer API.
 An internal [primary-worklist stage](docs/design/adaptive-primary-worklist.md)
 now compacts preselected tile/tier budgets into dense local pixel IDs and builds

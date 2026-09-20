@@ -12,6 +12,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Experimental shared-round adaptive scheduler: range-based GPU worklists,
+    compacted fused prepare/commit, reflected phase ABI and batched configuration
+    uploads around unchanged transport. Adds paired image/timing and physical
+    safety diagnostics. Public adaptation remains off; no matched-quality,
+    real-time or memory-reduction claim is made.
   - Internal opt-in complete compute-pass timestamp pairs for physical diagnostics;
     default public telemetry descriptors and memory remain unchanged.
   - Before/after physical diagnostic fixture with equal-budget identity control,

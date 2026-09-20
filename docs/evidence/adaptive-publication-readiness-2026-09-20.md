@@ -7,6 +7,15 @@ site white paper and not approval to publish performance claims.
 
 ## Subsequent paired measurement (same date)
 
+Later scheduler refinement: the [shared-round report](shared-adaptive-rounds-2026-09-20.md)
+retains two new paired captures and physical safety tests. Rounds fall 42→32 and
+compute passes 389→206, with bit-identical fixed/shared-uniform and legacy/shared
+reduced images. Final diffuse GPU means improve from 16.528→13.120 ms versus the
+old scheduler (job 27.18→21.62 ms), but shared reduced remains noisier than fixed32
+and fails the approved timing-confidence gate. This advances internal scheduler
+efficiency, not real-time, memory or matched-quality publication claims. The
+older measurement and small-probe sections below keep their source-bound scope.
+
 The lighting-owned [before/after report](https://github.com/Plasius-LTD/gpu-lighting/blob/b23af8d4c79ce23c28c5134886569b84a73c9079/docs/evidence/paired-adaptive-2026-09-20.md)
 retains two 128×128 physical scenes, fixed32/adaptive32 identity controls and
 preassigned 2/8/32 budgets with fixed128/256 references. Renderer capture commit
