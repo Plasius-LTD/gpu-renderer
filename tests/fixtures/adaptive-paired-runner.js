@@ -13,6 +13,7 @@ import { createAdaptiveResolvePipelines, packAdaptiveResolveConfig } from "/src/
 import { WAVEFRONT_SHADER_KERNELS_WGSL } from "/src/wavefront-shader-kernels.js";
 import { assertShaderModuleCompiles } from "/src/wavefront-runtime-support.js";
 import { createPairedProbeScene, createPairedProbeBudgets } from "/lighting/demo/eames-environments/paired-adaptive-scenes.js";
+import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 export async function createPairedProbeRunner(scene, signal) {
@@ -117,10 +118,10 @@ export async function createPairedProbeRunner(scene, signal) {
           for(let ordinal=0;ordinal<tier;ordinal+=1,slot+=1) device.queue.writeBuffer(b.resolveConfig,slot*256,packAdaptiveResolveConfig(sampleConfig(tier,ordinal)));
         }
         if(budgets)device.queue.writeBuffer(b.resolveConfig,slot*256,packAdaptiveResolveConfig(sampleConfig(0,0)));
-        telemetry.beginFrame();const encoder=device.createCommandEncoder(),parallelism=createGpuParallelismCounters();
-        encoder.beginComputePass(telemetry.decorateFirstPass({label:"paired-start"})).end();
+        telemetry.beginFrame();const encoder=createTimestampSpanEncoder(device.createCommandEncoder(),telemetry),parallelism=createGpuParallelismCounters();
         if(mode==="fixed") for(let ordinal=0;ordinal<samples;ordinal+=1) {
           frameEncoder.encodeTileSample(encoder,tile,ordinal*config.memory.configBufferStride,parallelism);
+          if(ordinal===samples-1)encoder.closeNextPass();
           frameEncoder.encodeTileOutput(encoder,tile,ordinal*config.memory.configBufferStride,parallelism);
         } else {
           let resolveSlot=0;
@@ -133,9 +134,8 @@ export async function createPairedProbeRunner(scene, signal) {
             }
           }
           const pass=encoder.beginComputePass();pass.setPipeline(resolve.resolve);pass.setBindGroup(0,resolveGroup,[slot*256]);pass.dispatchWorkgroups(pixels/64);pass.end();
-          const outputPass=encoder.beginComputePass();outputPass.setPipeline(output);outputPass.setBindGroup(0,outputGroup);outputPass.dispatchWorkgroups(pixels/64);outputPass.end();
+          encoder.closeNextPass();const outputPass=encoder.beginComputePass();outputPass.setPipeline(output);outputPass.setBindGroup(0,outputGroup);outputPass.dispatchWorkgroups(pixels/64);outputPass.end();
         }
-        encoder.beginComputePass(telemetry.decorateFinalPass({label:"paired-end"})).end();
         device.queue.submit([encoder.finish()]);await wait(device.queue.onSubmittedWorkDone());
         const linearOutputJobMs=performance.now()-started;
         const sampleIterations=mode==="fixed"?samples:tiers.reduce((sum,value)=>sum+value,0);
@@ -149,7 +149,7 @@ export async function createPairedProbeRunner(scene, signal) {
         }
         const error=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!error && !errors.length,error?.message??errors[0]);
         return {image,mode,samples,actualSamples:expectedPrimaryRays,sampleIterations,linearOutputJobMs,
-          gpuMs:measured.totalGpuTimeMs,timestampStatus:measured.timestampQueryStatus,rayCounts:measured.rayCounts};
+          gpuMs:measured.totalGpuTimeMs,timestampStatus:measured.timestampQueryStatus,timestampReason:measured.reason,rayCounts:measured.rayCounts};
       },
       destroy(){destroy();check(owner.snapshot().allocatedBytes===0,"Adaptive cleanup failed");},
     };
