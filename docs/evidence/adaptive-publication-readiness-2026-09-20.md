@@ -186,3 +186,8 @@ accepting incomplete results, and releases its device/buffers on completion.
 Local results do not substitute for post-push CI, review or approved main/CD gates.
 Task and Feature completion remain open until those and the broader gates above
 succeed.
+
+The [completion-driven loop verification](completion-driven-frames-2026-09-26.md)
+confirms independent CPU work during waits and unchanged images/counts/commands.
+It is scheduling evidence only; it does not advance adaptive performance or
+matched-quality claims.
