@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Opt-in completion-driven frame loop with a drain promise, single-flight
+    scheduling, next-frame budget hooks and truthful elapsed/confirmed-tile
+    progress. Default diagnostic readbacks off; existing GPU waits and transport
+    unchanged. Adds independent-work/identity verification, not a speedup claim.
   - Opt-in per-frame CPU attribution: separate host preparation/encoding/upload/
     submit spans, GPU waits, post-job readback, API counts and known temporary
     buffer bytes. Includes bounded browser timing markers and paired profiler

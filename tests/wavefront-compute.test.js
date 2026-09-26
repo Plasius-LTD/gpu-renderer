@@ -3119,6 +3119,58 @@ serialWebGpuTest("wavefront output-probe readback waits for submitted GPU work b
   });
 });
 
+serialWebGpuTest("progress reports only queue-confirmed tiles and defers observer errors until drained", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas:createFakeWavefrontCanvas(), navigator:createFakeWavefrontNavigator(device),
+      width:32,height:16,tileSize:16,maxDepth:1,samplesPerPixel:8,denoise:false,
+    });
+    const events=[]; const waiters=[];
+    device.queue.onSubmittedWorkDone = () => new Promise(resolve=>waiters.push(resolve));
+    const pending=renderer.renderFrame({readOutputProbe:false,onProgress:event=>events.push(event)});
+    assert.equal(events.at(-1).stage,"waiting-gpu");
+    assert.equal(events.at(-1).completedTiles,0);
+    await new Promise(resolve=>setTimeout(resolve,0));
+    assert.equal(waiters.length,1); waiters[0]();
+    await new Promise(resolve=>setTimeout(resolve,0));
+    assert.equal(events.at(-1).completedTiles,1); assert.equal(waiters.length,2);
+    waiters[1](); await pending;
+    assert.equal(events.at(-1).stage,"complete"); assert.equal(events.at(-1).completedTiles,2);
+    assert.ok(events.every(Object.isFrozen));
+    let waits=0; device.queue.onSubmittedWorkDone=async()=>{waits++;};
+    const error=new Error("observer failed");
+    await assert.rejects(renderer.renderFrame({readOutputProbe:false,onProgress:()=>{throw error;}}),e=>e===error);
+    assert.equal(waits,2); // observer errors never release a pending GPU frame
+    await assert.rejects(renderer.renderFrame({onProgress:1}),/onProgress/);
+    const failed=[];device.queue.onSubmittedWorkDone=async()=>{throw new Error("GPU failure");};
+    await assert.rejects(renderer.renderFrame({readOutputProbe:false,onProgress:e=>failed.push(e)}),/GPU failure/);
+    assert.equal(failed.at(-1).stage,"failed"); assert.equal(failed.at(-1).completedTiles,0);
+    device.queue.onSubmittedWorkDone=async()=>{};
+    const submitted=[];
+    await renderer.renderFrame({awaitGPUCompletion:false,readOutputProbe:false,onProgress:e=>submitted.push(e)});
+    assert.equal(submitted.at(-1).stage,"submitted");assert.equal(submitted.at(-1).completedTiles,0);
+    renderer.destroy();
+  });
+});
+
+serialWebGpuTest("progress separates acceleration completion from rendered tiles and readback", async () => {
+  await withWebGpuConstants(async () => {
+    for (const profiling of [false,true]) {
+      const device=new FakeWavefrontDevice();
+      const renderer=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),
+        navigator:createFakeWavefrontNavigator(device),width:8,height:8,tileSize:8,maxDepth:1,
+        samplesPerPixel:8,denoise:false,accelerationBuildMode:"gpu",
+        meshes:[{positions:[-1,0,0,1,0,0,0,1,0],indices:[0,1,2],materialKind:"diffuse"}]});
+      const events=[];
+      await renderer.renderFrame({readStats:true,cpuProfiling:{enabled:profiling},onProgress:e=>events.push(e)});
+      assert.ok(events.some(e=>e.stage==="waiting-acceleration"&&e.completedTiles===0));
+      assert.ok(events.some(e=>e.stage==="readback"&&e.completedTiles===1));
+      assert.equal(events.at(-1).stage,"complete");renderer.destroy();
+    }
+  });
+});
+
 serialWebGpuTest("CPU profiling preserves fixed commands and separates tile waits, uploads and readback", async () => {
   await withWebGpuConstants(async () => {
     for (const samples of [1, 8]) {
@@ -3131,11 +3183,13 @@ serialWebGpuTest("CPU profiling preserves fixed commands and separates tile wait
           samplesPerPixel: samples, denoise: false, deferredPathResolve: true,
         });
         const beforeWrites = device.queue.writes.length;
-        const frame = await renderer.renderFrame({ readOutputProbe: false, cpuProfiling: { enabled } });
+        const events=[];
+        const frame = await renderer.renderFrame({ readOutputProbe: false, cpuProfiling: { enabled }, ...(enabled?{onProgress:e=>events.push(e)}:{}) });
         outputs.push({ submissions: frame.commandSubmissions, dispatches: frame.gpuWorkerJobs.completedPerFrame,
           writes: device.queue.writes.slice(beforeWrites).map(w => w.offset) });
         if (!enabled) assert.equal(frame.cpuProfile, undefined);
         else {
+          assert.equal(events.at(-1).completedTiles,frame.tiles);
           const p = frame.cpuProfile;
           assert.equal(p.timingBasis, "host-elapsed-not-cpu-utilization");
           assert.equal(p.stages.gpuWait.calls, samples >= 8 ? frame.tiles : 1);

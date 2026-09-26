@@ -58,6 +58,69 @@ identity checks, raw receipts and median/p95 summaries. These 128×128 experimen
 do not activate the GPU tab or qualify adaptive quality/performance.
 See the [measurement contract](docs/design/cpu-render-profiling.md).
 
+## Completion-driven frames (opt-in)
+
+`renderFrame()` already returns a GPU-completion promise by default. Waiting on
+it yields JavaScript; it is not a busy wait. The optional loop starts the next
+frame after that promise and completion observers settle, with a browser-task
+yield rather than waiting for an additional display tick:
+
+```js
+import { createWavefrontFrameLoop } from "@plasius/gpu-renderer";
+
+const loop = createWavefrontFrameLoop({
+  enabled: remoteFlags["renderer.sampling.adaptivePerPixel.enabled"] === true,
+  renderFrame: (options) => renderer.renderFrame(options),
+  targetFrameTimeMs: 1000 / 60, // Observation only; does not reduce SPP.
+  getRenderOptions: () => ({
+    samplesPerPixel: budgetAdapter.getCurrentBudget().samplesPerPixel,
+    frameTimeBudgetMs: 0, // Explicitly fixed ceiling; no frame-budget reduction.
+  }),
+  onFrameComplete: (frame, progress) => {
+    recordFrameMeasurements(frame, progress); // Feed existing gpu-performance policy.
+  },
+});
+const finished = loop.start(); // Do not await here if independent work should continue.
+finished.catch(reportRenderFailure); // Failures stop the loop; never silently restart.
+
+// From a UI/telemetry callback, as often as the application needs:
+const progress = loop.getProgress();
+// progress.elapsedMs, budgetRatio, overBudgetMs, completedTileFraction
+
+// On shutdown / remote disable, from outside a loop callback:
+await loop.stop(); // Drain current frame and readbacks before destroying resources.
+renderer.destroy();
+```
+
+Only one owner may call/render/update/destroy this renderer. Apply camera/scene
+updates at `getRenderOptions`, not during a tile wait. Independent simulation,
+input, networking or worker tasks may run while waiting, but long main-thread
+tasks can delay GPU completion callbacks. Do not await `stop()` inside the loop's
+own callbacks (request stop there; await the run promise outside). Custom render
+adapters must genuinely await completion with bounded timeouts; a submit-only
+callback is not sufficient. Stop does not cancel already submitted GPU commands.
+After a timeout/device failure, do not reuse the failed renderer in another loop;
+dispose it and recover through the application's device-recreation path.
+
+Progress is on-demand, with no GPU polling/readbacks. `budgetRatio` is elapsed
+wall time divided by the observational target; zero/omitted target returns null.
+Elapsed time includes preparation and requested readback, not CPU utilization.
+`completedTileFraction` counts queue-confirmed tiles, **not GPU-time completion**;
+`gpuCompletionFraction` is always null. Single-tile jobs remain 0 until the queue
+completes. The standalone renderer also accepts `onProgress(event)` with stages
+and confirmed counts; observer errors reject after draining, not during a wait.
+
+The loop forces GPU completion, defaults diagnostic readbacks off, and applies
+new budgets only on the next frame. It changes no transport, budgets, shaders or
+GPU allocations. It is disabled by default, inherits the parent remote flag,
+and is not enabled in the site. Rollback stops/drains it and resumes the existing
+GPU-native caller. The legacy display-paced runtime is unchanged. This throughput
+loop is not a guarantee of display pacing, idle CPU capacity or a GPU speedup.
+
+Open `tests/fixtures/frame-loop.html` on the source-bound replay server for
+fixed/shared/fused identity and independent-heartbeat verification. See the
+[design and acceptance contract](docs/design/completion-driven-frames.md).
+
 ## Privacy-Safe Feedback Diagnostics
 
 Approved in-game viewers can explicitly convert a small set of current renderer

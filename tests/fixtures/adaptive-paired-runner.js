@@ -120,7 +120,13 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const setupError=await wait(device.popErrorScope());check(!setupError,setupError?.message);device.pushErrorScope("validation");
     return { adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
       memory:{rendererBufferBytes,textureInventory,adaptiveBufferBytes:resources.allocatedBytes,telemetryBufferBytes:telemetry.memoryBytes,fixtureStagingBytes:extras.reduce((sum,item)=>sum+item.size,0)},
-      async run(mode, samples=32, fault=null, pruning="off", cpuProfiling={}) {
+      async run(mode, samples=32, fault=null, pruning="off", cpuProfiling={}, onProgress) {
+        let observerError, observerFailed=false;
+        const progress=onProgress?((stage,completedTiles=0)=>{
+          if(observerFailed)return;
+          try{onProgress(Object.freeze({stage,completedTiles,totalTiles:1}));}
+          catch(error){observerFailed=true;observerError=error;}
+        }):null;
         active();check(["fixed","uniform","reduced","uniform-shared","reduced-shared"].includes(mode),"Invalid probe mode");
         check(mode==="fixed" || samples===maximum,"Adaptive ceiling must match the probe");
         const useShared=mode.endsWith("-shared"),budgetMode=mode.replace("-shared","");
@@ -131,6 +137,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
         const cpuProfile=createWavefrontCpuProfile(cpuProfiling),frameDevice=cpuProfile?cpuProfile.wrapDevice(device):device;
         const stage=(name,fn)=>cpuProfile?cpuProfile.measure(name,fn):fn();
         const started=performance.now();config={...renderer.config,samplesPerPixel:samples};
+        progress?.("encoding");
         const budgets=stage("budgetCalculation",()=>{
           if(mode==="fixed")return null;
           const source=createPairedProbeBudgets(width,height,budgetMode),result=source.map(value=>value===32?maximum:value);
@@ -198,9 +205,11 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
         return encoder;
         });
         frameDevice.queue.submit([encoder.finish()]);
+        progress?.("waiting-gpu");
         if(cpuProfile)await cpuProfile.measureAsync("gpuWait",()=>wait(device.queue.onSubmittedWorkDone()));
         else await wait(device.queue.onSubmittedWorkDone());
         const linearOutputJobMs=performance.now()-started;
+        progress?.("readback",1);
         const sampleIterations=mode==="fixed"||useShared?samples:tiers.reduce((sum,value)=>sum+value,0);
         const readTelemetry=()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:sampleIterations*maxDepth,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}));
         const measured=await(cpuProfile?cpuProfile.measureAsync("telemetryReadback",readTelemetry):readTelemetry());
@@ -218,6 +227,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
           if(counts) check(!(counts[id]&0x80000000) && ((counts[id]>>>9)&511)===budgets[id] && image[id*4+3]===1,`Incomplete adaptive pixel ${id}`);
           else {check(image[id*4+3]===samples,`Incomplete fixed pixel ${id}: ${image[id*4+3]} of ${samples}; timestamp ${measured.reason}; raw ${timestampPairs.at(-1)}`);image[id*4+3]=1;}
         }
+        progress?.("complete",1);if(observerFailed)throw observerError;
         return {image,mode,pruning,samples,actualSamples:expectedPrimaryRays,sampleIterations,linearOutputJobMs,...(cpuProfile?{cpuProfile:cpuProfile.snapshot()}:{}),
           completedCountMin:counts?Math.min(...counts.map(word=>(word>>>9)&511)):samples,
           completedCountMax:counts?Math.max(...counts.map(word=>(word>>>9)&511)):samples,

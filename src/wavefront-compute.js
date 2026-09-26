@@ -787,6 +787,27 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   async function renderFrame(renderOptions = {}) {
+    if (renderOptions.onProgress === undefined) return renderFrameInternal(renderOptions);
+    if (typeof renderOptions.onProgress !== "function") throw new TypeError("onProgress must be a function.");
+    let completedTiles = 0, observerFailed = false, observerError;
+    const progress = (stage, count = completedTiles) => {
+      completedTiles = count;
+      // Observer failure cannot release resources before submitted work drains.
+      if (observerFailed) return;
+      try { renderOptions.onProgress(Object.freeze({stage, completedTiles, totalTiles:tiles.length})); }
+      catch (error) { observerFailed = true; observerError = error; }
+    };
+    try {
+      const result = await renderFrameInternal(renderOptions, progress);
+      if (observerFailed) throw observerError;
+      return result;
+    } catch (error) {
+      progress("failed");
+      throw error;
+    }
+  }
+
+  async function renderFrameInternal(renderOptions = {}, progress = null) {
     const cpuProfile = createWavefrontCpuProfile(renderOptions.cpuProfiling);
     const frameDevice = cpuProfile ? cpuProfile.wrapDevice(device) : device;
     const awaitGPUCompletion = renderOptions.awaitGPUCompletion !== false;
@@ -803,6 +824,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       activeFrameTelemetry = telemetryResourcesForFrame;
     }
     const frameStartTimeMs = nowMs();
+    progress?.("encoding");
     let frameStats;
     try {
       if (useThrottledHighSamplePath) {
@@ -815,6 +837,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         let frameSubmissionCount = 0;
         let frameConfigSlot = 0;
         if (accelerationBuildSubmitted) {
+          progress?.("waiting-acceleration");
           const accelerationWaitOptions = {
             ...estimateSubmittedGpuWorkTiming(
               { ...config, renderedSamplesPerPixel: 1 },
@@ -828,6 +851,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           else await waitForSubmittedGpuWork(accelerationWaitOptions);
         }
         for (let tileIndex = 0; tileIndex < tiles.length; tileIndex += 1) {
+          progress?.("encoding", tileIndex);
           const dispatchTile = () => dispatchFrameAwaitingGpu(
             frameIndex,
             parallelismCounters,
@@ -860,8 +884,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
             ),
             allowTimeout: false,
           };
+          progress?.("waiting-gpu", tileIndex);
           if (cpuProfile) await cpuProfile.measureAsync("gpuWait", () => waitForSubmittedGpuWork(tileWaitOptions));
           else await waitForSubmittedGpuWork(tileWaitOptions);
+          progress?.("gpu-complete", tileIndex + 1);
         }
         frameStats = createFrameStats({
           frameIndex,
@@ -892,14 +918,17 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
             };
         frameStats = renderOnce(renderOptions, samplingPlan, cpuProfile, frameDevice);
         if (awaitGPUCompletion) {
+          progress?.("waiting-gpu");
           if (cpuProfile) await cpuProfile.measureAsync("gpuWait", () => waitForSubmittedGpuWork(submissionWaitOptions));
           else await waitForSubmittedGpuWork(submissionWaitOptions);
+          progress?.("gpu-complete", tiles.length);
         }
       }
     } finally {
       activeFrameTelemetry = null;
     }
     const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
+    if (telemetryCanRecord || renderOptions.readOutputProbe !== false) progress?.("readback");
     if (awaitGPUCompletion) {
       lastCompletedFrameTimeMs = frameTimeMs;
       lastCompletedSamplesPerPixel = frameStats.renderedSamplesPerPixel ?? frameStats.samplesPerPixel;
@@ -1005,11 +1034,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       transportContributions: terminationMetrics.transportContributions,
       queueOverflow: terminationMetrics.queueOverflow,
     });
-    return Object.freeze({
+    const result = Object.freeze({
       ...completedFrame,
       ...(cpuProfile ? { cpuProfile: cpuProfile.snapshot() } : {}),
       transportGuardrails: createWavefrontTransportGuardrailSummary(completedFrame),
     });
+    progress?.(awaitGPUCompletion ? "complete" : "submitted");
+    return result;
   }
 
   function rebuildLiveConfig(overrides = {}) {

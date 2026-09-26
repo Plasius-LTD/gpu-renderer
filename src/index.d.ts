@@ -1129,6 +1129,62 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly frameIndex?: number;
 }
 
+export interface WavefrontFrameProgress {
+  readonly stage: "encoding" | "waiting-acceleration" | "waiting-gpu" | "gpu-complete" | "readback" | "complete" | "submitted" | "failed";
+  /** Queue-confirmed render tiles; not a GPU-time fraction. */
+  readonly completedTiles: number;
+  readonly totalTiles: number;
+}
+
+export interface WavefrontRenderFrameOptions {
+  cpuProfiling?: { enabled?: boolean; userTiming?: boolean };
+  /** Observer errors reject only after the frame has drained. */
+  onProgress?: (progress: WavefrontFrameProgress) => void;
+  readStats?: boolean;
+  readOutputProbe?: boolean;
+  awaitGPUCompletion?: boolean;
+  submittedWorkTimeoutMs?: number;
+  samplesPerPixel?: number;
+  minimumSamplesPerPixel?: number;
+  frameTimeBudgetMs?: number;
+  probe?: { x?: number; y?: number };
+}
+
+export interface WavefrontFrameLoopProgress {
+  readonly status: "disabled" | "idle" | "running" | "stopping" | "stopped" | "failed";
+  readonly frame: number;
+  readonly completedFrames: number;
+  readonly stage: WavefrontFrameProgress["stage"] | "preparing" | null;
+  readonly elapsedMs: number;
+  readonly targetFrameTimeMs: number | null;
+  readonly budgetRatio: number | null;
+  readonly overBudgetMs: number | null;
+  readonly completedTiles: number;
+  readonly totalTiles: number | null;
+  readonly completedTileFraction: number | null;
+  readonly gpuCompletionFraction: null;
+  readonly lastError: string | null;
+}
+
+export interface WavefrontFrameLoop {
+  /** Resolves when stopped and drained, rejects on failure. Concurrent starts join. */
+  start(): Promise<WavefrontFrameLoopProgress>;
+  /** Stops future frames, not already submitted GPU work. Do not await from a loop callback. */
+  stop(): Promise<WavefrontFrameLoopProgress>;
+  getProgress(): WavefrontFrameLoopProgress;
+}
+
+export function createWavefrontFrameLoop<Result = WavefrontPathTracingComputeFrameStats>(options: {
+  /** Explicit opt-in; defaults false. Integrations forward their remote flag decision. */
+  enabled?: boolean;
+  /** Must exclusively own its renderer and await GPU completion with a bounded timeout. */
+  renderFrame: (options: WavefrontRenderFrameOptions) => Promise<Result>;
+  /** Observational target only, NOT an implicit SPP budget. Omitted/zero disables comparison. */
+  targetFrameTimeMs?: number;
+  getRenderOptions?: (context: Readonly<{frame: number; previousResult: Result | undefined}>) => WavefrontRenderFrameOptions | Promise<WavefrontRenderFrameOptions>;
+  onFrameComplete?: (result: Result, progress: WavefrontFrameLoopProgress) => void | Promise<void>;
+}): WavefrontFrameLoop;
+
 export interface WavefrontPathTracingComputeRenderer {
   readonly canvas: HTMLCanvasElement;
   readonly context: GPUCanvasContext;
@@ -1136,17 +1192,7 @@ export interface WavefrontPathTracingComputeRenderer {
   readonly format: GPUTextureFormat | string;
   readonly config: WavefrontPathTracingComputeConfig;
   renderOnce(): WavefrontPathTracingComputeFrameStats;
-  renderFrame(options?: {
-    cpuProfiling?: { enabled?: boolean; userTiming?: boolean };
-    readStats?: boolean;
-    readOutputProbe?: boolean;
-    awaitGPUCompletion?: boolean;
-    submittedWorkTimeoutMs?: number;
-    samplesPerPixel?: number;
-    minimumSamplesPerPixel?: number;
-    frameTimeBudgetMs?: number;
-    probe?: { x?: number; y?: number };
-  }): Promise<WavefrontPathTracingComputeFrameStats>;
+  renderFrame(options?: WavefrontRenderFrameOptions): Promise<WavefrontPathTracingComputeFrameStats>;
   readOutputProbe(options?: { x?: number; y?: number }): Promise<
     Readonly<{
       x: number;
@@ -1542,11 +1588,7 @@ export function createWavefrontPathTracingComputeRenderer(
   options?: CreateWavefrontPathTracingComputeRendererOptions
 ): Promise<WavefrontPathTracingComputeRenderer>;
 export function renderWavefrontPathTracingComputeFrame(
-  options?: CreateWavefrontPathTracingComputeRendererOptions & {
-    cpuProfiling?: { enabled?: boolean; userTiming?: boolean };
-    readStats?: boolean;
-    readOutputProbe?: boolean;
-  }
+  options?: CreateWavefrontPathTracingComputeRendererOptions & WavefrontRenderFrameOptions
 ): Promise<WavefrontPathTracingComputeFrameStats>;
 export function createWavefrontPathTracingComputeShaderSource(options?: {
   workgroupSize?: number;
