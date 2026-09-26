@@ -2,6 +2,7 @@ import { createWavefrontPathTracingComputeRenderer } from "/src/wavefront-comput
 import { createWavefrontFrameEncoder } from "/src/wavefront-frame-encoder.js";
 import { createGpuParallelismCounters } from "/src/wavefront-frame-runtime.js";
 import { createWavefrontFrameTelemetryResources } from "/src/wavefront-frame-telemetry.js";
+import { createWavefrontCpuProfile } from "/src/wavefront-cpu-profile.js";
 import { createConfigPayload } from "/src/wavefront-packers.js";
 import { createAdaptiveResourceOwner, packAdaptivePixelState } from "/src/wavefront-adaptive-metadata.js";
 import { createAdaptivePrimaryPipelines, packAdaptivePrimaryConfig, encodeAdaptivePrimaryWorklist } from "/src/wavefront-adaptive-primary.js";
@@ -119,7 +120,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const setupError=await wait(device.popErrorScope());check(!setupError,setupError?.message);device.pushErrorScope("validation");
     return { adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
       memory:{rendererBufferBytes,textureInventory,adaptiveBufferBytes:resources.allocatedBytes,telemetryBufferBytes:telemetry.memoryBytes,fixtureStagingBytes:extras.reduce((sum,item)=>sum+item.size,0)},
-      async run(mode, samples=32, fault=null, pruning="off") {
+      async run(mode, samples=32, fault=null, pruning="off", cpuProfiling={}) {
         active();check(["fixed","uniform","reduced","uniform-shared","reduced-shared"].includes(mode),"Invalid probe mode");
         check(mode==="fixed" || samples===maximum,"Adaptive ceiling must match the probe");
         const useShared=mode.endsWith("-shared"),budgetMode=mode.replace("-shared","");
@@ -127,28 +128,43 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
         check(!fault || useShared,"Fault injection requires shared mode");
         check(!fault || ["stale-count","failed-pixel","uncovered-budget","weighted","skipped-phase","duplicate-ordinal","pending","overflow","lineage"].includes(fault),"Unknown shared fault");
         if(["pending","overflow","lineage"].includes(fault) && !faultWord){faultWord=makeBuffer(4,GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST);device.queue.writeBuffer(faultWord,0,new Uint32Array([1]));await wait(device.queue.onSubmittedWorkDone());}
+        const cpuProfile=createWavefrontCpuProfile(cpuProfiling),frameDevice=cpuProfile?cpuProfile.wrapDevice(device):device;
+        const stage=(name,fn)=>cpuProfile?cpuProfile.measure(name,fn):fn();
         const started=performance.now();config={...renderer.config,samplesPerPixel:samples};
-        const budgets=mode==="fixed"?null:createPairedProbeBudgets(width,height,budgetMode).map(value=>value===32?maximum:value);
+        const budgets=stage("budgetCalculation",()=>{
+          if(mode==="fixed")return null;
+          const source=createPairedProbeBudgets(width,height,budgetMode),result=source.map(value=>value===32?maximum:value);
+          cpuProfile?.recordAllocation(source.byteLength);cpuProfile?.recordAllocation(result.byteLength);return result;
+        });
         const tiers=budgetMode==="uniform"?[maximum]:[2,8,maximum],ranges=createSharedSampleRanges(tiers);
         const expectedPrimaryRays=budgets?budgets.reduce((sum,value)=>sum+value,0):pixels*samples;
-        if(budgets) {const words=Uint32Array.from(budgets,requested=>packAdaptivePixelState({requested}));
+        if(budgets) {const words=stage("budgetPacking",()=>Uint32Array.from(budgets,requested=>packAdaptivePixelState({requested})));cpuProfile?.recordAllocation(words.byteLength);
           if(fault==="stale-count")words[0]|=1<<9;
           if(fault==="failed-pixel")words[0]|=0x80000000;
           if(fault==="uncovered-budget")words[0]=packAdaptivePixelState({requested:3});
-          device.queue.writeBuffer(b.pixelState,0,words);}
+          frameDevice.queue.writeBuffer(b.pixelState,0,words);}
+        stage("configPacking",()=>{
         const frameBatch=useShared?new Uint8Array(samples*config.memory.configBufferStride):null;
+        if(frameBatch)cpuProfile?.recordAllocation(frameBatch.byteLength);
         for(let ordinal=0;ordinal<samples;ordinal+=1) {const payload=createConfigPayload(config,tile,7,{sampleIndex:fault==="duplicate-ordinal"&&ordinal===1?0:ordinal,sampleWeight:mode==="fixed"?1/samples:fault==="weighted"?0.5:1});
+          cpuProfile?.recordAllocation(payload.byteLength);
           if(frameBatch)frameBatch.set(new Uint8Array(payload),ordinal*config.memory.configBufferStride);
-          else device.queue.writeBuffer(frame,ordinal*config.memory.configBufferStride,payload);}
-        if(frameBatch)device.queue.writeBuffer(frame,0,frameBatch);
+          else frameDevice.queue.writeBuffer(frame,ordinal*config.memory.configBufferStride,payload);}
+        if(frameBatch)frameDevice.queue.writeBuffer(frame,0,frameBatch);
+        });
         let slot=0;
+        stage("configPacking",()=>{
+        const pack=(fn,value)=>{const payload=fn(value);cpuProfile?.recordAllocation(payload.byteLength);return payload;};
         if(budgets && !useShared) for(const [tierIndex,tier] of tiers.entries()) {
-          device.queue.writeBuffer(b.primaryConfig,tierIndex*256,packAdaptivePrimaryConfig(tileConfig(tier)));
-          for(let ordinal=0;ordinal<tier;ordinal+=1,slot+=1) device.queue.writeBuffer(b.resolveConfig,slot*256,packAdaptiveResolveConfig(sampleConfig(tier,ordinal)));
+          frameDevice.queue.writeBuffer(b.primaryConfig,tierIndex*256,pack(packAdaptivePrimaryConfig,tileConfig(tier)));
+          for(let ordinal=0;ordinal<tier;ordinal+=1,slot+=1) frameDevice.queue.writeBuffer(b.resolveConfig,slot*256,pack(packAdaptiveResolveConfig,sampleConfig(tier,ordinal)));
         }
-        if(budgets && !useShared)device.queue.writeBuffer(b.resolveConfig,slot*256,packAdaptiveResolveConfig(sampleConfig(0,0)));
-        if(useShared){const phaseBatch=new Uint8Array(ranges.length*256);for(const [index,range] of ranges.entries())phaseBatch.set(new Uint8Array(packSharedPhase({...tileConfig(0),...range,...(fault==="skipped-phase"&&index===1?{firstSample:3}:{})})),index*256);device.queue.writeBuffer(b.primaryConfig,0,phaseBatch);}
-        telemetry.beginFrame();const encoder=createTimestampSpanEncoder(device.createCommandEncoder(),telemetry),parallelism=createGpuParallelismCounters();
+        if(budgets && !useShared)frameDevice.queue.writeBuffer(b.resolveConfig,slot*256,pack(packAdaptiveResolveConfig,sampleConfig(0,0)));
+        if(useShared){const phaseBatch=new Uint8Array(ranges.length*256);cpuProfile?.recordAllocation(phaseBatch.byteLength);for(const [index,range] of ranges.entries())phaseBatch.set(new Uint8Array(pack(packSharedPhase,{...tileConfig(0),...range,...(fault==="skipped-phase"&&index===1?{firstSample:3}:{})})),index*256);frameDevice.queue.writeBuffer(b.primaryConfig,0,phaseBatch);}
+        });
+        telemetry.beginFrame();const parallelism=createGpuParallelismCounters();
+        const encoder=stage("commandEncoding",()=>{
+        const encoder=createTimestampSpanEncoder(frameDevice.createCommandEncoder(),telemetry);
         if(mode==="fixed") for(let ordinal=0;ordinal<samples;ordinal+=1) {
           frameEncoder.encodeTileSample(encoder,tile,ordinal*config.memory.configBufferStride,parallelism);
           if(ordinal===samples-1)encoder.closeNextPass();
@@ -179,12 +195,17 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
           const pass=encoder.beginComputePass();pass.setPipeline(resolve.resolve);pass.setBindGroup(0,resolveGroup,[slot*256]);pass.dispatchWorkgroups(pixels/64);pass.end();
           encoder.closeNextPass();const outputPass=encoder.beginComputePass();outputPass.setPipeline(output);outputPass.setBindGroup(0,outputGroup);outputPass.dispatchWorkgroups(pixels/64);outputPass.end();
         }
-        device.queue.submit([encoder.finish()]);await wait(device.queue.onSubmittedWorkDone());
+        return encoder;
+        });
+        frameDevice.queue.submit([encoder.finish()]);
+        if(cpuProfile)await cpuProfile.measureAsync("gpuWait",()=>wait(device.queue.onSubmittedWorkDone()));
+        else await wait(device.queue.onSubmittedWorkDone());
         const linearOutputJobMs=performance.now()-started;
         const sampleIterations=mode==="fixed"||useShared?samples:tiers.reduce((sum,value)=>sum+value,0);
-        const measured=await wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:sampleIterations*maxDepth,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}));
-        const image=new Float32Array(await read(budgets?b.resolvedRadiance:accumulation,pixels*16));
-        const counts=budgets?new Uint32Array(await read(b.pixelState,pixels*4)):null;
+        const readTelemetry=()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:sampleIterations*maxDepth,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}));
+        const measured=await(cpuProfile?cpuProfile.measureAsync("telemetryReadback",readTelemetry):readTelemetry());
+        const readOutput=async()=>({image:new Float32Array(await read(budgets?b.resolvedRadiance:accumulation,pixels*16)),counts:budgets?new Uint32Array(await read(b.pixelState,pixels*4)):null});
+        const {image,counts}=await(cpuProfile?cpuProfile.measureAsync("outputReadback",readOutput):readOutput());
         const error=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!error && !errors.length,error?.message??errors[0]);
         if(fault){
           const vetoedPixels=image.filter((value,index)=>index%4===3&&value===0).length;
@@ -197,7 +218,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
           if(counts) check(!(counts[id]&0x80000000) && ((counts[id]>>>9)&511)===budgets[id] && image[id*4+3]===1,`Incomplete adaptive pixel ${id}`);
           else {check(image[id*4+3]===samples,`Incomplete fixed pixel ${id}: ${image[id*4+3]} of ${samples}; timestamp ${measured.reason}; raw ${timestampPairs.at(-1)}`);image[id*4+3]=1;}
         }
-        return {image,mode,pruning,samples,actualSamples:expectedPrimaryRays,sampleIterations,linearOutputJobMs,
+        return {image,mode,pruning,samples,actualSamples:expectedPrimaryRays,sampleIterations,linearOutputJobMs,...(cpuProfile?{cpuProfile:cpuProfile.snapshot()}:{}),
           completedCountMin:counts?Math.min(...counts.map(word=>(word>>>9)&511)):samples,
           completedCountMax:counts?Math.max(...counts.map(word=>(word>>>9)&511)):samples,
           gpuMs:measured.totalGpuTimeMs,timestampStatus:measured.timestampQueryStatus,timestampReason:measured.reason,rawTimestampPair:timestampPairs.at(-1)??null,rayCounts:measured.rayCounts};

@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Opt-in per-frame CPU attribution: separate host preparation/encoding/upload/
+    submit spans, GPU waits, post-job readback, API counts and known temporary
+    buffer bytes. Includes bounded browser timing markers and paired profiler
+    off/on adaptive diagnostics; no transport or scheduling changes.
   - Independent experimental prepared-path options for immediate hit consumption
     and zero-work empty queues. Reuse canonical traversal/shading bodies, preserve
     fixed shader bytes and command order, and retain source-bound paired/physical

@@ -1137,6 +1137,7 @@ export interface WavefrontPathTracingComputeRenderer {
   readonly config: WavefrontPathTracingComputeConfig;
   renderOnce(): WavefrontPathTracingComputeFrameStats;
   renderFrame(options?: {
+    cpuProfiling?: { enabled?: boolean; userTiming?: boolean };
     readStats?: boolean;
     readOutputProbe?: boolean;
     awaitGPUCompletion?: boolean;
@@ -1214,7 +1215,32 @@ export interface WavefrontFrameTimingTelemetry {
   readonly reason: string | null;
 }
 
+/** Opt-in host elapsed diagnostics; not CPU utilization, heap size or GPU work. */
+export interface WavefrontCpuProfile {
+  readonly schemaVersion: 1;
+  readonly timingBasis: "host-elapsed-not-cpu-utilization";
+  readonly stages: Readonly<Partial<Record<
+    "budgetCalculation" | "budgetPacking" | "configPacking" | "commandEncoding" |
+    "accelerationEncoding" | "uploads" | "finish" | "submit" | "gpuWait" |
+    "telemetryReadback" | "outputReadback",
+    Readonly<{ calls: number; failures: number; elapsedMs: number; exclusiveMs: number;
+      kind: "synchronous-host" | "asynchronous-wait" }>
+  >>>;
+  /** Render-job API calls only; post-job readback commands are excluded. */
+  readonly commands: Readonly<{
+    commandEncoders: number; computePasses: number; renderPasses: number;
+    pipelineChanges: number; bindGroupChanges: number; directDispatches: number;
+    indirectDispatches: number; bufferCopies: number; bufferCopyBytes: number;
+    clears: number; clearBytes: number; uploadCalls: number; uploadBytes: number;
+    submissions: number; commandBuffers: number;
+  }>;
+  /** Explicitly recorded temporary ArrayBuffer backing stores, not total JS allocations. */
+  readonly knownTemporaryBuffers: Readonly<{ count: number; bytes: number }>;
+  readonly timeline: Readonly<{ enabled: boolean; emitted: number; dropped: number; errors: number }>;
+}
+
 export interface WavefrontPathTracingComputeFrameStats {
+  readonly cpuProfile?: WavefrontCpuProfile;
   readonly frame: number;
   readonly width: number;
   readonly height: number;
@@ -1517,6 +1543,7 @@ export function createWavefrontPathTracingComputeRenderer(
 ): Promise<WavefrontPathTracingComputeRenderer>;
 export function renderWavefrontPathTracingComputeFrame(
   options?: CreateWavefrontPathTracingComputeRendererOptions & {
+    cpuProfiling?: { enabled?: boolean; userTiming?: boolean };
     readStats?: boolean;
     readOutputProbe?: boolean;
   }

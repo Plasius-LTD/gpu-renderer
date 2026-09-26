@@ -24,6 +24,40 @@ on actual first/final compute work. Normal renderer telemetry retains its existi
 two-query descriptors and allocation; unavailable/invalid timestamps never become
 GPU performance evidence. See the lighting-owned paired diagnostic protocol.
 
+## CPU attribution diagnostics
+
+Opt in per render without enabling adaptive sampling:
+
+```js
+const frame = await renderer.renderFrame({
+  cpuProfiling: { enabled: true, userTiming: false },
+  readStats: true, // Independent opt-in GPU timestamps/ray readback.
+  readOutputProbe: false,
+});
+console.log(frame.cpuProfile);
+```
+
+`cpuProfile` is absent by default. It reports host elapsed packing, upload,
+encoding, finish and submission intervals; nested `exclusiveMs` avoids counting
+child intervals twice. `gpuWait`, `telemetryReadback` and `outputReadback` are
+asynchronous elapsed time, **not CPU busy time**. GPU/job timing boundaries and
+rendering commands remain unchanged. Post-job readback commands are excluded
+from API counts. Explicit temporary buffer bytes are not total heap allocation,
+GC, driver memory, residency or a memory-saving claim. Setup/updateSceneObjects
+and browser UI work are outside this per-render profile.
+
+`userTiming: true` emits at most 128 named browser timing spans per frame,
+clearing their timeline entries after emission; aggregate counters retain every
+call. CPU profiling itself adds overhead; compare on/off before interpreting
+numbers. Use a separate browser CPU/GC trace for active CPU attribution.
+
+The source-bound [replay setup](https://github.com/Plasius-LTD/gpu-lighting/blob/b23af8d4c79ce23c28c5134886569b84a73c9079/docs/paired-adaptive-replay.md)
+can open `tests/fixtures/adaptive-cpu-profile.html` at the profiling commit.
+Choose **Measure CPU breakdown** for alternating off/on fixed/shared/fused runs,
+identity checks, raw receipts and median/p95 summaries. These 128×128 experiments
+do not activate the GPU tab or qualify adaptive quality/performance.
+See the [measurement contract](docs/design/cpu-render-profiling.md).
+
 ## Privacy-Safe Feedback Diagnostics
 
 Approved in-game viewers can explicitly convert a small set of current renderer

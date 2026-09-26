@@ -3119,6 +3119,47 @@ serialWebGpuTest("wavefront output-probe readback waits for submitted GPU work b
   });
 });
 
+serialWebGpuTest("CPU profiling preserves fixed commands and separates tile waits, uploads and readback", async () => {
+  await withWebGpuConstants(async () => {
+    for (const samples of [1, 8]) {
+      const outputs = [];
+      for (const enabled of [false, true]) {
+        const device = new FakeWavefrontDevice();
+        const renderer = await createWavefrontPathTracingComputeRenderer({
+          canvas: createFakeWavefrontCanvas(), navigator: createFakeWavefrontNavigator(device),
+          width: 32, height: 16, tileSize: 16, maxDepth: 2,
+          samplesPerPixel: samples, denoise: false, deferredPathResolve: true,
+        });
+        const beforeWrites = device.queue.writes.length;
+        const frame = await renderer.renderFrame({ readOutputProbe: false, cpuProfiling: { enabled } });
+        outputs.push({ submissions: frame.commandSubmissions, dispatches: frame.gpuWorkerJobs.completedPerFrame,
+          writes: device.queue.writes.slice(beforeWrites).map(w => w.offset) });
+        if (!enabled) assert.equal(frame.cpuProfile, undefined);
+        else {
+          const p = frame.cpuProfile;
+          assert.equal(p.timingBasis, "host-elapsed-not-cpu-utilization");
+          assert.equal(p.stages.gpuWait.calls, samples >= 8 ? frame.tiles : 1);
+          assert.equal(p.commands.submissions, frame.commandSubmissions);
+          assert.equal(p.commands.directDispatches + p.commands.indirectDispatches, frame.gpuWorkerJobs.completedPerFrame);
+          assert.equal(p.commands.uploadCalls, device.queue.writes.length - beforeWrites);
+          assert.equal(p.stages.configPacking.calls, p.commands.uploadCalls);
+          assert.equal(p.knownTemporaryBuffers.count, p.commands.uploadCalls);
+          assert.ok(p.commands.uploadBytes > 0);
+          assert.ok(p.stages.commandEncoding.elapsedMs >= p.stages.commandEncoding.exclusiveMs);
+          assert.equal(p.stages.telemetryReadback, undefined);
+          const readback = await renderer.renderFrame({ readStats: true, cpuProfiling: { enabled: true } });
+          assert.equal(readback.cpuProfile.stages.telemetryReadback.calls, 2);
+          assert.equal(readback.cpuProfile.stages.outputReadback.calls, 1);
+          const submittedOnly = await renderer.renderFrame({ awaitGPUCompletion: false, readOutputProbe: false, cpuProfiling: { enabled: true } });
+          assert.equal(submittedOnly.cpuProfile.stages.gpuWait, undefined);
+        }
+        renderer.destroy();
+      }
+      assert.deepEqual(outputs[0], outputs[1]);
+    }
+  });
+});
+
 serialWebGpuTest("wavefront renderFrame waits for submitted GPU work before reporting completion", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();
