@@ -9,5 +9,5 @@
     "strict": true,
     "target": "ES2022"
   },
-  "include": ["src/index.d.ts", "tests/feedback-diagnostics.types.ts"]
+  "include": ["src/index.d.ts", "tests/feedback-diagnostics.types.ts", "tests/cpu-profile.types.ts"]
 }

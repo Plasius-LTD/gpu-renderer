@@ -1049,7 +1049,7 @@ test("wavefront compute denoise adapts filter cost and strength to spp", () => {
   assert.match(source, /tone_map_radiance/);
   assert.match(source, /fn present_radiance/);
   assert.match(source, /config\.pathResolveSettings\.w > 0\.5/);
-  assert.match(source, /present_radiance\(linearOutput\)/);
+  assert.match(source, /present_radiance\(radiance\)/);
   assert.match(source, /present_radiance\(radiance\)/);
   assert.doesNotMatch(source, /getImageData|putImageData/);
 });
@@ -1132,7 +1132,7 @@ test("wavefront compute guides and gates environment lighting through portals", 
   assert.match(source, /@group\(0\) @binding\(19\) var<storage, read> environmentPortals/);
   assert.match(source, /@group\(0\) @binding\(20\) var environmentMapTexture: texture_2d<f32>/);
   assert.match(source, /@group\(0\) @binding\(21\) var environmentMapSampler: sampler/);
-  assert.match(source, /@group\(0\) @binding\(22\) var<storage, read_write> pathVertices/);
+  assert.match(source, /@group\(0\) @binding\(22\) var<storage, read_write> pathNodes/);
   assert.match(source, /fn environment_map_radiance/);
   assert.match(source, /textureSampleLevel\(environmentMapTexture, environmentMapSampler, uv, 0\.0\)/);
   assert.match(source, /fn environment_portal_radiance_scale/);
@@ -1218,7 +1218,7 @@ test("wavefront compute uses physical continuation throughput with strict physic
   assert.match(source, /return config\.pathResolveSettings\.z > 0\.5;/);
   assert.match(source, /fn sanitize_path_throughput_component/);
   assert.match(source, /fn sanitize_path_throughput/);
-  assert.match(source, /fn record_deferred_path_throughput/);
+  assert.match(source, /fn record_path_direct/);
   assert.match(source, /fn surface_delta_reflection_throughput/);
   assert.match(source, /fn surface_delta_transmission_throughput/);
   assert.match(source, /fn surface_continuation_throughput/);
@@ -1245,12 +1245,12 @@ test("wavefront compute uses physical continuation throughput with strict physic
   assert.match(source, /let glossyEnvironment = max\(/);
   assert.match(source, /let environmentFloor = max\(ambientFloor, max\(sunlitFloor, glossyEnvironment \* environmentInfluence\)\);/);
   assert.match(source, /var continuationThroughput = surface_continuation_throughput\(\s+hit,\s+continuationViewDirection,\s+continuationLightDirection,\s+scatter\s+\) \* segmentTransmittance;/);
-  assert.match(source, /if \(max_component\(continuationThroughput\) <= 0\.000001\) \{/);
-  assert.match(source, /record_deferred_path_throughput\(ray, continuationThroughput\);/);
+  assert.match(source, /if \(max\(max_component\(continuationThroughput\), max_component\(secondaryThroughput\)\) <= 0\.000001\) \{/);
+  assert.match(source, /let throughput = ray\.throughput\.xyz \* continuationThroughput;/);
   assert.match(source, /TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE/);
   assert.match(source, /let rouletteStartBounce = select\(/);
   assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) && ray\.bounce >= rouletteStartBounce/);
-  assert.match(source, /let survivalProbability = clamp\(max_component\(continuationThroughput\), 0\.05, 0\.95\);/);
+  assert.match(source, /let survivalProbability = clamp\(max\(max_component\(continuationThroughput\), max_component\(secondaryThroughput\)\), 0\.05, 0\.95\);/);
   assert.match(source, /SAMPLE_DIM_RUSSIAN_ROULETTE/);
   assert.match(source, /continuationThroughput = continuationThroughput \/ survivalProbability;/);
   assert.match(
@@ -1276,13 +1276,13 @@ test("wavefront compute uses physical continuation throughput with strict physic
   assert.match(source, /record_termination_metrics\(/);
   assert.match(
     source,
-    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(weightedContribution, 1\.0\);/
+    /record_path_terminal\(ray, radiance, sourceKind\);/
   );
   assert.match(source, /TRANSPORT_EXPERIMENT_STRICT_ZERO_OVERFLOW/);
-  assert.match(source, /var rawWeightedContribution = vec3<f32>\(0\.0\);/);
+  assert.match(source, /if \(nextIndex >= config\.tilePixelCount\) \{\s+fail_path_node\(ray\);/);
   assert.match(
     source,
-    /record_deferred_terminal_source\(\s*ray,\s*vec3<f32>\(0\.0\),\s*TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW\s*\);/
+    /record_weighted_terminal\(ray, vec3<f32>\(0\.0\), TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW\);/
   );
 });
 
@@ -1354,7 +1354,7 @@ test("wavefront compute samples all-material direct light with MIS before random
   );
   assert.match(
     source,
-    /accumulation\[ray\.rayId\] =\s+accumulation\[ray\.rayId\] \+\s+vec4<f32>\(weightedDirectLight, 0\.0\);/
+    /record_path_direct\(ray, weightedDirectLight\);/
   );
   assert.ok(
     source.indexOf("let shouldEstimateDirectLight =") <
@@ -1431,8 +1431,8 @@ test("wavefront compute keeps deterministic low-SPP indirect diagnostic only", (
   assert.match(source, /atomicAdd\(&counters\.termination\.deterministicResidualZeroCount, 1u\);/);
   assert.match(source, /let scatter = scatter_direction\(ray, hit\);/);
   assert.match(source, /surface_continuation_throughput\(/);
-  assert.match(source, /record_transport_contribution\(TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL, safeResolved\);/);
-  assert.match(source, /record_transport_checksum\(index, linearOutput\);/);
+  assert.match(source, /record_transport_contribution\(TRANSPORT_BUCKET_STOCHASTIC_RESIDUAL, radiance\);/);
+  assert.match(source, /record_transport_checksum\(index, radiance\);/);
 });
 
 test("wavefront BSDF numeric helpers flag PDF mismatches and invalid MIS measures", () => {
@@ -1618,24 +1618,24 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
   assert.equal(createWavefrontPathTracingComputeConfig({ width: 64, height: 64 }).deferredPathResolve, true);
   assert.equal(config.deferredPathResolve, false);
   assert.match(source, /fn deferred_path_resolve_enabled\(\) -> bool/);
-  assert.match(source, /fn clear_deferred_path\(rayId: u32\)/);
+  assert.match(source, /fn begin_path_node\(input: RayRecord, queueIndex: u32\)/);
   assert.match(
     source,
     /record_deferred_terminal_source\(\s*ray,\s*sourceRadiance \* segmentTransmittance,\s*TERMINAL_SOURCE_KIND_(EMISSIVE|ENVIRONMENT)\s*\);/
   );
   assert.match(source, /sourceRadiance = sourceRadiance \* misWeight;/);
-  assert.match(source, /fn resolve_deferred_path_radiance\(rayId: u32\) -> vec3<f32>/);
-  assert.match(source, /let terminal = pathVertices\[path_vertex_index\(rayId, config\.maxDepth\)\];/);
-  assert.match(source, /depth = depth - 1u;/);
-  assert.match(source, /let throughput = pathVertices\[path_vertex_index\(rayId, depth\)\];/);
-  assert.match(source, /radiance = radiance \* throughput\.xyz;/);
-  assert.match(source, /let terminal = pathVertices\[path_vertex_index\(index, config\.maxDepth\)\];/);
-  assert.match(source, /let resolved = resolve_deferred_path_radiance\(index\) \* sample_weight\(\);/);
+  assert.match(source, /fn resolve_complete_path_tree\(root: u32, sourcePixelId: u32, sampleId: u32\) -> vec4<f32>/);
+  assert.match(source, /let node = pathNodes\[index\];/);
+  assert.match(source, /next = node\.firstChild;/);
+  assert.match(source, /pathNodes\[node\.parent\]\.depth \+ 1u != node\.depth/);
+  assert.match(source, /radiance = radiance \+ node\.directRadiance \+ node\.terminalRadiance;/);
+  assert.match(source, /node\.flags != PATH_INITIALIZED/);
+  assert.match(source, /let completed = resolve_complete_path_tree\(index, sourcePixelId, sampleId\);/);
   assert.match(
     source,
     /let rawDirectLight = \(directLight \+ sunLight\) \* sample_weight\(\);/
   );
-  assert.match(source, /if \(config\.deferredPathResolve\) \{/);
+  assert.doesNotMatch(source, /if \(config\.deferredPathResolve\) \{/);
   assert.match(source, /createGpuSubmissionBatcher\(\{/);
   assert.match(source, /encodeTileOutput\(batch\.reserve\(1\), tile, configOffset, parallelism\);/);
 });
@@ -1647,8 +1647,8 @@ test("wavefront compute records radiance diagnostics instead of silently applyin
   assert.match(source, /fn record_radiance_diagnostics\(sample: vec3<f32>\)/);
   assert.match(source, /invalidSampleCount: atomic<u32>/);
   assert.match(source, /legacyClampEquivalentCount: atomic<u32>/);
-  assert.match(source, /record_radiance_diagnostics\(rawWeightedContribution\);/);
-  assert.match(source, /record_radiance_diagnostics\(resolved\);/);
+  assert.match(source, /record_radiance_diagnostics\(rawRadiance\);/);
+  assert.match(source, /if \(!path_radiance_valid\(rawRadiance\)\) \{ fail_path_node\(ray\); return; \}/);
   assert.doesNotMatch(source, /contribution = clamp_sample_radiance\(/);
   assert.doesNotMatch(source, /radiance = clamp_sample_radiance\(radiance \+ resolved\);/);
   assert.match(types, /readonly radianceDiagnostics\?: Readonly<\{/);
@@ -3119,6 +3119,101 @@ serialWebGpuTest("wavefront output-probe readback waits for submitted GPU work b
   });
 });
 
+serialWebGpuTest("progress reports only queue-confirmed tiles and defers observer errors until drained", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas:createFakeWavefrontCanvas(), navigator:createFakeWavefrontNavigator(device),
+      width:32,height:16,tileSize:16,maxDepth:1,samplesPerPixel:8,denoise:false,
+    });
+    const events=[]; const waiters=[];
+    device.queue.onSubmittedWorkDone = () => new Promise(resolve=>waiters.push(resolve));
+    const pending=renderer.renderFrame({readOutputProbe:false,onProgress:event=>events.push(event)});
+    assert.equal(events.at(-1).stage,"waiting-gpu");
+    assert.equal(events.at(-1).completedTiles,0);
+    await new Promise(resolve=>setTimeout(resolve,0));
+    assert.equal(waiters.length,1); waiters[0]();
+    await new Promise(resolve=>setTimeout(resolve,0));
+    assert.equal(events.at(-1).completedTiles,1); assert.equal(waiters.length,2);
+    waiters[1](); await pending;
+    assert.equal(events.at(-1).stage,"complete"); assert.equal(events.at(-1).completedTiles,2);
+    assert.ok(events.every(Object.isFrozen));
+    let waits=0; device.queue.onSubmittedWorkDone=async()=>{waits++;};
+    const error=new Error("observer failed");
+    await assert.rejects(renderer.renderFrame({readOutputProbe:false,onProgress:()=>{throw error;}}),e=>e===error);
+    assert.equal(waits,2); // observer errors never release a pending GPU frame
+    await assert.rejects(renderer.renderFrame({onProgress:1}),/onProgress/);
+    const failed=[];device.queue.onSubmittedWorkDone=async()=>{throw new Error("GPU failure");};
+    await assert.rejects(renderer.renderFrame({readOutputProbe:false,onProgress:e=>failed.push(e)}),/GPU failure/);
+    assert.equal(failed.at(-1).stage,"failed"); assert.equal(failed.at(-1).completedTiles,0);
+    device.queue.onSubmittedWorkDone=async()=>{};
+    const submitted=[];
+    await renderer.renderFrame({awaitGPUCompletion:false,readOutputProbe:false,onProgress:e=>submitted.push(e)});
+    assert.equal(submitted.at(-1).stage,"submitted");assert.equal(submitted.at(-1).completedTiles,0);
+    renderer.destroy();
+  });
+});
+
+serialWebGpuTest("progress separates acceleration completion from rendered tiles and readback", async () => {
+  await withWebGpuConstants(async () => {
+    for (const profiling of [false,true]) {
+      const device=new FakeWavefrontDevice();
+      const renderer=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),
+        navigator:createFakeWavefrontNavigator(device),width:8,height:8,tileSize:8,maxDepth:1,
+        samplesPerPixel:8,denoise:false,accelerationBuildMode:"gpu",
+        meshes:[{positions:[-1,0,0,1,0,0,0,1,0],indices:[0,1,2],materialKind:"diffuse"}]});
+      const events=[];
+      await renderer.renderFrame({readStats:true,cpuProfiling:{enabled:profiling},onProgress:e=>events.push(e)});
+      assert.ok(events.some(e=>e.stage==="waiting-acceleration"&&e.completedTiles===0));
+      assert.ok(events.some(e=>e.stage==="readback"&&e.completedTiles===1));
+      assert.equal(events.at(-1).stage,"complete");renderer.destroy();
+    }
+  });
+});
+
+serialWebGpuTest("CPU profiling preserves fixed commands and separates tile waits, uploads and readback", async () => {
+  await withWebGpuConstants(async () => {
+    for (const samples of [1, 8]) {
+      const outputs = [];
+      for (const enabled of [false, true]) {
+        const device = new FakeWavefrontDevice();
+        const renderer = await createWavefrontPathTracingComputeRenderer({
+          canvas: createFakeWavefrontCanvas(), navigator: createFakeWavefrontNavigator(device),
+          width: 32, height: 16, tileSize: 16, maxDepth: 2,
+          samplesPerPixel: samples, denoise: false, deferredPathResolve: true,
+        });
+        const beforeWrites = device.queue.writes.length;
+        const events=[];
+        const frame = await renderer.renderFrame({ readOutputProbe: false, cpuProfiling: { enabled }, ...(enabled?{onProgress:e=>events.push(e)}:{}) });
+        outputs.push({ submissions: frame.commandSubmissions, dispatches: frame.gpuWorkerJobs.completedPerFrame,
+          writes: device.queue.writes.slice(beforeWrites).map(w => w.offset) });
+        if (!enabled) assert.equal(frame.cpuProfile, undefined);
+        else {
+          assert.equal(events.at(-1).completedTiles,frame.tiles);
+          const p = frame.cpuProfile;
+          assert.equal(p.timingBasis, "host-elapsed-not-cpu-utilization");
+          assert.equal(p.stages.gpuWait.calls, samples >= 8 ? frame.tiles : 1);
+          assert.equal(p.commands.submissions, frame.commandSubmissions);
+          assert.equal(p.commands.directDispatches + p.commands.indirectDispatches, frame.gpuWorkerJobs.completedPerFrame);
+          assert.equal(p.commands.uploadCalls, device.queue.writes.length - beforeWrites);
+          assert.equal(p.stages.configPacking.calls, p.commands.uploadCalls);
+          assert.equal(p.knownTemporaryBuffers.count, p.commands.uploadCalls);
+          assert.ok(p.commands.uploadBytes > 0);
+          assert.ok(p.stages.commandEncoding.elapsedMs >= p.stages.commandEncoding.exclusiveMs);
+          assert.equal(p.stages.telemetryReadback, undefined);
+          const readback = await renderer.renderFrame({ readStats: true, cpuProfiling: { enabled: true } });
+          assert.equal(readback.cpuProfile.stages.telemetryReadback.calls, 2);
+          assert.equal(readback.cpuProfile.stages.outputReadback.calls, 1);
+          const submittedOnly = await renderer.renderFrame({ awaitGPUCompletion: false, readOutputProbe: false, cpuProfiling: { enabled: true } });
+          assert.equal(submittedOnly.cpuProfile.stages.gpuWait, undefined);
+        }
+        renderer.destroy();
+      }
+      assert.deepEqual(outputs[0], outputs[1]);
+    }
+  });
+});
+
 serialWebGpuTest("wavefront renderFrame waits for submitted GPU work before reporting completion", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();
@@ -3152,7 +3247,9 @@ serialWebGpuTest("wavefront renderFrame waits for submitted GPU work before repo
       frame.gpuWorkerJobs.completedPerFrame / frame.commandSubmissions
     );
     assert.equal(frame.deviceLossStatus, "not-detected");
-    assert.equal(frame.transportGuardrails.status, "pass");
+    assert.equal(frame.pathCompletionValid, null);
+    assert.equal(frame.transportGuardrails.status, "warn");
+    assert.equal(frame.transportGuardrails.checks.find(({ id }) => id === "path-completion").status, "warn");
     assert.equal(
       frame.transportGuardrails.current.jobsPerSubmission,
       frame.gpuWorkerJobs.completedPerSubmission
@@ -3525,6 +3622,48 @@ test("wavefront telemetry resources fail closed when readback is unavailable or 
   overflow.destroy();
 });
 
+test("opt-in paired compute timestamps span first beginning to final end", async () => {
+  const device = new FakeWavefrontDevice();
+  device.features = new Set(["timestamp-query"]);
+  device.timestampReadbackValues = [1_000_000n, 2_000_000n, 4_000_000n, 7_000_000n];
+  const telemetry = createWavefrontFrameTelemetryResources({
+    device, constants: gpuConstants, maxRayCountRecords: 1, timestampPassPairs: true,
+  });
+  assert.equal(telemetry.memoryBytes, 8 + 64);
+  telemetry.beginFrame();
+  const first = telemetry.decorateFirstPass({ label: "first" }).timestampWrites;
+  const last = telemetry.decorateFinalPass({ label: "last" }).timestampWrites;
+  assert.equal(first.beginningOfPassWriteIndex, 0);
+  assert.equal(first.endOfPassWriteIndex, 1);
+  assert.equal(last.beginningOfPassWriteIndex, 2);
+  assert.equal(last.endOfPassWriteIndex, 3);
+  const encoder = device.createCommandEncoder();
+  telemetry.recordActiveRayCount(encoder, device.createBuffer({size: 4, usage: gpuConstants.buffer.COPY_SRC}), 0);
+  const result = await telemetry.readFrame({ expectedPrimaryRays: 64, expectedRayCounts: 1, waitForSubmittedGpuWork: async () => true });
+  assert.equal(result.totalGpuTimeMs, 6);
+  assert.equal(result.timestampQueryStatus, "available");
+  telemetry.destroy();
+});
+
+test("paired timestamp measurement rejects a missing final query without losing ray evidence", async () => {
+  const device = new FakeWavefrontDevice();
+  device.features = new Set(["timestamp-query"]);
+  device.timestampReadbackValues = [1_000_000n, 2_000_000n, 4_000_000n, 0n];
+  const telemetry = createWavefrontFrameTelemetryResources({
+    device, constants: gpuConstants, maxRayCountRecords: 1, timestampPassPairs: true,
+  });
+  telemetry.beginFrame();
+  telemetry.decorateFirstPass({});
+  telemetry.decorateFinalPass({});
+  telemetry.recordActiveRayCount(device.createCommandEncoder(), device.createBuffer({size: 4, usage: gpuConstants.buffer.COPY_SRC}), 0);
+  const result = await telemetry.readFrame({ expectedPrimaryRays: 64, expectedRayCounts: 1, waitForSubmittedGpuWork: async () => true });
+  assert.equal(result.totalGpuTimeMs, null);
+  assert.equal(result.timestampQueryStatus, "failed");
+  assert.equal(result.reason, "timestamp-query-returned-invalid-range");
+  assert.equal(result.rayCounts.status, "available");
+  telemetry.destroy();
+});
+
 test("wavefront telemetry reduces stress-scale ray records without call-stack growth", async () => {
   const recordsPerBounce = 17_280;
   const bounceCount = 8;
@@ -3626,7 +3765,9 @@ serialWebGpuTest("wavefront renderFrame awaits completed 8 spp work without timi
     assert.equal(device.queue.submittedWorkDoneCalls, 1);
     assert.equal(frame.gpuWorkerJobs.awaitedGpuCompletion, true);
     assert.ok(frame.gpuWorkerJobs.completedPerFrame > frame.commandSubmissions);
-    assert.equal(frame.transportGuardrails.status, "pass");
+    assert.equal(frame.pathCompletionValid, null);
+    assert.equal(frame.transportGuardrails.status, "warn");
+    assert.equal(frame.transportGuardrails.checks.find(({ id }) => id === "path-completion").status, "warn");
     assert.ok(frame.transportGuardrails.current.jobsPerSubmission > 1);
 
     renderer.destroy();
@@ -3762,7 +3903,9 @@ test("default wavefront scene includes emissive termination geometry", () => {
     sceneObjectCapacity: 128,
   });
   assert.ok(estimate.queueBytes < 134_217_728);
-  assert.ok(estimate.totalHotBufferBytes < 40_000_000);
+  assert.equal(estimate.pathVertexBytes, 256 * 256 * 7 * 64);
+  // Preserve the previous non-path-storage ceiling; ownership now has an explicit 64-byte/depth budget.
+  assert.ok(estimate.totalHotBufferBytes - estimate.pathVertexBytes < 40_000_000);
 });
 
 serialWebGpuTest("wavefront memory evidence matches every persistent GPU buffer allocation", async () => {

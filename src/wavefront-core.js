@@ -30,7 +30,7 @@ export const EMISSIVE_TRIANGLE_INDEX_BYTES = 4;
 export const ENVIRONMENT_PORTAL_RECORD_BYTES = 96;
 export const MEDIUM_TABLE_ROWS = 2;
 export const ACCUMULATION_RECORD_BYTES = 16;
-export const PATH_VERTEX_RECORD_BYTES = 16;
+export const PATH_VERTEX_RECORD_BYTES = 64;
 export const GPU_SUBMITTED_WORK_TIMEOUT_MS = 5_000;
 export const GPU_READBACK_COMPLETION_TIMEOUT_MS = 60_000;
 export const GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS = 60_000;
@@ -57,6 +57,7 @@ export const COUNTER_TRANSPORT_CACHED_INDIRECT_LUMINANCE_OFFSET = 21;
 export const COUNTER_TRANSPORT_RESIDUAL_LUMINANCE_OFFSET = 22;
 export const COUNTER_TRANSPORT_ZERO_TERMINATION_OFFSET = 23;
 export const COUNTER_TRANSPORT_CHECKSUM_OFFSET = 24;
+export const COUNTER_PATH_FAILURE_OFFSET = 26;
 export const TRACE_STORAGE_BUFFER_BINDINGS = 10;
 export const TRACE_SAMPLED_TEXTURE_BINDINGS = 21;
 export const BRDF_LUT_UPLOAD_CACHE = new Map();
@@ -99,6 +100,7 @@ export const DEFAULT_ENVIRONMENT_LIGHTING = Object.freeze({
 });
 
 export const EMPTY_TERMINATION_METRICS = Object.freeze({
+  pathCompletionValid: null,
   termination: Object.freeze({
     emissive: 0,
     environment: 0,

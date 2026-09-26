@@ -4,6 +4,7 @@ import { WAVEFRONT_SHADER_KERNELS_WGSL } from "./wavefront-shader-kernels.js";
 import { WAVEFRONT_SHADER_LAYOUT_WGSL } from "./wavefront-shader-layout.js";
 import { WAVEFRONT_SHADER_LIGHTING_WGSL } from "./wavefront-shader-lighting.js";
 import { WAVEFRONT_SHADER_MATERIALS_WGSL } from "./wavefront-shader-materials.js";
+import { PATH_TREE_WGSL } from "./wavefront-path-tree-shader.js";
 export { PRESENT_WGSL } from "./wavefront-present-shader.js";
 
 function readPositiveInteger(name, value, fallback) {
@@ -22,6 +23,7 @@ export const WAVEFRONT_COMPUTE_WGSL = [
   WAVEFRONT_SHADER_MATERIALS_WGSL,
   WAVEFRONT_SHADER_LIGHTING_WGSL,
   WAVEFRONT_SHADER_BVH_WGSL,
+  PATH_TREE_WGSL,
   WAVEFRONT_SHADER_KERNELS_WGSL,
 ].join("\n");
 

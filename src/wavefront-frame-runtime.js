@@ -195,6 +195,16 @@ export function createWavefrontTransportGuardrailSummary(frameStats, options = {
   const memory = summarizeWavefrontMemory(frameStats?.memory)
   const checks = Object.freeze([
     createTransportGuardrailCheck(
+      "path-completion",
+      frameStats?.pathCompletionValid === false ? "fail"
+        : frameStats?.pathCompletionValid === true ? "pass" : "warn",
+      frameStats?.pathCompletionValid === false
+        ? "At least one camera sample had incomplete, invalid, or overflowing path lineage; reject this frame."
+        : frameStats?.pathCompletionValid === true
+          ? "Every reduced camera sample had complete path lineage."
+          : "Path completion integrity was not read back; this frame is not qualification evidence."
+    ),
+    createTransportGuardrailCheck(
       "device-loss",
       deviceLossStatus === "lost" ? "fail" : deviceLossStatus === "pending" ? "warn" : "pass",
       deviceLossStatus === "lost"

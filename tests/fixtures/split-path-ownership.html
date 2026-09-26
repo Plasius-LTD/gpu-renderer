@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Split-path physical ownership verification</title>
+<h1>Split-path physical ownership verification</h1>
+<p>Tests the final assembled shader and the actual fixed renderer. Not a performance or image-quality qualification.</p>
+<pre id="result" role="status">Running…</pre>
+<canvas id="canvas" width="16" height="16" aria-label="Controlled transport test"></canvas>
+<script type="module">
+import { WAVEFRONT_COMPUTE_WGSL } from "/src/wavefront-shaders.js";
+import { createWavefrontPathTracingComputeConfig } from "/src/wavefront-config.js";
+import { createConfigPayload } from "/src/wavefront-packers.js";
+import { createWavefrontPathTracingComputeRenderer } from "/src/wavefront-compute.js";
+
+const probe = `
+@compute @workgroup_size(1)
+fn initialise_probe() {
+  var input = RayRecord();
+  input.parentRayId = PATH_NONE;
+  input.sampleId = 7u;
+  let ray = begin_path_node(input, 0u);
+  link_path_child(ray, 0u, false);
+  link_path_child(ray, 1u, true);
+}
+@compute @workgroup_size(2)
+fn siblings_probe(@builtin(local_invocation_id) id: vec3<u32>) {
+  var input = RayRecord();
+  input.parentRayId = 0u;
+  input.sampleId = 7u;
+  input.bounce = 1u;
+  input.throughput = vec4<f32>(1.0);
+  let ray = begin_path_node(input, id.x);
+  record_deferred_terminal_source(ray, vec3<f32>(1.0, 2.0, 3.0) * f32(id.x + 1u), TERMINAL_SOURCE_KIND_ENVIRONMENT);
+}
+@compute @workgroup_size(1)
+fn invalidate_probe() { pathNodes[4u].flags = PATH_INITIALIZED | PATH_FAILED; }
+@compute @workgroup_size(1)
+fn reduce_probe() { accumulation[0] = resolve_complete_path_tree(0u, 0u, 7u); }
+`;
+let device, renderer, timer;
+let cancelled = false;
+const owned = [];
+const active = () => { if (cancelled) throw new Error("Cancelled"); };
+const buffer = (size, usage) => {
+  const value = device.createBuffer({ size, usage }); owned.push(value); return value;
+};
+const hash = async (source) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",
+  new TextEncoder().encode(source))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+async function readBuffer(gpuDevice, source, size) {
+  const staging = gpuDevice.createBuffer({ size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  let copy;
+  try {
+    const encoder = gpuDevice.createCommandEncoder();
+    if ((source.usage & GPUBufferUsage.COPY_SRC) === 0) {
+      // Test-only exact storage copy. Do not alter the renderer's allocation usage.
+      copy = gpuDevice.createBuffer({ size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+      const module = gpuDevice.createShaderModule({ code: `
+        @group(0) @binding(0) var<storage, read> input: array<vec4<u32>>;
+        @group(0) @binding(1) var<storage, read_write> output: array<vec4<u32>>;
+        @compute @workgroup_size(64) fn copy_words(@builtin(global_invocation_id) id: vec3<u32>) {
+          if (id.x < arrayLength(&output)) { output[id.x] = input[id.x]; }
+        }` });
+      const pipeline = await gpuDevice.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "copy_words" } });
+      active();
+      const group = gpuDevice.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: { buffer: source } }, { binding: 1, resource: { buffer: copy } },
+      ] });
+      const pass = encoder.beginComputePass(); pass.setPipeline(pipeline); pass.setBindGroup(0, group);
+      pass.dispatchWorkgroups(Math.ceil(size / 16 / 64)); pass.end();
+    }
+    encoder.copyBufferToBuffer(copy ?? source, 0, staging, 0, size);
+    gpuDevice.queue.submit([encoder.finish()]);
+    await staging.mapAsync(GPUMapMode.READ); active();
+    return new Float32Array(staging.getMappedRange().slice(0));
+  } finally { staging.destroy(); copy?.destroy(); }
+}
+const check = (condition, message) => { if (!condition) throw new Error(message); };
+async function run() {
+  const adapter = await navigator.gpu?.requestAdapter(); active();
+  check(adapter?.info.isFallbackAdapter === false, "Physical adapter unavailable");
+  device = await adapter.requestDevice(); active();
+  device.pushErrorScope("validation");
+  const module = device.createShaderModule({ code: WAVEFRONT_COMPUTE_WGSL + probe });
+  const compilation = await module.getCompilationInfo(); active();
+  const errors = compilation.messages.filter(({ type }) => type === "error");
+  check(errors.length === 0, errors.map(({ message }) => message).join("; "));
+  const config = createWavefrontPathTracingComputeConfig({ width: 16, height: 16, maxDepth: 2, samplesPerPixel: 1, denoise: false });
+  const payload = createConfigPayload(config, { x: 0, y: 0, width: 4, height: 1 }, 0, { sampleIndex: 7, sampleWeight: 1 });
+  const uniform = buffer(payload.byteLength, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+  const paths = buffer(4 * 3 * 64, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
+  const counters = buffer(128, GPUBufferUsage.STORAGE);
+  const output = buffer(16, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
+  device.queue.writeBuffer(uniform, 0, payload);
+  const resources = new Map([[3, output], [5, uniform], [6, counters], [22, paths]]);
+  const pipelines = new Map();
+  for (const [name, bindings] of [
+    ["initialise_probe", [5, 22]], ["siblings_probe", [5, 6, 22]],
+    ["invalidate_probe", [22]], ["reduce_probe", [3, 5, 22]],
+  ]) {
+    const pipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: name } }); active();
+    const group = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0),
+      entries: bindings.map((binding) => ({ binding, resource: { buffer: resources.get(binding) } })) });
+    pipelines.set(name, { pipeline, group });
+  }
+  const trials = [];
+  for (let trial = 0; trial < 9; trial += 1) {
+    const encoder = device.createCommandEncoder();
+    const entries = ["initialise_probe", "siblings_probe", ...(trial === 8 ? ["invalidate_probe"] : []), "reduce_probe"];
+    for (const name of entries) {
+      const { pipeline, group } = pipelines.get(name);
+      const pass = encoder.beginComputePass(); pass.setPipeline(pipeline); pass.setBindGroup(0, group);
+      pass.dispatchWorkgroups(1); pass.end();
+    }
+    device.queue.submit([encoder.finish()]);
+    const value = Array.from(await readBuffer(device, output, 16));
+    check(value.every((x, i) => x === (trial === 8 ? 0 : [3, 6, 9, 1][i])), "Ownership sum/completion mismatch: " + value);
+    trials.push(value);
+  }
+  const validation = await device.popErrorScope(); active();
+  check(!validation, validation?.message);
+  for (const value of owned) value.destroy();
+  device.destroy(); device = null;
+
+  const rendererTrials = [];
+  const cases = [
+    { name: "environment-deferred", deferredPathResolve: true },
+    { name: "environment-forward", deferredPathResolve: false },
+    { name: "small-glass-mesh", deferredPathResolve: true, extent: 0.35, materialKind: "dielectric" },
+    { name: "full-metal-mesh", deferredPathResolve: true, extent: 10, materialKind: "metal" },
+    { name: "overflow-glass-mesh-denoise", deferredPathResolve: true, extent: 10, materialKind: "dielectric", overflow: true, denoise: true },
+  ];
+  for (const testCase of cases) {
+    const { deferredPathResolve, extent, materialKind, overflow = false, denoise = false } = testCase;
+    const renderAdapter = await navigator.gpu.requestAdapter(); active();
+    check(renderAdapter?.info.isFallbackAdapter === false
+      && renderAdapter.info.vendor === adapter.info.vendor
+      && renderAdapter.info.architecture === adapter.info.architecture, "Physical adapter changed");
+    // Only observe allocations; all API operations execute on the physical device.
+    const allocations = new Map();
+    const navigatorForTest = { gpu: {
+      requestAdapter: async () => ({
+        limits: renderAdapter.limits, features: renderAdapter.features, info: renderAdapter.info,
+        requestDevice: async (descriptor) => {
+          const real = await renderAdapter.requestDevice(descriptor);
+          active(); device = real;
+          real.pushErrorScope("validation");
+          const create = real.createBuffer.bind(real);
+          real.createBuffer = (description) => {
+            const value = create(description);
+            if (description.label) allocations.set(description.label, value);
+            return value;
+          };
+          return real;
+        },
+      }),
+      getPreferredCanvasFormat: () => navigator.gpu.getPreferredCanvasFormat(),
+    } };
+    renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: document.querySelector("#canvas"), navigator: navigatorForTest,
+      width: 16, height: 16, tileSize: 16, maxDepth: 2, samplesPerPixel: 32,
+      denoise, deferredPathResolve, strictPhysicalLowSppLighting: true,
+      camera: { position: [0, 0, 3], target: [0, 0, 0], fovYDegrees: 46 },
+      environmentLighting: { horizonColor: [1, 1, 1, 1], zenithColor: [1, 1, 1, 1], sunColor: [0, 0, 0, 1], intensity: 1 },
+      ...(extent ? { displayQuality: true, meshes: [{
+        positions: [-extent, -extent, 0, extent, -extent, 0, extent, extent, 0, -extent, extent, 0],
+        indices: [0, 1, 2, 0, 2, 3], materialKind, roughness: 0,
+        color: [1, 1, 1, 1], ior: 1.5, transmission: materialKind === "dielectric" ? 1 : 0,
+        metallic: materialKind === "metal" ? 1 : 0,
+      }] } : { sceneObjects: [{ type: "sphere", center: [0, 0, 1000], radius: 1 }] }),
+    }); active();
+    // Task #199 / PR #205 covers the separate zero-budget defect. Omission is
+    // the current unambiguous fixed dispatcher and must not silently reduce SPP.
+    const frame = await renderer.renderFrame({ awaitGPUCompletion: true, readStats: true }); active();
+    const accumulation = allocations.get("plasius.wavefront.accumulation");
+    check(accumulation, "Actual accumulation buffer unavailable");
+    const values = await readBuffer(device, accumulation, 256 * 16);
+    const counts = Array.from({ length: 256 }, (_, i) => values[i * 4 + 3]);
+    check(frame.pathCompletionValid === !overflow, testCase.name + ": unexpected lineage validity");
+    check(overflow ? counts.some((count) => count === -1) : counts.every((count) => count === 32), "Actual completed count differs from fixed 32: " + JSON.stringify({
+      min: Math.min(...counts), max: Math.max(...counts), rendered: frame.renderedSamplesPerPixel,
+      target: frame.targetSamplesPerPixel, budget: frame.frameTimeBudgetMs, constrained: frame.budgetConstrained,
+    }));
+    const centerRadiance = Array.from(values.slice((8 * 16 + 8) * 4, (8 * 16 + 8) * 4 + 3));
+    if (extent && !overflow) {
+      check(centerRadiance.every((channel) => Math.abs(channel - 1) <= 0.00001), testCase.name + ": white-environment energy mismatch " + centerRadiance);
+    }
+    const nodes = new Uint32Array((await readBuffer(device, allocations.get("plasius.wavefront.pathVertices"), 256 * 3 * 64)).buffer);
+    const splitRoots = Array.from({ length: 256 }, (_, i) => nodes[i * 16 + 10]).filter((child) => child !== 0xffffffff).length;
+    if (materialKind === "metal") check(splitRoots === 0, "Metal incorrectly created a transmission sibling");
+    if (materialKind === "dielectric" && !overflow) check(splitRoots > 0, "Glass mesh did not exercise split siblings");
+    rendererTrials.push({ name: testCase.name, deferredPathResolve, denoise, requestedSpp: 32, actualCountMin: Math.min(...counts),
+      actualCountMax: Math.max(...counts), pathCompletionValid: frame.pathCompletionValid,
+      centerRadiance, splitRoots, outputProbe: frame.outputProbe, queueOverflow: frame.queueOverflow });
+    if (overflow) {
+      check(frame.transportGuardrails.status === "fail" && frame.queueOverflow > 0, "Overflow did not reject the frame");
+      renderer.updateCamera({ position: [0, 0, 3], target: [0, 0, 10], fovYDegrees: 46 });
+      const recovered = await renderer.renderFrame({ awaitGPUCompletion: true, readStats: true });
+      check(recovered.pathCompletionValid === true, "Failure was not reset for the next successful frame");
+      rendererTrials.at(-1).nextFrameRecovered = true;
+    }
+    const error = await device.popErrorScope(); active();
+    check(!error, error?.message);
+    renderer.destroy(); renderer = null; device.destroy(); device = null;
+  }
+  return { status: "passed", scope: "physical-path-ownership-and-fixed-count-smoke",
+    timestamp: new Date().toISOString(), shaderSha256: await hash(WAVEFRONT_COMPUTE_WGSL),
+    adapter: { vendor: adapter.info.vendor, architecture: adapter.info.architecture, isFallbackAdapter: adapter.info.isFallbackAdapter },
+    userAgent: navigator.userAgent, siblingTrials: trials, rendererTrials, compilerErrors: 0, validationErrors: 0,
+    limitations: ["Only 16x16 and two bounces", "Not an HDR image regression", "Not a performance benchmark", "Broad material, variance and stress qualification remains outstanding"] };
+}
+try {
+  const receipt = await Promise.race([run(), new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Physical verification timeout")), 60000);
+  })]);
+  document.querySelector("#result").textContent = JSON.stringify(receipt, null, 2);
+} catch (error) {
+  document.querySelector("#result").textContent = JSON.stringify({ status: "failed", reason: String(error.message).slice(0, 1500) });
+} finally {
+  cancelled = true; clearTimeout(timer);
+  renderer?.destroy(); for (const value of owned) value.destroy(); device?.destroy();
+}
+</script>
+</html>

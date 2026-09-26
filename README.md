@@ -9,6 +9,39 @@
 [![Changelog](https://img.shields.io/badge/changelog-md-blue.svg)](./CHANGELOG.md)
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
+
+`tests/fixtures/native-eames-trace.html` uses the original Eames source asset
+through the shared Product Studio loader and mesh builder, with lighting-owned
+hash/geometry/texture/material admission. It retains loading/BVH setup separately
+from native fixed32/radial frame costs. It is not full site/application or quality
+qualification. The six-triangle results below remain synthetic diagnostics only.
+`tests/fixtures/native-adaptive-trace.html` is the opt-in full-frame radial
+diagnostic: native 1080p/4K, centred area shares 5/10/15/20/25/25% at
+32/16/8/4/2/1 SPP. It reuses shared rounds and canonical material transport, omits
+absent tile tiers, retains CPU/GPU/count/HDR traces separately from timing-only
+frames, and checks uniform32 identity. Fixed32 is the reference; the real-time
+target applies to adaptation. This is not public integration or qualification.
+The optional fused-hit variant is disabled for this native trace: its 4K
+uniform32 identity control failed while the ordinary adaptive control matched.
+The [retained native radial results](https://github.com/Plasius-LTD/gpu-lighting/blob/11730c4203e30ff8ae009a991916a332f5c38920/docs/evidence/native-radial-2026-09-26.md)
+verify exact 5.95 mean SPP and 81.40625% fewer primary rays. Timing-only jobs
+average 722.93 / 2,996.97 ms at 1080p/4K, versus same-run fixed32
+2,281.60 / 8,904.07 ms. Visible reduced-SPP brightness boundaries/noise remain;
+these lower-work timings establish neither matched quality nor real-time success.
+The minimum real-time acceptance target is native **1920×1080 at sustained 60 Hz
+on the M2 Max MacBook Pro**; native **3840×2160 at 60 Hz** is the ideal target.
+128×128 fixtures are correctness diagnostics, not full-frame performance evidence.
+`tests/fixtures/native-frame-screen.html` measures actual native fixed32 frames
+with the existing tiled renderer, including presentation commands. Its short-run
+results cannot establish sustained application/display or image-quality success.
+The older paired runner remains single-tile by default; the explicit native
+diagnostic extends it to full frames. Public tiled adaptive integration and
+matched-quality native-resolution qualification remain required.
+The [retained M2 Max native screen](https://github.com/Plasius-LTD/gpu-lighting/blob/43c216d0d7f263ed432ae0f44d510b9389778320/docs/evidence/native-resolution-2026-09-26.md)
+measured 2,342.07 ms at 1080p and 8,966.80 ms at 4K in the fixed32 simple scene.
+The current fixed path fails the real-time target. Each resolution now requests
+an independent adapter/device; the failed adapter-reuse attempt is also retained.
+
 This package is intended to replace Three.js-dependent render orchestration with
 an explicit WebGPU-first runtime that can be consumed from React, vanilla, or
 worker-driven app surfaces.
@@ -18,6 +51,108 @@ runtime line (`^1.1.1`), and validates its development tooling against the
 current ESLint 10 and TypeScript 7 baselines.
 
 Apache-2.0. ESM + CJS builds.
+
+The paired adaptive diagnostic uses an internal opt-in four-query timestamp span
+on actual first/final compute work. Normal renderer telemetry retains its existing
+two-query descriptors and allocation; unavailable/invalid timestamps never become
+GPU performance evidence. See the lighting-owned paired diagnostic protocol.
+
+## CPU attribution diagnostics
+
+Opt in per render without enabling adaptive sampling:
+
+```js
+const frame = await renderer.renderFrame({
+  cpuProfiling: { enabled: true, userTiming: false },
+  readStats: true, // Independent opt-in GPU timestamps/ray readback.
+  readOutputProbe: false,
+});
+console.log(frame.cpuProfile);
+```
+
+`cpuProfile` is absent by default. It reports host elapsed packing, upload,
+encoding, finish and submission intervals; nested `exclusiveMs` avoids counting
+child intervals twice. `gpuWait`, `telemetryReadback` and `outputReadback` are
+asynchronous elapsed time, **not CPU busy time**. GPU/job timing boundaries and
+rendering commands remain unchanged. Post-job readback commands are excluded
+from API counts. Explicit temporary buffer bytes are not total heap allocation,
+GC, driver memory, residency or a memory-saving claim. Setup/updateSceneObjects
+and browser UI work are outside this per-render profile.
+
+`userTiming: true` emits at most 128 named browser timing spans per frame,
+clearing their timeline entries after emission; aggregate counters retain every
+call. CPU profiling itself adds overhead; compare on/off before interpreting
+numbers. Use a separate browser CPU/GC trace for active CPU attribution.
+
+The source-bound [replay setup](https://github.com/Plasius-LTD/gpu-lighting/blob/b23af8d4c79ce23c28c5134886569b84a73c9079/docs/paired-adaptive-replay.md)
+can open `tests/fixtures/adaptive-cpu-profile.html` at the profiling commit.
+Choose **Measure CPU breakdown** for alternating off/on fixed/shared/fused runs,
+identity checks, raw receipts and median/p95 summaries. These 128×128 experiments
+do not activate the GPU tab or qualify adaptive quality/performance.
+See the [measurement contract](docs/design/cpu-render-profiling.md).
+
+## Completion-driven frames (opt-in)
+
+`renderFrame()` already returns a GPU-completion promise by default. Waiting on
+it yields JavaScript; it is not a busy wait. The optional loop starts the next
+frame after that promise and completion observers settle, with a browser-task
+yield rather than waiting for an additional display tick:
+
+```js
+import { createWavefrontFrameLoop } from "@plasius/gpu-renderer";
+
+const loop = createWavefrontFrameLoop({
+  enabled: remoteFlags["renderer.sampling.adaptivePerPixel.enabled"] === true,
+  renderFrame: (options) => renderer.renderFrame(options),
+  targetFrameTimeMs: 1000 / 60, // Observation only; does not reduce SPP.
+  getRenderOptions: () => ({
+    samplesPerPixel: budgetAdapter.getCurrentBudget().samplesPerPixel,
+    frameTimeBudgetMs: 0, // Explicitly fixed ceiling; no frame-budget reduction.
+  }),
+  onFrameComplete: (frame, progress) => {
+    recordFrameMeasurements(frame, progress); // Feed existing gpu-performance policy.
+  },
+});
+const finished = loop.start(); // Do not await here if independent work should continue.
+finished.catch(reportRenderFailure); // Failures stop the loop; never silently restart.
+
+// From a UI/telemetry callback, as often as the application needs:
+const progress = loop.getProgress();
+// progress.elapsedMs, budgetRatio, overBudgetMs, completedTileFraction
+
+// On shutdown / remote disable, from outside a loop callback:
+await loop.stop(); // Drain current frame and readbacks before destroying resources.
+renderer.destroy();
+```
+
+Only one owner may call/render/update/destroy this renderer. Apply camera/scene
+updates at `getRenderOptions`, not during a tile wait. Independent simulation,
+input, networking or worker tasks may run while waiting, but long main-thread
+tasks can delay GPU completion callbacks. Do not await `stop()` inside the loop's
+own callbacks (request stop there; await the run promise outside). Custom render
+adapters must genuinely await completion with bounded timeouts; a submit-only
+callback is not sufficient. Stop does not cancel already submitted GPU commands.
+After a timeout/device failure, do not reuse the failed renderer in another loop;
+dispose it and recover through the application's device-recreation path.
+
+Progress is on-demand, with no GPU polling/readbacks. `budgetRatio` is elapsed
+wall time divided by the observational target; zero/omitted target returns null.
+Elapsed time includes preparation and requested readback, not CPU utilization.
+`completedTileFraction` counts queue-confirmed tiles, **not GPU-time completion**;
+`gpuCompletionFraction` is always null. Single-tile jobs remain 0 until the queue
+completes. The standalone renderer also accepts `onProgress(event)` with stages
+and confirmed counts; observer errors reject after draining, not during a wait.
+
+The loop forces GPU completion, defaults diagnostic readbacks off, and applies
+new budgets only on the next frame. It changes no transport, budgets, shaders or
+GPU allocations. It is disabled by default, inherits the parent remote flag,
+and is not enabled in the site. Rollback stops/drains it and resumes the existing
+GPU-native caller. The legacy display-paced runtime is unchanged. This throughput
+loop is not a guarantee of display pacing, idle CPU capacity or a GPU speedup.
+
+Open `tests/fixtures/frame-loop.html` on the source-bound replay server for
+fixed/shared/fused identity and independent-heartbeat verification. See the
+[design and acceptance contract](docs/design/completion-driven-frames.md).
 
 ## Privacy-Safe Feedback Diagnostics
 
@@ -59,6 +194,58 @@ diagnostic capture or network/storage operation, and never registers
 reporting.
 
 ## Adaptive per-pixel implementation status
+
+This experimental integration branch combines the separately tracked split-path
+ownership and primary-visibility MIS fixes with adaptive scheduling infrastructure.
+Its fixed shader matches PR 214's corrected baseline, **not** the earlier released
+shader. The earlier receipts below remain evidence for their stated revisions.
+No prerequisite PR, public renderer option or site flag is enabled by this branch.
+
+An internal complete-camera-sample producer now reduces the canonical branch tree
+into the existing sample record before selected-tier count commit. Unweighted
+radiance is normalized by actual completed samples; sibling branches cannot count
+as separate camera samples. Invalid worklists, pending paths, overflow, bad lineage
+or stale identities reject completion. It reuses capped buffers without new GPU
+storage. Bootstrap uses the 64-byte PathNode ABI and invalidates selected roots;
+the shared bounce code owns initialization of every child node.
+See [integration design](docs/design/adaptive-complete-sample-integration.md) and
+[ADR 0039](docs/adrs/adr-0039-adaptive-complete-camera-sample-integration.md).
+The physical probe is `tests/fixtures/adaptive-complete-sample.html`; it connects
+real transport with unequal-budget count/resolve, not a synthetic radiance source.
+On Apple Metal-3, 14 small-scene/order cases passed, including diffuse same-sample
+prefix agreement with the fixed dispatcher, plus 11 fail-closed cases. These are
+not matched-quality performance or site qualification. See the
+[dated publication-readiness ledger](docs/evidence/adaptive-publication-readiness-2026-09-20.md)
+for source-bound receipts, actual sample counts and outstanding claim gates.
+
+The additional `tests/fixtures/adaptive-paired.html` diagnostic connects the same
+real pipeline to the lighting-owned paired protocol and image metrics. It compares
+fixed32, equal-budget adaptive32 and preassigned 2/8/32 budgets, with 128/256-SPP
+references, two warmups, ten rotated timing rounds, native queue/timestamp telemetry
+and retained linear pixels/previews. It requires the pinned lighting fixture
+modules under `/lighting/` and the existing loopback capture bridge. It is not a
+live adaptive importance policy, Eames benchmark, or public site integration.
+
+The internal [shared-round scheduler](docs/design/adaptive-shared-rounds.md) adds
+an independently selectable comparison in `tests/fixtures/adaptive-shared.html`.
+It shares absolute sampling rounds across tiers, batches immutable uploads, and
+prepares/commits only compacted pixels around the unchanged bounce pipeline.
+For 2/8/32 budgets at four bounces, rounds fall from 42 to 32 and compute passes
+from 389 to 206. `tests/fixtures/adaptive-shared-safety.html` checks analytic
+images, split paths, 128 SPP and malformed-state rejection. These are internal
+diagnostics, not a public adaptive option. See [ADR 0040](docs/adrs/adr-0040-shared-adaptive-sampling-rounds.md)
+and the [source-bound results](docs/evidence/shared-adaptive-rounds-2026-09-20.md)
+for measured trade-offs and outstanding quality/confidence gates.
+
+`tests/fixtures/adaptive-pruning.html` independently compares zero-work empty
+queues, immediate hit consumption, and both together against the shared-round
+baseline. Internal default-off options omit the global hit-record round-trip
+and/or guarded empty workgroups; they add no temporal cache and preserve the
+fixed shader and command trace. Allocation capacity is retained, so this is not
+a memory-saving claim. See [ADR 0041](docs/adrs/adr-0041-immediate-hit-consumption-and-empty-queue-pruning.md)
+and [pruning evidence](docs/evidence/adaptive-pruning-2026-09-20.md). Physical image,
+ray and count identity passes these bounded scenes; timing confidence and the
+preassigned budgets' image-quality gates still do not qualify a public rollout.
 
 Per-pixel adaptive rendering is not yet exposed by the public renderer API.
 An internal [primary-worklist stage](docs/design/adaptive-primary-worklist.md)
@@ -126,13 +313,14 @@ retains the dense internal commit mode. Final resolve still covers the whole
 tile. The 48-byte payload fits the same 256-byte slots; allocated memory and
 fixed transport are unchanged. See [ADR 0035](docs/adrs/adr-0035-tier-qualified-camera-sample-commit.md).
 
-The fixed renderer and its whole-frame budget adjustment are unchanged. The new
-stage is not wired to transport or exposed through package exports. Race-free
-split-path production, compact primary scheduling, foveation and shared
-integration remain prerequisites for a site comparison. The validation fixtures
-under `tests/fixtures/adaptive-*.html` test arithmetic/ABI and resource ownership,
-not adaptive images, transport correctness, performance or net memory savings.
-Physical execution status is recorded in the [Task 168 evidence](docs/evidence/task-168-adaptive-count-resolve.md).
+The earlier metadata/count-resolve foundation did not connect to transport; its
+physical execution is recorded in [Task 168 evidence](docs/evidence/task-168-adaptive-count-resolve.md).
+The experimental integration described above now connects real transport in a
+physical fixture, while the public renderer remains fixed-dispatch only. Its
+whole-frame budget policy is unchanged. The separate prerequisite transport fixes,
+production adaptive scheduler/presentation, importance controllers and shared/site
+integration still require qualification before a site comparison. No fixture here
+establishes matched-quality performance, full-scene noise or net memory savings.
 See [ADR 0029](docs/adrs/adr-0029-reflected-adaptive-metadata-admission.md) and
 [ADR 0030](docs/adrs/adr-0030-complete-camera-sample-resolve.md).
 
@@ -319,11 +507,9 @@ requirement and route segment. The current surface establishes the WebGPU
 lifecycle and validation boundary for the PBR animation path; shader-level
 textured character and environment drawing builds on this boundary.
 
-The production transport rollout remains gated by
-`renderer.transport.physicalEstimator`. With the flag enabled, deferred
-continuation vertices carry sanitized physical throughput segments instead of a
-heuristic material-response tint, while the older fallback path remains the
-rollback route during validation.
+The physical material functions are shared by both resolve modes. Transport
+rollout controls do not permit the former sibling-address race to return:
+rollback requires a separately qualified GPU-native release.
 Low-SPP physical lighting hardening is separately controlled by the boolean
 `renderer.transport.strictPhysicalLowSppLighting` flag, passed either as
 `strictPhysicalLowSppLighting: true` or through `featureFlags`. When enabled,
@@ -498,16 +684,42 @@ separate shadow/direct-light pass: the active ray still has to hit emissive
 geometry or miss into the environment before radiance is committed. Guided
 emissive hits carry a bounded estimator weight so finite light guidance does not
 over-expose low-sample renders before full material PDFs/MIS are implemented.
-By default, `deferredPathResolve` records
-per-bounce material responses in a tile-bounded path buffer and records the
-terminal emissive/HDRI/environment source in the final path slot. The output
-pass then resolves that recorded path backward and adds the weighted sample to
-the pixel accumulation, so unresolved continuation light is still deferred until
-a terminal source is known. Surface resolution may still add a small
-shadow-tested direct-light term immediately when it has an explicit source and
-visibility result, which keeps true occlusion shadows possible without falling
-back to broad per-bounce ambient fill. Set `deferredPathResolve: false` only
-for legacy forward-accumulation comparison.
+Both resolve modes now retain branch-owned direct and terminal radiance in
+64-byte, tile/depth-bounded path nodes. After the bounce passes, one root
+invocation reduces the complete sibling tree and commits one weighted camera
+sample. Fixed rendering still uses a weight of `1 / renderedSamplesPerPixel`;
+this is not yet per-pixel adaptive normalization. The
+`deferredPathResolve: false` comparison retains its terminal-policy differences,
+but no longer performs unsafe concurrent writes to pixel accumulation.
+
+`renderFrame({ readStats: true })` reports `pathCompletionValid`: `true` for
+complete lineage, `false` when any sample failed, and `null` when integrity was
+not read back. Reject false/unknown results for qualification. Overflow or
+invalid lineage is sticky for the frame; affected pixels carry invalid alpha
+and a magenta diagnostic, including through denoise. A new frame resets the
+failure state. Full-screen refractive scenes can still exceed bounded queue
+capacity and are rejected, not silently rendered with missing siblings.
+
+At a 128 × 128 tile and depth eight, the actual node allocation is 9 MiB
+(eight usable depth levels plus the retained guard level), versus 2.25 MiB for
+the former shared-chain storage. This is allocated buffer memory, not physical
+VRAM residency. The [ownership design](docs/design/split-path-ownership.md) and
+[evidence ledger](docs/evidence/task-210-path-ownership.md) distinguish focused
+physical checks from the outstanding image, variance, stress and release gates.
+
+Primary camera visibility of environment and emissive sources now bypasses
+terminal MIS: no competing next-event sample exists at bounce zero. Non-delta
+secondary rays retain the existing PDF/weight calculation; delta paths retain
+unit MIS weight. This narrow fixed-renderer correction adds no buffers or
+dispatches. The [Task 212 design](docs/design/primary-terminal-mis.md) and
+[evidence status](docs/evidence/task-212-primary-terminal-mis.md) separate local
+checks from bounded physical evidence and outstanding full-scene qualification.
+All 24 controlled 1/32/128-SPP lanes passed on Apple Metal-3 on 2026-09-14.
+Serve the repository's `src/` and
+`tests/fixtures/` paths on loopback and open
+`tests/fixtures/primary-terminal-mis.html` to run the focused linear-HDR probes.
+This does not enable adaptive sampling or establish a new quality baseline.
+
 When an `environmentMap` is provided, the wavefront trace shader samples it as
 an equirectangular radiance source for environment misses and uses the same
 mapped radiance for terminal residuals before falling back to static ambient.

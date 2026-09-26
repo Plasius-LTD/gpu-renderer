@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Existing split-path collision reproduction</title>
+<h1>Existing split-path collision reproduction</h1>
+<p>Calls the existing assembled WGSL terminal helper with two sibling contributions.
+This is a controlled ownership reproduction, not a scene-noise or performance result.</p>
+<pre id="result" role="status">Running…</pre>
+<script type="module">
+import { WAVEFRONT_COMPUTE_WGSL } from "/src/wavefront-shaders.js";
+import { createWavefrontPathTracingComputeConfig } from "/src/wavefront-config.js";
+import { createConfigPayload } from "/src/wavefront-packers.js";
+
+const probe = `
+@compute @workgroup_size(2)
+fn reproduce_sibling_terminal_collision(@builtin(local_invocation_id) id: vec3<u32>) {
+  var ray = RayRecord();
+  ray.rayId = 0u;
+  ray.sourcePixelId = 0u;
+  ray.sampleId = 0u;
+  ray.bounce = 1u;
+  ray.throughput = vec4<f32>(1.0);
+  record_deferred_terminal_source(ray, vec3<f32>(1.0, 2.0, 3.0) * f32(id.x + 1u), TERMINAL_SOURCE_KIND_ENVIRONMENT);
+}
+`;
+let device, timer;
+let cancelled = false;
+const buffers = [];
+function active() { if (cancelled) { device?.destroy(); throw new Error("Cancelled"); } }
+function buffer(size, usage) { const item = device.createBuffer({ size, usage }); buffers.push(item); return item; }
+const run = async () => {
+  const sourceHash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode(WAVEFRONT_COMPUTE_WGSL))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  if (sourceHash !== "6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0") {
+    throw new Error("Historical reproduction requires original transport at commit 3382f8226c312f06903adbd1f8f37a737de8a97f");
+  }
+  const adapter = await navigator.gpu?.requestAdapter();
+  active();
+  if (!adapter || adapter.info.isFallbackAdapter !== false) throw new Error("Physical adapter unavailable");
+  device = await adapter.requestDevice();
+  active();
+  device.pushErrorScope("validation");
+  const module = device.createShaderModule({ code: WAVEFRONT_COMPUTE_WGSL + probe });
+  const info = await module.getCompilationInfo();
+  active();
+  if (info.messages.some(({ type }) => type === "error")) throw new Error("Assembled shader compilation failed");
+  const pipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "reproduce_sibling_terminal_collision" } });
+  active();
+  const config = createWavefrontPathTracingComputeConfig({ width: 16, height: 16, maxDepth: 2, samplesPerPixel: 1, denoise: false, deferredPathResolve: true });
+  const payload = createConfigPayload(config, { x: 0, y: 0, width: 1, height: 1 }, 0);
+  const uniform = buffer(payload.byteLength, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+  const paths = buffer(3 * 16, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);
+  const readback = buffer(3 * 16, GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ);
+  device.queue.writeBuffer(uniform, 0, payload);
+  const bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
+    { binding: 5, resource: { buffer: uniform } }, { binding: 22, resource: { buffer: paths } },
+  ] });
+  const observed = [];
+  for (let trial = 0; trial < 8; trial += 1) {
+    device.queue.writeBuffer(paths, 0, new Uint8Array(48));
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline); pass.setBindGroup(0, bindGroup); pass.dispatchWorkgroups(1); pass.end();
+    encoder.copyBufferToBuffer(paths, 0, readback, 0, 48);
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ); active();
+    observed.push(Array.from(new Float32Array(readback.getMappedRange(), 32, 3)));
+    readback.unmap();
+  }
+  if (await device.popErrorScope()) throw new Error("WebGPU validation error");
+  active();
+  const expected = [3, 6, 9];
+  const allContributionsRetained = observed.every((rgb) => rgb.every((value, channel) => value === expected[channel]));
+  return {
+    status: allContributionsRetained ? "unexpected-no-collision" : "reproduced-defect",
+    scope: "actual-deferred-terminal-helper-sibling-address-alias",
+    timestamp: new Date().toISOString(),
+    shaderSha256: Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(WAVEFRONT_COMPUTE_WGSL))), (byte) => byte.toString(16).padStart(2, "0")).join(""),
+    adapter: { vendor: adapter.info.vendor, architecture: adapter.info.architecture, isFallbackAdapter: adapter.info.isFallbackAdapter },
+    userAgent: navigator.userAgent, expectedCameraSampleSum: expected, observedTerminalValues: observed,
+    allContributionsRetained, compilerErrors: 0, validationErrors: 0,
+  };
+};
+try {
+  const receipt = await Promise.race([run(), new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Physical reproduction timeout")), 30000);
+  })]);
+  document.querySelector("#result").textContent = JSON.stringify(receipt, null, 2);
+} catch (error) {
+  document.querySelector("#result").textContent = JSON.stringify({ status: "failed-reproduction", reason: String(error.message).slice(0, 200) });
+} finally {
+  cancelled = true; clearTimeout(timer);
+  for (const item of buffers) item.destroy();
+  device?.destroy();
+}
+</script>
+</html>
