@@ -7,6 +7,14 @@ site white paper and not approval to publish performance claims.
 
 ## Subsequent paired measurement (same date)
 
+The [26 September native-resolution screen](https://github.com/Plasius-LTD/gpu-lighting/blob/43c216d0d7f263ed432ae0f44d510b9389778320/docs/evidence/native-resolution-2026-09-26.md)
+supersedes any interpretation of the small probes as real-time evidence. The
+required minimum is now explicitly native 1080p/60 Hz on the M2 Max, with native
+4K/60 Hz the ideal target. Fixed32/four-bounce means in a simple scene are
+2,342.07 ms and 8,966.80 ms respectively: both fail the frame budget. The adapter
+reuse bug was fixed and both resolutions rerun. This is a full-frame fixed-path
+shortfall screen, not a native adaptive comparison or quality qualification.
+
 The [26 September CPU-attribution capture](cpu-attribution-2026-09-26.md) adds
 opt-in renderer/fixture host stages, separate waits/readback and command/known
 allocation counts. 144 physical on/off frames retain exact image/count/ray

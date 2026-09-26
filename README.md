@@ -17,6 +17,10 @@ with the existing tiled renderer, including presentation commands. Its short-run
 results cannot establish sustained application/display or image-quality success.
 The experimental adaptive paired runner is still single-tile; full tiled adaptive
 integration and matched-quality native-resolution qualification remain required.
+The [retained M2 Max native screen](https://github.com/Plasius-LTD/gpu-lighting/blob/43c216d0d7f263ed432ae0f44d510b9389778320/docs/evidence/native-resolution-2026-09-26.md)
+measured 2,342.07 ms at 1080p and 8,966.80 ms at 4K in the fixed32 simple scene.
+The current fixed path fails the real-time target. Each resolution now requests
+an independent adapter/device; the failed adapter-reuse attempt is also retained.
 
 This package is intended to replace Three.js-dependent render orchestration with
 an explicit WebGPU-first runtime that can be consumed from React, vanilla, or

@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Fix native screening fixture adapter reuse: obtain a fresh adapter for each
+  independent resolution/device and test consumed-adapter and failure handling.
+  Retain physical full-frame results showing both resolutions over the 60 Hz
+  budget, without treating fixed-path measurements as adaptive qualification.
+
 - **Added**
   - Full native 1080p/4K fixed32 screening page and explicit 1080p/60 Hz minimum
     acceptance. Includes all tiles and GPU presentation commands; reports shortfalls
