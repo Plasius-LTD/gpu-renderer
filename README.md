@@ -9,14 +9,21 @@
 [![Changelog](https://img.shields.io/badge/changelog-md-blue.svg)](./CHANGELOG.md)
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
+`tests/fixtures/native-adaptive-trace.html` is the opt-in full-frame radial
+diagnostic: native 1080p/4K, centred area shares 5/10/15/20/25/25% at
+32/16/8/4/2/1 SPP. It reuses shared rounds and immediate-hit transport, omits
+absent tile tiers, retains CPU/GPU/count/HDR traces separately from timing-only
+frames, and checks uniform32 identity. Fixed32 is the reference; the real-time
+target applies to adaptation. This is not public integration or qualification.
 The minimum real-time acceptance target is native **1920×1080 at sustained 60 Hz
 on the M2 Max MacBook Pro**; native **3840×2160 at 60 Hz** is the ideal target.
 128×128 fixtures are correctness diagnostics, not full-frame performance evidence.
 `tests/fixtures/native-frame-screen.html` measures actual native fixed32 frames
 with the existing tiled renderer, including presentation commands. Its short-run
 results cannot establish sustained application/display or image-quality success.
-The experimental adaptive paired runner is still single-tile; full tiled adaptive
-integration and matched-quality native-resolution qualification remain required.
+The older paired runner remains single-tile by default; the explicit native
+diagnostic extends it to full frames. Public tiled adaptive integration and
+matched-quality native-resolution qualification remain required.
 The [retained M2 Max native screen](https://github.com/Plasius-LTD/gpu-lighting/blob/43c216d0d7f263ed432ae0f44d510b9389778320/docs/evidence/native-resolution-2026-09-26.md)
 measured 2,342.07 ms at 1080p and 8,966.80 ms at 4K in the fixed32 simple scene.
 The current fixed path fails the real-time target. Each resolution now requests

@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add opt-in native radial adaptive tracing with cached per-tile tier plans,
+  partial-tile full-screen output/count gathering, separate timing-only and
+  CPU/GPU/HDR diagnostics. Preserve canonical fixed transport and public defaults.
+
 - Fix native screening fixture adapter reuse: obtain a fresh adapter for each
   independent resolution/device and test consumed-adapter and failure handling.
   Retain physical full-frame results showing both resolutions over the 60 Hz

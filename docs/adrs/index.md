@@ -40,3 +40,4 @@
 - [ADR 0041: Immediate hit consumption and empty-queue pruning](./adr-0041-immediate-hit-consumption-and-empty-queue-pruning.md)
 - [ADR 0042: Opt-in host elapsed attribution](./adr-0042-opt-in-host-attribution.md)
 - [ADR 0043: Completion-driven frame ownership and observational progress](./adr-0043-completion-driven-frame-loop.md)
+- [ADR 0044: Native prescribed adaptive tracing](./adr-0044-native-prescribed-adaptive-tracing.md)

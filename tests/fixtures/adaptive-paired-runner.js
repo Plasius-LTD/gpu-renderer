@@ -17,11 +17,13 @@ import { createPairedProbeScene, createPairedProbeBudgets } from "/lighting/demo
 import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 import { createSharedSampleRanges, packSharedPhase, createSharedAdaptivePipelines, encodeSharedPhase, encodeSharedSample } from "/src/wavefront-adaptive-shared.js";
 import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continuations.js";
+import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-export async function createPairedProbeRunner(scene, signal, {pruningVariants=false}={}) {
+export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null}={}) {
+  if(native)check(Number.isSafeInteger(native.width)&&Number.isSafeInteger(native.height)&&native.width>=128&&native.height>=128&&native.width*native.height<=3840*2160,"Invalid native fixture dimensions");
   let device, renderer, owner, telemetry, lost = false, disposed = false;
-  let tracePipelineLayout, activePreparedPipelines=null;
+  let tracePipelineLayout, activePreparedPipelines=null, activeTelemetry=null, presentPipeline;
   const timestampPairs = [];
   const extras = [], errors = [], buffers = new Map(), bindings = new Map(), descriptors = new Map(), pipelines = {}, textures = [];
   const active = () => check(!signal.aborted && !lost && !disposed, "Probe cancelled or device lost");
@@ -53,18 +55,19 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
         const createPipeline=device.createComputePipelineAsync.bind(device);
         device.createComputePipelineAsync=async descriptor=>{const value=await createPipeline(descriptor);
           if(!Object.hasOwn(pipelines,descriptor.compute.entryPoint)){pipelines[descriptor.compute.entryPoint]=value;if(descriptor.compute.entryPoint==="intersectActiveQueue")tracePipelineLayout=descriptor.layout;}return value;};
+        if(native){const createPresent=device.createRenderPipelineAsync.bind(device);device.createRenderPipelineAsync=async descriptor=>{const result=await createPresent(descriptor);if(descriptor.label==="plasius.wavefront.presentPipeline")presentPipeline=result;return result;};}
         return device;
       } };
-    const width=128,height=128,pixels=width*height,tile={x:0,y:0,width,height},sceneConfig=typeof scene==="string"?createPairedProbeScene(scene):scene;
+    const width=native?.width??128,height=native?.height??128,pixels=128*128,tile={x:0,y:0,width:128,height:128},sceneConfig=typeof scene==="string"?createPairedProbeScene(scene):scene;
     const maximum=sceneConfig.probeMaximum??32,maxDepth=sceneConfig.probeDepth??4;
-    renderer = await wait(createWavefrontPathTracingComputeRenderer({ ...sceneConfig, canvas:new OffscreenCanvas(width,height), width,height,tileSize:128,maxDepth,
-      samplesPerPixel:256,denoise:false,deferredPathResolve:true,strictPhysicalLowSppLighting:true,
+    renderer = await wait(createWavefrontPathTracingComputeRenderer({ ...sceneConfig, canvas:native?.canvas??new OffscreenCanvas(width,height), width,height,tileSize:128,maxDepth,
+      samplesPerPixel:native?32:256,denoise:false,deferredPathResolve:true,strictPhysicalLowSppLighting:true,
       navigator:{gpu:{requestAdapter:async()=>observedAdapter,getPreferredCanvasFormat:()=>navigator.gpu.getPreferredCanvasFormat()}} }));
     const rendererBufferBytes=[...buffers.values()].reduce((sum,buffer)=>sum+buffer.size,0);
     const textureInventory=textures.map(item=>({format:item.format,size:item.size,mipLevelCount:item.mipLevelCount??1,sampleCount:item.sampleCount??1}));
     const get=name=>{const value=buffers.get(`plasius.wavefront.${name}`);check(value,`Missing ${name}`);return value;};
     const queue=get("activeQueue"), counters=get("counters"), paths=get("pathVertices"), frame=get("frameConfig"), accumulation=get("accumulation");
-    owner=createAdaptiveResourceOwner(device,GPUBufferUsage,{enabled:true,width,height,tilePixelCapacity:pixels,primaryWorklist:true,primaryConfigSlots:3,countResolve:true,resolveConfigSlots:maximum+11});
+    owner=createAdaptiveResourceOwner(device,GPUBufferUsage,{enabled:true,width,height,tilePixelCapacity:pixels,primaryWorklist:true,primaryConfigSlots:native?6:3,countResolve:true,resolveConfigSlots:maximum+11});
     const resources=await wait(owner.acquire()); check(resources.status==="ready",resources.reason); const b=resources.buffers;
     const compact=await wait(createAdaptivePrimaryPipelines(device,GPUShaderStage,{enabled:true}));
     const bootstrap=await wait(createAdaptiveBootstrapPipelines(device,GPUShaderStage,{enabled:true}));
@@ -85,9 +88,11 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       cameraFrame:group(camera.rayLayout,[[0,queue],[5,frame,320]]),cameraWorklist:group(camera.worklistLayout,[[0,b.worklist],[1,b.primaryControl],[2,b.primaryConfig,32]]) };
     telemetry=createWavefrontFrameTelemetryResources({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},maxRayCountRecords:256*maxDepth,timestampPassPairs:true});
     check(telemetry.available,"Ray telemetry unavailable");
+    activeTelemetry=telemetry;
     let config=renderer.config;
     const frameEncoder=createWavefrontFrameEncoder({getConfig:()=>config,getBindGroups:()=>[bindings.get("plasius.wavefront.bind.activeNext"),bindings.get("plasius.wavefront.bind.nextActive")],
-      pipelines,counterBuffer:counters,activeDispatchBuffer:get("activeDispatchArgs"),getFrameTelemetry:()=>telemetry,getPreparedContinuationPipelines:()=>activePreparedPipelines});
+      pipelines,counterBuffer:counters,activeDispatchBuffer:get("activeDispatchArgs"),getFrameTelemetry:()=>activeTelemetry,getPreparedContinuationPipelines:()=>activePreparedPipelines,
+      ...(native?{presentPipeline,presentBindGroup:bindings.get("plasius.wavefront.presentBindGroup"),context:native.canvas.getContext("webgpu")}:{}),});
     const prepared=createAdaptivePreparedSampleEncoder({enabled:true,bootstrapPipelines:bootstrap,cameraPipeline:camera,frameEncoder,counterBuffer:counters,primaryDispatchBuffer:b.dispatch,getBindGroups:()=>preparedBindings});
     const makeBuffer=(size,usage)=>{const value=device.createBuffer({size,usage});extras.push(value);return value;};
     const copied=makeBuffer(pixels*16,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC), staging=makeBuffer(pixels*16,GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST);
@@ -99,6 +104,11 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const copy=await wait(device.createComputePipelineAsync({layout:"auto",compute:{module:copyModule,entryPoint:"copy_words"}}));
     const read=async(source,size)=>{const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(copy);pass.setBindGroup(0,group(copy.getBindGroupLayout(0),[[0,source,size],[1,copied]]));pass.dispatchWorkgroups(Math.ceil(size/256));pass.end();encoder.copyBufferToBuffer(copied,0,staging,0,size);device.queue.submit([encoder.finish()]);
       await wait(staging.mapAsync(GPUMapMode.READ));const value=staging.getMappedRange(0,size).slice(0);staging.unmap();return value;};
+    if(native)return await createNativeAdaptiveRunner({native,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
+      variants,telemetry,timestampPairs,read,makeBuffer,group,descriptors,wait,active,destroy,errors,owner,
+      setMode(diagnostic,fused){activeTelemetry=diagnostic?telemetry:null;activePreparedPipelines=fused?variants.fused:null;},
+      setConfig(value){config=value;},adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
+      memory:{rendererBufferBytes,textureInventory,adaptiveBufferBytes:resources.allocatedBytes,telemetryBufferBytes:telemetry.memoryBytes,fixtureStagingBytes:extras.reduce((sum,item)=>sum+item.size,0)}});
     // Fixture adapter only: publish adaptive linear output into the same textures
     // as fixed output. Reuse the exact fixed tone-map function, not a new transfer.
     const toneMap=WAVEFRONT_SHADER_KERNELS_WGSL.slice(WAVEFRONT_SHADER_KERNELS_WGSL.indexOf("fn tone_map_radiance"),WAVEFRONT_SHADER_KERNELS_WGSL.indexOf("fn present_radiance"));
