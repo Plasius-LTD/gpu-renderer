@@ -37,3 +37,9 @@ Diagnostics add separately reported staging/readback and can perturb timing, so
 their wall times are not headline performance. Prescribed one-SPP regions do not
 qualify material/edge/environment safeguards. Production integration, converged
 references, sustained display performance, CI and release gates remain open.
+
+Physical qualification finding, same date: 4K equal-budget shared transport is
+bit-identical to fixed32, but the optional fused-hit variant exceeds the existing
+identity tolerance (0.08680737018585205 maximum difference). Native traces now
+default to ordinary transport. Retain both controls and keep fusion's native
+qualification open; no tolerance or fixed shader change is justified by speed.

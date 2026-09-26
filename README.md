@@ -17,6 +17,11 @@ frames, and checks uniform32 identity. Fixed32 is the reference; the real-time
 target applies to adaptation. This is not public integration or qualification.
 The optional fused-hit variant is disabled for this native trace: its 4K
 uniform32 identity control failed while the ordinary adaptive control matched.
+The [retained native radial results](https://github.com/Plasius-LTD/gpu-lighting/blob/11730c4203e30ff8ae009a991916a332f5c38920/docs/evidence/native-radial-2026-09-26.md)
+verify exact 5.95 mean SPP and 81.40625% fewer primary rays. Timing-only jobs
+average 722.93 / 2,996.97 ms at 1080p/4K, versus same-run fixed32
+2,281.60 / 8,904.07 ms. Visible reduced-SPP brightness boundaries/noise remain;
+these lower-work timings establish neither matched quality nor real-time success.
 The minimum real-time acceptance target is native **1920×1080 at sustained 60 Hz
 on the M2 Max MacBook Pro**; native **3840×2160 at 60 Hz** is the ideal target.
 128×128 fixtures are correctness diagnostics, not full-frame performance evidence.

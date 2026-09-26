@@ -7,6 +7,19 @@ site white paper and not approval to publish performance claims.
 
 ## Subsequent paired measurement (same date)
 
+The [26 September native radial trace](https://github.com/Plasius-LTD/gpu-lighting/blob/11730c4203e30ff8ae009a991916a332f5c38920/docs/evidence/native-radial-2026-09-26.md)
+now executes full 1080p/4K adaptation with exact centred area shares of
+5/10/15/20/25/25% at 32/16/8/4/2/1 SPP. GPU readback verifies 5.95 mean SPP:
+12,337,920 / 49,351,680 primary rays, 81.40625% below fixed32. Ordinary uniform32
+is bit-identical at both sizes. Timing-only means fall from 2,281.60 to 722.93 ms
+and 8,904.07 to 2,996.97 ms; this is not near 60 Hz or matched-quality proof.
+Radial images have visible diffuse brightness boundaries and noise: global
+energy difference is about +0.97%, masking +4.46% in the 16-SPP ring. The native
+fused uniform control differs in four pixels (maximum 0.0868074); fusion stays
+off in the final native trace and needs diagnosis. Complete raw native HDR,
+exact failed-image delta, timestamps, CPU spans, counts and allocations are
+retained. The following older captures keep their original source/scope.
+
 The [26 September native-resolution screen](https://github.com/Plasius-LTD/gpu-lighting/blob/43c216d0d7f263ed432ae0f44d510b9389778320/docs/evidence/native-resolution-2026-09-26.md)
 supersedes any interpretation of the small probes as real-time evidence. The
 required minimum is now explicitly native 1080p/60 Hz on the M2 Max, with native

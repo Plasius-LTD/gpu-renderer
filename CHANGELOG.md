@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Link native radial physical traces with exact GPU-completed counts, separate
+  CPU/GPU diagnostics and lower-SPP timing savings. Preserve failed 4K fusion
+  identity and reduced-prefix image differences; no real-time or quality approval.
+
 - Disable optional hit fusion by default in the native adaptive trace after its
   4K equal-budget identity control failed; retain ordinary/fused isolation evidence
   and keep the original identity tolerance unchanged.
