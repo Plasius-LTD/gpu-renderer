@@ -1,6 +1,7 @@
 import { createWavefrontPathTracingComputeRenderer } from "/src/wavefront-compute.js";
 import { createPairedProbeScene } from "/lighting/demo/eames-environments/paired-adaptive-scenes.js";
 import { NATIVE_FRAME_TARGETS, summarizeNativeFrameScreen } from "/lighting/demo/eames-environments/native-frame-screen.js";
+import { forEachNativeFrameTarget } from "./native-frame-targets.js";
 
 const check=(value,message)=>{if(!value)throw new Error(message);};
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),byte=>byte.toString(16).padStart(2,"0")).join("");
@@ -19,11 +20,8 @@ runButton.addEventListener("click",async()=>{
   const show=()=>{output.textContent=JSON.stringify(receipt,null,2);};
   try {
     const response=await fetch("/__provenance");check(response.ok,"Missing provenance");receipt.provenance=await response.json();
-    for(const path of [import.meta.url,"/src/wavefront-compute.js","/src/wavefront-frame-dispatcher.js","/lighting/demo/eames-environments/paired-adaptive-scenes.js","/lighting/demo/eames-environments/native-frame-screen.js"]){const source=await fetch(path);check(source.ok,"Missing source");receipt.hashes[new URL(path,location.href).pathname]=await hash(await source.arrayBuffer());}
-    const adapter=await navigator.gpu?.requestAdapter({powerPreference:"high-performance"});
-    check(adapter?.info.isFallbackAdapter===false,"Physical WebGPU unavailable");
-    receipt.adapter={vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false};
-    for(const [name,{width,height}] of Object.entries(NATIVE_FRAME_TARGETS)){
+    for(const path of [import.meta.url,"/src/wavefront-compute.js","/src/wavefront-frame-dispatcher.js","/tests/fixtures/native-frame-targets.js","/lighting/demo/eames-environments/paired-adaptive-scenes.js","/lighting/demo/eames-environments/native-frame-screen.js"]){const source=await fetch(path);check(source.ok,"Missing source");receipt.hashes[new URL(path,location.href).pathname]=await hash(await source.arrayBuffer());}
+    await forEachNativeFrameTarget(navigator.gpu,NATIVE_FRAME_TARGETS,async(name,{width,height},adapter)=>{
       check(!stopped,"Stopped by user");status.textContent=`Preparing native ${name}: ${width}×${height}`;
       const errors=[];let loss=null;
       const observedAdapter={limits:adapter.limits,features:adapter.features,info:adapter.info,requestDevice:async descriptor=>{
@@ -36,6 +34,7 @@ runButton.addEventListener("click",async()=>{
         navigator:{gpu:{requestAdapter:async()=>observedAdapter,getPreferredCanvasFormat:()=>navigator.gpu.getPreferredCanvasFormat()}}});
       const snapshot=renderer.getSnapshot();check(snapshot.width===width&&snapshot.height===height&&canvas.width===width&&canvas.height===height,"Native dimensions mismatch");
       const lane={name,width,height,canvasWidth:canvas.width,canvasHeight:canvas.height,scene:"diffuse-silhouette",requestedSpp:32,maxDepth:4,denoise:false,
+        adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
         frameTimeBudgetMs:0,perPixelAdaptive:false,motion:false,history:false,snapshot,warmups:[],measurements:[],actualGpuCounts:"not-read-back",errors};receipt.lanes.push(lane);
       device.pushErrorScope("validation");
       for(let index=0;index<4;index++){
@@ -57,7 +56,7 @@ runButton.addEventListener("click",async()=>{
       const preview=document.createElement("img");preview.src=dataUrl;preview.alt=`Native ${width} by ${height} fixed32 output, illustrative only`;document.querySelector("#previews").append(preview);
       const retained=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({path:`output/playwright/eames-environments/${receipt.provenance.captureId}/native-${name}-${Date.now()}.png`,dataUrl,result:{...receipt,status:"screened",lanes:[lane]}})});check(retained.ok,"Evidence retention failed");lane.artifact=await retained.json();
       renderer.destroy();renderer=null;device.destroy();device=null;show();
-    }
+    },()=>stopped);
     receipt.status="screened-not-qualified";
   }catch(error){receipt.status="failed";receipt.failures.push(error.message);}
   finally{
