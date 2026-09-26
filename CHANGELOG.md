@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - Full native 1080p/4K fixed32 screening page and explicit 1080p/60 Hz minimum
+    acceptance. Includes all tiles and GPU presentation commands; reports shortfalls
+    without treating short runs, tiny probes or missing quality evidence as success.
   - Opt-in completion-driven frame loop with a drain promise, single-flight
     scheduling, next-frame budget hooks and truthful elapsed/confirmed-tile
     progress. Default diagnostic readbacks off; existing GPU waits and transport

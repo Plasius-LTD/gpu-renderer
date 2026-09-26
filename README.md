@@ -9,6 +9,15 @@
 [![Changelog](https://img.shields.io/badge/changelog-md-blue.svg)](./CHANGELOG.md)
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
+The minimum real-time acceptance target is native **1920×1080 at sustained 60 Hz
+on the M2 Max MacBook Pro**; native **3840×2160 at 60 Hz** is the ideal target.
+128×128 fixtures are correctness diagnostics, not full-frame performance evidence.
+`tests/fixtures/native-frame-screen.html` measures actual native fixed32 frames
+with the existing tiled renderer, including presentation commands. Its short-run
+results cannot establish sustained application/display or image-quality success.
+The experimental adaptive paired runner is still single-tile; full tiled adaptive
+integration and matched-quality native-resolution qualification remain required.
+
 This package is intended to replace Three.js-dependent render orchestration with
 an explicit WebGPU-first runtime that can be consumed from React, vanilla, or
 worker-driven app surfaces.

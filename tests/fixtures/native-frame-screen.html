@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Native 1080p / 4K baseline</title>
+<style>body{font:16px system-ui;background:#10151d;color:#edf2f7;margin:2rem;max-width:1100px}button{font:inherit;padding:.7rem;margin:.5rem}pre{white-space:pre-wrap;overflow-wrap:anywhere}canvas,img{display:block;max-width:100%;height:auto}a{color:#8fd5ff}</style></head>
+<body><h1>Native 1080p / 4K fixed baseline</h1>
+<p>Minimum target: native 1920×1080 at sustained 60 Hz. Ideal: native 3840×2160 at 60 Hz. This short fixed32 / four-bounce screen measures the entire tiled renderer, not a 128×128 tile. Denoise and all quality reduction are off. A fast short run cannot qualify sustained display delivery or image quality.</p>
+<button id="run">Measure native 1080p and 4K</button><button id="stop" disabled>Stop after current frame</button>
+<p id="status" role="status" aria-live="polite">Ready. Source-bound capture server required.</p>
+<canvas id="canvas" width="1920" height="1080" aria-label="Native-resolution fixed renderer output"></canvas>
+<div id="previews"></div><pre id="result" aria-label="Native-resolution measurement receipt"></pre>
+<script type="module" src="./native-frame-screen.js"></script></body></html>
