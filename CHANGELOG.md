@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Bound native HDR evidence uploads through lighting-owned lossless chunks;
+  retain display snapshots before asynchronous encoding and report upload errors.
+
 - Add opt-in native radial adaptive tracing with cached per-tile tier plans,
   partial-tile full-screen output/count gathering, separate timing-only and
   CPU/GPU/HDR diagnostics. Preserve canonical fixed transport and public defaults.
