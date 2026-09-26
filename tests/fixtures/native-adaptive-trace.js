@@ -7,6 +7,24 @@ const check=(v,m)=>{if(!v)throw new Error(m);};
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),n=>n.toString(16).padStart(2,"0")).join("");
 const canvas=document.querySelector("#canvas"),status=document.querySelector("#status"),result=document.querySelector("#result"),run=document.querySelector("#run"),cancel=document.querySelector("#cancel"),previews=document.querySelector("#previews");
 let cancellation;cancel.addEventListener("click",()=>cancellation?.abort());
+const eames=document.documentElement.dataset.scene==="eames";
+async function originalEames(receipt){
+  const started=performance.now(),response=await fetch("/lighting/demo/eames-environments/eames-source-manifest.json");
+  check(response.ok,"Missing original Eames manifest");const manifest=await response.json();
+  check(manifest.siteCommit===receipt.provenance.sources.site,"Eames asset commit mismatch");
+  for(const file of manifest.files){
+    check(!cancellation.signal.aborted,"Cancelled while verifying Eames");
+    const source=await fetch(`/eames/${file.name}`,{signal:AbortSignal.any([cancellation.signal,AbortSignal.timeout(30000)])});
+    check(source.ok,`Missing Eames asset ${file.name}`);const bytes=await source.arrayBuffer();
+    check(bytes.byteLength===file.bytes&&await hash(bytes)===file.sha256,`Eames asset integrity failed: ${file.name}`);
+  }
+  const [{loadGltfModel},{createProductStudioMeshes},{createWavefrontEnvironmentLightingOptions},{createEamesTraceScene,assertEamesRendererAdmission}]=await Promise.all([
+    import("/shared/src/gltf-loader.js"),import("/shared/src/product-studio-runtime.js"),import("/lighting/src/index.js"),import("/lighting/demo/eames-environments/eames-fidelity.js")]);
+  const model=await loadGltfModel(new URL("/eames/Eames_Lounge_Chair_Ottoman.gltf",location.href).href);
+  const admitted=createEamesTraceScene(model,{createProductStudioMeshes,lightingOptions:createWavefrontEnvironmentLightingOptions({preset:"product-studio"})});
+  receipt.scene={...admitted.evidence,manifest,assetVerificationAndSceneSetupMs:performance.now()-started};
+  return {...admitted,assertEamesRendererAdmission};
+}
 function budgetPreview(plan){
   const board=document.createElement("canvas");board.width=plan.width;board.height=plan.height;
   const pixels=new Uint8ClampedArray(plan.budgets.length*4),colors={32:[255,80,80],16:[255,160,55],8:[235,225,60],4:[70,210,125],2:[55,155,245],1:[90,70,155]};
@@ -23,7 +41,7 @@ function ringDifferences(image,reference,plan){
 run.addEventListener("click",async()=>{
   run.disabled=true;cancel.disabled=false;cancellation=new AbortController();previews.replaceChildren();let runner;
   const receipt={schemaVersion:1,status:"running",scope:"native-prescribed-radial-adaptive-trace",timestamp:new Date().toISOString(),hashes:{},lanes:[],failures:[],
-    limitations:["Prescribed circular budgets, not a qualified production classifier or governor","Simple diffuse-silhouette scene, not Eames/site; depth ceiling four; seed seven; denoise off",
+    limitations:["Prescribed circular budgets, not a qualified production classifier or governor",eames?"Original Eames/Product Studio renderer path, not the site application; depth ceiling four; seed seven; denoise off":"Simple diffuse-silhouette scene, not Eames/site; depth ceiling four; seed seven; denoise off",
       "Timing-only includes full renderer frame and GPU presentation, not physical display/application work","Instrumented frames include per-tile diagnostics and must not replace timing-only results",
       "GPU spans cover tile compute through output, excluding uploads and final presentation; not whole-job GPU time",
       "Fixed32 image differences are not converged-reference quality qualification; no adaptive publication claim",
@@ -34,14 +52,24 @@ run.addEventListener("click",async()=>{
   };
   try{
     const provenance=await fetch("/__provenance");check(provenance.ok,"Missing provenance");receipt.provenance=await provenance.json();
+    let admitted;
+    if(eames){
+      status.textContent="Verifying original Eames assets and loading full textures";admitted=await originalEames(receipt);receipt.scope="native-original-eames-radial-adaptive-trace";
+      for(const path of ["/tests/fixtures/native-eames-trace.html","/shared/src/gltf-loader.js","/shared/src/product-studio-runtime.js","/shared/src/asset-url.js","/lighting/src/index.js","/lighting/demo/eames-environments/eames-fidelity.js","/lighting/demo/eames-environments/eames-source-manifest.json"]){
+        const source=await fetch(path);check(source.ok,"Missing Eames pipeline source");receipt.hashes[path]=await hash(await source.arrayBuffer());
+      }
+    }
     for(const path of [import.meta.url,"/tests/fixtures/native-adaptive-runner.js","/tests/fixtures/adaptive-paired-runner.js","/src/wavefront-adaptive-tile-plan.js","/src/wavefront-adaptive-tile-output.js","/src/wavefront-adaptive-shared-shader.js","/lighting/demo/eames-environments/radial-sampling-plan.js","/lighting/demo/eames-environments/linear-image-chunks.js","/lighting/demo/eames-environments/paired-adaptive-metrics.js","/lighting/demo/eames-environments/paired-adaptive-scenes.js"]){const source=await fetch(path);check(source.ok,"Missing source");receipt.hashes[new URL(path,location.href).pathname]=await hash(await source.arrayBuffer());}
     for(const [name,{width,height}] of Object.entries(NATIVE_FRAME_TARGETS)){
       check(!cancellation.signal.aborted,"Cancelled");status.textContent=`Preparing ${name} radial budget and pipelines`;
       const started=performance.now(),plan=createRadialSamplingPlan(width,height),budgetSetupMs=performance.now()-started;
-      const lane={name,width,height,scene:"diffuse-silhouette",maximumSpp:32,maxDepth:4,denoise:false,frameBudgetReduction:false,seed:7,
+      const lane={name,width,height,scene:eames?"original-eames-product-studio":"diffuse-silhouette",maximumSpp:32,maxDepth:4,denoise:false,frameBudgetReduction:false,seed:7,
         budgets:{bands:plan.bands,meanSpp:plan.meanSpp,expectedPrimaryRays:plan.totalSamples,sha256:await hash(plan.budgets.buffer),setupMs:budgetSetupMs},warmups:[],measurements:[],diagnostics:[],summary:{}};
       receipt.lanes.push(lane);const board=budgetPreview(plan);lane.budgetArtifact=await save(`${name}-budget`,board,{provenance:receipt.provenance,...lane.budgets,width,height});
-      runner=await createPairedProbeRunner("diffuse-silhouette",cancellation.signal,{pruningVariants:true,native:{width,height,canvas,budgets:plan.budgets}});
+      const setupStarted=performance.now();
+      runner=await createPairedProbeRunner(admitted?.scene??"diffuse-silhouette",cancellation.signal,{pruningVariants:true,native:{width,height,canvas,budgets:plan.budgets}});
+      lane.rendererSetupMs=performance.now()-setupStarted;
+      if(admitted)lane.rendererAdmission=admitted.assertEamesRendererAdmission(runner.sceneSnapshot);
       lane.adapter=runner.adapter;lane.memory=runner.memory;lane.planSetupMs=runner.planSetupMs;lane.tileCount=runner.tiles;
       const progress=(mode,diagnostic)=>state=>{if(state.completedTiles%16===0||state.completedTiles===state.totalTiles)status.textContent=`${name} ${mode} ${diagnostic?"diagnostic":"timing"}: ${state.completedTiles}/${state.totalTiles} tiles`;};
       for(let round=-1;round<3;round++)for(let order=0;order<2;order++){

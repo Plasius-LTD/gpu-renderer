@@ -9,6 +9,12 @@
 [![Changelog](https://img.shields.io/badge/changelog-md-blue.svg)](./CHANGELOG.md)
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
+
+`tests/fixtures/native-eames-trace.html` uses the original Eames source asset
+through the shared Product Studio loader and mesh builder, with lighting-owned
+hash/geometry/texture/material admission. It retains loading/BVH setup separately
+from native fixed32/radial frame costs. It is not full site/application or quality
+qualification. The six-triangle results below remain synthetic diagnostics only.
 `tests/fixtures/native-adaptive-trace.html` is the opt-in full-frame radial
 diagnostic: native 1080p/4K, centred area shares 5/10/15/20/25/25% at
 32/16/8/4/2/1 SPP. It reuses shared rounds and canonical material transport, omits

@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add original-Eames native trace using canonical shared Product Studio scene
+  construction and lighting-owned source fidelity admission. Preserve original
+  textures/materials and geometry, record setup separately, and reject asset or
+  renderer-scene mismatches without substituting a simpler workload.
+
 - Link native radial physical traces with exact GPU-completed counts, separate
   CPU/GPU diagnostics and lower-SPP timing savings. Preserve failed 4K fusion
   identity and reduced-prefix image differences; no real-time or quality approval.
