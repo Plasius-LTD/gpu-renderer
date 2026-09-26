@@ -29,10 +29,10 @@ export async function createNativeAdaptiveRunner(c) {
   const memory={...c.memory,fixtureStagingBytes:c.memory.fixtureStagingBytes+gathered.size,
     cachedBudgetHostBytes:budgets.byteLength+words.byteLength+uniform.byteLength};
   return {adapter:c.adapter,memory,planSetupMs,tiles:plan.length,
-    async run(mode,{diagnostics=false,profile=false,onProgress}={}){
+    async run(mode,{diagnostics=false,profile=false,onProgress,fused=true}={}){
       active();check(["fixed","uniform","radial"].includes(mode),"Invalid native mode");
       const adaptive=mode!=="fixed",selected=mode==="radial"?plan:uniformPlan;
-      c.setMode(diagnostics,adaptive);
+      c.setMode(diagnostics,adaptive&&fused);
       const config={...renderer.config,samplesPerPixel:32};c.setConfig(config);
       const cpu=createWavefrontCpuProfile({enabled:profile}),frameDevice=cpu?cpu.wrapDevice(device):device;
       const stage=(name,fn)=>cpu?cpu.measure(name,fn):fn();
@@ -101,12 +101,12 @@ export async function createNativeAdaptiveRunner(c) {
         tiles.push(trace);onProgress?.({mode,diagnostics,completedTiles:tileIndex+1,totalTiles:plan.length});
       }
       // Close the tile query interval before encoding the canonical full-frame present.
-      c.setMode(false,adaptive);
+      c.setMode(false,adaptive&&fused);
       const present=stage("commandEncoding",()=>{const e=frameDevice.createCommandEncoder();frameEncoder.encodePresent(e);return e;});
       frameDevice.queue.submit([present.finish()]);await asyncStage("gpuWait",()=>wait(device.queue.onSubmittedWorkDone()));
       const elapsed=performance.now()-started,visibilityAfter=document.visibilityState;
       const validation=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!validation&&!errors.length,validation?.message??errors[0]);
-      return {mode,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
+      return {mode,fused:adaptive&&fused,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
         diagnosticReadbackMs:diagnostics?readbackMs:null,diagnosticRenderIntervalsMs:diagnostics?elapsed-readbackMs:null,
         actualSamples:diagnostics?actualSamples:null,actualHistogram:diagnostics?actualHistogram:null,tiles,
         ...(cpu?{cpuProfile:cpu.snapshot()}:{}),visibilityBefore,visibilityAfter,validationErrors:0};

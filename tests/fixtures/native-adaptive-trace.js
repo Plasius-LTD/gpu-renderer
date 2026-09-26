@@ -50,12 +50,17 @@ run.addEventListener("click",async()=>{
       }
       for(const mode of ["fixed","radial"])lane.summary[mode]=summarizeNativeFrameScreen({width,height,canvasWidth:canvas.width,canvasHeight:canvas.height,completedFrameTimesMs:lane.measurements.filter(f=>f.mode===mode).map(f=>f.completedFrameMs)});
       let fixed,fixedHash;
-      for(const mode of ["fixed","uniform","radial"]){
-        status.textContent=`${name}: ${mode} diagnostic, actual counts/HDR/CPU/GPU`;
-        const diagnostic=await runner.run(mode,{diagnostics:true,profile:true,onProgress:progress(mode,true)}),image=diagnostic.image;delete diagnostic.image;
+      for(const label of ["fixed","uniform-unfused","uniform","radial"]){
+        const mode=label==="uniform-unfused"?"uniform":label;
+        status.textContent=`${name}: ${label} diagnostic, actual counts/HDR/CPU/GPU`;
+        const diagnostic=await runner.run(mode,{diagnostics:true,profile:true,fused:label!=="uniform-unfused",onProgress:progress(label,true)}),image=diagnostic.image;delete diagnostic.image;
+        diagnostic.label=label;
         const displaySnapshot=canvas.toDataURL("image/png");
         if(mode==="fixed")fixed=image;
-        else {diagnostic.differenceFromFixed32=compareLinearImages(image,fixed);if(mode==="uniform")check(diagnostic.differenceFromFixed32.maxAbsoluteError<=1e-5,"Native uniform adaptive identity failed");}
+        else {diagnostic.differenceFromFixed32=compareLinearImages(image,fixed);if(mode==="uniform"){
+          diagnostic.identityPassed=diagnostic.differenceFromFixed32.maxAbsoluteError<=1e-5;
+          if(!diagnostic.identityPassed)receipt.failures.push(`${name} ${label} identity failed: max error ${diagnostic.differenceFromFixed32.maxAbsoluteError}`);
+        }}
         if(mode==="radial"){
           check(diagnostic.actualSamples===plan.totalSamples,"Actual native sample total mismatch");
           for(const band of plan.bands)check(diagnostic.actualHistogram[band.spp]===band.pixels,"Actual radial histogram mismatch");
@@ -67,19 +72,19 @@ run.addEventListener("click",async()=>{
         if(mode==="fixed")fixedHash=diagnostic.imageSha256;
         if(mode==="uniform"&&fixedHash===diagnostic.imageSha256)linearImage.identicalTo=`${name}-fixed`;
         else {
-          const marker=document.createElement("canvas");marker.width=640;marker.height=80;const ctx=marker.getContext("2d");ctx.fillStyle="#10151d";ctx.fillRect(0,0,640,80);ctx.fillStyle="#edf2f7";ctx.font="18px system-ui";ctx.fillText(`${name} ${mode}: lossless HDR data chunk`,12,42);
+          const marker=document.createElement("canvas");marker.width=640;marker.height=80;const ctx=marker.getContext("2d");ctx.fillStyle="#10151d";ctx.fillRect(0,0,640,80);ctx.fillStyle="#edf2f7";ctx.font="18px system-ui";ctx.fillText(`${name} ${label}: lossless HDR data chunk`,12,42);
           let index=0;for await(const chunk of encodeLinearImageChunks(image)){
             check(!cancellation.signal.aborted,"Cancelled while retaining HDR");
-            const artifact=await save(`${name}-${mode}-hdr-${String(index++).padStart(3,"0")}`,marker,{provenance:receipt.provenance,width,height,chunk});
+            const artifact=await save(`${name}-${label}-hdr-${String(index++).padStart(3,"0")}`,marker,{provenance:receipt.provenance,width,height,chunk});
             linearImage.chunks.push({byteOffset:chunk.byteOffset,byteLength:chunk.byteLength,sha256:chunk.sha256,artifact});
           }
         }
-        diagnostic.artifact=await save(`${name}-${mode}`,displaySnapshot,{provenance:receipt.provenance,hashes:receipt.hashes,width,height,diagnostic,linearImage});
-        const preview=document.createElement("img");preview.src=displaySnapshot;preview.alt=`${name} ${mode}, native ${width} by ${height}`;previews.append(preview);
+        diagnostic.artifact=await save(`${name}-${label}`,displaySnapshot,{provenance:receipt.provenance,hashes:receipt.hashes,width,height,diagnostic,linearImage});
+        const preview=document.createElement("img");preview.src=displaySnapshot;preview.alt=`${name} ${label}, native ${width} by ${height}`;previews.append(preview);
       }
       runner.destroy();runner=null;show();lane.artifact=await save(`${name}-trace`,canvas,{...receipt,lanes:[lane]});
     }
-    receipt.status="traced-not-qualified";
+    receipt.status=receipt.failures.length?"traced-with-validation-failures":"traced-not-qualified";
   }catch(error){receipt.status="failed";receipt.failures.push(error.message);}
   finally{
     runner?.destroy();cancellation.abort();
