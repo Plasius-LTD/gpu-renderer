@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Disable optional hit fusion by default in the native adaptive trace after its
+  4K equal-budget identity control failed; retain ordinary/fused isolation evidence
+  and keep the original identity tolerance unchanged.
+
 - Bound native HDR evidence uploads through lighting-owned lossless chunks;
   retain display snapshots before asynchronous encoding and report upload errors.
 

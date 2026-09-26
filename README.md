@@ -11,10 +11,12 @@
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 `tests/fixtures/native-adaptive-trace.html` is the opt-in full-frame radial
 diagnostic: native 1080p/4K, centred area shares 5/10/15/20/25/25% at
-32/16/8/4/2/1 SPP. It reuses shared rounds and immediate-hit transport, omits
+32/16/8/4/2/1 SPP. It reuses shared rounds and canonical material transport, omits
 absent tile tiers, retains CPU/GPU/count/HDR traces separately from timing-only
 frames, and checks uniform32 identity. Fixed32 is the reference; the real-time
 target applies to adaptation. This is not public integration or qualification.
+The optional fused-hit variant is disabled for this native trace: its 4K
+uniform32 identity control failed while the ordinary adaptive control matched.
 The minimum real-time acceptance target is native **1920×1080 at sustained 60 Hz
 on the M2 Max MacBook Pro**; native **3840×2160 at 60 Hz** is the ideal target.
 128×128 fixtures are correctness diagnostics, not full-frame performance evidence.

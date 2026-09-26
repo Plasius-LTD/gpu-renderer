@@ -26,7 +26,8 @@ run.addEventListener("click",async()=>{
     limitations:["Prescribed circular budgets, not a qualified production classifier or governor","Simple diffuse-silhouette scene, not Eames/site; depth ceiling four; seed seven; denoise off",
       "Timing-only includes full renderer frame and GPU presentation, not physical display/application work","Instrumented frames include per-tile diagnostics and must not replace timing-only results",
       "GPU spans cover tile compute through output, excluding uploads and final presentation; not whole-job GPU time",
-      "Fixed32 image differences are not converged-reference quality qualification; no adaptive publication claim"]};
+      "Fixed32 image differences are not converged-reference quality qualification; no adaptive publication claim",
+      "Optional fused-hit transport is disabled: the retained isolation run failed its 4K uniform identity control"]};
   const show=()=>{result.textContent=JSON.stringify(receipt,null,2);};
   const save=async(name,board,payload)=>{
     const response=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({path:`output/playwright/eames-environments/${receipt.provenance.captureId}/${name}.png`,dataUrl:typeof board==="string"?board:board.toDataURL("image/png"),result:payload})});check(response.ok,`Trace retention failed: ${response.status} ${response.ok?"":await response.text()}`);return response.json();
@@ -50,10 +51,10 @@ run.addEventListener("click",async()=>{
       }
       for(const mode of ["fixed","radial"])lane.summary[mode]=summarizeNativeFrameScreen({width,height,canvasWidth:canvas.width,canvasHeight:canvas.height,completedFrameTimesMs:lane.measurements.filter(f=>f.mode===mode).map(f=>f.completedFrameMs)});
       let fixed,fixedHash;
-      for(const label of ["fixed","uniform-unfused","uniform","radial"]){
-        const mode=label==="uniform-unfused"?"uniform":label;
+      for(const label of ["fixed","uniform","radial"]){
+        const mode=label;
         status.textContent=`${name}: ${label} diagnostic, actual counts/HDR/CPU/GPU`;
-        const diagnostic=await runner.run(mode,{diagnostics:true,profile:true,fused:label!=="uniform-unfused",onProgress:progress(label,true)}),image=diagnostic.image;delete diagnostic.image;
+        const diagnostic=await runner.run(mode,{diagnostics:true,profile:true,fused:false,onProgress:progress(label,true)}),image=diagnostic.image;delete diagnostic.image;
         diagnostic.label=label;
         const displaySnapshot=canvas.toDataURL("image/png");
         if(mode==="fixed")fixed=image;

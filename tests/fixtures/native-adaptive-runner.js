@@ -29,7 +29,7 @@ export async function createNativeAdaptiveRunner(c) {
   const memory={...c.memory,fixtureStagingBytes:c.memory.fixtureStagingBytes+gathered.size,
     cachedBudgetHostBytes:budgets.byteLength+words.byteLength+uniform.byteLength};
   return {adapter:c.adapter,memory,planSetupMs,tiles:plan.length,
-    async run(mode,{diagnostics=false,profile=false,onProgress,fused=true}={}){
+    async run(mode,{diagnostics=false,profile=false,onProgress,fused=false}={}){
       active();check(["fixed","uniform","radial"].includes(mode),"Invalid native mode");
       const adaptive=mode!=="fixed",selected=mode==="radial"?plan:uniformPlan;
       c.setMode(diagnostics,adaptive&&fused);
