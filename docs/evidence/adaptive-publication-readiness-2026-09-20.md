@@ -7,6 +7,14 @@ site white paper and not approval to publish performance claims.
 
 ## Subsequent paired measurement (same date)
 
+The [26 September CPU-attribution capture](cpu-attribution-2026-09-26.md) adds
+opt-in renderer/fixture host stages, separate waits/readback and command/known
+allocation counts. 144 physical on/off frames retain exact image/count/ray
+identity. Fused geometry's synthetic budget calculation/packing averages 1.50 ms
+versus 0.31 ms command encoding; the remaining wait cannot be called CPU work.
+Signed observer deltas are noisy, not a speedup or proof of negligible overhead.
+No transport, scheduling, site activation or publication qualification changes.
+
 The subsequent [early-pruning experiment](adaptive-pruning-2026-09-20.md) removes
 one-use global hit scratch traffic and independently permits zero-work empty
 queues. Fixed shader bytes, same-budget pixels and ray counts remain unchanged.
