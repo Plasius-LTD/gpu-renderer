@@ -59,6 +59,16 @@ test("Independent keys integrate the unit square, whereas legacy truncated prefi
   assert.deepEqual(sampleWavefrontDimension2D(0,0,0,7,22,32),sampleWavefrontDimension2D(0,0,0,7,22,32,"legacy"));
 });
 
+test("CPU reference uses exact wrapping multiplication, including high-bit keys",()=>{
+  const u32=x=>BigInt.asUintN(32,x);
+  const hash=word=>{let x=u32(word);x=u32((x>>16n^x)*0x45d9f3bn);x=u32((x>>16n^x)*0x45d9f3bn);return u32(x>>16n^x);};
+  for(const args of [[0,0,0,7,22],[0xffffffff,255,7,43,42]]){
+    let x=u32(args.map(BigInt).reduce((s,v,i)=>s^u32(v*[747796405n,2891336453n,277803737n,1442695041n,1597334677n][i]),0n));
+    x^=x>>16n;x=u32(x*0x7feb352dn);x^=x>>15n;x=u32(x*0x846ca68bn);x^=x>>16n;
+    assert.deepEqual(progressiveSampleWords(...args,"independent-random"),[0xa511e9b3n,0x63d83595n].map(s=>Number(hash(x^s)&0xffffff00n)));
+  }
+});
+
 test("Sampler flags are independently default off, accept remote snapshots, reject conflicts and preserve false overrides", () => {
   const a="renderer.sampling.owenSobol.enabled",b="renderer.sampling.independentRandom.enabled";
   assert.equal(resolveTransportExperiments().bitmask,0);

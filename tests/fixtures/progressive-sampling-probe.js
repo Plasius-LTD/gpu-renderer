@@ -28,7 +28,7 @@ export async function probeProgressiveSampling(){
     for(let i=0;i<count;i++){
       const args=[Math.floor(i/32),i%32,i%4,7,22];
       const expected=[...progressiveSampleWords(...args,"owen-sobol"),...progressiveSampleWords(...args,"independent-random")];
-      if(expected.some((word,j)=>word!==words[i*4+j]))throw new Error(`CPU/GPU sample mismatch at ${i}`);
+      if(expected.some((word,j)=>word!==words[i*4+j]))throw new Error(`CPU/GPU sample mismatch at ${i}: CPU ${expected}, GPU ${Array.from(words.subarray(i*4,i*4+4))}`);
     }
     readback.unmap();const error=await device.popErrorScope();if(error)throw new Error(error.message);
     return {status:"passed",pairsPerSampler:count,comparedWords:count*4,adapter:adapter.info,validationErrors:0};
