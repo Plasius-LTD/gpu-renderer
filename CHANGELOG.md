@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Record native stable-pattern correction results: brightness and static
+  repeatability pass at 1080p/4K, but grain remains and the old speed advantage
+  is lost. Select it for further fixed-camera experiments, not production.
+
 - Add default-off stable-pattern correction candidate with centre-first camera
   points and temporally stable, spatial/event-decorrelated lighting sampling;
   preserve the rejected shared-point experiment and exact disabled path.

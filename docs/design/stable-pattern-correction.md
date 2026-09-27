@@ -8,8 +8,8 @@ The failed fixed-pattern capture remains immutable comparison evidence.
 Retain centre-first fixed camera locations. Replace spatially shared lighting
 choices with deterministic pixel/event/bounce/component-keyed permutations of
 the existing Sobol pair. Keys exclude frame, seed, ordinal and selected budget.
-Use the fast nested bit permutation described by PBRT, not the expensive
-24-level hash loop. This is a pixel-local pair sampler with independently keyed
+Use the fast prefix-preserving bit permutation described by PBRT, not full
+nested Owen scrambling or the expensive 24-level hash loop. This is a pixel-local pair sampler with independently keyed
 events, NOT a full high-dimensional Sobol generator or a guarantee of unbiased
 individual pixels. All 1D selectors use their own event key. No new allocations,
 passes, caches or changes to BSDF/PDF/MIS, transport, count resolve or budgets.
@@ -18,7 +18,10 @@ New remote snapshot flag renderer.sampling.stablePattern.enabled defaults off,
 mutually exclusive with existing sampler flags. It selects a dedicated shader
 at creation. Keep the failed fixedPattern experiment intact. An internal
 stable-camera-random control shares the fixed camera pattern but uses independent
-lighting keyed with frame zero, isolating camera changes from lighting changes.
+lighting keyed with frame zero, providing a fixed-camera comparison control.
+The control also uses the new dedicated 1D selectors; it is not a pure camera-only
+change from the historical independent-random sampler. Do not attribute isolated
+camera costs from this comparison.
 This deliberately relaxes identical lighting points across pixels, not temporal
 stability. 1-SPP camera stays at pixel centre. No production primary/default
 switch is permitted until quality and performance qualification pass.
@@ -53,4 +56,3 @@ Rollback disables sampler flags and recreates the unchanged GPU-native path.
 Three.js is prohibited without exception or fallback. No local publishing.
 
 Reference: https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sobol_Samplers
-

@@ -16,8 +16,9 @@ Use default-off renderer.sampling.stablePattern.enabled, mutually exclusive with
 other samplers. Renderer creation specializes source; turning all flags off and
 recreating restores the unchanged GPU-native path. Three.js is prohibited.
 
-The internal stable-camera-random control isolates the fixed camera with stable
-independent lighting. Production promotion requires converged image, local,
+The internal stable-camera-random control combines the fixed camera with stable
+independent lighting and dedicated 1D selectors; it does not isolate camera cost
+from the historical random implementation. Production promotion requires converged image, local,
 temporal and matched-quality performance qualification; passing a regional
 brightness screen alone is insufficient. See
 [design and frozen checks](../design/stable-pattern-correction.md).

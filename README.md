@@ -19,11 +19,17 @@ Sobol construction or a guarantee of clean 1-SPP rendering. Run
 `tests/fixtures/native-stable-pattern.html` and see the
 [correction protocol](docs/design/stable-pattern-correction.md). It is not yet
 the production default; disable sampler flags and recreate for rollback.
+The [native Eames correction evidence](https://github.com/Plasius-LTD/gpu-lighting/blob/03d1cc2d28195777c49e2dbeb5406aabdb82abfa/docs/evidence/stable-pattern-2026-09-27.md)
+passes brightness and static-repeatability screens at 1080p/4K, but retains
+low-SPP grain and loses the old fixed pattern's speed advantage. Adaptive jobs
+measure 5226.73 / 17777.60 ms, versus random 5197.27 / 17658.67 ms. Use it as
+the primary experimental fixed-camera optimization lane, retaining random as
+the comparison control; this is not production or matched-quality approval.
 
 `renderer.sampling.fixedPattern.enabled` is a separate default-off experiment:
 fixed relative camera and lighting points shared across pixels and frames, with
 the first camera ray at the pixel centre. It replaces both 1D and 2D sampling,
-is mutually exclusive with the two samplers below, and requires renderer
+is mutually exclusive with every other sampler flag, and requires renderer
 recreation. It does not add resources or passes. Temporal repeatability can
 conceal coherent lighting error; this is not production-qualified. See the
 [fixed-pattern design](docs/design/fixed-pattern-experiment.md) and run
