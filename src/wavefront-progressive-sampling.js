@@ -50,7 +50,7 @@ export function sampleProgressivePair(...args) {
   return progressiveSampleWords(...args).map(word=>(word>>>8)/16777216);
 }
 
-export const WAVEFRONT_PROGRESSIVE_SAMPLING_WGSL = `
+export const SOBOL_PAIR_WGSL = `
 fn sobol_pair_words(sampleId: u32) -> vec2<u32> {
   var index=sampleId;
   var value=vec2<u32>(0u);
@@ -62,7 +62,9 @@ fn sobol_pair_words(sampleId: u32) -> vec2<u32> {
   }
   return value;
 }
+`;
 
+export const WAVEFRONT_PROGRESSIVE_SAMPLING_WGSL = SOBOL_PAIR_WGSL + `
 fn owen_scramble_24(word: u32, seed: u32) -> u32 {
   var prefix=0u;
   var result=0u;

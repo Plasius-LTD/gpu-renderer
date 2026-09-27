@@ -1,5 +1,6 @@
 import { hashUint32, mixSeed, random01FromSeed } from "./wavefront-core.js";
 import { sampleProgressivePair, WAVEFRONT_PROGRESSIVE_SAMPLING_WGSL } from "./wavefront-progressive-sampling.js";
+import { fixedPatternWords, FIXED_PATTERN_WGSL } from "./wavefront-fixed-pattern.js";
 
 const sampleDimensionEntries = Object.freeze([
   ["cameraJitter", 1],
@@ -65,7 +66,8 @@ export function radicalInverseVdc(value) {
   return bits / 0x100000000;
 }
 
-export function sampleWavefrontDimension1D(pixelId, sampleId, bounce, frameIndex, dimension) {
+export function sampleWavefrontDimension1D(pixelId, sampleId, bounce, frameIndex, dimension, sampler = "legacy") {
+  if (sampler === "fixed-pattern") return (fixedPatternWords(sampleId, bounce, dimension)[0] >>> 8) / 16777216;
   return random01FromSeed(mixSeed(pixelId, sampleId, bounce, frameIndex, dimension));
 }
 
@@ -78,6 +80,7 @@ export function sampleWavefrontDimension2D(
   strataCount,
   sampler = "legacy"
 ) {
+  if (sampler === "fixed-pattern") return fixedPatternWords(sampleId, bounce, dimension).map(x => (x >>> 8) / 16777216);
   if (sampler !== "legacy") return sampleProgressivePair(pixelId, sampleId, bounce, frameIndex, dimension, sampler);
   const strata = Math.max(1, Number.isFinite(strataCount) ? Math.trunc(strataCount) : 1);
   const jitter = sampleWavefrontDimension1D(
@@ -170,6 +173,12 @@ fn sample_dimension_2d(
 export function withProgressiveSampling(source, enabled = false) {
   if (!enabled) return source;
   if (!source.includes(WAVEFRONT_SAMPLE_SEQUENCE_WGSL)) throw new Error("Missing canonical sampling source");
+  if (enabled === "fixed-pattern") {
+    // Preserve non-sampling helpers called by transport, but remove both random
+    // sampling entry points entirely. Do not add dormant experimental branches.
+    const helpers = WAVEFRONT_SAMPLE_SEQUENCE_WGSL.slice(0, WAVEFRONT_SAMPLE_SEQUENCE_WGSL.indexOf("fn sample_dimension_1d"));
+    return source.replace(WAVEFRONT_SAMPLE_SEQUENCE_WGSL, helpers + FIXED_PATTERN_WGSL);
+  }
   const branch=`  if(transport_experiment_enabled(256u) || transport_experiment_enabled(512u)){
     let words=progressive_sample_words(pixelId,sampleId,bounce,sample_frame_index(frameIndex),dimension,transport_experiment_enabled(512u));
     return vec2<f32>(words>>vec2<u32>(8u))/16777216.0;

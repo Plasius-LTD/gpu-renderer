@@ -37,5 +37,5 @@ export function createWavefrontPathTracingComputeShaderSource(options = {}) {
   if (workgroupSize !== WAVEFRONT_COMPUTE_WORKGROUP_SIZE) {
     throw new Error(`wavefront mesh compute currently requires workgroupSize=${WAVEFRONT_COMPUTE_WORKGROUP_SIZE}`);
   }
-  return withProgressiveSampling(WAVEFRONT_COMPUTE_WGSL, options.progressiveSampling === true);
+  return withProgressiveSampling(WAVEFRONT_COMPUTE_WGSL, options.progressiveSampling === "fixed-pattern" ? "fixed-pattern" : options.progressiveSampling === true);
 }

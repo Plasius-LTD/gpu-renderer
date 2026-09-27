@@ -911,6 +911,7 @@ export interface WavefrontPathTracingComputeConfig {
 export interface WavefrontRendererFeatureFlags {
   readonly "renderer.sampling.owenSobol.enabled"?: boolean;
   readonly "renderer.sampling.independentRandom.enabled"?: boolean;
+  readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
   readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
   readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
   readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -923,6 +924,7 @@ export interface WavefrontRendererFeatureFlags {
   readonly enabled?: {
     readonly "renderer.sampling.owenSobol.enabled"?: boolean;
     readonly "renderer.sampling.independentRandom.enabled"?: boolean;
+    readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
     readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
     readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
     readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -936,6 +938,7 @@ export interface WavefrontRendererFeatureFlags {
   readonly flags?: {
     readonly "renderer.sampling.owenSobol.enabled"?: boolean;
     readonly "renderer.sampling.independentRandom.enabled"?: boolean;
+    readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
     readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
     readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
     readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -950,6 +953,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly sampling?: {
       readonly owenSobol?: boolean | { readonly enabled?: boolean };
       readonly independentRandom?: boolean | { readonly enabled?: boolean };
+      readonly fixedPattern?: boolean | { readonly enabled?: boolean };
     };
     readonly transport?: {
       readonly strictPhysicalLowSppLighting?: boolean;
@@ -973,6 +977,7 @@ export interface WavefrontTransportExperimentFlags {
   /** Default off; optional for structural compatibility with older snapshots. */
   readonly owenSobol?: boolean;
   readonly independentRandom?: boolean;
+  readonly fixedPattern?: boolean;
   readonly stableSampleRouting: boolean;
   readonly strictZeroOverflow: boolean;
   readonly deferLowSppRussianRoulette: boolean;
@@ -1131,6 +1136,7 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly presentationOutput?: "tone-mapped" | "linear";
   readonly "renderer.sampling.owenSobol.enabled"?: boolean;
   readonly "renderer.sampling.independentRandom.enabled"?: boolean;
+  readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
   readonly strictPhysicalLowSppLighting?: boolean;
   readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
   readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -1607,7 +1613,7 @@ export function renderWavefrontPathTracingComputeFrame(
 ): Promise<WavefrontPathTracingComputeFrameStats>;
 export function createWavefrontPathTracingComputeShaderSource(options?: {
   /** Internal source selection; public renderer flags select this automatically. */
-  progressiveSampling?: boolean;
+  progressiveSampling?: boolean | "fixed-pattern";
   workgroupSize?: number;
   outputTextureFormat?: GPUTextureFormat | "rgba8unorm";
 }): string;

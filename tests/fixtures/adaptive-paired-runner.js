@@ -21,8 +21,8 @@ import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy"}={}) {
-  check(["legacy","owen-sobol","independent-random"].includes(sampler),"Invalid sampler");
-  const progressiveSampling=sampler!=="legacy";
+  check(["legacy","owen-sobol","independent-random","fixed-pattern"].includes(sampler),"Invalid sampler");
+  const progressiveSampling=sampler==="fixed-pattern"?"fixed-pattern":sampler!=="legacy";
   if(native)check(Number.isSafeInteger(native.width)&&Number.isSafeInteger(native.height)&&native.width>=128&&native.height>=128&&native.width*native.height<=3840*2160,"Invalid native fixture dimensions");
   let device, renderer, owner, telemetry, lost = false, disposed = false;
   let tracePipelineLayout, activePreparedPipelines=null, activeTelemetry=null, presentPipeline;
@@ -66,6 +66,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       samplesPerPixel:native?32:256,denoise:false,deferredPathResolve:true,strictPhysicalLowSppLighting:true,
       "renderer.sampling.owenSobol.enabled":sampler==="owen-sobol",
       "renderer.sampling.independentRandom.enabled":sampler==="independent-random",
+      "renderer.sampling.fixedPattern.enabled":sampler==="fixed-pattern",
       navigator:{gpu:{requestAdapter:async()=>observedAdapter,getPreferredCanvasFormat:()=>navigator.gpu.getPreferredCanvasFormat()}} }));
     const rendererBufferBytes=[...buffers.values()].reduce((sum,buffer)=>sum+buffer.size,0);
     const textureInventory=textures.map(item=>({format:item.format,size:item.size,mipLevelCount:item.mipLevelCount??1,sampleCount:item.sampleCount??1}));

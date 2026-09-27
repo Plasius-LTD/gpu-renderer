@@ -10,13 +10,22 @@
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 
+`renderer.sampling.fixedPattern.enabled` is a separate default-off experiment:
+fixed relative camera and lighting points shared across pixels and frames, with
+the first camera ray at the pixel centre. It replaces both 1D and 2D sampling,
+is mutually exclusive with the two samplers below, and requires renderer
+recreation. It does not add resources or passes. Temporal repeatability can
+conceal coherent lighting error; this is not production-qualified. See the
+[fixed-pattern design](docs/design/fixed-pattern-experiment.md) and run
+`tests/fixtures/native-fixed-pattern.html` for the source-pinned Eames comparison.
+
 Experimental sampling flags (both default off):
 `renderer.sampling.owenSobol.enabled` selects pixel-local 2D Sobol with
 24-bit hash-driven nested Owen scrambling; `renderer.sampling.independentRandom.enabled`
 selects a separately keyed random control. Supply either through the existing
 `featureFlags` snapshot or direct dotted option. Enabling both throws. Neither
 changes 1D selectors, transport, PDFs, sample counts, buffers or denoising.
-Both off retains the legacy sequence. The feature remains experimental and must
+All sampler flags off retains the legacy sequence. The feature remains experimental and must
 not be treated as quality/performance qualified.
 Sampler flags are renderer-creation snapshots: recreate the renderer to change
 them. Off uses the original shader bytes, not dormant experimental shader code.
