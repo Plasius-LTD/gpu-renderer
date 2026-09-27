@@ -2,6 +2,8 @@ import { createWavefrontPathTracingComputeConfig, type WavefrontRendererFeatureF
 const snapshots: WavefrontRendererFeatureFlags[] = [
   { "renderer.sampling.owenSobol.enabled": true },
   { "renderer.sampling.fixedPattern.enabled": true },
+  { "renderer.sampling.stablePattern.enabled": true },
+  { renderer: { sampling: { stablePattern: { enabled: true } } } },
   { renderer: { sampling: { fixedPattern: { enabled: true } } } },
   { enabled: { "renderer.sampling.independentRandom.enabled": true } },
   { flags: { "renderer.sampling.owenSobol.enabled": false } },

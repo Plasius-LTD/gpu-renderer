@@ -10,6 +10,16 @@
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 
+`renderer.sampling.stablePattern.enabled` is the default-off correction candidate:
+centre-first fixed camera points, with fast, pixel/event/bounce-keyed lighting
+permutations that remain stable across frames. It is mutually exclusive with all
+other sampler flags and requires renderer recreation. No new buffers or passes
+are added. This is a pixel-local scrambled pair, not a full multidimensional
+Sobol construction or a guarantee of clean 1-SPP rendering. Run
+`tests/fixtures/native-stable-pattern.html` and see the
+[correction protocol](docs/design/stable-pattern-correction.md). It is not yet
+the production default; disable sampler flags and recreate for rollback.
+
 `renderer.sampling.fixedPattern.enabled` is a separate default-off experiment:
 fixed relative camera and lighting points shared across pixels and frames, with
 the first camera ray at the pixel centre. It replaces both 1D and 2D sampling,

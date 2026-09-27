@@ -1,4 +1,5 @@
 import { createWavefrontPathTracingComputeRenderer } from "/src/wavefront-compute.js";
+import { createWavefrontPathTracingComputeShaderSource } from "/src/wavefront-shaders.js";
 import { createWavefrontFrameEncoder } from "/src/wavefront-frame-encoder.js";
 import { createGpuParallelismCounters } from "/src/wavefront-frame-runtime.js";
 import { createWavefrontFrameTelemetryResources } from "/src/wavefront-frame-telemetry.js";
@@ -21,8 +22,8 @@ import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy"}={}) {
-  check(["legacy","owen-sobol","independent-random","fixed-pattern"].includes(sampler),"Invalid sampler");
-  const progressiveSampling=sampler==="fixed-pattern"?"fixed-pattern":sampler!=="legacy";
+  check(["legacy","owen-sobol","independent-random","fixed-pattern","stable-pattern","stable-camera-random"].includes(sampler),"Invalid sampler");
+  const progressiveSampling=["fixed-pattern","stable-pattern","stable-camera-random"].includes(sampler)?sampler:sampler!=="legacy";
   if(native)check(Number.isSafeInteger(native.width)&&Number.isSafeInteger(native.height)&&native.width>=128&&native.height>=128&&native.width*native.height<=3840*2160,"Invalid native fixture dimensions");
   let device, renderer, owner, telemetry, lost = false, disposed = false;
   let tracePipelineLayout, activePreparedPipelines=null, activeTelemetry=null, presentPipeline;
@@ -52,6 +53,10 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
             }
             return result;};
         }
+        if(sampler==="stable-camera-random"){
+          const createModule=device.createShaderModule.bind(device);
+          device.createShaderModule=descriptor=>createModule(descriptor.label==="plasius.wavefront.computeShader"?{...descriptor,code:createWavefrontPathTracingComputeShaderSource({progressiveSampling:sampler})}:descriptor);
+        }
         const createTexture=device.createTexture.bind(device);
         device.createTexture=descriptor=>{textures.push(descriptor); return createTexture(descriptor);};
         const createPipeline=device.createComputePipelineAsync.bind(device);
@@ -67,6 +72,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       "renderer.sampling.owenSobol.enabled":sampler==="owen-sobol",
       "renderer.sampling.independentRandom.enabled":sampler==="independent-random",
       "renderer.sampling.fixedPattern.enabled":sampler==="fixed-pattern",
+      "renderer.sampling.stablePattern.enabled":["stable-pattern","stable-camera-random"].includes(sampler),
       navigator:{gpu:{requestAdapter:async()=>observedAdapter,getPreferredCanvasFormat:()=>navigator.gpu.getPreferredCanvasFormat()}} }));
     const rendererBufferBytes=[...buffers.values()].reduce((sum,buffer)=>sum+buffer.size,0);
     const textureInventory=textures.map(item=>({format:item.format,size:item.size,mipLevelCount:item.mipLevelCount??1,sampleCount:item.sampleCount??1}));

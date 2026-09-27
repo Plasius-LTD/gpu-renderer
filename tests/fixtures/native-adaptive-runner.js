@@ -35,7 +35,7 @@ export async function createNativeAdaptiveRunner(c) {
       maxDepth:renderer.config.maxDepth,samplesPerPixel:renderer.config.samplesPerPixel,camera:renderer.config.camera},
     async run(mode,{diagnostics=false,profile=false,onProgress,fused=false,seed=7,sampler="legacy"}={}){
       active();check(["fixed","uniform","radial"].includes(mode),"Invalid native mode");
-      check(["legacy","owen-sobol","independent-random","fixed-pattern"].includes(sampler),"Invalid native sampler");
+      check(["legacy","owen-sobol","independent-random","fixed-pattern","stable-pattern","stable-camera-random"].includes(sampler),"Invalid native sampler");
       check(sampler===(c.sampler??"legacy"),"Sampler source must be selected at renderer creation");
       check(Number.isSafeInteger(seed)&&seed>=0&&seed<=0xffffffff,"Invalid frame seed");
       const adaptive=mode!=="fixed",selected=mode==="radial"?plan:uniformPlan;
@@ -44,9 +44,10 @@ export async function createNativeAdaptiveRunner(c) {
         "renderer.sampling.owenSobol.enabled":sampler==="owen-sobol",
         "renderer.sampling.independentRandom.enabled":sampler==="independent-random",
         "renderer.sampling.fixedPattern.enabled":sampler==="fixed-pattern",
+        "renderer.sampling.stablePattern.enabled":["stable-pattern","stable-camera-random"].includes(sampler),
       });
       const config={...renderer.config,samplesPerPixel:32,
-        transportExperimentFlags:(renderer.config.transportExperimentFlags&~1792)|experiments.bitmask};c.setConfig(config);
+        transportExperimentFlags:(renderer.config.transportExperimentFlags&~3840)|experiments.bitmask};c.setConfig(config);
       const cpu=createWavefrontCpuProfile({enabled:profile}),frameDevice=cpu?cpu.wrapDevice(device):device;
       const stage=(name,fn)=>cpu?cpu.measure(name,fn):fn();
       const asyncStage=(name,fn)=>cpu?cpu.measureAsync(name,fn):fn();

@@ -263,7 +263,7 @@ export async function createWavefrontPipelineResources({ device, constants, form
   const pipelineLayouts = createWavefrontPipelineLayouts(device, bindGroupLayouts);
   const computeShader = device.createShaderModule({
     label: "plasius.wavefront.computeShader",
-    code: createWavefrontPathTracingComputeShaderSource({progressiveSampling:((config?.transportExperimentFlags??0)&1024)!==0?"fixed-pattern":((config?.transportExperimentFlags??0)&768)!==0}),
+    code: createWavefrontPathTracingComputeShaderSource({progressiveSampling:((config?.transportExperimentFlags??0)&2048)!==0?"stable-pattern":((config?.transportExperimentFlags??0)&1024)!==0?"fixed-pattern":((config?.transportExperimentFlags??0)&768)!==0}),
   });
   await assertShaderModuleCompiles(computeShader, "plasius.wavefront.computeShader");
 

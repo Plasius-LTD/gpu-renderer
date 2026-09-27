@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add default-off stable-pattern correction candidate with centre-first camera
+  points and temporally stable, spatial/event-decorrelated lighting sampling;
+  preserve the rejected shared-point experiment and exact disabled path.
+  Add native Eames camera-control, GPU parity and unchanged brightness gates.
+
 - Add default-off fixed relative sampling experiment covering all camera/light
   sample dimensions, centre-first camera rays, exact disabled-source preservation,
   native Eames repeatability and common-reference brightness/error controls.

@@ -1,12 +1,12 @@
 // Exact u32 multiplication matches WGSL. Do not alter the legacy CPU reference
 // during this isolated experiment: its floating multiplication loses low bits.
-function hashUint32(value) {
+export function hashUint32(value) {
   let x=value>>>0;
   x=Math.imul((x>>>16)^x,0x45d9f3b)>>>0;
   x=Math.imul((x>>>16)^x,0x45d9f3b)>>>0;
   return ((x>>>16)^x)>>>0;
 }
-function mixSeed(pixelId,sampleId,bounce,frameIndex,dimension) {
+export function mixSeed(pixelId,sampleId,bounce,frameIndex,dimension) {
   let x=Math.imul(pixelId,747796405)^Math.imul(sampleId,2891336453)^Math.imul(bounce,277803737)^Math.imul(frameIndex,1442695041)^Math.imul(dimension,1597334677);
   x^=x>>>16;x=Math.imul(x,0x7feb352d);x^=x>>>15;
   x=Math.imul(x,0x846ca68b);return (x^(x>>>16))>>>0;

@@ -354,10 +354,12 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   owenSobol: 1 << 8,
   independentRandom: 1 << 9,
   fixedPattern: 1 << 10,
+  stablePattern: 1 << 11,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
   const requested = Object.freeze({
+    stablePattern: readBooleanFeatureFlag(options, "renderer.sampling.stablePattern.enabled", (flags) => flags?.renderer?.sampling?.stablePattern?.enabled ?? flags?.renderer?.sampling?.stablePattern),
     fixedPattern: readBooleanFeatureFlag(
       options, "renderer.sampling.fixedPattern.enabled",
       (flags) => flags?.renderer?.sampling?.fixedPattern?.enabled ?? flags?.renderer?.sampling?.fixedPattern
@@ -415,6 +417,7 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
   });
   const effective = Object.freeze({
     fixedPattern: requested.fixedPattern,
+    stablePattern: requested.stablePattern,
     owenSobol: requested.owenSobol,
     independentRandom: requested.independentRandom,
     stableSampleRouting: requested.stableSampleRouting,
@@ -436,8 +439,8 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
       requested.deterministicLowSppIndirect && strictPhysicalLowSppLighting,
   });
   let bitmask = 0;
-  if ([requested.owenSobol, requested.independentRandom, requested.fixedPattern].filter(Boolean).length > 1) {
-    throw new Error("Owen Sobol, independent random and fixed pattern sampler flags are mutually exclusive.");
+  if ([requested.owenSobol, requested.independentRandom, requested.fixedPattern, requested.stablePattern].filter(Boolean).length > 1) {
+    throw new Error("Owen Sobol, independent random, fixed and stable pattern sampler flags are mutually exclusive.");
   }
   for (const [key, bit] of Object.entries(WAVEFRONT_TRANSPORT_EXPERIMENT_BITS)) {
     if (effective[key]) {
