@@ -909,6 +909,8 @@ export interface WavefrontPathTracingComputeConfig {
 }
 
 export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.sampling.owenSobol.enabled"?: boolean;
+  readonly "renderer.sampling.independentRandom.enabled"?: boolean;
   readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
   readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
   readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -919,6 +921,8 @@ export interface WavefrontRendererFeatureFlags {
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly enabled?: {
+    readonly "renderer.sampling.owenSobol.enabled"?: boolean;
+    readonly "renderer.sampling.independentRandom.enabled"?: boolean;
     readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
     readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
     readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -930,6 +934,8 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly flags?: {
+    readonly "renderer.sampling.owenSobol.enabled"?: boolean;
+    readonly "renderer.sampling.independentRandom.enabled"?: boolean;
     readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
     readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
     readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -941,6 +947,10 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly renderer?: {
+    readonly sampling?: {
+      readonly owenSobol?: boolean | { readonly enabled?: boolean };
+      readonly independentRandom?: boolean | { readonly enabled?: boolean };
+    };
     readonly transport?: {
       readonly strictPhysicalLowSppLighting?: boolean;
       readonly stableSampleRouting?: boolean;
@@ -960,6 +970,9 @@ export interface WavefrontRendererFeatureFlags {
 }
 
 export interface WavefrontTransportExperimentFlags {
+  /** Default off; optional for structural compatibility with older snapshots. */
+  readonly owenSobol?: boolean;
+  readonly independentRandom?: boolean;
   readonly stableSampleRouting: boolean;
   readonly strictZeroOverflow: boolean;
   readonly deferLowSppRussianRoulette: boolean;
@@ -1116,6 +1129,8 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly displayQuality?: boolean;
   readonly denoise?: boolean;
   readonly presentationOutput?: "tone-mapped" | "linear";
+  readonly "renderer.sampling.owenSobol.enabled"?: boolean;
+  readonly "renderer.sampling.independentRandom.enabled"?: boolean;
   readonly strictPhysicalLowSppLighting?: boolean;
   readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
   readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;

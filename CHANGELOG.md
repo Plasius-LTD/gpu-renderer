@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add mutually exclusive default-off Owen–Sobol and independent-random sampling
+  flags without changing the legacy sequence or buffer ABI. Cover progressive
+  prefixes, scrambling and remote snapshots; add full-source Eames causal
+  brightness-band controls, physical GPU word parity and separate timing capture.
+
 - Add original-Eames native trace using canonical shared Product Studio scene
   construction and lighting-owned source fidelity admission. Preserve original
   textures/materials and geometry, record setup separately, and reject asset or

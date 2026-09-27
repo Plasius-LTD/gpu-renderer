@@ -351,10 +351,20 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   productTransportTelemetry: 1 << 5,
   sourceStableDirectLighting: 1 << 6,
   deterministicLowSppIndirect: 1 << 7,
+  owenSobol: 1 << 8,
+  independentRandom: 1 << 9,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
   const requested = Object.freeze({
+    owenSobol: readBooleanFeatureFlag(
+      options, "renderer.sampling.owenSobol.enabled",
+      (flags) => flags?.renderer?.sampling?.owenSobol?.enabled ?? flags?.renderer?.sampling?.owenSobol
+    ),
+    independentRandom: readBooleanFeatureFlag(
+      options, "renderer.sampling.independentRandom.enabled",
+      (flags) => flags?.renderer?.sampling?.independentRandom?.enabled ?? flags?.renderer?.sampling?.independentRandom
+    ),
     stableSampleRouting: readBooleanFeatureFlag(
       options,
       "renderer.transport.stableSampleRouting.enabled",
@@ -399,6 +409,8 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
     ),
   });
   const effective = Object.freeze({
+    owenSobol: requested.owenSobol,
+    independentRandom: requested.independentRandom,
     stableSampleRouting: requested.stableSampleRouting,
     strictZeroOverflow: requested.strictZeroOverflow && strictPhysicalLowSppLighting,
     deferLowSppRussianRoulette:
@@ -418,6 +430,9 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
       requested.deterministicLowSppIndirect && strictPhysicalLowSppLighting,
   });
   let bitmask = 0;
+  if (requested.owenSobol && requested.independentRandom) {
+    throw new Error("Owen Sobol and independent random sampler flags are mutually exclusive.");
+  }
   for (const [key, bit] of Object.entries(WAVEFRONT_TRANSPORT_EXPERIMENT_BITS)) {
     if (effective[key]) {
       bitmask |= bit;

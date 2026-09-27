@@ -1,4 +1,5 @@
 import { hashUint32, mixSeed, random01FromSeed } from "./wavefront-core.js";
+import { sampleProgressivePair, WAVEFRONT_PROGRESSIVE_SAMPLING_WGSL } from "./wavefront-progressive-sampling.js";
 
 const sampleDimensionEntries = Object.freeze([
   ["cameraJitter", 1],
@@ -74,8 +75,10 @@ export function sampleWavefrontDimension2D(
   bounce,
   frameIndex,
   dimension,
-  strataCount
+  strataCount,
+  sampler = "legacy"
 ) {
+  if (sampler !== "legacy") return sampleProgressivePair(pixelId, sampleId, bounce, frameIndex, dimension, sampler);
   const strata = Math.max(1, Number.isFinite(strataCount) ? Math.trunc(strataCount) : 1);
   const jitter = sampleWavefrontDimension1D(
     pixelId,
@@ -154,10 +157,15 @@ fn sample_dimension_2d(
   dimension: u32,
   strataCount: u32
 ) -> vec2<f32> {
+  if(transport_experiment_enabled(256u) || transport_experiment_enabled(512u)){
+    let words=progressive_sample_words(pixelId,sampleId,bounce,sample_frame_index(frameIndex),dimension,transport_experiment_enabled(512u));
+    return vec2<f32>(words>>vec2<u32>(8u))/16777216.0;
+  }
   let strata = max(strataCount, 1u);
   let jitter = sample_dimension_1d(pixelId, sampleId, bounce, frameIndex, dimension);
   let scramble = hash_u32(mix_seed(pixelId, sampleId, bounce, sample_frame_index(frameIndex), dimension));
   let stratified = fract((f32(sampleId % strata) + jitter) / f32(strata));
   let lowDiscrepancy = fract(radical_inverse_vdc(sampleId ^ scramble) + jitter);
   return vec2<f32>(stratified, lowDiscrepancy);
-}`;
+}
+${WAVEFRONT_PROGRESSIVE_SAMPLING_WGSL}`;

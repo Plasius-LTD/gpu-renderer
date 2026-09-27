@@ -1,6 +1,7 @@
 import { createAdaptiveTilePlan } from "/src/wavefront-adaptive-tile-plan.js";
 import { createAdaptiveTileOutputPipelines } from "/src/wavefront-adaptive-tile-output.js";
 import { createConfigPayload } from "/src/wavefront-packers.js";
+import { resolveTransportExperiments } from "/src/wavefront-core.js";
 import { createGpuParallelismCounters } from "/src/wavefront-frame-runtime.js";
 import { createWavefrontCpuProfile } from "/src/wavefront-cpu-profile.js";
 import { packSharedPhase,encodeSharedPhase,encodeSharedSample } from "/src/wavefront-adaptive-shared.js";
@@ -32,11 +33,18 @@ export async function createNativeAdaptiveRunner(c) {
     sceneSnapshot:{triangleCount:renderer.config.triangleCount,bvhNodeCount:renderer.config.bvhNodeCount,
       displayQuality:renderer.config.displayQuality,accelerationBuildMode:renderer.config.accelerationBuildMode,
       maxDepth:renderer.config.maxDepth,samplesPerPixel:renderer.config.samplesPerPixel,camera:renderer.config.camera},
-    async run(mode,{diagnostics=false,profile=false,onProgress,fused=false}={}){
+    async run(mode,{diagnostics=false,profile=false,onProgress,fused=false,seed=7,sampler="legacy"}={}){
       active();check(["fixed","uniform","radial"].includes(mode),"Invalid native mode");
+      check(["legacy","owen-sobol","independent-random"].includes(sampler),"Invalid native sampler");
+      check(Number.isSafeInteger(seed)&&seed>=0&&seed<=0xffffffff,"Invalid frame seed");
       const adaptive=mode!=="fixed",selected=mode==="radial"?plan:uniformPlan;
       c.setMode(diagnostics,adaptive&&fused);
-      const config={...renderer.config,samplesPerPixel:32};c.setConfig(config);
+      const experiments=resolveTransportExperiments({
+        "renderer.sampling.owenSobol.enabled":sampler==="owen-sobol",
+        "renderer.sampling.independentRandom.enabled":sampler==="independent-random",
+      });
+      const config={...renderer.config,samplesPerPixel:32,
+        transportExperimentFlags:(renderer.config.transportExperimentFlags&~768)|experiments.bitmask};c.setConfig(config);
       const cpu=createWavefrontCpuProfile({enabled:profile}),frameDevice=cpu?cpu.wrapDevice(device):device;
       const stage=(name,fn)=>cpu?cpu.measure(name,fn):fn();
       const asyncStage=(name,fn)=>cpu?cpu.measureAsync(name,fn):fn();
@@ -51,7 +59,7 @@ export async function createNativeAdaptiveRunner(c) {
         stage("configPacking",()=>{
           const batch=new Uint8Array(samples*config.memory.configBufferStride);cpu?.recordAllocation(batch.byteLength);
           for(let ordinal=0;ordinal<samples;ordinal++){
-            const value=createConfigPayload(config,tile,7,{sampleIndex:ordinal,sampleWeight:adaptive?1:1/32});
+            const value=createConfigPayload(config,tile,seed,{sampleIndex:ordinal,sampleWeight:adaptive?1:1/32});
             cpu?.recordAllocation(value.byteLength);batch.set(new Uint8Array(value),ordinal*config.memory.configBufferStride);
           }
           frameDevice.queue.writeBuffer(frame,0,batch);
@@ -109,7 +117,7 @@ export async function createNativeAdaptiveRunner(c) {
       frameDevice.queue.submit([present.finish()]);await asyncStage("gpuWait",()=>wait(device.queue.onSubmittedWorkDone()));
       const elapsed=performance.now()-started,visibilityAfter=document.visibilityState;
       const validation=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!validation&&!errors.length,validation?.message??errors[0]);
-      return {mode,fused:adaptive&&fused,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
+      return {mode,sampler,seed,fused:adaptive&&fused,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
         diagnosticReadbackMs:diagnostics?readbackMs:null,diagnosticRenderIntervalsMs:diagnostics?elapsed-readbackMs:null,
         actualSamples:diagnostics?actualSamples:null,actualHistogram:diagnostics?actualHistogram:null,tiles,
         ...(cpu?{cpuProfile:cpu.snapshot()}:{}),visibilityBefore,visibilityAfter,validationErrors:0};

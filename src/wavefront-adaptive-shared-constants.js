@@ -1,5 +1,5 @@
 // Generated from final shared-round WGSL; checked by tests.
-// Source SHA-256: c72ea75f5da72bcc06dd19f40568e431f331d6f31a1f1cc8aff298f02a147864
+// Source SHA-256: 88cbce19a8e22924556f30dacfc49ca8672185b08cadfac3f9ee3c40c8837db7
 export const SHARED_PHASE_ALIGNMENT = 4;
 export const SHARED_PHASE_BYTE_SIZE = 32;
 export const SHARED_PHASE_MINIMUM_BYTE_SIZE = 32;

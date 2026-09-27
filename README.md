@@ -10,6 +10,20 @@
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 
+Experimental sampling flags (both default off):
+`renderer.sampling.owenSobol.enabled` selects pixel-local 2D Sobol with
+24-bit hash-driven nested Owen scrambling; `renderer.sampling.independentRandom.enabled`
+selects a separately keyed random control. Supply either through the existing
+`featureFlags` snapshot or direct dotted option. Enabling both throws. Neither
+changes 1D selectors, transport, PDFs, sample counts, buffers or denoising.
+Both off retains the legacy sequence. The feature remains experimental and must
+not be treated as quality/performance qualified.
+
+`tests/fixtures/native-sampler-experiment.html` runs the source-pinned, full
+Eames 1080p three-seed comparison and 4K Sobol follow-up. See the
+[frozen experiment design](docs/design/progressive-sampling-experiment.md);
+independent-random results distinguish prefix coverage from Sobol-specific gains.
+
 `tests/fixtures/native-eames-trace.html` uses the original Eames source asset
 through the shared Product Studio loader and mesh builder, with lighting-owned
 hash/geometry/texture/material admission. It retains loading/BVH setup separately

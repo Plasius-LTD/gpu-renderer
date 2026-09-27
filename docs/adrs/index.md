@@ -41,3 +41,6 @@
 - [ADR 0042: Opt-in host elapsed attribution](./adr-0042-opt-in-host-attribution.md)
 - [ADR 0043: Completion-driven frame ownership and observational progress](./adr-0043-completion-driven-frame-loop.md)
 - [ADR 0044: Native prescribed adaptive tracing](./adr-0044-native-prescribed-adaptive-tracing.md)
+# Sampling experiment
+
+- [ADR 0045: Progressive sampling experiment](adr-0045-progressive-sampling-experiment.md)
