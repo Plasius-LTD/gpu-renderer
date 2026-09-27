@@ -67,3 +67,15 @@ changed-source LCOV, lint/types/build/package/dependency gates, physical checks,
 push/CI. No production flag enablement, local publishing or release bypass.
 Source reference: https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sobol_Samplers
 
+## Pre-comparison correction: preserve compiled flag-off control
+
+The initial physical probe rejected the legacy CPU hash's floating multiplication;
+the new CPU reference now uses exact u32 operations. A subsequent native run
+rejected the historical flag-off HDR hash with dormant sampler helpers present.
+Keep both failed capture receipts. Do not use their timings for sampler claims.
+
+Select progressive shader source at renderer creation, leaving default shader
+bytes exactly unchanged. Keep the same buffer ABI and pipeline count, recreating
+the renderer when sampler flags change. The fixture rotates sampler/mode order
+with one live renderer at a time and records recreation outside frame timings.
+The frozen seeds, budgets, thresholds and full-fidelity scope remain unchanged.

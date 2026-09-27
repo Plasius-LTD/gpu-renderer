@@ -1606,6 +1606,8 @@ export function renderWavefrontPathTracingComputeFrame(
   options?: CreateWavefrontPathTracingComputeRendererOptions & WavefrontRenderFrameOptions
 ): Promise<WavefrontPathTracingComputeFrameStats>;
 export function createWavefrontPathTracingComputeShaderSource(options?: {
+  /** Internal source selection; public renderer flags select this automatically. */
+  progressiveSampling?: boolean;
   workgroupSize?: number;
   outputTextureFormat?: GPUTextureFormat | "rgba8unorm";
 }): string;

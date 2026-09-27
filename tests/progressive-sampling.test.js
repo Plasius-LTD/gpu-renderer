@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sobolPairWords, owenScramble24, progressiveSampleWords, sampleProgressivePair } from "../src/wavefront-progressive-sampling.js";
-import { sampleWavefrontDimension2D } from "../src/wavefront-sampling-dimensions.js";
+import { sampleWavefrontDimension2D,withProgressiveSampling } from "../src/wavefront-sampling-dimensions.js";
+import { legacySamplingSource } from "./helpers/legacy-sampling-source.js";
+import { WAVEFRONT_COMPUTE_WGSL,createWavefrontPathTracingComputeShaderSource } from "../src/wavefront-shaders.js";
 import { resolveTransportExperiments } from "../src/wavefront-core.js";
 import { createWavefrontPathTracingComputeConfig } from "../src/index.js";
+import { createConfigPayload } from "../src/wavefront-packers.js";
+import { createWavefrontPipelineResources } from "../src/wavefront-pipelines.js";
+import { createAdaptiveCameraRayPipeline } from "../src/wavefront-adaptive-camera.js";
+import { createSharedAdaptivePipelines } from "../src/wavefront-adaptive-shared.js";
+import { createPrunedContinuationShader } from "../src/wavefront-pruned-continuations.js";
 
 test("Sobol first two dimensions have known words and every power-of-two elementary interval", () => {
   const expected = [[0,0],[4,4],[2,6],[6,2],[1,5],[5,1],[3,3],[7,7]];
@@ -81,4 +88,44 @@ test("Sampler flags are independently default off, accept remote snapshots, reje
     assert.equal(resolveTransportExperiments({[flag]:false,featureFlags:{[flag]:true}}).bitmask,0);
   }
   assert.throws(()=>resolveTransportExperiments({[a]:true,[b]:true}),/mutually exclusive/);
+});
+
+test("Sampler selection changes only the existing flag word, not allocation sizes or frame ABI",()=>{
+  const options={width:1920,height:1080,samplesPerPixel:32,maxDepth:4};
+  const baseline=createWavefrontPathTracingComputeConfig(options),tile={x:0,y:0,width:128,height:128};
+  const before=new Uint8Array(createConfigPayload(baseline,tile,7,{sampleIndex:0,sampleWeight:1/32}));
+  for(const flag of ["renderer.sampling.owenSobol.enabled","renderer.sampling.independentRandom.enabled"]){
+    const config=createWavefrontPathTracingComputeConfig({...options,[flag]:true});
+    assert.deepEqual(config.memory,baseline.memory);
+    const after=new Uint8Array(createConfigPayload(config,tile,7,{sampleIndex:0,sampleWeight:1/32}));
+    assert.equal(after.length,before.length);
+    assert.equal(new DataView(after.buffer).getUint32(268,true),config.transportExperimentFlags);
+    after.set(before.subarray(268,272),268);assert.deepEqual(after,before);
+  }
+});
+
+test("Flag-off source is byte-identical; opt-in changes only the sampler and fails missing source",()=>{
+  assert.equal(withProgressiveSampling(WAVEFRONT_COMPUTE_WGSL),WAVEFRONT_COMPUTE_WGSL);
+  assert.equal(createWavefrontPathTracingComputeShaderSource(),WAVEFRONT_COMPUTE_WGSL);
+  assert.equal(legacySamplingSource(createWavefrontPathTracingComputeShaderSource({progressiveSampling:true})),WAVEFRONT_COMPUTE_WGSL);
+  assert.throws(()=>withProgressiveSampling("",true),/Missing canonical/);
+});
+
+test("All executed pipeline families select the sampler source only when opted in",async()=>{
+  const modules=[],device={
+    createBindGroupLayout:value=>value,createPipelineLayout:value=>value,
+    createShaderModule:value=>{modules.push(value);return {getCompilationInfo:async()=>({messages:[]})};},
+    createComputePipelineAsync:async value=>value,createRenderPipelineAsync:async value=>value,
+  },constants={shader:{COMPUTE:4,FRAGMENT:2,VERTEX:1}};
+  for(const enabled of [false,true]){
+    modules.length=0;
+    await createWavefrontPipelineResources({device,constants,format:"bgra8unorm",config:{transportExperimentFlags:enabled?256:0}});
+    const main=modules.find(m=>m.label==="plasius.wavefront.computeShader").code;
+    assert.equal(main,createWavefrontPathTracingComputeShaderSource({progressiveSampling:enabled}));
+    modules.length=0;
+    await createAdaptiveCameraRayPipeline(device,constants.shader,{enabled:true,progressiveSampling:enabled});
+    await createSharedAdaptivePipelines(device,constants.shader,{enabled:true,progressiveSampling:enabled});
+    for(const module of modules)assert.equal(module.code.includes("fn owen_scramble_24"),enabled);
+    assert.equal(createPrunedContinuationShader({progressiveSampling:enabled}).includes("fn owen_scramble_24"),enabled);
+  }
 });

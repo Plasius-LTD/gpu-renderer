@@ -157,15 +157,24 @@ fn sample_dimension_2d(
   dimension: u32,
   strataCount: u32
 ) -> vec2<f32> {
-  if(transport_experiment_enabled(256u) || transport_experiment_enabled(512u)){
-    let words=progressive_sample_words(pixelId,sampleId,bounce,sample_frame_index(frameIndex),dimension,transport_experiment_enabled(512u));
-    return vec2<f32>(words>>vec2<u32>(8u))/16777216.0;
-  }
   let strata = max(strataCount, 1u);
   let jitter = sample_dimension_1d(pixelId, sampleId, bounce, frameIndex, dimension);
   let scramble = hash_u32(mix_seed(pixelId, sampleId, bounce, sample_frame_index(frameIndex), dimension));
   let stratified = fract((f32(sampleId % strata) + jitter) / f32(strata));
   let lowDiscrepancy = fract(radical_inverse_vdc(sampleId ^ scramble) + jitter);
   return vec2<f32>(stratified, lowDiscrepancy);
+}`;
+
+// Keep default shader bytes exact: even a dormant uniform branch can change
+// compiler arithmetic. Sampler choice is a renderer-creation snapshot.
+export function withProgressiveSampling(source, enabled = false) {
+  if (!enabled) return source;
+  if (!source.includes(WAVEFRONT_SAMPLE_SEQUENCE_WGSL)) throw new Error("Missing canonical sampling source");
+  const branch=`  if(transport_experiment_enabled(256u) || transport_experiment_enabled(512u)){
+    let words=progressive_sample_words(pixelId,sampleId,bounce,sample_frame_index(frameIndex),dimension,transport_experiment_enabled(512u));
+    return vec2<f32>(words>>vec2<u32>(8u))/16777216.0;
+  }
+`;
+  const sequence=WAVEFRONT_SAMPLE_SEQUENCE_WGSL.replace("  let strata = max(strataCount, 1u);",branch+"  let strata = max(strataCount, 1u);")+"\n"+WAVEFRONT_PROGRESSIVE_SAMPLING_WGSL;
+  return source.replace(WAVEFRONT_SAMPLE_SEQUENCE_WGSL,sequence);
 }
-${WAVEFRONT_PROGRESSIVE_SAMPLING_WGSL}`;

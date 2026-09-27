@@ -9,7 +9,7 @@ import { createWavefrontFrameEncoder } from "../src/wavefront-frame-encoder.js";
 import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
 
 test("fixed shader bytes and transport bodies stay canonical; pruning flags are independent",()=>{
-  assert.equal(createHash("sha256").update(legacySamplingSource(WAVEFRONT_COMPUTE_WGSL)).digest("hex"),"c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb");
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),"c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb");
   assert.equal(createPrunedContinuationShader(),WAVEFRONT_COMPUTE_WGSL);
   const fused=createPrunedContinuationShader({fusedHits:true});
   assert.ok(fused.includes(WAVEFRONT_SURFACE_BODY_WGSL));
@@ -54,4 +54,3 @@ for(const depth of [1,4,8])test(`prepared-only variant dispatches preserve queue
   calls.length=0;frame.encodeTileSample(encoder,{width:128,height:128},0,createGpuParallelismCounters());assert.ok(!calls.includes("fused"));assert.ok(!calls.includes("zero-swap"));
   calls.length=0;variant={compactAndSwapQueues:"zero-swap"};frame.encodePreparedTileSample(encoder,{width:128,height:128},0,createGpuParallelismCounters());assert.equal(calls.filter(v=>v==="intersect").length,depth);
 });
-import { legacySamplingSource } from "./helpers/legacy-sampling-source.js";

@@ -19,7 +19,7 @@ test("compacted camera rays reuse camera WGSL without changing fixed transport o
     assert.equal(shader.match(/fn sample_dimension_2d\(/g)?.length, 1);
   }
   // Byte-identical to PR 214's separately tracked corrected fixed baseline.
-  assert.equal(createHash("sha256").update(legacySamplingSource(WAVEFRONT_COMPUTE_WGSL)).digest("hex"), "c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb");
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb");
   const entry = ADAPTIVE_CAMERA_WGSL.slice(ADAPTIVE_CAMERA_WGSL.indexOf("fn generateCompactedCameraRays"));
   assert.match(entry, /activeQueue\[slot\] = make_ray\(localPixelId\);/);
   assert.doesNotMatch(entry, /sample_dimension_2d\(/);
@@ -72,4 +72,3 @@ test("camera dispatch preserves immutable frame/tile slots and uses indirect arg
     assert.throws(() => encodeAdaptiveCameraRays(encoder, {}, null, null, null, 0, offset));
   }
 });
-import { legacySamplingSource } from "./helpers/legacy-sampling-source.js";

@@ -18,6 +18,8 @@ selects a separately keyed random control. Supply either through the existing
 changes 1D selectors, transport, PDFs, sample counts, buffers or denoising.
 Both off retains the legacy sequence. The feature remains experimental and must
 not be treated as quality/performance qualified.
+Sampler flags are renderer-creation snapshots: recreate the renderer to change
+them. Off uses the original shader bytes, not dormant experimental shader code.
 
 `tests/fixtures/native-sampler-experiment.html` runs the source-pinned, full
 Eames 1080p three-seed comparison and 4K Sobol follow-up. See the

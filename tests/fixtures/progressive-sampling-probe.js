@@ -1,4 +1,4 @@
-import { WAVEFRONT_SAMPLE_SEQUENCE_WGSL,WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL } from "/src/wavefront-sampling-dimensions.js";
+import { WAVEFRONT_SAMPLE_SEQUENCE_WGSL,WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL,withProgressiveSampling } from "/src/wavefront-sampling-dimensions.js";
 import { progressiveSampleWords } from "/src/wavefront-progressive-sampling.js";
 // Physical integer parity probe; never used as rendering performance evidence.
 export async function probeProgressiveSampling(){
@@ -10,7 +10,7 @@ export async function probeProgressiveSampling(){
       struct ProbeConfig {transportExperimentFlags:u32,}
       var<private> config:ProbeConfig;
       ${WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL}
-      ${WAVEFRONT_SAMPLE_SEQUENCE_WGSL}
+      ${withProgressiveSampling(WAVEFRONT_SAMPLE_SEQUENCE_WGSL,true)}
       @group(0) @binding(0) var<storage,read_write> output:array<vec4<u32>>;
       @compute @workgroup_size(64) fn probe(@builtin(global_invocation_id) id:vec3<u32>){
         let i=id.x;if(i>=4096u){return;}

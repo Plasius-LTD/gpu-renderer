@@ -3,7 +3,7 @@ import {
   createComputePipeline,
   createRenderPipeline,
 } from "./wavefront-runtime-support.js";
-import { PRESENT_WGSL, WAVEFRONT_COMPUTE_WGSL } from "./wavefront-shaders.js";
+import { PRESENT_WGSL, createWavefrontPathTracingComputeShaderSource } from "./wavefront-shaders.js";
 import { CONFIG_BUFFER_BYTES } from "./wavefront-core.js";
 
 export function createWavefrontBindGroupLayouts(device, constants) {
@@ -258,12 +258,12 @@ export async function createWavefrontPresentPipeline(device, presentBindGroupLay
   });
 }
 
-export async function createWavefrontPipelineResources({ device, constants, format }) {
+export async function createWavefrontPipelineResources({ device, constants, format, config }) {
   const bindGroupLayouts = createWavefrontBindGroupLayouts(device, constants);
   const pipelineLayouts = createWavefrontPipelineLayouts(device, bindGroupLayouts);
   const computeShader = device.createShaderModule({
     label: "plasius.wavefront.computeShader",
-    code: WAVEFRONT_COMPUTE_WGSL,
+    code: createWavefrontPathTracingComputeShaderSource({progressiveSampling:((config?.transportExperimentFlags??0)&768)!==0}),
   });
   await assertShaderModuleCompiles(computeShader, "plasius.wavefront.computeShader");
 

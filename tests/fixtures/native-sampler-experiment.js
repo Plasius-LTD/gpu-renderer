@@ -24,17 +24,39 @@ run.addEventListener("click",async()=>{
       const plan=createRadialSamplingPlan(width,height),samplers=name==="1080p"?SAMPLING_EXPERIMENT.samplers:["owen-sobol"];
       const lane={name,width,height,maximumSpp:32,maxDepth:4,denoise:false,frameBudgetReduction:false,budgets:{bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)},warmups:[],measurements:[],diagnostics:[]};receipt.lanes.push(lane);
       status.textContent=`${name}: constructing full Eames pipelines`;
-      runner=await createPairedProbeRunner(admitted.scene,cancellation.signal,{pruningVariants:true,native:{width,height,canvas,budgets:plan.budgets}});
-      lane.admission=admitted.assertEamesRendererAdmission(runner.sceneSnapshot);lane.adapter=runner.adapter;lane.memory=runner.memory;lane.tiles=runner.tiles;
+      let activeSampler;
+      lane.setups=[];
+      const selectSampler=async sampler=>{
+        if(runner&&activeSampler===sampler)return;
+        runner?.destroy();runner=null;
+        const started=performance.now();
+        runner=await createPairedProbeRunner(admitted.scene,cancellation.signal,{pruningVariants:true,sampler,native:{width,height,canvas,budgets:plan.budgets}});
+        activeSampler=sampler;
+        lane.admission=admitted.assertEamesRendererAdmission(runner.sceneSnapshot);lane.adapter=runner.adapter;lane.memory=runner.memory;lane.tiles=runner.tiles;
+        lane.setups.push({sampler,excludedSetupMs:performance.now()-started,memory:runner.memory});
+      };
       const progress=label=>p=>{if(p.completedTiles%16===0||p.completedTiles===p.totalTiles)status.textContent=`${name} ${label}: ${p.completedTiles}/${p.totalTiles} tiles`;};
+      if(name==="1080p"){
+        await selectSampler("legacy");
+        const preflight=await runner.run("fixed",{sampler:"legacy",seed:7,diagnostics:true,onProgress:progress("historical flag-off preflight")});
+        const image=preflight.image;delete preflight.image;preflight.imageSha256=await hashBytes(image.buffer);lane.preflight=preflight;
+        if(preflight.imageSha256!==SAMPLING_EXPERIMENT.historicalFixed1080pSha256){
+          const marker=document.createElement("canvas");marker.width=32;marker.height=32;const chunks=[];let index=0;
+          for await(const chunk of encodeLinearImageChunks(image))chunks.push(await save(`flag-off-preflight-hdr-${index++}`,marker,{provenance:receipt.provenance,chunk}));
+          await save("flag-off-preflight",canvas,{provenance:receipt.provenance,width,height,preflight,chunks});
+          throw new Error(`Flag-off historical HDR hash mismatch: ${preflight.imageSha256} (HDR retained)`);
+        }
+      }
       // Rotate sampler and mode order. Diagnostic readback/retention never enters timings.
       for(let round=-1;round<3;round++)for(let j=0;j<samplers.length;j++)for(let k=0;k<2;k++){
         const sampler=samplers[(j+round+1)%samplers.length],mode=["fixed","radial"][(round+1+k)%2];
+        await selectSampler(sampler);
         const frame=await runner.run(mode,{sampler,seed:7,onProgress:progress(`${sampler} ${mode} ${round<0?"warmup":`timing ${round+1}/3`}`)});
         delete frame.image;(round<0?lane.warmups:lane.measurements).push({...frame,round});
       }
       for(const [seedIndex,seed] of (name==="1080p"?SAMPLING_EXPERIMENT.seeds:[7]).entries())for(let j=0;j<samplers.length;j++){
         const sampler=samplers[(seedIndex+j)%samplers.length],frames={};
+        await selectSampler(sampler);
         const modes=seedIndex%2?["radial","fixed"]:["fixed","radial"];if(seed===7)modes.push("uniform");
         for(const mode of modes){
           const diagnostic=await runner.run(mode,{sampler,seed,diagnostics:true,profile:true,onProgress:progress(`${sampler} ${mode} seed ${seed} diagnostic`)}),image=diagnostic.image;delete diagnostic.image;
@@ -53,7 +75,10 @@ run.addEventListener("click",async()=>{
             for(const b of plan.bands)check(diagnostic.actualHistogram[b.spp]===b.pixels,"Actual radial histogram mismatch");
             diagnostic.rings=compareSamplingRings(image,fixed.image,plan);
           }
-          if(name==="1080p"&&sampler==="legacy"&&seed===7&&mode==="fixed")check(diagnostic.imageSha256===SAMPLING_EXPERIMENT.historicalFixed1080pSha256,"Flag-off historical HDR hash mismatch");
+          if(name==="1080p"&&sampler==="legacy"&&seed===7&&mode==="fixed"){
+            diagnostic.historicalIdentityPassed=diagnostic.imageSha256===SAMPLING_EXPERIMENT.historicalFixed1080pSha256;
+            if(!diagnostic.historicalIdentityPassed)receipt.failures.push(`Flag-off historical HDR hash mismatch: ${diagnostic.imageSha256}`);
+          }
           const linearImage={format:"rgba-float32-little-endian",sha256:diagnostic.imageSha256,uncompressedBytes:image.byteLength,chunks:[],retained:seed===7};
           if(seed===7&&mode==="uniform")linearImage.identicalTo=`${name}-${sampler}-seed7-fixed`;
           else if(seed===7){
@@ -65,6 +90,7 @@ run.addEventListener("click",async()=>{
             }
           }
           diagnostic.artifact=await save(label,snapshot,{provenance:receipt.provenance,width,height,diagnostic,linearImage});lane.diagnostics.push(diagnostic);
+          check(diagnostic.historicalIdentityPassed!==false,"Flag-off historical HDR hash mismatch (HDR retained)");
           if(seed===7&&mode!=="uniform"){const preview=document.createElement("img");preview.src=snapshot;preview.alt=label;previews.append(preview);}
         }
         await save(`${name}-checkpoint-${sampler}-${seed}`,canvas,receipt);

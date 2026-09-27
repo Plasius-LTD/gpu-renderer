@@ -212,6 +212,5 @@ test("pipeline compilation failures propagate without returning partial pipeline
 });
 
 test("the corrected PR 214 fixed transport remains byte-identical", () => {
-  assert.equal(createHash("sha256").update(legacySamplingSource(WAVEFRONT_COMPUTE_WGSL)).digest("hex"), "c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb");
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb");
 });
-import { legacySamplingSource } from "./helpers/legacy-sampling-source.js";

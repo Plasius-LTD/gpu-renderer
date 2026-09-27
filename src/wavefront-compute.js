@@ -500,7 +500,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     },
     computePipelines: pipelines,
     presentPipeline,
-  } = await createWavefrontPipelineResources({ device, constants, format });
+  } = await createWavefrontPipelineResources({ device, constants, format, config });
 
   function createTraceBindGroups() {
     return createWavefrontTraceBindGroups({

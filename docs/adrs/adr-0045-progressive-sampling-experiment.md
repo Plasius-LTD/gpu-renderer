@@ -15,9 +15,11 @@ random control isolates full-domain coverage from low-discrepancy benefits.
 Keep one-dimensional selectors, transport, PDFs and normalization unchanged.
 
 Scrambling costs integer instructions. No speed or memory claim follows from
-the algorithm choice. Preserve the original transport hash checks after removing
-only the explicitly added sampler branch/helpers; additionally require physical
-legacy HDR identity. Native tests are specified in
+the algorithm choice. Select experimental source only at renderer creation:
+the initial dormant-branch implementation failed the historical HDR hash.
+Preserve the entire original flag-off shader hash and require physical legacy
+HDR identity. Recreate the renderer when sampler flags change; no additional
+pipelines or allocations coexist. Native tests are specified in
 [the frozen design](../design/progressive-sampling-experiment.md).
 
 Rollback disables the sampler flags. Three.js remains permanently prohibited.

@@ -5,6 +5,7 @@ import { WAVEFRONT_SHADER_LAYOUT_WGSL } from "./wavefront-shader-layout.js";
 import { WAVEFRONT_SHADER_LIGHTING_WGSL } from "./wavefront-shader-lighting.js";
 import { WAVEFRONT_SHADER_MATERIALS_WGSL } from "./wavefront-shader-materials.js";
 import { PATH_TREE_WGSL } from "./wavefront-path-tree-shader.js";
+import { withProgressiveSampling } from "./wavefront-sampling-dimensions.js";
 export { PRESENT_WGSL } from "./wavefront-present-shader.js";
 
 function readPositiveInteger(name, value, fallback) {
@@ -36,5 +37,5 @@ export function createWavefrontPathTracingComputeShaderSource(options = {}) {
   if (workgroupSize !== WAVEFRONT_COMPUTE_WORKGROUP_SIZE) {
     throw new Error(`wavefront mesh compute currently requires workgroupSize=${WAVEFRONT_COMPUTE_WORKGROUP_SIZE}`);
   }
-  return WAVEFRONT_COMPUTE_WGSL;
+  return withProgressiveSampling(WAVEFRONT_COMPUTE_WGSL, options.progressiveSampling === true);
 }

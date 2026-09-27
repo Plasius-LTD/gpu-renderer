@@ -1,6 +1,7 @@
 import { WAVEFRONT_COMPUTE_WGSL } from "./wavefront-shaders.js";
 import { WAVEFRONT_INTERSECTION_BODY_WGSL, WAVEFRONT_SURFACE_BODY_WGSL } from "./wavefront-shader-kernels.js";
 import { assertShaderModuleCompiles, createComputePipeline } from "./wavefront-runtime-support.js";
+import { withProgressiveSampling } from "./wavefront-sampling-dimensions.js";
 
 // Only the output assignment changes: all traversal/material calculations stay
 // single-sourced. The two stable assignment seams are checksum/identity-tested.
@@ -22,8 +23,8 @@ ${WAVEFRONT_SURFACE_BODY_WGSL}
 }
 `;
 
-export function createPrunedContinuationShader({ fusedHits = false, zeroEmptyDispatch = false } = {}) {
-  let source = WAVEFRONT_COMPUTE_WGSL;
+export function createPrunedContinuationShader({ fusedHits = false, zeroEmptyDispatch = false, progressiveSampling = false } = {}) {
+  let source = withProgressiveSampling(WAVEFRONT_COMPUTE_WGSL,progressiveSampling);
   if (zeroEmptyDispatch) source = source.replace("return max(1u, (rayCount + 63u) / 64u);", "return (rayCount + 63u) / 64u;");
   return fusedHits ? source + fusedEntry : source;
 }

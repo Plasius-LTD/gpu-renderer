@@ -20,7 +20,9 @@ import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continu
 import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null}={}) {
+export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy"}={}) {
+  check(["legacy","owen-sobol","independent-random"].includes(sampler),"Invalid sampler");
+  const progressiveSampling=sampler!=="legacy";
   if(native)check(Number.isSafeInteger(native.width)&&Number.isSafeInteger(native.height)&&native.width>=128&&native.height>=128&&native.width*native.height<=3840*2160,"Invalid native fixture dimensions");
   let device, renderer, owner, telemetry, lost = false, disposed = false;
   let tracePipelineLayout, activePreparedPipelines=null, activeTelemetry=null, presentPipeline;
@@ -62,6 +64,8 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const maximum=sceneConfig.probeMaximum??32,maxDepth=sceneConfig.probeDepth??4;
     renderer = await wait(createWavefrontPathTracingComputeRenderer({ ...sceneConfig, canvas:native?.canvas??new OffscreenCanvas(width,height), width,height,tileSize:128,maxDepth,
       samplesPerPixel:native?32:256,denoise:false,deferredPathResolve:true,strictPhysicalLowSppLighting:true,
+      "renderer.sampling.owenSobol.enabled":sampler==="owen-sobol",
+      "renderer.sampling.independentRandom.enabled":sampler==="independent-random",
       navigator:{gpu:{requestAdapter:async()=>observedAdapter,getPreferredCanvasFormat:()=>navigator.gpu.getPreferredCanvasFormat()}} }));
     const rendererBufferBytes=[...buffers.values()].reduce((sum,buffer)=>sum+buffer.size,0);
     const textureInventory=textures.map(item=>({format:item.format,size:item.size,mipLevelCount:item.mipLevelCount??1,sampleCount:item.sampleCount??1}));
@@ -71,12 +75,12 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const resources=await wait(owner.acquire()); check(resources.status==="ready",resources.reason); const b=resources.buffers;
     const compact=await wait(createAdaptivePrimaryPipelines(device,GPUShaderStage,{enabled:true}));
     const bootstrap=await wait(createAdaptiveBootstrapPipelines(device,GPUShaderStage,{enabled:true}));
-    const camera=await wait(createAdaptiveCameraRayPipeline(device,GPUShaderStage,{enabled:true}));
+    const camera=await wait(createAdaptiveCameraRayPipeline(device,GPUShaderStage,{enabled:true,progressiveSampling}));
     const producer=await wait(createAdaptiveCompletionPipeline(device,GPUShaderStage,{enabled:true}));
     const resolve=await wait(createAdaptiveResolvePipelines(device,GPUShaderStage,{enabled:true}));
-    const shared=await wait(createSharedAdaptivePipelines(device,GPUShaderStage,{enabled:true}));
+    const shared=await wait(createSharedAdaptivePipelines(device,GPUShaderStage,{enabled:true,progressiveSampling}));
     const variants={};
-    if(pruningVariants)for(const [name,options] of Object.entries({zero:{zeroEmptyDispatch:true},fused:{fusedHits:true},combined:{fusedHits:true,zeroEmptyDispatch:true}}))variants[name]=await wait(createPrunedContinuationPipelines(device,tracePipelineLayout,options));
+    if(pruningVariants)for(const [name,options] of Object.entries({zero:{zeroEmptyDispatch:true},fused:{fusedHits:true},combined:{fusedHits:true,zeroEmptyDispatch:true}}))variants[name]=await wait(createPrunedContinuationPipelines(device,tracePipelineLayout,{...options,progressiveSampling}));
     const group=(layout,entries)=>device.createBindGroup({layout,entries:entries.map(([binding,buffer,size])=>({binding,resource:{buffer,...(size?{size}:{})}}))});
     const compactGroup=group(compact.layout,[[0,b.pixelState],[1,b.worklist],[2,b.primaryControl],[3,b.dispatch],[4,b.primaryConfig,32]]);
     const producerGroup=group(producer.layout,[[0,frame,320],[1,paths],[2,b.pixelState],[3,b.cameraSamples],[4,b.primaryControl],[5,counters],[6,b.resolveConfig,48]]);
@@ -104,7 +108,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const copy=await wait(device.createComputePipelineAsync({layout:"auto",compute:{module:copyModule,entryPoint:"copy_words"}}));
     const read=async(source,size)=>{const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(copy);pass.setBindGroup(0,group(copy.getBindGroupLayout(0),[[0,source,size],[1,copied]]));pass.dispatchWorkgroups(Math.ceil(size/256));pass.end();encoder.copyBufferToBuffer(copied,0,staging,0,size);device.queue.submit([encoder.finish()]);
       await wait(staging.mapAsync(GPUMapMode.READ));const value=staging.getMappedRange(0,size).slice(0);staging.unmap();return value;};
-    if(native)return await createNativeAdaptiveRunner({native,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
+    if(native)return await createNativeAdaptiveRunner({native,sampler,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
       variants,telemetry,timestampPairs,read,makeBuffer,group,descriptors,wait,active,destroy,errors,owner,
       setMode(diagnostic,fused){activeTelemetry=diagnostic?telemetry:null;activePreparedPipelines=fused?variants.fused:null;},
       setConfig(value){config=value;},adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
