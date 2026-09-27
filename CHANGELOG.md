@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Refresh compatible npm dependencies and published Plasius dependency resolutions for the weekly security maintenance batch (2026-09-27).
+
 - **Added**
   - Internal reflected adaptive budget/count metadata, optional bounded classifier
     and packed-history buffers, and lazy allocation admission with a 128 MiB cap.
