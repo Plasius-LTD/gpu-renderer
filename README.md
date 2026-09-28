@@ -9,6 +9,9 @@ Reset and the splitting benchmark retain the default ceiling. Evidence checks
 every completed count; non-default filenames include the ceiling. Host budgets
 widen only when needed; GPU queues remain tile-bounded. See the
 [capture design](docs/design/high-spp-room-reference.md).
+The [retained 4K/256-centre result](docs/evidence/high-spp-room-2026-09-28.md)
+verified 394,813,440 camera samples in a 447.960-second diagnostic render job;
+raw/cleaned native captures remain local. This is quality-reference evidence only.
 
 Meshes are single-sided by default: set `doubleSided: true` explicitly for
 two-sided sheets. glTF material sidedness is forwarded by gpu-shared. Rejected
