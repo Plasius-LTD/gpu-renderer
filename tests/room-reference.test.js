@@ -8,6 +8,10 @@ test("room reference exposes original-scene placement, native resolutions and ex
  assert.match(html,/<option value="fixed-pattern" selected>/);
  assert.match(html,/img:not\(\[hidden\]\)/);
  assert.match(html,/<img id="preview" hidden/);
+ assert.match(html,/<input id="chair-x"[^>]*value="2.3"/);
+ assert.match(html,/<input id="chair-z"[^>]*value="-2.5"/);
+ assert.match(html,/uniformly scaled to 2.1 m wide/);
+ assert.match(html,/preserving its proportions/);
 });
 test("room capture reuses real transport, hashes input, validates counts and clears stale results",()=>{
  const js=readFileSync(new URL("./fixtures/native-room-reference.js",import.meta.url),"utf8");
@@ -20,4 +24,5 @@ test("room capture reuses real transport, hashes input, validates counts and cle
  assert.match(js,/addEventListener\("change",clearCapture\)/);
  assert.match(js,/addEventListener\("input",clearCapture\)/);
  assert.match(js,/sampler:settings.sampler/);
+ assert.match(js,/ROOM_DEFAULTS.x/);assert.match(js,/ROOM_DEFAULTS.z/);
 });

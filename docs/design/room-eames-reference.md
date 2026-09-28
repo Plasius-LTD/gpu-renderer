@@ -1,5 +1,18 @@
 # Room plus Eames local adaptive reference
 
+## Proportional seating and swapped layout (site#2256 / renderer#220)
+
+Use lighting-owned defaults: Eames X/Z 2.3/-2.5, standing reference 1.8/-1.1,
+unchanged yaw/floor alignment, and the original fixed camera target. Initial
+controls and Reset must agree. The first local seating model is uniformly scaled
+to 2.1 m source-local width, preserving height/depth proportions and normal
+directions. This is a recorded local override, not authored asset dimensions.
+UI labels must disclose it. Source assets, materials, UVs and transport stay
+unchanged. Requirements-first tests cover initial/reset agreement; native
+1080p/4K captures verify the three-model composition, completed counts and
+cleanup. Retain private captures locally; no performance/quality claims from
+the changed composition. Existing default-off flags and rollback apply.
+
 Tasks renderer#169 / lighting#87; Stories site#2119/#2125; Feature site#2114.
 User supplied a room GLB and explicitly requested the original Eames inside it,
 with an interior viewpoint and model-placement interaction.
@@ -18,7 +31,7 @@ Eames-only page intact. No new package dependency or Three.js runtime.
 ## Interaction and lighting
 Native 1080p default and explicit 4K; six-bounce ceiling, 32 maximum,
 5.95 average SPP, denoise off; fixed-pattern working sampler, stable comparison.
-Camera presets are inside the main room and target the placed Eames.
+Camera presets are inside the main room and use the fixed comparison target.
 Placement exposes X/Z and yaw; chair floor alignment is deterministic.
 Bounds admission prevents escape from the room AABB, but there is no wall
 collision/physics guarantee. No live drag, moving-mesh transport, animation,
