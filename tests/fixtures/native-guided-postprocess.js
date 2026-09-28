@@ -43,7 +43,7 @@ export async function createGuidedRoomPostprocess(c) {
    queryReadback=makeBuffer(16,GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST);
   }
   const readTexture=await createTextureReader({device,makeBuffer,read,wait,width:native.width,height:native.height});
-  return {denoiser,rawView,readTexture,memory:{...denoiser.memory,diagnosticStagingBytes:16384*16+16+(query?32:0)},
+  return {denoiser,rawView,readTexture,memory:{...denoiser.memory,diagnosticStagingBytes:16384*16+16+(query?32:0),diagnosticStagingIncludedInFixtureTotal:true},
    async apply(filtered){
     active();const start=performance.now(),e=device.createCommandEncoder();
     denoiser.encode(e,{filtered,...(query?{timestampWrites:{querySet:query,beginningOfPassWriteIndex:0,endOfPassWriteIndex:1}}:{})});

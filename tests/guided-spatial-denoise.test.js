@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {analyzeWgslSource} from '@plasius/gpu-shader/node';
+import {analyzeWgslSource,reflectGpuInterface} from '@plasius/gpu-shader/node';
 import {resolveGuidedDenoise,createGuidedSpatialDenoiser} from '../src/wavefront-guided-denoise.js';
 import {GUIDED_CAPTURE_WGSL,GUIDED_FILTER_WGSL} from '../src/wavefront-guided-denoise-shader.js';
 import {createWavefrontFrameEncoder} from '../src/wavefront-frame-encoder.js';
@@ -52,6 +52,17 @@ test('assembled guide ABI reuses canonical hits and captures by source pixel; fi
  assert.match(GUIDED_FILTER_WGSL,/>> 9u\) & 511u/);
  assert.match(GUIDED_FILTER_WGSL,/center\.w == 0\.0 \|\| albedo\.w == 0\.0/);
  assert.doesNotMatch(GUIDED_FILTER_WGSL,/vec3<f32>\(16\.0\)/);
+});
+test('final assembled guided pipelines reflect canonical records and the exact resource interfaces',async()=>{
+ const sources=[['capture',GUIDED_CAPTURE_WGSL,[['capture_primary_guides',[0,1,2,3,4,5]]]],['filter',GUIDED_FILTER_WGSL,[['filter_guided',[0,1,2,3,4,5,6]],['resolve_guided',[0,1,2,5,7]]]]];
+ const pipelines=[];
+ for(const [moduleId,source,entries] of sources){
+  const bindings=analyzeWgslSource(source,moduleId).bindings;
+  for(const [entryPoint,used] of entries)pipelines.push({kind:'compute',pipelineId:entryPoint,layout:{bindGroups:[{group:0,entries:bindings.filter(b=>used.includes(b.binding)).map(b=>({...b,visibility:['compute']}))}]},compute:{moduleId,entryPoint,constants:{}}});
+ }
+ const manifest=await reflectGpuInterface({interfaceId:'plasius.renderer.guided-spatial',interfaceVersion:'1.0.0',modules:sources.map(([moduleId,source])=>({moduleId,source})),pipelines,modelFacingRecordNames:['FrameConfig','HitRecord','RayRecord','FilterConfig'],modelFacingBindings:[],semantics:[]});
+ for(const [name,bytes] of [['FrameConfig',320],['HitRecord',240],['RayRecord',96],['FilterConfig',16]])assert.equal(manifest.records.find(r=>r.name===name).byteSize,bytes);
+ assert.equal(manifest.entryPoints.length,3);
 });
 test('primary guide capture runs between intersection and surface, once at sample zero only; off order unchanged',()=>{
  const run=enabled=>{const order=[],parallelism=createGpuParallelismCounters();

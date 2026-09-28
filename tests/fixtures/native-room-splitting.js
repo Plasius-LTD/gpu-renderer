@@ -22,6 +22,7 @@ export async function runRoomSplittingBenchmark({loadAssets,clearCapture}){
   for(const control of locked)if(!control.checkValidity()){control.reportValidity();throw Error('Invalid placement');}
   clearCapture();locked.forEach(c=>c.disabled=true);el('cancel').disabled=false;el('cancel').addEventListener('click',stop);
   el('sampler').value='stable-pattern';
+  el('denoise').value='off';
   const settings=roomReferenceSettings(el('resolution').value,'stable-pattern');report.settings=settings;
   const placement={x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view=el('view').value;
   report.provenance=await (await fetch('/__provenance',{signal:AbortSignal.timeout(10000)})).json();

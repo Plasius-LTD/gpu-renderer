@@ -50,7 +50,8 @@ fn completed_count(pixel:vec2<i32>) -> f32 {
 }
 fn valid_pixel(pixel:vec2<i32>) -> bool {
   let word=pixelWords[u32(pixel.y)*settings.width+u32(pixel.x)];
-  return (word & 0x80000000u) == 0u && ((word >> 9u) & 511u) > 0u;
+  let requested=word & 511u;
+  return (word & 0x80000000u) == 0u && requested > 0u && requested <= 256u && ((word >> 9u) & 511u) == requested;
 }
 fn range_color(c:vec3<f32>) -> vec3<f32> { return c/(vec3<f32>(1.0)+c); }
 fn kernel(offset:i32) -> f32 { return select(select(1.0,4.0,abs(offset)==1),6.0,offset==0); }
@@ -67,7 +68,8 @@ fn filter_guided(@builtin(global_invocation_id) id:vec3<u32>) {
   let pixel=vec2<i32>(id.xy);
   let center=textureLoad(filterInput,pixel,0);
   let albedo=textureLoad(albedoGuide,pixel,0);
-  if (center.w == 0.0 || albedo.w == 0.0 || !valid_pixel(pixel)) {
+  if (!valid_pixel(pixel)) { textureStore(filterOutput,pixel,vec4<f32>(0.0)); return; }
+  if (center.w == 0.0 || albedo.w == 0.0) {
     textureStore(filterOutput,pixel,center); return;
   }
   let geometry=textureLoad(normalDepth,pixel,0);
