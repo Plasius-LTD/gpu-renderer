@@ -72,6 +72,7 @@ fn spawn_rough_children(ray: RayRecord, hit: HitRecord, transmittance: vec3<f32>
     if (slot >= rough_queue_capacity()) {
       fail_path_node(ray);
       record_termination_metrics(TERMINAL_SOURCE_KIND_AMBIENT_QUEUE_OVERFLOW, vec3<f32>(0.0));
+      atomicAdd(&counters.terminatedCount, 1u);
       return;
     }
     link_path_child(ray, slot, branch == 1u);

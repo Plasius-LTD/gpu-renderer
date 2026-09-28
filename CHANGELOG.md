@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
   branch-decorrelated lighting, half-throughput/count-once accounting and capped
   tile-local allocations. Add room controls and same-sampler native comparisons;
   keep production defaults and all disabled shader bytes unchanged.
+  Account for expanded continuation queues in indirect-workgroup upper-bound
+  telemetry without changing encoded commands or measured ray counts.
 
 - Add a separate room-plus-Eames reference page with native 1080p/4K rendering,
   interior camera/placement controls and retained count/HDR/source evidence;
