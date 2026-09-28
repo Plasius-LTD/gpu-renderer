@@ -12,16 +12,16 @@ export function createClothProbe() {
   hitWords[h+1]=pixel;hits[h+12]=x<64?1:4;
   hits.set(x<64?[0,0,1,0]:[1,0,0,0],h+20);
   hits.set([x%2?.8:-.8,0,.6,0],h+24); // deliberately discontinuous fibre normal
-  hits.set([...color,1],h+40);hits.set([.8,0,1,1.5],h+48);hits.set([1,.329,.1,0],h+52);
+  hits.set([...color,1],h+36);hits.set([.8,0,1,1.5],h+44);hits.set([1,.329,.1,0],h+48);
   if(y>=96){
    // Protected sheen combinations: low roughness, metal, transparency,
    // transmission, coat, emissive material, miss, later camera sample.
    const kind=Math.floor(x/16);
-   if(kind===0)hits[h+48]=.6;
-   if(kind===1)hits[h+49]=1;
-   if(kind===2)hits[h+50]=.5;
-   if(kind===3)hits[h+58]=1;
-   if(kind===4)hits[h+55]=1;
+   if(kind===0)hits[h+44]=.6;
+   if(kind===1)hits[h+45]=1;
+   if(kind===2)hits[h+46]=.5;
+   if(kind===3)hits[h+54]=1;
+   if(kind===4)hits[h+51]=1;
    if(kind===5)hitWords[h+4]=1;
    if(kind===6)hitWords[h+2]=1;
    if(kind===7)rays[slot*24+3]=1;
