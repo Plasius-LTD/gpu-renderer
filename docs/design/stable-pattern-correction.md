@@ -1,5 +1,10 @@
 # Stable-pattern defect correction
 
+Current direction: [fast-pattern restoration](fast-pattern-restoration.md)
+supersedes stable-pattern as the working experimental lane. The correction
+protocol and retained measurements remain as comparison history, not a
+production or overall quality/performance success.
+
 Tasks gpu-renderer#169 / gpu-lighting#87; Stories site#2119/#2125; Feature site#2114.
 The failed fixed-pattern capture remains immutable comparison evidence.
 

@@ -11,11 +11,16 @@
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 
 `tests/fixtures/native-stable-reference.html` captures original Eames at native
-3840x2160, a six-bounce ceiling, corrected stable sampling and the prescribed
+3840x2160, a six-bounce ceiling and the prescribed
 5.95-average-SPP circular tiers. It retains a clean PNG, full HDR and provenance,
 checks actual counts and static repeatability, and leaves denoise off. This is
 visual reference material, not performance or converged-quality qualification.
 The separate four-bounce comparison and production defaults are unchanged.
+Its local default is now the fast `fixed-pattern` working experiment; the
+slower `stable-pattern` remains selectable for comparison. Neither is qualified.
+The fast path retains known brightness/structured-artifact defects. Selection
+is locked during capture and encoded in filenames, settings and validation.
+See [restoration and investigation](docs/design/fast-pattern-restoration.md).
 The [retained six-bounce image and receipt](https://github.com/Plasius-LTD/gpu-lighting/blob/6c12346e4cc32382d50fce18da4c733541c06c0f/docs/evidence/stable-reference-4k-2026-09-28.md)
 verify all 49351680 camera samples and bit-identical repeated HDR. Low-SPP grain
 and the performance/production qualification gates remain.

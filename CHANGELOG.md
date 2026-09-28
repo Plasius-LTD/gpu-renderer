@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Restore fast fixed-pattern as the local six-bounce reference default, retain
+  explicit stable comparison and prevent stale/mislabelled sampler evidence.
+  Characterize cross-event correlation without modifying either shader or
+  production flags; brightness and performance qualification remain open.
+
 - Add a separately admitted native 4K, six-bounce corrected stable-pattern
   visual reference capture; preserve four-bounce baselines and production defaults.
   Verify actual counts and bit-identical repeated HDR on a physical Apple GPU;
