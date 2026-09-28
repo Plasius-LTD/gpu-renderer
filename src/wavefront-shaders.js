@@ -6,6 +6,7 @@ import { WAVEFRONT_SHADER_LIGHTING_WGSL } from "./wavefront-shader-lighting.js";
 import { WAVEFRONT_SHADER_MATERIALS_WGSL } from "./wavefront-shader-materials.js";
 import { PATH_TREE_WGSL } from "./wavefront-path-tree-shader.js";
 import { withProgressiveSampling } from "./wavefront-sampling-dimensions.js";
+import { withRoughBounceSplitting } from './wavefront-rough-bounce-splitting.js';
 export { PRESENT_WGSL } from "./wavefront-present-shader.js";
 
 function readPositiveInteger(name, value, fallback) {
@@ -37,5 +38,6 @@ export function createWavefrontPathTracingComputeShaderSource(options = {}) {
   if (workgroupSize !== WAVEFRONT_COMPUTE_WORKGROUP_SIZE) {
     throw new Error(`wavefront mesh compute currently requires workgroupSize=${WAVEFRONT_COMPUTE_WORKGROUP_SIZE}`);
   }
-  return withProgressiveSampling(WAVEFRONT_COMPUTE_WGSL, options.progressiveSampling ?? false);
+  if(options.roughBounceSplitting?.enabled && !['stable-pattern','stable-camera-random'].includes(options.progressiveSampling))throw new Error('Rough splitting requires stable sampling.');
+  return withRoughBounceSplitting(withProgressiveSampling(WAVEFRONT_COMPUTE_WGSL, options.progressiveSampling ?? false),options.roughBounceSplitting,true);
 }

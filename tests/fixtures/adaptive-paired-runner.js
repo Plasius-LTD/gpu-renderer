@@ -21,7 +21,9 @@ import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continu
 import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy"}={}) {
+export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0}={}) {
+  check([0,1,2].includes(splitDepth)&&(!splitDepth||sampler==="stable-pattern"),"Splitting requires stable-pattern and depth 1 or 2");
+  check(!splitDepth||!pruningVariants,"Splitting/pruning combination is not admitted");
   check(["legacy","owen-sobol","independent-random","fixed-pattern","stable-pattern","stable-camera-random"].includes(sampler),"Invalid sampler");
   const progressiveSampling=["fixed-pattern","stable-pattern","stable-camera-random"].includes(sampler)?sampler:sampler!=="legacy";
   if(native)check(Number.isSafeInteger(native.width)&&Number.isSafeInteger(native.height)&&native.width>=128&&native.height>=128&&native.width*native.height<=3840*2160,"Invalid native fixture dimensions");
@@ -73,6 +75,8 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       "renderer.sampling.independentRandom.enabled":sampler==="independent-random",
       "renderer.sampling.fixedPattern.enabled":sampler==="fixed-pattern",
       "renderer.sampling.stablePattern.enabled":["stable-pattern","stable-camera-random"].includes(sampler),
+      "renderer.sampling.roughBounceSplitting.enabled":splitDepth>0,
+      roughBounceSplitting:{splitDepth},
       navigator:{gpu:{requestAdapter:async()=>observedAdapter,getPreferredCanvasFormat:()=>navigator.gpu.getPreferredCanvasFormat()}} }));
     const rendererBufferBytes=[...buffers.values()].reduce((sum,buffer)=>sum+buffer.size,0);
     const textureInventory=textures.map(item=>({format:item.format,size:item.size,mipLevelCount:item.mipLevelCount??1,sampleCount:item.sampleCount??1}));
@@ -83,9 +87,9 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const compact=await wait(createAdaptivePrimaryPipelines(device,GPUShaderStage,{enabled:true}));
     const bootstrap=await wait(createAdaptiveBootstrapPipelines(device,GPUShaderStage,{enabled:true}));
     const camera=await wait(createAdaptiveCameraRayPipeline(device,GPUShaderStage,{enabled:true,progressiveSampling}));
-    const producer=await wait(createAdaptiveCompletionPipeline(device,GPUShaderStage,{enabled:true}));
+    const producer=await wait(createAdaptiveCompletionPipeline(device,GPUShaderStage,{enabled:true,roughBounceSplitting:renderer.config.roughBounceSplitting}));
     const resolve=await wait(createAdaptiveResolvePipelines(device,GPUShaderStage,{enabled:true}));
-    const shared=await wait(createSharedAdaptivePipelines(device,GPUShaderStage,{enabled:true,progressiveSampling}));
+    const shared=await wait(createSharedAdaptivePipelines(device,GPUShaderStage,{enabled:true,progressiveSampling,roughBounceSplitting:renderer.config.roughBounceSplitting}));
     const variants={};
     if(pruningVariants)for(const [name,options] of Object.entries({zero:{zeroEmptyDispatch:true},fused:{fusedHits:true},combined:{fusedHits:true,zeroEmptyDispatch:true}}))variants[name]=await wait(createPrunedContinuationPipelines(device,tracePipelineLayout,{...options,progressiveSampling}));
     const group=(layout,entries)=>device.createBindGroup({layout,entries:entries.map(([binding,buffer,size])=>({binding,resource:{buffer,...(size?{size}:{})}}))});

@@ -4,6 +4,7 @@ import { CONFIG_BUFFER_BYTES, COUNTER_BUFFER_BYTES, RAY_RECORD_BYTES, PATH_VERTE
 import { recordDirectDispatch, recordIndirectDispatch, createGpuParallelismCounters } from "./wavefront-frame-runtime.js";
 import * as abi from "./wavefront-adaptive-shared-constants.js";
 import { withProgressiveSampling } from "./wavefront-sampling-dimensions.js";
+import { withRoughBounceSplitting } from './wavefront-rough-bounce-splitting.js';
 
 export function createSharedSampleRanges(tiers) {
   if (!Array.isArray(tiers) || !tiers.length || tiers.some(n=>!Number.isSafeInteger(n)||n<1||n>256)) throw new RangeError("Invalid shared sample tiers.");
@@ -24,9 +25,9 @@ export function packSharedPhase(phase) {
 export const SHARED_ADAPTIVE_BINDING_SIZES = Object.freeze([CONFIG_BUFFER_BYTES,abi.SHARED_PHASE_MINIMUM_BYTE_SIZE,4,4,16,12,RAY_RECORD_BYTES,PATH_VERTEX_RECORD_BYTES,COUNTER_BUFFER_BYTES,16,16]);
 export const SHARED_ADAPTIVE_ENTRIES = Object.freeze({initialize:"initialize_shared_phase",compact:"compact_shared_phase",finalize:"finalize_shared_phase",validate:"validate_shared_phase",prepare:"prepare_shared_sample",commit:"commit_shared_sample",resolve:"resolve_shared_frame"});
 
-export async function createSharedAdaptivePipelines(device, shaderStage, {enabled=false,progressiveSampling=false}={}) {
+export async function createSharedAdaptivePipelines(device, shaderStage, {enabled=false,progressiveSampling=false,roughBounceSplitting}={}) {
   if(!enabled)return null;
-  const module=device.createShaderModule({label:"adaptive-shared-rounds",code:withProgressiveSampling(SHARED_ADAPTIVE_WGSL,progressiveSampling)});
+  const module=device.createShaderModule({label:"adaptive-shared-rounds",code:withRoughBounceSplitting(withProgressiveSampling(SHARED_ADAPTIVE_WGSL,progressiveSampling),roughBounceSplitting)});
   await assertShaderModuleCompiles(module,"adaptive-shared-rounds");
   const entries=SHARED_ADAPTIVE_BINDING_SIZES.map((minBindingSize,binding)=>({binding,visibility:shaderStage.COMPUTE,
     buffer:{type:binding<2?"uniform":"storage",minBindingSize,...(binding<2?{hasDynamicOffset:true}:{})}}));

@@ -6,7 +6,7 @@ import {encodeLinearImageChunks} from "/lighting/demo/eames-environments/linear-
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
-const controls=[...el("controls").querySelectorAll("input,select")];
+const controls=[...el("controls").querySelectorAll("input,select"),el("benchmark")];
 let cancellation,assets;
 function clearCapture(){preview.hidden=true;preview.removeAttribute("src");download.hidden=true;download.removeAttribute("href");result.textContent="";status.textContent="Settings changed. Render to update the room view.";}
 for(const control of controls){
@@ -15,10 +15,10 @@ for(const control of controls){
 }
 reset.addEventListener("click",()=>{
  el("chair-x").value=ROOM_DEFAULTS.x;el("chair-z").value=ROOM_DEFAULTS.z;el("chair-yaw").value=ROOM_DEFAULTS.yaw;
- el("view").value=ROOM_DEFAULTS.view;el("resolution").value="1080p";el("sampler").value="fixed-pattern";clearCapture();
+ el("view").value=ROOM_DEFAULTS.view;el("resolution").value="1080p";el("sampler").value="fixed-pattern";el("splitting").value="0";clearCapture();
 });
 cancel.addEventListener("click",()=>cancellation?.abort());
-async function loadAssets(receipt,signal){
+export async function loadAssets(receipt,signal){
  if(assets){receipt.eamesSource=assets.eamesSource;return assets;}
  const [{loadGltfModel},{createProductStudioMeshes},{createWavefrontEnvironmentLightingOptions}]=await Promise.all([
   import("/shared/src/gltf-loader.js"),import("/shared/src/product-studio-runtime.js"),import("/lighting/src/index.js")]);
@@ -35,12 +35,14 @@ async function loadAssets(receipt,signal){
 run.addEventListener("click",async()=>{
  for(const control of controls)if(!control.checkValidity()){control.reportValidity();status.textContent="Invalid placement. Check the highlighted field.";return;}
  const settings=roomReferenceSettings(el("resolution").value,el("sampler").value),view=el("view").value;
+ const splitDepth=Number(el("splitting").value);
+ if(splitDepth&&settings.sampler!=="stable-pattern"){status.textContent="Select the stable sampler to test splitting.";return;}
  const placement={x:el("chair-x").valueAsNumber,z:el("chair-z").valueAsNumber,yaw:el("chair-yaw").valueAsNumber};
  clearCapture();run.disabled=true;reset.disabled=true;controls.forEach(c=>c.disabled=true);cancel.disabled=false;
  cancellation=new AbortController();let runner;
- const receipt={schemaVersion:1,scope:"room-eames-interior-reference",status:"running",settings,view,placement,timestamp:new Date().toISOString(),
+ const receipt={schemaVersion:1,scope:"room-eames-interior-reference",status:"running",settings,splitDepth,view,placement,timestamp:new Date().toISOString(),
   browser:{userAgent:navigator.userAgent,platform:navigator.platform},failures:[],qualification:"visual-reference-only-not-performance-or-convergence"};
- const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-6-bounces`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
+ const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-6-bounces${splitDepth?'-split'+splitDepth:''}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
  const save=async(name,dataUrl,payload)=>{
   const response=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},signal:AbortSignal.timeout(30000),
    body:JSON.stringify({path:`output/playwright/eames-environments/${receipt.provenance.captureId}/${name}.png`,dataUrl,result:payload})});
@@ -54,7 +56,7 @@ run.addEventListener("click",async()=>{
   const plan=createRadialSamplingPlan(settings.width,settings.height);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
-  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{sampler:settings.sampler,native:{width:settings.width,height:settings.height,canvas,budgets:plan.budgets}});
+  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,sampler:settings.sampler,native:{width:settings.width,height:settings.height,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===269140&&runner.sceneSnapshot.maxDepth===6&&runner.sceneSnapshot.samplesPerPixel===32&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;
   const frame=await runner.run("radial",{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,onProgress:p=>{
@@ -79,7 +81,12 @@ run.addEventListener("click",async()=>{
   try{runner?.destroy();}catch(error){receipt.status="failed";receipt.failures.push(error.message);clearCapture();}
   cancellation.abort();run.disabled=false;reset.disabled=false;controls.forEach(c=>c.disabled=false);cancel.disabled=true;
   status.textContent=receipt.status==="failed"?`Failed: ${receipt.failures.join("; ")}`:`Captured room + Eames · ${settings.width} × ${settings.height} · ${receipt.frame.actualSamples.toLocaleString()} camera samples · not quality-qualified`;
-  result.textContent=JSON.stringify({status:receipt.status,settings,scene:receipt.scene,admission:receipt.admission,actualSamples:receipt.frame?.actualSamples,
+  result.textContent=JSON.stringify({status:receipt.status,settings,splitDepth,scene:receipt.scene,admission:receipt.admission,actualSamples:receipt.frame?.actualSamples,
    linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
  }
+});
+
+el('benchmark').addEventListener('click',async()=>{
+ const {runRoomSplittingBenchmark}=await import('./native-room-splitting.js');
+ await runRoomSplittingBenchmark({loadAssets,clearCapture});
 });

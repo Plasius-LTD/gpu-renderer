@@ -844,6 +844,7 @@ export interface WavefrontEnvironmentMapSnapshot {
 }
 
 export interface WavefrontPathTracingComputeConfig {
+  readonly roughBounceSplitting: WavefrontRoughBounceSplittingConfig;
   readonly mode: typeof rendererWavefrontComputeMode;
   readonly width: number;
   readonly height: number;
@@ -908,7 +909,15 @@ export interface WavefrontPathTracingComputeConfig {
   readonly memory: WavefrontPathTracingMemoryEstimate;
 }
 
+export interface WavefrontRoughBounceSplittingConfig {
+  readonly enabled: boolean;
+  readonly splitDepth: 0 | 1 | 2;
+  readonly queueFactor: 1 | 2 | 4;
+  readonly maximumAdditionalBytes: number;
+}
+
 export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
   readonly "renderer.sampling.owenSobol.enabled"?: boolean;
   readonly "renderer.sampling.independentRandom.enabled"?: boolean;
   readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
@@ -923,6 +932,7 @@ export interface WavefrontRendererFeatureFlags {
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly enabled?: {
+    readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
     readonly "renderer.sampling.owenSobol.enabled"?: boolean;
     readonly "renderer.sampling.independentRandom.enabled"?: boolean;
     readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
@@ -938,6 +948,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly flags?: {
+    readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
     readonly "renderer.sampling.owenSobol.enabled"?: boolean;
     readonly "renderer.sampling.independentRandom.enabled"?: boolean;
     readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
@@ -958,6 +969,7 @@ export interface WavefrontRendererFeatureFlags {
       readonly independentRandom?: boolean | { readonly enabled?: boolean };
       readonly fixedPattern?: boolean | { readonly enabled?: boolean };
       readonly stablePattern?: boolean | { readonly enabled?: boolean };
+      readonly roughBounceSplitting?: { readonly enabled?: boolean };
     };
     readonly transport?: {
       readonly strictPhysicalLowSppLighting?: boolean;
@@ -1095,6 +1107,8 @@ export interface WavefrontGpuParallelismDiagnostics {
 }
 
 export interface CreateWavefrontPathTracingComputeRendererOptions {
+  readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
+  readonly roughBounceSplitting?: {readonly splitDepth?: 1 | 2; readonly maximumAdditionalBytes?: number};
   readonly canvas?: HTMLCanvasElement | string;
   readonly navigator?: Navigator | { gpu?: GPU };
   readonly document?: Document;
@@ -1445,6 +1459,7 @@ export function createWavefrontGpuMaterialSource(
 ): WavefrontGpuMaterialSource;
 export function createDefaultWavefrontSceneObjects(): readonly WavefrontSceneObject[];
 export function estimateWavefrontPathTracingMemory(options?: {
+  roughBounceSplitting?: WavefrontRoughBounceSplittingConfig;
   width?: number;
   height?: number;
   tileSize?: number;
@@ -1620,6 +1635,7 @@ export function renderWavefrontPathTracingComputeFrame(
 export function createWavefrontPathTracingComputeShaderSource(options?: {
   /** Internal source selection; public renderer flags select this automatically. */
   progressiveSampling?: boolean | "fixed-pattern" | "stable-pattern" | "stable-camera-random";
+  roughBounceSplitting?: WavefrontRoughBounceSplittingConfig;
   workgroupSize?: number;
   outputTextureFormat?: GPUTextureFormat | "rgba8unorm";
 }): string;

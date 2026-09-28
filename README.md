@@ -10,6 +10,25 @@
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 
+Experimental `renderer.sampling.roughBounceSplitting.enabled` (default false)
+adds two independently keyed continuations at eligible rough non-metal surfaces.
+Set `roughBounceSplitting: { splitDepth: 1 }` for **2/1/1/...** or `splitDepth: 2`
+for **2/2/1/...**. These are absolute bounce indices, not repeated splitting at
+every diffuse encounter. Requires `renderer.sampling.stablePattern.enabled`,
+`deferredPathResolve: true`, `strictPhysicalLowSppLighting: true` and depth <=8.
+Supply flags directly or through the existing remote `featureFlags` snapshot;
+recreate to change them. The additional queue/path allocation cap defaults to
+128 MiB (`roughBounceSplitting.maximumAdditionalBytes`); over-cap settings throw
+before allocation. Siblings keep one completed camera sample and share energy.
+Perfect mirrors, glass and rough metals are not newly split. Existing glass
+splitting can still overflow the hard queue bound, which invalidates the frame.
+Disable the child flag for unchanged allocations and shaders. See
+[design](docs/design/rough-bounce-splitting.md) and [ADR 0048](docs/adrs/adr-0048-bounded-rough-bounce-splitting.md).
+The room page offers explicit depth controls and a rotated off/first/first-two
+comparison using the same stable sampler, analytic energy checks, native
+1080p/4K images, completed counts, ray totals and timing-only render jobs.
+It is not a production setting, a converged-quality result or a speedup claim.
+
 `tests/fixtures/native-room-reference.html` composes the original Eames inside
 the user-approved room GLB owned by gpu-lighting. The companion lighting
 `room-reference-server.mjs` serves the commit-pinned scene and source dependencies.

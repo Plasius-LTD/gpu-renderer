@@ -120,7 +120,7 @@ export async function createNativeAdaptiveRunner(c) {
       frameDevice.queue.submit([present.finish()]);await asyncStage("gpuWait",()=>wait(device.queue.onSubmittedWorkDone()));
       const elapsed=performance.now()-started,visibilityAfter=document.visibilityState;
       const validation=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!validation&&!errors.length,validation?.message??errors[0]);
-      return {mode,sampler,seed,fused:adaptive&&fused,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
+      return {mode,sampler,roughBounceSplitting:renderer.config.roughBounceSplitting,seed,fused:adaptive&&fused,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
         diagnosticReadbackMs:diagnostics?readbackMs:null,diagnosticRenderIntervalsMs:diagnostics?elapsed-readbackMs:null,
         actualSamples:diagnostics?actualSamples:null,actualHistogram:diagnostics?actualHistogram:null,tiles,
         ...(cpu?{cpuProfile:cpu.snapshot()}:{}),visibilityBefore,visibilityAfter,validationErrors:0};

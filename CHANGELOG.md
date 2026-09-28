@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add default-off bounded rough-bounce splitting with 2/1 or 2/2/1 schedules,
+  branch-decorrelated lighting, half-throughput/count-once accounting and capped
+  tile-local allocations. Add room controls and same-sampler native comparisons;
+  keep production defaults and all disabled shader bytes unchanged.
+
 - Add a separate room-plus-Eames reference page with native 1080p/4K rendering,
   interior camera/placement controls and retained count/HDR/source evidence;
   reuse existing GPU transport and preserve the previous studio comparison.

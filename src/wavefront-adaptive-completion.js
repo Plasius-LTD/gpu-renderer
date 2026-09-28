@@ -2,10 +2,11 @@ import { ADAPTIVE_COMPLETION_WGSL } from "./wavefront-adaptive-completion-shader
 import { CONFIG_BUFFER_BYTES, COUNTER_BUFFER_BYTES, PATH_VERTEX_RECORD_BYTES } from "./wavefront-core.js";
 import { ADAPTIVE_CAMERA_SAMPLE_BYTE_SIZE, ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE } from "./wavefront-adaptive-resolve-constants.js";
 import { assertShaderModuleCompiles, createComputePipeline } from "./wavefront-runtime-support.js";
+import { withRoughBounceSplitting } from './wavefront-rough-bounce-splitting.js';
 
-export async function createAdaptiveCompletionPipeline(device, shaderStage, { enabled = false } = {}) {
+export async function createAdaptiveCompletionPipeline(device, shaderStage, { enabled = false, roughBounceSplitting } = {}) {
   if (!enabled) return null;
-  const module = device.createShaderModule({ label: "adaptive-complete-camera-sample", code: ADAPTIVE_COMPLETION_WGSL });
+  const module = device.createShaderModule({ label: "adaptive-complete-camera-sample", code: withRoughBounceSplitting(ADAPTIVE_COMPLETION_WGSL,roughBounceSplitting) });
   await assertShaderModuleCompiles(module, "adaptive-complete-camera-sample");
   const entries = [[0, "uniform", CONFIG_BUFFER_BYTES], [1, "storage", PATH_VERTEX_RECORD_BYTES],
     [2, "read-only-storage", 4], [3, "storage", ADAPTIVE_CAMERA_SAMPLE_BYTE_SIZE],
