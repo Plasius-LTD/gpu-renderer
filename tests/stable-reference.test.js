@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { STABLE_REFERENCE, validateStableReferenceFrame } from "./fixtures/stable-reference-contract.js";
+
+test("reference preview stays hidden until a successful capture",()=>{
+ const html=readFileSync(new URL("./fixtures/native-stable-reference.html",import.meta.url),"utf8");
+ assert.match(html,/img:not\(\[hidden\]\)\{display:block/);
+ assert.match(html,/<img id="preview" hidden/);
+});
 
 test("reference locks native 4K, six bounces and corrected stable sampling",()=>{
  assert.deepEqual(STABLE_REFERENCE,{width:3840,height:2160,maxDepth:6,maximumSpp:32,sampler:"stable-pattern",denoise:false});

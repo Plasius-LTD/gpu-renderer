@@ -16,6 +16,9 @@ Framework-agnostic WebGPU renderer runtime for Plasius projects.
 checks actual counts and static repeatability, and leaves denoise off. This is
 visual reference material, not performance or converged-quality qualification.
 The separate four-bounce comparison and production defaults are unchanged.
+The [retained six-bounce image and receipt](https://github.com/Plasius-LTD/gpu-lighting/blob/6c12346e4cc32382d50fce18da4c733541c06c0f/docs/evidence/stable-reference-4k-2026-09-28.md)
+verify all 49351680 camera samples and bit-identical repeated HDR. Low-SPP grain
+and the performance/production qualification gates remain.
 
 `renderer.sampling.stablePattern.enabled` is the default-off correction candidate:
 centre-first fixed camera points, with fast, pixel/event/bounce-keyed lighting

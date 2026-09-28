@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
 
 - Add a separately admitted native 4K, six-bounce corrected stable-pattern
   visual reference capture; preserve four-bounce baselines and production defaults.
+  Verify actual counts and bit-identical repeated HDR on a physical Apple GPU;
+  keep the preview hidden until capture succeeds and retain the native image.
 
 - Record native stable-pattern correction results: brightness and static
   repeatability pass at 1080p/4K, but grain remains and the old speed advantage
