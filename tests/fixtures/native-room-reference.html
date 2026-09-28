@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Eames inside your room · GPU reference</title>
+<style>
+body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-bottom:8px}p{max-width:90ch}button,a,select,input{font:inherit;padding:8px}input{width:7em}button{margin:6px 6px 6px 0}a{color:#9bd3ff}.controls{display:flex;gap:14px;flex-wrap:wrap;align-items:end}.field{display:grid;gap:5px}select{max-width:100%}img:not([hidden]){display:block;max-width:100%;height:auto;margin:16px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere}#status{min-height:2em}canvas{position:absolute;width:1px;height:1px;left:-2px;top:0}summary{cursor:pointer}#warning{color:#ffd69b}
+</style>
+<h1>Eames inside your room</h1>
+<p>Original chair and ottoman inside <strong>finalscene.glb</strong>. No added studio walls or ceiling panel. External daylight is supplied because the room has no authored lights.</p>
+<p id="warning">Experimental adaptive sampling: known lighting artifacts remain. Six bounces, 32/16/8/4/2/1 SPP rings (5.95 average), denoise off. Not real-time or quality-qualified.</p>
+<div class="controls" id="controls">
+<div class="field"><label for="resolution">Native resolution</label><select id="resolution"><option value="1080p">1920 × 1080</option><option value="4k">3840 × 2160</option></select></div>
+<div class="field"><label for="sampler">Experimental sampler</label><select id="sampler"><option value="fixed-pattern" selected>Fast fixed pattern</option><option value="stable-pattern">Slower stable comparison</option></select></div>
+<div class="field"><label for="view">Interior viewpoint</label><select id="view"><option value="entry">Room entrance</option><option value="front">Facing the Eames</option><option value="corner">Opposite corner</option></select></div>
+<div class="field"><label for="chair-x">Eames X</label><input id="chair-x" type="number" min="-5" max="5" step="0.1" value="1.8" required></div>
+<div class="field"><label for="chair-z">Eames Z</label><input id="chair-z" type="number" min="-4" max="4" step="0.1" value="-1.1" required></div>
+<div class="field"><label for="chair-yaw">Rotation °</label><input id="chair-yaw" type="number" min="-180" max="180" step="5" value="-25" required></div>
+</div>
+<p>Placement moves the chair and ottoman together. Changes apply on Render; wall collisions are not checked.</p>
+<button id="run">Render room</button><button id="reset">Reset view</button><button id="cancel" disabled>Stop after pending GPU work</button>
+<p id="status" role="status" aria-live="polite">Ready. Render to view the Eames inside the room.</p>
+<canvas id="canvas" width="1920" height="1080" aria-hidden="true"></canvas>
+<a id="download" hidden>Save native PNG</a>
+<img id="preview" hidden alt="Eames chair and ottoman inside the supplied room">
+<details><summary>Scene and capture evidence</summary><pre id="result" aria-label="Capture settings and verification"></pre></details>
+<p><a href="./native-stable-reference.html">Previous studio comparison</a></p>
+<script type="module" src="./native-room-reference.js"></script></html>

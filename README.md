@@ -10,6 +10,17 @@
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 
+`tests/fixtures/native-room-reference.html` composes the original Eames inside
+the user-approved room GLB owned by gpu-lighting. The companion lighting
+`room-reference-server.mjs` serves the commit-pinned scene and source dependencies.
+Choose native 1080p/4K, an interior view and chair/ottoman X/Z/yaw, then Render.
+Controls apply between renders, not as live moving-mesh transport. Six bounces,
+5.95-average-SPP radial budgets, count/HDR evidence and original material transport
+are retained. No old studio enclosure/panel is added; external daylight is explicit.
+This is an experimental visual reference with known sampler artifacts, not
+performance, collision or production qualification. See the
+[design and QA inventory](docs/design/room-eames-reference.md).
+
 `tests/fixtures/native-stable-reference.html` captures original Eames at native
 3840x2160, a six-bounce ceiling and the prescribed
 5.95-average-SPP circular tiers. It retains a clean PNG, full HDR and provenance,

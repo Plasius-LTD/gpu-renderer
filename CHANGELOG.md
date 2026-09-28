@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add a separate room-plus-Eames reference page with native 1080p/4K rendering,
+  interior camera/placement controls and retained count/HDR/source evidence;
+  reuse existing GPU transport and preserve the previous studio comparison.
+
 - Restore fast fixed-pattern as the local six-bounce reference default, retain
   explicit stable comparison and prevent stale/mislabelled sampler evidence.
   Characterize cross-event correlation without modifying either shader or

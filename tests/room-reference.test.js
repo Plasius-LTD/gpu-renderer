@@ -1,0 +1,20 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+test("room reference exposes original-scene placement, native resolutions and explicit render controls",()=>{
+ const html=readFileSync(new URL("./fixtures/native-room-reference.html",import.meta.url),"utf8");
+ for(const id of ["resolution","sampler","view","chair-x","chair-z","chair-yaw"])assert.match(html,new RegExp(`<label for="${id}">`));
+ for(const text of ["1920 × 1080","3840 × 2160","Render room","Reset view","Stop after pending GPU work","No added studio walls","External daylight"])assert(html.includes(text));
+ assert.match(html,/<option value="fixed-pattern" selected>/);
+ assert.match(html,/img:not\(\[hidden\]\)/);
+ assert.match(html,/<img id="preview" hidden/);
+});
+test("room capture reuses real transport, hashes input, validates counts and clears stale results",()=>{
+ const js=readFileSync(new URL("./fixtures/native-room-reference.js",import.meta.url),"utf8");
+ for(const name of ["createPairedProbeRunner","loadOriginalEames","composeRoomEamesScene","validateRoomFrame","hashBytes","encodeLinearImageChunks","ROOM_ASSET.sha256","runner.destroy()","clearCapture","AbortController"])
+  assert(js.includes(name),name);
+ assert.match(js,/diagnostics:true/);assert.match(js,/sceneSnapshot.triangleCount===269140/);
+ assert.match(js,/room-eames-interior-reference/);assert.match(js,/failed/);
+ assert.match(js,/addEventListener\("change",clearCapture\)/);
+ assert.match(js,/sampler:settings.sampler/);
+});
