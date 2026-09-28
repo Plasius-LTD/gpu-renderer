@@ -9,7 +9,7 @@ and a mandatory physical dual-UV probe before capture. No production flag change
 
 The room fixture now defaults to the exchanged Eames/standing-reference positions.
 The comparison camera target stays fixed; Reset uses the same lighting-owned
-defaults. The first local seating model has an explicit **uniform** 2.1 m width
+defaults. The first local seating model has an explicit **uniform** 1.5 m width
 override: height and depth scale proportionally, without changing source assets
 or materials. Capture evidence records the factor and source/display dimensions.
 

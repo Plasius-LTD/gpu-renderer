@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Align room controls/Reset with swapped Eames and standing-reference positions; disclose the first seating model's proportion-preserving uniform size override (#220).
+- Align room controls/Reset with swapped Eames and standing-reference positions; disclose the first seating model's proportion-preserving uniform 1.5 m width override, revised after review of the 2.1 m trial (#220).
 
 - Correct per-texture UV0/UV1 sampling and normal tangents without increasing GPU record sizes; add physical parity probes, narrower FOV and private multi-model references (#220).
 

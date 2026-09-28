@@ -5,7 +5,7 @@
 Use lighting-owned defaults: Eames X/Z 2.3/-2.5, standing reference 1.8/-1.1,
 unchanged yaw/floor alignment, and the original fixed camera target. Initial
 controls and Reset must agree. The first local seating model is uniformly scaled
-to 2.1 m source-local width, preserving height/depth proportions and normal
+to 1.5 m source-local width, preserving height/depth proportions and normal
 directions. This is a recorded local override, not authored asset dimensions.
 UI labels must disclose it. Source assets, materials, UVs and transport stay
 unchanged. Requirements-first tests cover initial/reset agreement; native

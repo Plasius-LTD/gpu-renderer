@@ -10,7 +10,7 @@ test("room reference exposes original-scene placement, native resolutions and ex
  assert.match(html,/<img id="preview" hidden/);
  assert.match(html,/<input id="chair-x"[^>]*value="2.3"/);
  assert.match(html,/<input id="chair-z"[^>]*value="-2.5"/);
- assert.match(html,/uniformly scaled to 2.1 m wide/);
+ assert.match(html,/uniformly scaled to 1\.5 m wide/);
  assert.match(html,/preserving its proportions/);
 });
 test("room capture reuses real transport, hashes input, validates counts and clears stale results",()=>{

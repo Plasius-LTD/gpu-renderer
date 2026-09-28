@@ -19,7 +19,7 @@ body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-
 <div class="field"><label for="chair-z">Eames Z</label><input id="chair-z" type="number" min="-4" max="4" step="0.1" value="-2.5" required></div>
 <div class="field"><label for="chair-yaw">Rotation °</label><input id="chair-yaw" type="number" min="-180" max="180" step="5" value="-25" required></div>
 </div>
-<p>Placement moves the Eames chair and ottoman together; the comparison camera target stays fixed. Their default position is swapped with the standing reference. The first additional seating model is uniformly scaled to 2.1 m wide, preserving its proportions; the standing model keeps its source scale. All retain default materials. Changes apply on Render; wall collisions are not checked. FOV defaults to 52° (previously 62°); this remains a single-camera, not stereo, view.</p>
+<p>Placement moves the Eames chair and ottoman together; the comparison camera target stays fixed. Their default position is swapped with the standing reference. The first additional seating model is uniformly scaled to 1.5 m wide, preserving its proportions; the standing model keeps its source scale. All retain default materials. Changes apply on Render; wall collisions are not checked. FOV defaults to 52° (previously 62°); this remains a single-camera, not stereo, view.</p>
 <p id="model-names" role="status">Additional assets are loaded only from the local server and verified on Render.</p>
 <button id="run">Render room</button><button id="reset">Reset view</button><button id="cancel" disabled>Stop after pending GPU work</button>
 <p>Splitting requires the stable sampler. It adds secondary rays, not camera SPP. No split after the selected depth.</p>
