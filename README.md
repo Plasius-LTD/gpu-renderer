@@ -10,6 +10,13 @@
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 
+`tests/fixtures/native-stable-reference.html` captures original Eames at native
+3840x2160, a six-bounce ceiling, corrected stable sampling and the prescribed
+5.95-average-SPP circular tiers. It retains a clean PNG, full HDR and provenance,
+checks actual counts and static repeatability, and leaves denoise off. This is
+visual reference material, not performance or converged-quality qualification.
+The separate four-bounce comparison and production defaults are unchanged.
+
 `renderer.sampling.stablePattern.enabled` is the default-off correction candidate:
 centre-first fixed camera points, with fast, pixel/event/bounce-keyed lighting
 permutations that remain stable across frames. It is mutually exclusive with all

@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add a separately admitted native 4K, six-bounce corrected stable-pattern
+  visual reference capture; preserve four-bounce baselines and production defaults.
+
 - Record native stable-pattern correction results: brightness and static
   repeatability pass at 1080p/4K, but grain remains and the old speed advantage
   is lost. Select it for further fixed-camera experiments, not production.
