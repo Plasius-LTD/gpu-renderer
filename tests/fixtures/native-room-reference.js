@@ -1,6 +1,6 @@
 import {createPairedProbeRunner} from "./adaptive-paired-runner.js";
 import {loadOriginalEames,hashBytes} from "./original-eames-scene.js";
-import {ROOM_ASSET,ROOM_DEFAULTS,composeRoomEamesScene,roomReferenceSettings,validateRoomFrame} from "/lighting/demo/eames-environments/room-eames.js";
+import {ROOM_DEFAULTS,composeRoomEamesScene,roomReferenceSettings,validateRoomFrame} from "/lighting/demo/eames-environments/room-eames.js";
 import {createRadialSamplingPlan} from "/lighting/demo/eames-environments/radial-sampling-plan.js";
 import {encodeLinearImageChunks} from "/lighting/demo/eames-environments/linear-image-chunks.js";
 import {compareDenoisedRadiance} from "/lighting/demo/eames-environments/guided-denoise-probe.js";
@@ -25,15 +25,19 @@ export async function loadAssets(receipt,signal){
  if(assets){receipt.eamesSource=assets.eamesSource;return assets;}
  const [{loadGltfModel},{createProductStudioMeshes},{createWavefrontEnvironmentLightingOptions}]=await Promise.all([
   import("/shared/src/gltf-loader.js"),import("/shared/src/product-studio-runtime.js"),import("/lighting/src/index.js")]);
- const response=await fetch("/lighting/demo/eames-environments/assets/finalscene.glb",{signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});
+ const manifestResponse=await fetch('/__room-manifest.json',{signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])});
+ check(manifestResponse.ok,'Room manifest missing');const roomAsset=await manifestResponse.json();
+ if(receipt.provenance.assets?.room)check(roomAsset.sha256===receipt.provenance.assets.room.sha256,'Room provenance mismatch');
+ const response=await fetch("/__room-model.glb",{signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});
  check(response.ok,"Room asset missing");const bytes=await response.arrayBuffer();
- check(bytes.byteLength===ROOM_ASSET.bytes&&await hashBytes(bytes)===ROOM_ASSET.sha256,"Room checksum mismatch");
+ check(bytes.byteLength===roomAsset.bytes&&await hashBytes(bytes)===roomAsset.sha256,"Room checksum mismatch");
  const objectUrl=URL.createObjectURL(new Blob([bytes],{type:"model/gltf-binary"}));let room;
  try{room=await loadGltfModel(objectUrl);}finally{URL.revokeObjectURL(objectUrl);}
  check(!signal.aborted,"Loading cancelled");
  const eames=await loadOriginalEames(receipt,signal,{maxDepth:6});receipt.eamesSource=receipt.scene;
  const lightingOptions=createWavefrontEnvironmentLightingOptions({preset:"neutral-studio",sunDirection:[0.18,0.93,0.24],sunColor:[2.4,2.25,2,1],intensity:1});
- assets={room,eames,createProductStudioMeshes,lightingOptions,eamesSource:receipt.eamesSource};return assets;
+ el('room-name').textContent=roomAsset.name;document.title=`Eames inside ${roomAsset.name} · GPU reference`;
+ assets={room,roomAsset,eames,createProductStudioMeshes,lightingOptions,eamesSource:receipt.eamesSource};return assets;
 }
 run.addEventListener("click",async()=>{
  for(const control of controls)if(!control.checkValidity()){control.reportValidity();status.textContent="Invalid placement. Check the highlighted field.";return;}
@@ -62,7 +66,7 @@ run.addEventListener("click",async()=>{
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
   runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sampler:settings.sampler,native:{width:settings.width,height:settings.height,canvas,budgets:plan.budgets}});
-  check(runner.sceneSnapshot.triangleCount===269140&&runner.sceneSnapshot.maxDepth===6&&runner.sceneSnapshot.samplesPerPixel===32&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
+  check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===6&&runner.sceneSnapshot.samplesPerPixel===32&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;
   const frame=await runner.run("radial",{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,onProgress:p=>{
    status.textContent=`Rendering room · ${p.completedTiles}/${p.totalTiles} tiles completed`;
@@ -92,7 +96,7 @@ run.addEventListener("click",async()=>{
   }
   runner.destroy();runner=null;receipt.cleanupPassed=true;receipt.status="captured-reference-not-qualified";
   await save(stem+(guidedDenoise?'-guided':''),snapshot,receipt);
-  preview.alt=`Eames inside finalscene room, ${settings.width} by ${settings.height}, ${view}, ${settings.sampler}`;preview.src=snapshot;preview.hidden=false;
+  preview.alt=`Eames inside ${source.roomAsset.name}, ${settings.width} by ${settings.height}, ${view}, ${settings.sampler}`;preview.src=snapshot;preview.hidden=false;
   download.download=stem+".png";download.href=snapshot;download.hidden=false;
   if(guidedDenoise){el('comparison').hidden=false;showComparison(true);}
  }catch(error){

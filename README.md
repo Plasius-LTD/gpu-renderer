@@ -1,5 +1,11 @@
 # @plasius/gpu-renderer
 
+The native room reference fixture accepts the lighting server's checksum-bound
+room manifest, including an explicitly supplied local-only room GLB. Model-specific
+triangle admission replaces the old fixture constant; original Eames geometry,
+materials, sampling and GPU denoising remain unchanged. Private models and their
+captures are not published automatically (renderer#219, lighting#102).
+
 [![npm version](https://img.shields.io/npm/v/@plasius/gpu-renderer.svg)](https://www.npmjs.com/package/@plasius/gpu-renderer)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Plasius-LTD/gpu-renderer/ci.yml?branch=main&label=build&style=flat)](https://github.com/Plasius-LTD/gpu-renderer/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/codecov/c/github/Plasius-LTD/gpu-renderer)](https://codecov.io/gh/Plasius-LTD/gpu-renderer)

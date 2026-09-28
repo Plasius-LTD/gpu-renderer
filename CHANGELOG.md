@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Admit checksum-bound replacement rooms in the native adaptive reference fixture
+  with model-specific geometry counts and labels, retaining the original Eames,
+  transport and default public room (#219).
+
 - Add default-off GPU guided spatial denoising to the native adaptive room lane,
   with first-hit guides, completed-count weighting, same-input raw/cleaned
   controls and separate timing/HDR evidence (renderer#218, site#2249).
