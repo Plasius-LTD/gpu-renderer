@@ -9,7 +9,10 @@ const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=
 const controls=[...el("controls").querySelectorAll("input,select")];
 let cancellation,assets;
 function clearCapture(){preview.hidden=true;preview.removeAttribute("src");download.hidden=true;download.removeAttribute("href");result.textContent="";status.textContent="Settings changed. Render to update the room view.";}
-for(const control of controls)control.addEventListener("change",clearCapture);
+for(const control of controls){
+ control.addEventListener("change",clearCapture);
+ control.addEventListener("input",clearCapture);
+}
 reset.addEventListener("click",()=>{
  el("chair-x").value=ROOM_DEFAULTS.x;el("chair-z").value=ROOM_DEFAULTS.z;el("chair-yaw").value=ROOM_DEFAULTS.yaw;
  el("view").value=ROOM_DEFAULTS.view;el("resolution").value="1080p";el("sampler").value="fixed-pattern";clearCapture();

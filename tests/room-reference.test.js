@@ -16,5 +16,6 @@ test("room capture reuses real transport, hashes input, validates counts and cle
  assert.match(js,/diagnostics:true/);assert.match(js,/sceneSnapshot.triangleCount===269140/);
  assert.match(js,/room-eames-interior-reference/);assert.match(js,/failed/);
  assert.match(js,/addEventListener\("change",clearCapture\)/);
+ assert.match(js,/addEventListener\("input",clearCapture\)/);
  assert.match(js,/sampler:settings.sampler/);
 });
