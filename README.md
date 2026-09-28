@@ -58,6 +58,14 @@ Raw HDR, filtered HDR and separate pass/job timings are retained. Spatial
 smoothing can lose detail; it does not establish convergence or real-time speed.
 See [design and acceptance](docs/design/guided-spatial-denoise.md) and ADR 0049.
 
+Rough opaque nonmetallic cloth with sheen now has its own guided class: geometric
+guidance and bounded colour demodulation preserve base-colour texture while
+reconstructing noisy lighting. It uses the same passes and allocation, not more
+rays. This is a biased presentation approximation, **not complete velvet/sheen
+BRDF support**; fine lighting/normal detail can soften. Full sheen layering and
+texture-minification qualification remain separate work. See
+[cloth scope and tests](docs/design/rough-cloth-denoise.md) and ADR 0052.
+
 Experimental `renderer.sampling.roughBounceSplitting.enabled` (default false)
 adds two independently keyed continuations at eligible rough non-metal surfaces.
 Set `roughBounceSplitting: { splitDepth: 1 }` for **2/1/1/...** or `splitDepth: 2`

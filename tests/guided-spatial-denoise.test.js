@@ -19,6 +19,16 @@ function mock(fail=false){
  return {device,allocations,commands,encoder};
 }
 const args={width:1920,height:1080,[flag]:true,inputView:{},outputView:{},scratchView:{},pixelState:{},frameBuffer:{},hitBuffer:{},rayBuffer:{},counterBuffer:{}};
+test('rough cloth has a separate geometric guide and bounded texture-preserving reconstruction',()=>{
+ assert.match(GUIDED_CAPTURE_WGSL,/let cloth = any\(hit\.materialResponse\.xyz > vec3<f32>\(0\.0\)\)/);
+ assert.match(GUIDED_CAPTURE_WGSL,/!cloth \|\| hit\.material\.x >= 0\.7/);
+ assert.match(GUIDED_CAPTURE_WGSL,/select\(hit\.shadingNormal\.xyz, hit\.geometricNormal\.xyz, cloth\)/);
+ assert.match(GUIDED_CAPTURE_WGSL,/select\(1\.0, 0\.5, cloth\)/);
+ assert.match(GUIDED_FILTER_WGSL,/abs\(a\.w-albedo\.w\) > 0\.1/);
+ assert.match(GUIDED_FILTER_WGSL,/max\(albedo\.xyz,vec3<f32>\(0\.1\)\)/);
+ assert.match(GUIDED_FILTER_WGSL,/other\.xyz\/cloth_modulation\(a\)/);
+ assert.match(GUIDED_FILTER_WGSL,/sum\/max\(total,0\.00001\)\*cloth_modulation\(albedo\)/);
+});
 test('guided denoise is default off, validates native allocation before work, and has bounded memory',async()=>{
  assert.equal(resolveGuidedDenoise({}).enabled,false);
  assert.equal(await createGuidedSpatialDenoiser(null,null,{}),null);

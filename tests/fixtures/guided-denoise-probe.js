@@ -2,6 +2,7 @@ import {createGuidedSpatialDenoiser} from '/src/wavefront-guided-denoise.js';
 import {createTextureReader} from './native-guided-postprocess.js';
 import {createGuidedDenoiseProbe,evaluateGuidedDenoiseProbe} from '/lighting/demo/eames-environments/guided-denoise-probe.js';
 import {assertShaderModuleCompiles} from '/src/wavefront-runtime-support.js';
+import {runClothDenoiseProbe} from './cloth-denoise-probe.js';
 
 export async function runGuidedDenoiseProbe(signal) {
  const adapter=await navigator.gpu.requestAdapter();if(adapter?.info.isFallbackAdapter!==false)throw new Error('Physical GPU required for guided probe');
@@ -32,6 +33,6 @@ export async function runGuidedDenoiseProbe(signal) {
   const e=device.createCommandEncoder(),p=e.beginComputePass();p.setPipeline(pipeline);p.setBindGroup(0,group);p.dispatchWorkgroups(256);p.end();denoiser.encode(e);device.queue.submit([e.finish()]);await wait(device.queue.onSubmittedWorkDone());
   const readTexture=await createTextureReader({device,makeBuffer,read,wait,width:128,height:128});
   const output=await readTexture(denoiser.filteredView);const error=await wait(device.popErrorScope());if(error)throw Error(error.message);
-  return {...evaluateGuidedDenoiseProbe(probe,output),adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture}};
+  return {...evaluateGuidedDenoiseProbe(probe,output),cloth:await runClothDenoiseProbe(signal),adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture}};
  }finally{denoiser?.destroy();owned.forEach(r=>r.destroy());device.destroy();}
 }

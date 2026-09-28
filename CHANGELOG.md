@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Include eligible rough cloth in opt-in guided GPU denoising, with geometric
+  guides and bounded colour-detail reconstruction; preserve protected surfaces,
+  raw transport, pass counts and memory allocation (#222).
+
 - Honor explicit mesh sidedness in CPU/GPU traversal, preserving matching transmissive-medium exits; orthonormalize normal-map frames and repair invalid reflection hemispheres consistently before BSDF evaluation/sampling (#221). Add physical surface-validity probes; no extra allocations or dispatches in rendering.
 
 - Align room controls/Reset with swapped Eames and standing-reference positions; disclose the first seating model's proportion-preserving uniform 1.5 m width override, revised after review of the 2.1 m trial (#220).
