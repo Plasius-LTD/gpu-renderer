@@ -1,6 +1,8 @@
 # ADR 0051: Surface sidedness and valid normal-mapped shading
 
-Status: proposed for physical qualification (2026-09-28).
+Status: accepted (2026-09-28). Tasks renderer #221 / shared #134.
+Physical defect probes and native reference captures passed; broad image/energy
+and performance qualification remains separate.
 
 ## Evidence and scope
 
@@ -63,6 +65,22 @@ tests/coverage (>=80%, changed-source LCOV), types/lint/build/package/Zero-Three
 physical evidence and post-push CI. No local publishing or main/CD in this task.
 
 ## References
+
+Implementation evidence: renderer commit
+`e718af58937693b8f28ce5cb2018ba860e65f32d`, paired with shared commit
+`861005966d3af7dea4613130ae8b96310ec09ead`. The assembled GPU probe passes
+single-/double-sided candidate tests, matching/mismatched medium exits,
+orthonormal/mirrored/degenerate UV frames, 128 grazing directions, unchanged
+valid normals and finite positive repaired BSDF/PDF values. The 19-case dual-UV
+probe also verifies the sidedness flag through both geometry preparation paths.
+Native 1080p/4K six-bounce captures retain identical completed sample counts,
+raw/filtered HDR and allocation inventories, with no reported GPU failures.
+Residual grain and increased diagnostic time prevent a noise-free/speedup claim.
+
+Local checks: 343 renderer tests, 96.15% line coverage; 111 shared tests, 88.14%.
+All changed JavaScript source files appear in LCOV. Lint/types/build/package and
+full Zero-Three gates pass. Post-push renderer CI run 36472229260 and shared run
+36472234118 succeed. Branch review/merge and approved CD remain outstanding.
 
 - [glTF sidedness](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#double-sided).
 - Blender Cycles `ensure_valid_specular_reflection` documents the related
