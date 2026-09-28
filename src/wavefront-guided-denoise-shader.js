@@ -83,7 +83,9 @@ fn filter_guided(@builtin(global_invocation_id) id:vec3<u32>) {
   let geometry=textureLoad(normalDepth,pixel,0);
   let spp=max(completed_count(pixel),1.0);
   let sigma=0.15+0.45/sqrt(spp);
-  let centerRange=range_color(center.xyz/cloth_modulation(albedo));
+  let cloth=albedo.w < 0.75;
+  let centerSignal=center.xyz/cloth_modulation(albedo);
+  let centerRange=range_color(centerSignal);
   var sum=vec3<f32>(0.0); var total=0.0;
   for (var y=-2i;y<=2i;y=y+1i) {
     for (var x=-2i;x<=2i;x=x+1i) {
@@ -106,10 +108,13 @@ fn filter_guided(@builtin(global_invocation_id) id:vec3<u32>) {
         *exp(-dot(colorDelta,colorDelta)/0.01)
         *exp(-depthDelta/max(depthLimit,0.00001))
         /(1.0+dot(rangeDelta,rangeDelta)/(sigma*sigma));
-      sum=sum+signal*weight; total=total+weight;
+      // Accumulate cloth differences about the centre: a constant signal then
+      // stays bit-exact instead of drifting at each half-float ping-pong pass.
+      sum=sum+select(signal,signal-centerSignal,cloth)*weight; total=total+weight;
     }
   }
   var color=vec4<f32>(sum/max(total,0.00001)*cloth_modulation(albedo),center.w);
+  if (cloth) { color=vec4<f32>(center.xyz+color.xyz,center.w); }
   if (settings.step == 4u) { color=guided_value(pixel,color); }
   textureStore(filterOutput,pixel,color);
 }

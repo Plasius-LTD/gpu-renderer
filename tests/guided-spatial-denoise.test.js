@@ -28,6 +28,7 @@ test('rough cloth has a separate geometric guide and bounded texture-preserving 
  assert.match(GUIDED_FILTER_WGSL,/max\(albedo\.xyz,vec3<f32>\(0\.1\)\)/);
  assert.match(GUIDED_FILTER_WGSL,/other\.xyz\/cloth_modulation\(a\)/);
  assert.match(GUIDED_FILTER_WGSL,/sum\/max\(total,0\.00001\)\*cloth_modulation\(albedo\)/);
+ assert.match(GUIDED_FILTER_WGSL,/select\(signal,signal-centerSignal,cloth\)/);
 });
 test('guided denoise is default off, validates native allocation before work, and has bounded memory',async()=>{
  assert.equal(resolveGuidedDenoise({}).enabled,false);
