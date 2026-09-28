@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Make the local room SPP ceiling configurable through the supported 1–256 range;
+  derive radial tiers and propagate the ceiling through sequence, dispatch and
+  count verification, preserving default behavior and tile-bounded queues (#223).
+
 - Include eligible rough cloth in opt-in guided GPU denoising, with geometric
   guides and bounded colour-detail reconstruction; preserve protected surfaces,
   raw transport, pass counts and memory allocation (#222).

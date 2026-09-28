@@ -6,6 +6,7 @@ import { createWavefrontFrameTelemetryResources } from "/src/wavefront-frame-tel
 import { createWavefrontCpuProfile } from "/src/wavefront-cpu-profile.js";
 import { createConfigPayload } from "/src/wavefront-packers.js";
 import { createAdaptiveResourceOwner, packAdaptivePixelState } from "/src/wavefront-adaptive-metadata.js";
+import { ADAPTIVE_MAX_SAMPLES } from "/src/wavefront-adaptive-shader.js";
 import { createAdaptivePrimaryPipelines, packAdaptivePrimaryConfig, encodeAdaptivePrimaryWorklist } from "/src/wavefront-adaptive-primary.js";
 import { createAdaptiveBootstrapPipelines } from "/src/wavefront-adaptive-bootstrap.js";
 import { createAdaptiveCameraRayPipeline } from "/src/wavefront-adaptive-camera.js";
@@ -69,9 +70,10 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
         return device;
       } };
     const width=native?.width??128,height=native?.height??128,pixels=128*128,tile={x:0,y:0,width:128,height:128},sceneConfig=typeof scene==="string"?createPairedProbeScene(scene):scene;
-    const maximum=sceneConfig.probeMaximum??32,maxDepth=sceneConfig.probeDepth??4;
+    const maximum=native?.maximumSpp??sceneConfig.probeMaximum??32,maxDepth=sceneConfig.probeDepth??4;
+    check(Number.isSafeInteger(maximum)&&maximum>=1&&maximum<=ADAPTIVE_MAX_SAMPLES,"Invalid sample ceiling");
     renderer = await wait(createWavefrontPathTracingComputeRenderer({ ...sceneConfig, canvas:native?.canvas??new OffscreenCanvas(width,height), width,height,tileSize:128,maxDepth,
-      samplesPerPixel:native?32:256,denoise:false,deferredPathResolve:true,strictPhysicalLowSppLighting:true,
+      samplesPerPixel:native?maximum:ADAPTIVE_MAX_SAMPLES,denoise:false,deferredPathResolve:true,strictPhysicalLowSppLighting:true,
       "renderer.sampling.owenSobol.enabled":sampler==="owen-sobol",
       "renderer.sampling.independentRandom.enabled":sampler==="independent-random",
       "renderer.sampling.fixedPattern.enabled":sampler==="fixed-pattern",

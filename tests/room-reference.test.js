@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 test("room reference exposes original-scene placement, native resolutions and explicit render controls",()=>{
  const html=readFileSync(new URL("./fixtures/native-room-reference.html",import.meta.url),"utf8");
- for(const id of ["resolution","sampler","view","chair-x","chair-z","chair-yaw","fov","models"])assert.match(html,new RegExp(`<label for="${id}">`));
+ for(const id of ["resolution","spp","sampler","view","chair-x","chair-z","chair-yaw","fov","models"])assert.match(html,new RegExp(`<label for="${id}">`));
  for(const text of ["1920 × 1080","3840 × 2160","Render room","Reset view","Stop after pending GPU work","No added studio walls","External daylight"])assert(html.includes(text));
  assert.match(html,/<option value="fixed-pattern" selected>/);
  assert.match(html,/img:not\(\[hidden\]\)/);
@@ -12,6 +12,25 @@ test("room reference exposes original-scene placement, native resolutions and ex
  assert.match(html,/<input id="chair-z"[^>]*value="-2.5"/);
  assert.match(html,/uniformly scaled to 1\.5 m wide/);
  assert.match(html,/preserving its proportions/);
+});
+test('room ceiling is configurable, forwarded and verified rather than a hard-coded preset',()=>{
+ const fixture=name=>readFileSync(new URL(`./fixtures/${name}.js`,import.meta.url),'utf8');
+ const page=fixture('native-room-reference'),native=fixture('native-adaptive-runner'),runner=fixture('adaptive-paired-runner');
+ assert.match(page,/roomReferenceSettings\(el\("resolution"\).value,el\("sampler"\).value,el\('spp'\).valueAsNumber\)/);
+ assert.match(page,/createRadialSamplingPlan\(settings.width,settings.height,settings.maximumSpp\)/);
+ assert.match(page,/maximumSpp:settings.maximumSpp/);
+ assert.match(page,/sceneSnapshot.samplesPerPixel===settings.maximumSpp/);
+ assert.match(page,/radialSamplingTiers\(el\('spp'\).valueAsNumber\)/);
+ assert.match(page,/'-spp'\+settings.maximumSpp/);
+ assert.match(page,/el\('spp'\).value=String\(RADIAL_SAMPLING_DEFAULTS.maximumSpp\)/);
+ assert.match(runner,/maximum=native\?\.maximumSpp\?\?sceneConfig.probeMaximum/);
+ assert.match(runner,/samplesPerPixel:native\?maximum:ADAPTIVE_MAX_SAMPLES/);
+ assert.match(native,/maximum=renderer.config.samplesPerPixel/);
+ assert.match(native,/sampleWeight:adaptive\?1:1\/maximum/);
+ assert.match(native,/maximumSpp:maximum/);
+ assert.doesNotMatch(native,/samplesPerPixel:32|sampleLimit:32|ordinal<32|fill\(32\)/);
+ const benchmark=fixture('native-room-splitting');
+ assert(benchmark.indexOf('const settings=roomReferenceSettings')<benchmark.indexOf("el('spp').value=String(settings.maximumSpp)"));
 });
 test("room capture reuses real transport, hashes input, validates counts and clears stale results",()=>{
  const js=readFileSync(new URL("./fixtures/native-room-reference.js",import.meta.url),"utf8");

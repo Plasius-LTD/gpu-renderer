@@ -1,5 +1,15 @@
 # @plasius/gpu-renderer
 
+The local room reference has a numeric **SPP ceiling**, default 32, accepting
+integers 1–256 (the packed count limit). Radial tiers derive by halving that
+ceiling, rounding upwards with a one-sample floor, preserving the existing
+5/10/15/20/25/25% screen areas. A 256 ceiling gives 256/128/64/32/16/8 and
+47.6 mean SPP. This is a slow quality-reference capture, not a real-time claim.
+Reset and the splitting benchmark retain the default ceiling. Evidence checks
+every completed count; non-default filenames include the ceiling. Host budgets
+widen only when needed; GPU queues remain tile-bounded. See the
+[capture design](docs/design/high-spp-room-reference.md).
+
 Meshes are single-sided by default: set `doubleSided: true` explicitly for
 two-sided sheets. glTF material sidedness is forwarded by gpu-shared. Rejected
 back faces are skipped during traversal, not treated as a black hit or bounce.

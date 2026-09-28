@@ -24,6 +24,7 @@ export async function runRoomSplittingBenchmark({loadAssets,clearCapture,roomCom
   el('sampler').value='stable-pattern';
   el('denoise').value='off';
   const settings=roomReferenceSettings(el('resolution').value,'stable-pattern');report.settings=settings;
+  el('spp').value=String(settings.maximumSpp);clearCapture();
   report.provenance=await (await fetch('/__provenance',{signal:AbortSignal.timeout(10000)})).json();
   report.correctness=[];
   for(const name of ['black','emissive','diffuse-constant']){
