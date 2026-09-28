@@ -502,6 +502,8 @@ export interface WavefrontMeshInput {
   readonly indices?: readonly number[] | Uint16Array | Uint32Array;
   readonly normals?: readonly number[] | Float32Array | null;
   readonly uvs?: readonly number[] | Float32Array | null;
+  /** TEXCOORD_1. Each material texture independently selects set 0 or 1. */
+  readonly uvs1?: readonly number[] | Float32Array | null;
   readonly texcoords?: readonly number[] | Float32Array | null;
   readonly uv?: readonly number[] | Float32Array | null;
   readonly materialKind?: WavefrontMaterialKind;
@@ -585,6 +587,8 @@ export interface WavefrontTriangleRecord {
   readonly uv0: readonly number[];
   readonly uv1: readonly number[];
   readonly uv2: readonly number[];
+  /** UV1 pairs for the triangle's three vertices; uv0/uv1/uv2 above are UV0 corners. */
+  readonly uvs1?: readonly number[];
   readonly color: readonly number[];
   readonly emission: readonly number[];
   readonly material: readonly number[];
@@ -714,6 +718,8 @@ export interface WavefrontGpuMeshSource {
       readonly indices: readonly number[];
       readonly normals: readonly number[] | null;
       readonly uvs: readonly number[] | null;
+      readonly uvs1: readonly number[] | null;
+      readonly textureUvMask: number;
       readonly materialKind: number;
       readonly flags: number;
       readonly materialRefId: number;
@@ -1491,6 +1497,8 @@ export function normalizeWavefrontMesh(
   indices: readonly number[];
   normals: readonly number[] | null;
   uvs: readonly number[] | null;
+  uvs1: readonly number[] | null;
+  textureUvMask: number;
   materialKind: number;
   flags: number;
   materialRefId: number;

@@ -54,6 +54,7 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
   let meshSurface = sample_surface_material(
     hitTriangle,
     candidate.uv,
+    candidate.barycentric,
     candidate.geometricNormal,
     candidate.shadingNormal
   );

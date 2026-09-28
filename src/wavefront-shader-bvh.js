@@ -109,9 +109,9 @@ fn prepareMeshTrianglesAndLeaves(@builtin(global_invocation_id) globalId: vec3<u
   let n0 = select(faceNormal, safe_normalize(vertex0.normal.xyz, faceNormal), vertex0.normal.w > 0.5);
   let n1 = select(faceNormal, safe_normalize(vertex1.normal.xyz, faceNormal), vertex1.normal.w > 0.5);
   let n2 = select(faceNormal, safe_normalize(vertex2.normal.xyz, faceNormal), vertex2.normal.w > 0.5);
-  let uv0 = select(vec2<f32>(0.0), vertex0.uv.xy, vertex0.uv.z > 0.5);
-  let uv1 = select(vec2<f32>(0.0), vertex1.uv.xy, vertex1.uv.z > 0.5);
-  let uv2 = select(vec2<f32>(0.0), vertex2.uv.xy, vertex2.uv.z > 0.5);
+  let uv0 = vertex0.uv.xy;
+  let uv1 = vertex1.uv.xy;
+  let uv2 = vertex2.uv.xy;
 
   var preparedTriangle = TriangleRecord();
   preparedTriangle.triangleId = triangleIndex;
@@ -121,12 +121,12 @@ fn prepareMeshTrianglesAndLeaves(@builtin(global_invocation_id) globalId: vec3<u
   preparedTriangle.materialRefId = mesh.materialRefId;
   preparedTriangle.mediumRefId = mesh.mediumRefId;
   preparedTriangle.materialSlot = mesh.materialSlot;
-  preparedTriangle.v0 = vec4<f32>(vertex0.position.xyz, 0.0);
-  preparedTriangle.v1 = vec4<f32>(vertex1.position.xyz, 0.0);
-  preparedTriangle.v2 = vec4<f32>(vertex2.position.xyz, 0.0);
-  preparedTriangle.n0 = vec4<f32>(n0, 0.0);
-  preparedTriangle.n1 = vec4<f32>(n1, 0.0);
-  preparedTriangle.n2 = vec4<f32>(n2, 0.0);
+  preparedTriangle.v0 = vec4<f32>(vertex0.position.xyz, vertex0.uv.z);
+  preparedTriangle.v1 = vec4<f32>(vertex1.position.xyz, vertex1.uv.z);
+  preparedTriangle.v2 = vec4<f32>(vertex2.position.xyz, vertex2.uv.z);
+  preparedTriangle.n0 = vec4<f32>(n0, vertex0.uv.w);
+  preparedTriangle.n1 = vec4<f32>(n1, vertex1.uv.w);
+  preparedTriangle.n2 = vec4<f32>(n2, vertex2.uv.w);
   preparedTriangle.uv0uv1 = vec4<f32>(uv0, uv1);
   preparedTriangle.uv2Pad = vec4<f32>(uv2, 0.0, 0.0);
   preparedTriangle.color = mesh.color;

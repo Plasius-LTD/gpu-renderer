@@ -6,7 +6,7 @@ import {encodeLinearImageChunks} from '/lighting/demo/eames-environments/linear-
 import {createRoughSplittingScene,validateRoughSplittingProbe} from '/lighting/demo/eames-environments/rough-splitting-scenes.js';
 const check=(v,m)=>{if(!v)throw Error(m);},el=id=>document.getElementById(id);
 let busy=false;
-export async function runRoomSplittingBenchmark({loadAssets,clearCapture}){
+export async function runRoomSplittingBenchmark({loadAssets,clearCapture,roomCompositionControls}){
  if(busy)return;busy=true;
  const abort=new AbortController(),stop=()=>abort.abort(),runners=[],canvases=[];
  const locked=[...document.querySelectorAll('#controls input,#controls select,#run,#reset,#benchmark')];
@@ -24,7 +24,6 @@ export async function runRoomSplittingBenchmark({loadAssets,clearCapture}){
   el('sampler').value='stable-pattern';
   el('denoise').value='off';
   const settings=roomReferenceSettings(el('resolution').value,'stable-pattern');report.settings=settings;
-  const placement={x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view=el('view').value;
   report.provenance=await (await fetch('/__provenance',{signal:AbortSignal.timeout(10000)})).json();
   report.correctness=[];
   for(const name of ['black','emissive','diffuse-constant']){
@@ -40,7 +39,7 @@ export async function runRoomSplittingBenchmark({loadAssets,clearCapture}){
    }
   }
   el('status').textContent='Preparing matching splitting controls';
-  const source=await loadAssets(report,abort.signal),composed=composeRoomEamesScene({...source,placement,view});report.scene=composed.evidence;
+  const source=await loadAssets(report,abort.signal),composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});report.scene=composed.evidence;
   const plan=createRadialSamplingPlan(settings.width,settings.height);report.budgets={totalSamples:plan.totalSamples,bands:plan.bands,sha256:await hashBytes(plan.budgets.buffer)};
   // Separate setup from measurement. Only one runner submits work at a time.
   for(const splitDepth of [0,1,2]){

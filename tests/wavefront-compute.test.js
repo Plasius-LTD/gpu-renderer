@@ -2129,7 +2129,7 @@ test("wavefront GPU mesh source packs raw mesh buffers without CPU BVH output", 
   assert.equal(source.meshes.buffer.byteLength, wavefrontPathTracingComputeLimits.meshRangeRecordBytes);
   assert.equal(source.triangleCount, 1);
   assert.equal(source.bvhNodeCapacity, 1);
-  assert.deepEqual(round(vertexFloats.slice(0, 12)), [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]);
+  assert.deepEqual(round(vertexFloats.slice(0, 12)), [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0]); // UV ZW now holds TEXCOORD_1, zero when absent.
   assert.deepEqual(Array.from(indexUints.slice(0, 3)), [0, 1, 2]);
   assert.deepEqual(
     Array.from(meshUints.slice(0, 11)),

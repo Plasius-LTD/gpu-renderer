@@ -95,12 +95,13 @@ export function packWavefrontTriangles(triangles, capacity = triangles.length) {
     uintView[u32 + 5] = triangle.mediumRefId;
     uintView[u32 + 6] = triangle.materialSlot ?? 0;
     uintView[u32 + 7] = 0;
-    writeVec4(floatView, byteOffset + 32, [...triangle.v0, 0]);
-    writeVec4(floatView, byteOffset + 48, [...triangle.v1, 0]);
-    writeVec4(floatView, byteOffset + 64, [...triangle.v2, 0]);
-    writeVec4(floatView, byteOffset + 80, [...triangle.n0, 0]);
-    writeVec4(floatView, byteOffset + 96, [...triangle.n1, 0]);
-    writeVec4(floatView, byteOffset + 112, [...triangle.n2, 0]);
+    // UV1 uses otherwise-unused W lanes; XYZ geometry and record stride are unchanged.
+    writeVec4(floatView, byteOffset + 32, [...triangle.v0, triangle.uvs1?.[0] ?? 0]);
+    writeVec4(floatView, byteOffset + 48, [...triangle.v1, triangle.uvs1?.[2] ?? 0]);
+    writeVec4(floatView, byteOffset + 64, [...triangle.v2, triangle.uvs1?.[4] ?? 0]);
+    writeVec4(floatView, byteOffset + 80, [...triangle.n0, triangle.uvs1?.[1] ?? 0]);
+    writeVec4(floatView, byteOffset + 96, [...triangle.n1, triangle.uvs1?.[3] ?? 0]);
+    writeVec4(floatView, byteOffset + 112, [...triangle.n2, triangle.uvs1?.[5] ?? 0]);
     writeVec4(floatView, byteOffset + 128, [...triangle.uv0, ...triangle.uv1]);
     writeVec4(floatView, byteOffset + 144, [...triangle.uv2, 0, 0]);
     writeVec4(floatView, byteOffset + 160, triangle.color);

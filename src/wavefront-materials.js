@@ -91,7 +91,9 @@ function readExtensionNumber(input, extensionName, key, fallback) {
 
 function resolveExtensionTexture(input, extensionName, key) {
   const extension = resolveExtension(input, extensionName);
-  return extension[key] ?? null;
+  const slot = key.replace(/Texture$/, "");
+  return input?.[key] ?? input?.material?.[key] ?? input?.extensionTextures?.[slot] ??
+    input?.materialExtensions?.textures?.[slot] ?? extension[key] ?? null;
 }
 
 export function normalizeWavefrontMaterialExtensions(input = {}) {

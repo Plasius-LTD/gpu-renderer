@@ -1,5 +1,12 @@
 # @plasius/gpu-renderer
 
+Meshes accept optional `uvs1` (TEXCOORD_1). Existing textures select `texCoord: 0`
+or `1` independently, including normal-map tangent construction. Invalid UV1
+references reject. CPU/GPU geometry records keep their existing byte sizes;
+reserved lanes now carry UV1 and slot selectors (ADR0050). The native room page
+adds a 52° vertical-FOV default (62° remains selectable), local reference models,
+and a mandatory physical dual-UV probe before capture. No production flag changes.
+
 The native room reference fixture accepts the lighting server's checksum-bound
 room manifest, including an explicitly supplied local-only room GLB. Model-specific
 triangle admission replaces the old fixture constant; original Eames geometry,

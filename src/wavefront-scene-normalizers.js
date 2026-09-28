@@ -1,3 +1,4 @@
+import { normalizeSecondaryUvs } from "./wavefront-uvs.js";
 import {
   MATERIAL_EMISSIVE,
   MATERIAL_TRANSPARENT,
@@ -263,6 +264,7 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     indices: Object.freeze(indices),
     normals: normals ? Object.freeze(normals) : null,
     uvs: uvs ? Object.freeze(uvs) : null,
+    ...normalizeSecondaryUvs(input, vertexCount, materialExtensions.textures),
     materialKind: resolvedMaterialKind,
     flags: readNonNegativeInteger("mesh flags", input.flags, 0),
     materialRefId: readNonNegativeInteger(

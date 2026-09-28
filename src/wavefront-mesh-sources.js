@@ -64,6 +64,7 @@ function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
           uv0: Object.freeze(uv0),
           uv1: Object.freeze(uv1),
           uv2: Object.freeze(uv2),
+          uvs1: Object.freeze([a, b, c].flatMap(vertex => mesh.uvs1 ? readVector2(mesh.uvs1, vertex) : [0, 0])),
           color: mesh.color,
           emission: mesh.emission,
           material: Object.freeze([
@@ -121,7 +122,7 @@ function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
             clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
             clampUnit(mesh.occlusionTexture?.strength ?? 1),
             clampUnit(mesh.emissiveTexture?.strength ?? 1),
-            0,
+            mesh.textureUvMask,
           ]),
           extensionTextures: Object.freeze(
             Object.fromEntries(
@@ -499,7 +500,7 @@ export function createWavefrontGpuMaterialSource(meshes = []) {
       clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
       clampUnit(mesh.occlusionTexture?.strength ?? 1),
       clampUnit(mesh.emissiveTexture?.strength ?? 1),
-      0,
+      mesh.textureUvMask,
     ]);
   });
 
@@ -628,8 +629,8 @@ export function createWavefrontGpuMeshSource(meshes = [], gpuMaterialSourceInput
       vertexFloats[recordOffset + 7] = mesh.normals ? 1 : 0;
       vertexFloats[recordOffset + 8] = uv[0];
       vertexFloats[recordOffset + 9] = uv[1];
-      vertexFloats[recordOffset + 10] = mesh.uvs ? 1 : 0;
-      vertexFloats[recordOffset + 11] = 0;
+      vertexFloats[recordOffset + 10] = mesh.uvs1?.[vertexIndex * 2] ?? 0;
+      vertexFloats[recordOffset + 11] = mesh.uvs1?.[vertexIndex * 2 + 1] ?? 0;
     }
 
     mesh.indices.forEach((indexValue, localIndex) => {
@@ -705,7 +706,7 @@ export function createWavefrontGpuMeshSource(meshes = [], gpuMaterialSourceInput
       clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
       clampUnit(mesh.occlusionTexture?.strength ?? 1),
       clampUnit(mesh.emissiveTexture?.strength ?? 1),
-      0,
+      mesh.textureUvMask,
     ]);
 
     vertexCursor += meshVertexCount;

@@ -17,12 +17,14 @@ for(const control of controls){
  control.addEventListener("input",clearCapture);
 }
 reset.addEventListener("click",()=>{
+ el('fov').value=ROOM_DEFAULTS.fovYDegrees;el('models').value='all';
  el("chair-x").value=ROOM_DEFAULTS.x;el("chair-z").value=ROOM_DEFAULTS.z;el("chair-yaw").value=ROOM_DEFAULTS.yaw;
  el("view").value=ROOM_DEFAULTS.view;el("resolution").value="1080p";el("sampler").value="fixed-pattern";el("splitting").value="0";el('denoise').value='off';clearCapture();
 });
 cancel.addEventListener("click",()=>cancellation?.abort());
 export async function loadAssets(receipt,signal){
- if(assets){receipt.eamesSource=assets.eamesSource;return assets;}
+ const sourceKey=JSON.stringify([receipt.provenance.sources,receipt.provenance.assets]);
+ if(assets){check(assets.sourceKey===sourceKey,'Server sources changed; reload this page before rendering');receipt.eamesSource=assets.eamesSource;return assets;}
  const [{loadGltfModel},{createProductStudioMeshes},{createWavefrontEnvironmentLightingOptions}]=await Promise.all([
   import("/shared/src/gltf-loader.js"),import("/shared/src/product-studio-runtime.js"),import("/lighting/src/index.js")]);
  const manifestResponse=await fetch('/__room-manifest.json',{signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])});
@@ -34,11 +36,26 @@ export async function loadAssets(receipt,signal){
  const objectUrl=URL.createObjectURL(new Blob([bytes],{type:"model/gltf-binary"}));let room;
  try{room=await loadGltfModel(objectUrl);}finally{URL.revokeObjectURL(objectUrl);}
  check(!signal.aborted,"Loading cancelled");
+ const extraResponse=await fetch('/__reference-models.json',{signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])});
+ check(extraResponse.ok,'Reference model manifest missing');const manifests=await extraResponse.json();
+ check(Array.isArray(manifests)&&manifests.length<=2,'Invalid reference model list');
+ check(JSON.stringify(manifests)===JSON.stringify(receipt.provenance.assets?.models??[]),'Reference model provenance mismatch');
+ const referenceModels=[];
+ for(const [i,asset] of manifests.entries()){
+  const response=await fetch(`/__reference-model-${i}.glb`,{signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});
+  check(response.ok,'Reference model missing');const bytes=await response.arrayBuffer();
+  check(bytes.byteLength===asset.bytes&&await hashBytes(bytes)===asset.sha256,'Reference model checksum mismatch');
+  const url=URL.createObjectURL(new Blob([bytes],{type:'model/gltf-binary'}));let model;
+  try{model=await loadGltfModel(url);}finally{URL.revokeObjectURL(url);}
+  check(!signal.aborted,'Loading cancelled');referenceModels.push({model,asset});
+ }
  const eames=await loadOriginalEames(receipt,signal,{maxDepth:6});receipt.eamesSource=receipt.scene;
  const lightingOptions=createWavefrontEnvironmentLightingOptions({preset:"neutral-studio",sunDirection:[0.18,0.93,0.24],sunColor:[2.4,2.25,2,1],intensity:1});
  el('room-name').textContent=roomAsset.name;document.title=`Eames inside ${roomAsset.name} · GPU reference`;
- assets={room,roomAsset,eames,createProductStudioMeshes,lightingOptions,eamesSource:receipt.eamesSource};return assets;
+ el('model-names').textContent=referenceModels.length?`Available: Eames + ${referenceModels.map(m=>m.asset.name).join(' + ')}. Private assets; default material variants.`:'Available: Eames only; no additional local models supplied.';
+ assets={room,roomAsset,eames,referenceModels,sourceKey,createProductStudioMeshes,lightingOptions,eamesSource:receipt.eamesSource};return assets;
 }
+export function roomCompositionControls(source){return {placement:{x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view:el('view').value,fovYDegrees:el('fov').valueAsNumber,referenceModels:el('models').value==='all'?source.referenceModels:[]};}
 run.addEventListener("click",async()=>{
  for(const control of controls)if(!control.checkValidity()){control.reportValidity();status.textContent="Invalid placement. Check the highlighted field.";return;}
  const settings=roomReferenceSettings(el("resolution").value,el("sampler").value),view=el("view").value;
@@ -60,7 +77,9 @@ run.addEventListener("click",async()=>{
   status.textContent="Loading original room and Eames assets";
   const response=await fetch("/__provenance",{signal:AbortSignal.timeout(10000)});check(response.ok,"Missing provenance");receipt.provenance=await response.json();
   if(guidedDenoise){status.textContent='Checking denoiser against analytic HDR/edge/noise probes';const {runGuidedDenoiseProbe}=await import('./guided-denoise-probe.js');receipt.denoiseProbe=await runGuidedDenoiseProbe(cancellation.signal);}
-  const source=await loadAssets(receipt,cancellation.signal),composed=composeRoomEamesScene({...source,placement,view});receipt.scene=composed.evidence;
+  status.textContent='Checking UV0/UV1 texture sampling and CPU/GPU geometry parity';
+  const {runDualUvProbe}=await import('./dual-uv-probe.js');receipt.uvProbe=await runDualUvProbe(cancellation.signal);
+  const source=await loadAssets(receipt,cancellation.signal),composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});receipt.scene=composed.evidence;
   check(!cancellation.signal.aborted,"Capture cancelled");
   const plan=createRadialSamplingPlan(settings.width,settings.height);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
@@ -107,11 +126,11 @@ run.addEventListener("click",async()=>{
   cancellation.abort();run.disabled=false;reset.disabled=false;controls.forEach(c=>c.disabled=false);cancel.disabled=true;
   status.textContent=receipt.status==="failed"?`Failed: ${receipt.failures.join("; ")}`:`Captured room + Eames · ${settings.width} × ${settings.height} · ${receipt.frame.actualSamples.toLocaleString()} camera samples · ${guidedDenoise?'guided denoise comparison':'raw'} · not quality-qualified`;
   result.textContent=JSON.stringify({status:receipt.status,settings,splitDepth,scene:receipt.scene,admission:receipt.admission,actualSamples:receipt.frame?.actualSamples,
-   guidedDenoise:receipt.guidedDenoise,denoiseProbe:receipt.denoiseProbe,linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
+   guidedDenoise:receipt.guidedDenoise,denoiseProbe:receipt.denoiseProbe,uvProbe:receipt.uvProbe,linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
  }
 });
 
 el('benchmark').addEventListener('click',async()=>{
  const {runRoomSplittingBenchmark}=await import('./native-room-splitting.js');
- await runRoomSplittingBenchmark({loadAssets,clearCapture});
+ await runRoomSplittingBenchmark({loadAssets,clearCapture,roomCompositionControls});
 });

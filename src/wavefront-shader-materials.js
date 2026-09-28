@@ -35,9 +35,10 @@ fn build_triangle_tangent_basis(
 ) -> TangentBasis {
   let edge1 = triangle.v1.xyz - triangle.v0.xyz;
   let edge2 = triangle.v2.xyz - triangle.v0.xyz;
-  let uv0 = triangle.uv0uv1.xy;
-  let uv1 = triangle.uv0uv1.zw;
-  let uv2 = triangle.uv2Pad.xy;
+  let secondary = (u32(triangle.textureSettings.w) & 4u) != 0u;
+  let uv0 = select(triangle.uv0uv1.xy, vec2<f32>(triangle.v0.w, triangle.n0.w), secondary);
+  let uv1 = select(triangle.uv0uv1.zw, vec2<f32>(triangle.v1.w, triangle.n1.w), secondary);
+  let uv2 = select(triangle.uv2Pad.xy, vec2<f32>(triangle.v2.w, triangle.n2.w), secondary);
   let deltaUv1 = uv1 - uv0;
   let deltaUv2 = uv2 - uv0;
   let determinant = deltaUv1.x * deltaUv2.y - deltaUv1.y * deltaUv2.x;
@@ -59,13 +60,22 @@ fn build_triangle_tangent_basis(
   return TangentBasis(tangent, bitangent);
 }
 
+fn material_uv(primary: vec2<f32>, secondary: vec2<f32>, mask: u32, slot: u32) -> vec2<f32> {
+  return select(primary, secondary, (mask & (1u << slot)) != 0u);
+}
+
 fn sample_surface_material(
   triangle: TriangleRecord,
   uv: vec2<f32>,
+  barycentric: vec3<f32>,
   geometricNormal: vec3<f32>,
   shadingNormal: vec3<f32>
 ) -> SurfaceMaterialSample {
-  let baseColorTexel = sample_atlas(baseColorAtlasTexture, triangle.baseColorAtlas, uv);
+  let secondaryUv = vec2<f32>(triangle.v0.w, triangle.n0.w) * barycentric.x +
+    vec2<f32>(triangle.v1.w, triangle.n1.w) * barycentric.y +
+    vec2<f32>(triangle.v2.w, triangle.n2.w) * barycentric.z;
+  let uvMask = u32(triangle.textureSettings.w);
+  let baseColorTexel = sample_atlas(baseColorAtlasTexture, triangle.baseColorAtlas, material_uv(uv, secondaryUv, uvMask, 0u));
   let baseColor = vec4<f32>(
     clamp(triangle.color.rgb * srgb_to_linear_vec3(baseColorTexel.rgb), vec3<f32>(0.0), vec3<f32>(1.0)),
     clamp(triangle.color.a * baseColorTexel.a, 0.0, 1.0)
@@ -73,43 +83,43 @@ fn sample_surface_material(
   let metallicRoughnessTexel = sample_atlas(
     metallicRoughnessAtlasTexture,
     triangle.metallicRoughnessAtlas,
-    uv
+    material_uv(uv, secondaryUv, uvMask, 1u)
   );
-  let normalTexel = sample_atlas(normalAtlasTexture, triangle.normalAtlas, uv);
-  let occlusionTexel = sample_atlas(occlusionAtlasTexture, triangle.occlusionAtlas, uv);
-  let emissiveTexel = sample_atlas(emissiveAtlasTexture, triangle.emissiveAtlas, uv);
-  let clearcoatTexel = sample_atlas(clearcoatAtlasTexture, triangle.clearcoatAtlas, uv);
+  let normalTexel = sample_atlas(normalAtlasTexture, triangle.normalAtlas, material_uv(uv, secondaryUv, uvMask, 2u));
+  let occlusionTexel = sample_atlas(occlusionAtlasTexture, triangle.occlusionAtlas, material_uv(uv, secondaryUv, uvMask, 3u));
+  let emissiveTexel = sample_atlas(emissiveAtlasTexture, triangle.emissiveAtlas, material_uv(uv, secondaryUv, uvMask, 4u));
+  let clearcoatTexel = sample_atlas(clearcoatAtlasTexture, triangle.clearcoatAtlas, material_uv(uv, secondaryUv, uvMask, 5u));
   let clearcoatRoughnessTexel = sample_atlas(
     clearcoatRoughnessAtlasTexture,
     triangle.clearcoatRoughnessAtlas,
-    uv
+    material_uv(uv, secondaryUv, uvMask, 6u)
   );
   let clearcoatNormalTexel = sample_atlas(
     clearcoatNormalAtlasTexture,
     triangle.clearcoatNormalAtlas,
-    uv
+    material_uv(uv, secondaryUv, uvMask, 7u)
   );
-  let transmissionTexel = sample_atlas(transmissionAtlasTexture, triangle.transmissionAtlas, uv);
-  let thicknessTexel = sample_atlas(thicknessAtlasTexture, triangle.thicknessAtlas, uv);
-  let sheenColorTexel = sample_atlas(sheenColorAtlasTexture, triangle.sheenColorAtlas, uv);
+  let transmissionTexel = sample_atlas(transmissionAtlasTexture, triangle.transmissionAtlas, material_uv(uv, secondaryUv, uvMask, 8u));
+  let thicknessTexel = sample_atlas(thicknessAtlasTexture, triangle.thicknessAtlas, material_uv(uv, secondaryUv, uvMask, 9u));
+  let sheenColorTexel = sample_atlas(sheenColorAtlasTexture, triangle.sheenColorAtlas, material_uv(uv, secondaryUv, uvMask, 10u));
   let sheenRoughnessTexel = sample_atlas(
     sheenRoughnessAtlasTexture,
     triangle.sheenRoughnessAtlas,
-    uv
+    material_uv(uv, secondaryUv, uvMask, 11u)
   );
-  let specularTexel = sample_atlas(specularAtlasTexture, triangle.specularAtlas, uv);
+  let specularTexel = sample_atlas(specularAtlasTexture, triangle.specularAtlas, material_uv(uv, secondaryUv, uvMask, 12u));
   let specularColorTexel = sample_atlas(
     specularColorAtlasTexture,
     triangle.specularColorAtlas,
-    uv
+    material_uv(uv, secondaryUv, uvMask, 13u)
   );
-  let iridescenceTexel = sample_atlas(iridescenceAtlasTexture, triangle.iridescenceAtlas, uv);
+  let iridescenceTexel = sample_atlas(iridescenceAtlasTexture, triangle.iridescenceAtlas, material_uv(uv, secondaryUv, uvMask, 14u));
   let iridescenceThicknessTexel = sample_atlas(
     iridescenceThicknessAtlasTexture,
     triangle.iridescenceThicknessAtlas,
-    uv
+    material_uv(uv, secondaryUv, uvMask, 15u)
   );
-  let anisotropyTexel = sample_atlas(anisotropyAtlasTexture, triangle.anisotropyAtlas, uv);
+  let anisotropyTexel = sample_atlas(anisotropyAtlasTexture, triangle.anisotropyAtlas, material_uv(uv, secondaryUv, uvMask, 16u));
   let normalScale = clamp(triangle.textureSettings.x, 0.0, 1.0);
   let tangentBasis = build_triangle_tangent_basis(triangle, geometricNormal);
   let tangentNormal = safe_normalize(

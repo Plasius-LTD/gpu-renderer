@@ -66,6 +66,7 @@ struct SceneObject {
 };
 
 struct TriangleRecord {
+  // vN.xyz/nN.xyz are geometry; paired vN.w/nN.w store TEXCOORD_1 for vertex N.
   triangleId: u32,
   meshId: u32,
   materialKind: u32,
