@@ -21,18 +21,19 @@ import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continu
 import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0}={}) {
+export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false}={}) {
+  check(!guidedDenoise||(native&&!pruningVariants),"Guided denoise requires native staged transport");
   check([0,1,2].includes(splitDepth)&&(!splitDepth||sampler==="stable-pattern"),"Splitting requires stable-pattern and depth 1 or 2");
   check(!splitDepth||!pruningVariants,"Splitting/pruning combination is not admitted");
   check(["legacy","owen-sobol","independent-random","fixed-pattern","stable-pattern","stable-camera-random"].includes(sampler),"Invalid sampler");
   const progressiveSampling=["fixed-pattern","stable-pattern","stable-camera-random"].includes(sampler)?sampler:sampler!=="legacy";
   if(native)check(Number.isSafeInteger(native.width)&&Number.isSafeInteger(native.height)&&native.width>=128&&native.height>=128&&native.width*native.height<=3840*2160,"Invalid native fixture dimensions");
-  let device, renderer, owner, telemetry, lost = false, disposed = false;
+  let device, renderer, owner, telemetry, guidePostprocess, lost = false, disposed = false;
   let tracePipelineLayout, activePreparedPipelines=null, activeTelemetry=null, presentPipeline;
   const timestampPairs = [];
   const extras = [], errors = [], buffers = new Map(), bindings = new Map(), descriptors = new Map(), pipelines = {}, textures = [];
   const active = () => check(!signal.aborted && !lost && !disposed, "Probe cancelled or device lost");
-  const destroy = () => { disposed=true;telemetry?.destroy(); owner?.destroy(); renderer?.destroy(); extras.forEach(buffer=>buffer.destroy()); device?.destroy(); };
+  const destroy = () => { disposed=true;guidePostprocess?.destroy();telemetry?.destroy(); owner?.destroy(); renderer?.destroy(); extras.forEach(buffer=>buffer.destroy()); device?.destroy(); };
   const wait = async promise => {
     let timer;
     try { const value = await Promise.race([promise, new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("GPU operation exceeded 30 seconds")),30000);})]); active(); return value; }
@@ -107,6 +108,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     let config=renderer.config;
     const frameEncoder=createWavefrontFrameEncoder({getConfig:()=>config,getBindGroups:()=>[bindings.get("plasius.wavefront.bind.activeNext"),bindings.get("plasius.wavefront.bind.nextActive")],
       pipelines,counterBuffer:counters,activeDispatchBuffer:get("activeDispatchArgs"),getFrameTelemetry:()=>activeTelemetry,getPreparedContinuationPipelines:()=>activePreparedPipelines,
+      getPrimaryGuideCapture:offset=>guidePostprocess?.denoiser.capture(offset),
       ...(native?{presentPipeline,presentBindGroup:bindings.get("plasius.wavefront.presentBindGroup"),context:native.canvas.getContext("webgpu")}:{}),});
     const prepared=createAdaptivePreparedSampleEncoder({enabled:true,bootstrapPipelines:bootstrap,cameraPipeline:camera,frameEncoder,counterBuffer:counters,primaryDispatchBuffer:b.dispatch,getBindGroups:()=>preparedBindings});
     const makeBuffer=(size,usage)=>{const value=device.createBuffer({size,usage});extras.push(value);return value;};
@@ -119,7 +121,11 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const copy=await wait(device.createComputePipelineAsync({layout:"auto",compute:{module:copyModule,entryPoint:"copy_words"}}));
     const read=async(source,size)=>{const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(copy);pass.setBindGroup(0,group(copy.getBindGroupLayout(0),[[0,source,size],[1,copied]]));pass.dispatchWorkgroups(Math.ceil(size/256));pass.end();encoder.copyBufferToBuffer(copied,0,staging,0,size);device.queue.submit([encoder.finish()]);
       await wait(staging.mapAsync(GPUMapMode.READ));const value=staging.getMappedRange(0,size).slice(0);staging.unmap();return value;};
-    if(native)return await createNativeAdaptiveRunner({native,sampler,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
+    if(guidedDenoise){
+      const {createGuidedRoomPostprocess}=await import('./native-guided-postprocess.js');
+      guidePostprocess=await wait(createGuidedRoomPostprocess({device,native,b,frame,counters,queue,descriptors,frameEncoder,makeBuffer,read,wait,active}));
+    }
+    if(native)return await createNativeAdaptiveRunner({native,sampler,guidePostprocess,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
       variants,telemetry,timestampPairs,read,makeBuffer,group,descriptors,wait,active,destroy,errors,owner,
       setMode(diagnostic,fused){activeTelemetry=diagnostic?telemetry:null;activePreparedPipelines=fused?variants.fused:null;},
       setConfig(value){config=value;},adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},

@@ -28,13 +28,16 @@ export async function createNativeAdaptiveRunner(c) {
   await wait(device.queue.onSubmittedWorkDone());
   const setupError=await wait(device.popErrorScope());check(!setupError,setupError?.message);device.pushErrorScope("validation");
   const memory={...c.memory,fixtureStagingBytes:c.memory.fixtureStagingBytes+gathered.size,
+    ...(c.guidePostprocess?{guidedDenoise:c.guidePostprocess.memory}:{}),
     cachedBudgetHostBytes:budgets.byteLength+words.byteLength+uniform.byteLength};
   return {adapter:c.adapter,memory,planSetupMs,tiles:plan.length,
+    guidedPostprocess:c.guidePostprocess,
     sceneSnapshot:{triangleCount:renderer.config.triangleCount,bvhNodeCount:renderer.config.bvhNodeCount,
       displayQuality:renderer.config.displayQuality,accelerationBuildMode:renderer.config.accelerationBuildMode,
       maxDepth:renderer.config.maxDepth,samplesPerPixel:renderer.config.samplesPerPixel,camera:renderer.config.camera},
     async run(mode,{diagnostics=false,profile=false,onProgress,fused=false,seed=7,sampler="legacy"}={}){
       active();check(["fixed","uniform","radial"].includes(mode),"Invalid native mode");
+      check(!c.guidePostprocess||(mode!=="fixed"&&!fused),'Guided denoise requires adaptive staged transport');
       check(["legacy","owen-sobol","independent-random","fixed-pattern","stable-pattern","stable-camera-random"].includes(sampler),"Invalid native sampler");
       check(sampler===(c.sampler??"legacy"),"Sampler source must be selected at renderer creation");
       check(Number.isSafeInteger(seed)&&seed>=0&&seed<=0xffffffff,"Invalid frame seed");

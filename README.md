@@ -10,6 +10,21 @@
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
 
+The local native room reference now has an independent **Guided denoising**
+control (off by default). It captures existing first-hit surface data, filters
+rough opaque non-metal surfaces on the GPU, and offers raw/cleaned images from
+the same camera samples. Glossy, emissive, transparent and environment pixels
+are deliberately protected. No temporal reuse or transport changes.
+
+The internal coordinator accepts the host-evaluated snapshot key
+`renderer.denoise.guidedSpatial.enabled`. This is not a released site control
+or a replacement for the existing public `denoise` boolean. With the control
+off, no new denoise resources/pipelines are created. Added allocation is bounded
+by a separate 192 MiB cap; native 4K adds about 158.2 MiB using existing scratch.
+Raw HDR, filtered HDR and separate pass/job timings are retained. Spatial
+smoothing can lose detail; it does not establish convergence or real-time speed.
+See [design and acceptance](docs/design/guided-spatial-denoise.md) and ADR 0049.
+
 Experimental `renderer.sampling.roughBounceSplitting.enabled` (default false)
 adds two independently keyed continuations at eligible rough non-metal surfaces.
 Set `roughBounceSplitting: { splitDepth: 1 }` for **2/1/1/...** or `splitDepth: 2`

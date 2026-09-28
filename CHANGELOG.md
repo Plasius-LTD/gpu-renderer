@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add default-off GPU guided spatial denoising to the native adaptive room lane,
+  with first-hit guides, completed-count weighting, same-input raw/cleaned
+  controls and separate timing/HDR evidence (renderer#218, site#2249).
+
 - Add default-off bounded rough-bounce splitting with 2/1 or 2/2/1 schedules,
   branch-decorrelated lighting, half-throughput/count-once accounting and capped
   tile-local allocations. Add room controls and same-sampler native comparisons;

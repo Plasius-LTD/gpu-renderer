@@ -44,3 +44,4 @@
 # Sampling experiment
 
 - [ADR 0045: Progressive sampling experiment](adr-0045-progressive-sampling-experiment.md)
+- [ADR 0049: Guided spatial denoising](adr-0049-guided-spatial-denoise.md)

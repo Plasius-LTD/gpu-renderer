@@ -26,6 +26,7 @@ export function createWavefrontFrameEncoder({
   context,
   getFrameTelemetry = () => null,
   getPreparedContinuationPipelines = () => null,
+  getPrimaryGuideCapture = () => null,
 }) {
   const resolveConfig = resolveGetter(getConfig);
   const resolveBindGroups = resolveGetter(getBindGroups);
@@ -56,6 +57,14 @@ export function createWavefrontFrameEncoder({
         passEncoder.setPipeline(pipelines.intersectActiveQueue);
         passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
         recordIndirectDispatch(parallelism, queueWorkgroupsUpperBound, WORKGROUP_SIZE);
+        const capture = bounceIndex === 0 ? getPrimaryGuideCapture(configOffset) : null;
+        if (capture) {
+          passEncoder.setPipeline(capture.pipeline);
+          passEncoder.setBindGroup(0, capture.bindGroup, [configOffset]);
+          passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
+          recordIndirectDispatch(parallelism, tileWorkgroups, WORKGROUP_SIZE);
+          passEncoder.setBindGroup(0, bindGroups[bounceIndex % 2], [configOffset]);
+        }
         passEncoder.setPipeline(pipelines.resolveSurfaceRecords);
         passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
         recordIndirectDispatch(parallelism, queueWorkgroupsUpperBound, WORKGROUP_SIZE);
