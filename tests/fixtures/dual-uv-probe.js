@@ -17,7 +17,7 @@ export async function runDualUvProbe(signal){
   device.pushErrorScope('validation');
   const slots=[...CORE_UV_TEXTURES,...EXTENSION_UV_TEXTURES],masks=[0,131071,...slots.map((_,i)=>1<<i)];
   const pixels=new Uint8Array([64,64,64,255,192,192,192,255]);
-  const meshes=masks.map(mask=>({positions:[0,0,0,1,0,0,0,1,0],indices:[0,1,2],normals:[0,0,1,0,0,1,0,0,1],
+  const meshes=masks.map((mask,i)=>({doubleSided:i%2===1,positions:[0,0,0,1,0,0,0,1,0],indices:[0,1,2],normals:[0,0,1,0,0,1,0,0,1],
    uvs:[0.25,0.25,0.75,0.25,0.25,0.75],uvs1:[0.75,0.25,0.75,0.75,0.25,0.25],color:[1,1,1,1],emission:[1,1,1,1],
    ...Object.fromEntries(slots.map((name,i)=>[name+'Texture',{texCoord:(mask>>i)&1,width:2,height:1,data:pixels}]))}));
   const materials=createWavefrontGpuMaterialSource(meshes),source=createWavefrontGpuMeshSource(meshes,materials),triangles=packWavefrontTriangles(createWavefrontMeshAcceleration(meshes,materials).triangles);
@@ -31,7 +31,7 @@ export async function runDualUvProbe(signal){
     let m=sample_surface_material(t,uv,bary,vec3<f32>(0,0,1),vec3<f32>(0,0,1));let base=t.triangleId*20u;
     accumulation[base]=vec4<f32>(m.color.rgb,m.occlusion);
     let basis=build_triangle_tangent_basis(t,vec3<f32>(0,0,1));
-    accumulation[base+1u]=vec4<f32>(basis.tangent,0);accumulation[base+2u]=vec4<f32>(basis.bitangent,0);
+    accumulation[base+1u]=vec4<f32>(basis.tangent,f32(t.flags));accumulation[base+2u]=vec4<f32>(basis.bitangent,0);
     for(var slot=0u;slot<17u;slot++){accumulation[base+3u+slot]=vec4<f32>(material_uv(uv,second,u32(t.textureSettings.w),slot),0,0);}
    }`;
   const module=device.createShaderModule({code});await wait(assertShaderModuleCompiles(module,'dual-uv-canonical'));
@@ -61,6 +61,7 @@ export async function runDualUvProbe(signal){
    const base=i*stride*4,value=(mask&1?192:64)/255,srgb=value<=0.04045?value/12.92:Math.pow((value+0.055)/1.055,2.4);
    check(near(cpu[base],srgb)&&near(cpu[base+3],(mask&8?192:64)/255),'texture sampled wrong UV set');
    check(near(cpu[base+4],mask&4?0:1)&&near(cpu[base+5],mask&4?-1:0),'normal tangent uses wrong UV set');
+   check(cpu[base+7]===(i%2?0x40000000:0),'sidedness differs between builders');
    for(let slot=0;slot<17;slot++)check(near(cpu[base+(3+slot)*4],mask&(1<<slot)?0.625:0.375)&&near(cpu[base+(3+slot)*4+1],0.375),'slot selection mismatch');
   });
   return {passed:true,cases:masks.length,slots:17,cpuGpuPreparationEqual:true,triangleRecordBytes:triangles.buffer.byteLength/masks.length,vertexRecordBytes:source.vertices.recordBytes,adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture},scope:'analytic-material-UV-test-not-performance'};

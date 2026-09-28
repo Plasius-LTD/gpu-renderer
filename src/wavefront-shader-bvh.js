@@ -409,6 +409,18 @@ fn repair_shading_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>) -
   return normal;
 }
 
+fn valid_surface_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>, view: vec3<f32>) -> vec3<f32> {
+  let normal = repair_shading_normal(geometricNormal, shadingNormal);
+  let reflected = 2.0 * dot(normal, view) * normal - view;
+  let height = dot(reflected, geometricNormal);
+  let threshold = min(0.01, 0.9 * max(0.0, dot(view, geometricNormal)));
+  if (height >= threshold && dot(normal, view) > 0.0) { return normal; }
+  // Project the invalid reflection above geometry, then use its view bisector.
+  // Store this once; evaluation, sampling and PDFs must share the same normal.
+  let safeReflection = safe_normalize(reflected + (threshold - height) * geometricNormal, geometricNormal);
+  return safe_normalize(view + safeReflection, geometricNormal);
+}
+
 fn no_candidate() -> Candidate {
   return Candidate(
     0u,
@@ -458,6 +470,12 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
   let pvec = cross(ray.direction.xyz, edge2);
   let det = dot(edge1, pvec);
   if (abs(det) < 0.0000001) {
+    return no_candidate();
+  }
+  let mediumExit = triangle.mediumRefId != 0u &&
+    triangle.mediumRefId == medium_stack_current_id(ray) &&
+    (triangle.materialExtension.z > 0.001 || triangle.material.z < 0.999);
+  if (det < 0.0 && (triangle.flags & 0x40000000u) == 0u && !mediumExit) {
     return no_candidate();
   }
 

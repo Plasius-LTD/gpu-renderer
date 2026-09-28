@@ -211,6 +211,6 @@ test("pipeline compilation failures propagate without returning partial pipeline
   }
 });
 
-test("the Task 220 dual-UV corrected fixed shader remains canonical", () => {
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "96888b7e397ec7218d66651474bfff14925e39d2f5131c66d7a283428a601c3f");
+test("the Task 221 surface-corrected fixed shader remains canonical", () => {
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "713b38fa57558bf6748f09cc46b56ebe18bc9d66cfc839ff5fb2572931e0eb65");
 });

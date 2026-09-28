@@ -49,14 +49,13 @@ fn build_triangle_tangent_basis(
     return TangentBasis(tangent, bitangent);
   }
   let inverse = 1.0 / determinant;
-  let tangent = safe_normalize(
-    inverse * (edge1 * deltaUv2.y - edge2 * deltaUv1.y),
-    vec3<f32>(1.0, 0.0, 0.0)
-  );
-  let bitangent = safe_normalize(
-    inverse * (-edge1 * deltaUv2.x + edge2 * deltaUv1.x),
-    vec3<f32>(0.0, 0.0, 1.0)
-  );
+  let rawTangent = inverse * (edge1 * deltaUv2.y - edge2 * deltaUv1.y);
+  let rawBitangent = inverse * (-edge1 * deltaUv2.x + edge2 * deltaUv1.x);
+  let axis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(fallbackNormal.y) >= 0.999);
+  let fallback = safe_normalize(cross(axis, fallbackNormal), vec3<f32>(1.0, 0.0, 0.0));
+  let tangent = safe_normalize(rawTangent - fallbackNormal * dot(rawTangent, fallbackNormal), fallback);
+  let handedness = select(-1.0, 1.0, dot(cross(tangent, rawBitangent), fallbackNormal) >= 0.0);
+  let bitangent = handedness * safe_normalize(cross(fallbackNormal, tangent), vec3<f32>(0.0, 0.0, 1.0));
   return TangentBasis(tangent, bitangent);
 }
 
@@ -121,7 +120,10 @@ fn sample_surface_material(
   );
   let anisotropyTexel = sample_atlas(anisotropyAtlasTexture, triangle.anisotropyAtlas, material_uv(uv, secondaryUv, uvMask, 16u));
   let normalScale = clamp(triangle.textureSettings.x, 0.0, 1.0);
-  let tangentBasis = build_triangle_tangent_basis(triangle, geometricNormal);
+  let windingNormal = cross(triangle.v1.xyz - triangle.v0.xyz, triangle.v2.xyz - triangle.v0.xyz);
+  let side = select(-1.0, 1.0, dot(windingNormal, geometricNormal) >= 0.0);
+  let authoredNormal = shadingNormal * side;
+  let tangentBasis = build_triangle_tangent_basis(triangle, authoredNormal);
   let tangentNormal = safe_normalize(
     vec3<f32>(
       (normalTexel.x * 2.0 - 1.0) * normalScale,
@@ -133,9 +135,9 @@ fn sample_surface_material(
   let mappedNormal = safe_normalize(
     tangentBasis.tangent * tangentNormal.x +
       tangentBasis.bitangent * tangentNormal.y +
-      shadingNormal * tangentNormal.z,
-    shadingNormal
-  );
+      authoredNormal * tangentNormal.z,
+    authoredNormal
+  ) * side;
   let emission = vec4<f32>(
     max(
       triangle.emission.rgb *

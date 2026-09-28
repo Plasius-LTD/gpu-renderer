@@ -498,6 +498,8 @@ export interface WavefrontSceneObject {
 
 export interface WavefrontMeshInput {
   readonly id?: number;
+  /** Default false. Back faces require explicit opt-in, except occupied-medium exits. */
+  readonly doubleSided?: boolean;
   readonly positions: readonly number[] | Float32Array;
   readonly indices?: readonly number[] | Uint16Array | Uint32Array;
   readonly normals?: readonly number[] | Float32Array | null;
@@ -534,6 +536,7 @@ export interface WavefrontMeshInput {
   readonly extensions?: Record<string, Record<string, unknown>>;
   readonly material?: {
     readonly kind?: WavefrontMaterialKind;
+    readonly doubleSided?: boolean;
     readonly color?: RendererColor | readonly number[];
     readonly baseColor?: RendererColor | readonly number[];
     readonly emission?: readonly [number, number, number, number?] | readonly number[];

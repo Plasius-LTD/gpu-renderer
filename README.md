@@ -1,5 +1,19 @@
 # @plasius/gpu-renderer
 
+Meshes are single-sided by default: set `doubleSided: true` explicitly for
+two-sided sheets. glTF material sidedness is forwarded by gpu-shared. Rejected
+back faces are skipped during traversal, not treated as a black hit or bounce.
+An occupied matching transmissive medium can still resolve its exit boundary.
+Mesh/triangle flag bit 30 is reserved for this policy. Geometry record sizes and
+dispatch counts are unchanged (ADR0051).
+
+Normal maps use a handed orthonormal triangle-derived frame. Invalid reflected
+directions are repaired once at hit construction; all BSDF/PDF consumers use
+the same corrected normal. This bounded view-dependent approximation is not a
+claim of exact bump-map reciprocity, complete MikkTSpace support or noise-free
+rendering. The room fixture checks sidedness, medium exits, tangent frames and
+normal validity on physical WebGPU before capturing the unchanged sample plan.
+
 Meshes accept optional `uvs1` (TEXCOORD_1). Existing textures select `texCoord: 0`
 or `1` independently, including normal-map tangent construction. Invalid UV1
 references reject. CPU/GPU geometry records keep their existing byte sizes;

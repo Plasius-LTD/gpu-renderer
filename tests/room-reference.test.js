@@ -19,7 +19,7 @@ test("room capture reuses real transport, hashes input, validates counts and cle
   assert(js.includes(name),name);
  assert.match(js,/diagnostics:true/);assert.match(js,/sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount/);
  assert.match(js,/__room-manifest.json/);assert.match(js,/__room-model.glb/);
- for(const text of ['__reference-models.json','asset.sha256','runDualUvProbe','fovYDegrees','referenceModels'])assert(js.includes(text),text);
+ for(const text of ['__reference-models.json','asset.sha256','runDualUvProbe','runSurfaceValidityProbe','fovYDegrees','referenceModels'])assert(js.includes(text),text);
  assert.match(js,/room-eames-interior-reference/);assert.match(js,/failed/);
  assert.match(js,/addEventListener\("change",clearCapture\)/);
  assert.match(js,/addEventListener\("input",clearCapture\)/);

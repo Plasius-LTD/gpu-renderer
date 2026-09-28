@@ -14,10 +14,10 @@ test("primary terminal MIS is excluded by one shared assembled predicate", () =>
   assert.equal(terminals.match(/power_heuristic\(bsdfPdf, lightPdf\)/g)?.length, 2);
 });
 
-test("MIS eligibility remains pinned alongside the Task 220 UV-only correction", () => {
+test("MIS eligibility remains pinned alongside the Task 221 surface correction", () => {
   const prior = WAVEFRONT_COMPUTE_WGSL.replace(
     "// Camera visibility has no competing next-event sample. Preserve the existing\n// terminal MIS only for non-delta secondary rays.\nfn terminal_mis_enabled(ray: RayRecord) -> bool {\n  return ray.bounce > 0u && (ray.flags & RAY_FLAG_DELTA_SAMPLE) == 0u;\n}\n\n", "")
     .replaceAll("if (terminal_mis_enabled(ray)) {", "if ((ray.flags & RAY_FLAG_DELTA_SAMPLE) == 0u) {");
   assert.equal(createHash("sha256").update(prior).digest("hex"),
-    "b28cec34eb31cab28fcd4cc0346dec0d09d822a3918721de3bdf5601a240a7ef");
+    "c1df772a67a8ac4ba5799ee48a798bc433e51bb70c99335647c7eec17ca2acb2");
 });
