@@ -1,6 +1,7 @@
 # ADR 0053: Preserve cloth texture and layered response
 
-Status: experimental implementation, qualification pending. Task #224, Story
+Status: experimental implementation; bounded physical checks passed, broader
+material/performance qualification pending. Task #224, Story
 site#2268, Feature site#2114; coordinated with gpu-shared#135.
 
 Do not bake UV transforms into unchanged-size images. Preserve decoded texels;
@@ -43,4 +44,6 @@ Specification references:
 [KHR_texture_transform](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_texture_transform),
 [KHR_materials_sheen](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_sheen).
 See the [design and acceptance programme](../design/cloth-material-fidelity.md).
+Retained [physical/native evidence](../evidence/cloth-material-2026-09-29.md)
+does not establish complete material conformance or a performance improvement.
 Mipmap/ray-footprint filtering and authored tangents remain separate work.

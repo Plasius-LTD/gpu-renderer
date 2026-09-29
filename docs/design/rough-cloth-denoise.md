@@ -1,5 +1,11 @@
 # Rough cloth reconstruction
 
+Historical Task #222 design. Task #224 / ADR 0053 supersedes geometric-only
+cloth guides with mapped normals and removes the compulsory high-SPP smoothing
+floor. Independent default-off sheen is now implemented; see the
+[current material-fidelity design](cloth-material-fidelity.md). The evidence
+below describes the earlier stage, not current implementation guidance.
+
 Owning task: Plasius-LTD/gpu-renderer#222.
 
 Parent Epic: Plasius-LTD/plasius-ltd-site#2113; Feature #2114; Story #2256.
