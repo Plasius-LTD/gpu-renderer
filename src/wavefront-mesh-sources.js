@@ -18,6 +18,7 @@ import {
 } from "./wavefront-core.js";
 import { writeVec4 } from "./wavefront-binary.js";
 import { normalizeWavefrontMesh } from "./wavefront-scene-normalizers.js";
+import { createMaterialTextureMetadata, texturePaddingIndex } from "./wavefront-texture-transforms.js";
 
 function clampUnit(value) {
   return clamp(Number(value) || 0, 0, 1);
@@ -373,11 +374,11 @@ function buildTextureAtlas(textures, fallbackColor) {
   };
 
   const rects = placements.map((placement, entryIndex) => {
-    const { texture } = uniqueEntries[entryIndex];
+    const { texture, source } = uniqueEntries[entryIndex];
     for (let y = 0; y < placement.tileHeight; y += 1) {
       for (let x = 0; x < placement.tileWidth; x += 1) {
-        const sampleX = Math.max(0, Math.min(texture.width - 1, x - padding));
-        const sampleY = Math.max(0, Math.min(texture.height - 1, y - padding));
+        const sampleX = texturePaddingIndex(x - padding, texture.width, source, 0);
+        const sampleY = texturePaddingIndex(y - padding, texture.height, source, 1);
         const sourceOffset = (sampleY * texture.width + sampleX) * 4;
         writePixel(placement.x + x, placement.y + y, texture.data.slice(sourceOffset, sourceOffset + 4));
       }
@@ -515,6 +516,11 @@ export function createWavefrontGpuMaterialSource(meshes = []) {
     occlusionAtlas,
     emissiveAtlas,
     extensionAtlases,
+    textureMetadata: createMaterialTextureMetadata(normalized, {
+      baseColor: baseColorAtlas, metallicRoughness: metallicRoughnessAtlas,
+      normal: normalAtlas, occlusion: occlusionAtlas, emissive: emissiveAtlas,
+      ...extensionAtlases,
+    }),
   });
 }
 

@@ -22,7 +22,7 @@ import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continu
 import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false}={}) {
+export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false}={}) {
   check(!guidedDenoise||(native&&!pruningVariants),"Guided denoise requires native staged transport");
   check([0,1,2].includes(splitDepth)&&(!splitDepth||sampler==="stable-pattern"),"Splitting requires stable-pattern and depth 1 or 2");
   check(!splitDepth||!pruningVariants,"Splitting/pruning combination is not admitted");
@@ -74,6 +74,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     check(Number.isSafeInteger(maximum)&&maximum>=1&&maximum<=ADAPTIVE_MAX_SAMPLES,"Invalid sample ceiling");
     renderer = await wait(createWavefrontPathTracingComputeRenderer({ ...sceneConfig, canvas:native?.canvas??new OffscreenCanvas(width,height), width,height,tileSize:128,maxDepth,
       samplesPerPixel:native?maximum:ADAPTIVE_MAX_SAMPLES,denoise:false,deferredPathResolve:true,strictPhysicalLowSppLighting:true,
+      "renderer.materials.sheen.enabled":sheen,
       "renderer.sampling.owenSobol.enabled":sampler==="owen-sobol",
       "renderer.sampling.independentRandom.enabled":sampler==="independent-random",
       "renderer.sampling.fixedPattern.enabled":sampler==="fixed-pattern",

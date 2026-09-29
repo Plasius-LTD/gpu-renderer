@@ -59,7 +59,7 @@ export const COUNTER_TRANSPORT_ZERO_TERMINATION_OFFSET = 23;
 export const COUNTER_TRANSPORT_CHECKSUM_OFFSET = 24;
 export const COUNTER_PATH_FAILURE_OFFSET = 26;
 export const TRACE_STORAGE_BUFFER_BINDINGS = 10;
-export const TRACE_SAMPLED_TEXTURE_BINDINGS = 21;
+export const TRACE_SAMPLED_TEXTURE_BINDINGS = 22;
 export const BRDF_LUT_UPLOAD_CACHE = new Map();
 export const HIT_TYPE_SURFACE = 0;
 export const HIT_TYPE_EMISSIVE = 1;
@@ -355,10 +355,12 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   independentRandom: 1 << 9,
   fixedPattern: 1 << 10,
   stablePattern: 1 << 11,
+  sheen: 1 << 12,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
   const requested = Object.freeze({
+    sheen: readBooleanFeatureFlag(options, "renderer.materials.sheen.enabled", flags => flags?.renderer?.materials?.sheen?.enabled),
     stablePattern: readBooleanFeatureFlag(options, "renderer.sampling.stablePattern.enabled", (flags) => flags?.renderer?.sampling?.stablePattern?.enabled ?? flags?.renderer?.sampling?.stablePattern),
     fixedPattern: readBooleanFeatureFlag(
       options, "renderer.sampling.fixedPattern.enabled",
@@ -416,6 +418,7 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
     ),
   });
   const effective = Object.freeze({
+    sheen: requested.sheen,
     fixedPattern: requested.fixedPattern,
     stablePattern: requested.stablePattern,
     owenSobol: requested.owenSobol,

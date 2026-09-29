@@ -9,7 +9,7 @@ import { createWavefrontFrameEncoder } from "../src/wavefront-frame-encoder.js";
 import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
 
 test("fixed shader bytes and transport bodies stay canonical; pruning flags are independent",()=>{
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),"713b38fa57558bf6748f09cc46b56ebe18bc9d66cfc839ff5fb2572931e0eb65"); // Task 221 surface correctness, fixed and adaptive alike.
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),"125b295352a229f26634c68ba1deb675d7b57079fc7e409b81a535e703bf91e5"); // Task 224 material correctness, fixed and adaptive alike.
   assert.equal(createPrunedContinuationShader(),WAVEFRONT_COMPUTE_WGSL);
   const fused=createPrunedContinuationShader({fusedHits:true});
   assert.ok(fused.includes(WAVEFRONT_SURFACE_BODY_WGSL));
@@ -24,7 +24,7 @@ test("fixed shader bytes and transport bodies stay canonical; pruning flags are 
 test("final fused module reflects canonical records and excludes hit scratch from executed entry",async()=>{
   const source=createPrunedContinuationShader({fusedHits:true,zeroEmptyDispatch:true});
   const analyzed=analyzeWgslSource(source,"pruned");
-  const used=[0,1,4,5,6,8,9,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44];
+  const used=[0,1,4,5,6,8,9,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45];
   const bindings=analyzed.bindings.filter(b=>used.includes(b.binding)).map(b=>({...b,visibility:["compute"]}));
   const manifest=await reflectGpuInterface({interfaceId:"plasius.renderer.pruned-continuations",interfaceVersion:"1.0.0",modules:[{moduleId:"pruned",source}],
     pipelines:[{kind:"compute",pipelineId:"fused",layout:{bindGroups:[{group:0,entries:bindings}]},compute:{moduleId:"pruned",entryPoint:"intersectAndResolveActiveQueue",constants:{}}}],

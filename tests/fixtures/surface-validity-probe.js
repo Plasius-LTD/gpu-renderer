@@ -3,6 +3,8 @@ import {createWavefrontMeshAcceleration} from '/src/wavefront-mesh-sources.js';
 import {packWavefrontTriangles} from '/src/wavefront-packers.js';
 import {assertShaderModuleCompiles} from '/src/wavefront-runtime-support.js';
 import {CONFIG_BUFFER_BYTES} from '/src/wavefront-core.js';
+import {createMaterialTextureResource,createMaterialTextureMetadata} from '/src/wavefront-texture-transforms.js';
+import {createBrdfLutResource} from '/src/wavefront-gpu-resources.js';
 
 // Canonical assembled-WGSL correctness probe, not a performance benchmark.
 export async function runSurfaceValidityProbe(signal) {
@@ -16,6 +18,8 @@ export async function runSurfaceValidityProbe(signal) {
   device.pushErrorScope('validation');
   const meshes=Array.from({length:4},(_,i)=>({positions:[-1,-1,0,1,-1,0,0,1,0],indices:[0,1,2],uvs:i===3?[0,0,0,0,0,0]:i===2?[1,0,0,0,.5,1]:[0,0,1,0,.5,1],doubleSided:i===1,transmission:i===2?1:0,mediumRefId:i===2?7:0}));
   const records=createWavefrontMeshAcceleration(meshes).triangles.slice().sort((a,b)=>a.triangleId-b.triangleId);
+  const metadata=createMaterialTextureResource(device,{texture:GPUTextureUsage},createMaterialTextureMetadata(meshes));
+  const lut=createBrdfLutResource(device,{texture:GPUTextureUsage});owned.push(metadata.texture,lut.texture);
   const triangles=buffer(packWavefrontTriangles(records).buffer,GPUBufferUsage.STORAGE),output=buffer(4*8*16,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC);
   const module=device.createShaderModule({code:WAVEFRONT_COMPUTE_WGSL+`
    @compute @workgroup_size(1) fn surfaceProbe(@builtin(global_invocation_id) id:vec3<u32>){
@@ -51,7 +55,7 @@ export async function runSurfaceValidityProbe(signal) {
    }`});
   await wait(assertShaderModuleCompiles(module,'canonical-surface-validity'));
   const pipeline=await wait(device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'surfaceProbe'}}));
-  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:3,resource:{buffer:output}},{binding:5,resource:{buffer:buffer(new Uint8Array(CONFIG_BUFFER_BYTES),GPUBufferUsage.UNIFORM)}},{binding:8,resource:{buffer:triangles}}]});
+  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:3,resource:{buffer:output}},{binding:5,resource:{buffer:buffer(new Uint8Array(CONFIG_BUFFER_BYTES),GPUBufferUsage.UNIFORM)}},{binding:8,resource:{buffer:triangles}},{binding:29,resource:lut.view},{binding:30,resource:lut.sampler},{binding:45,resource:metadata.view}]});
   const staging=buffer(output.size,GPUBufferUsage.MAP_READ),encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();
   pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(4);pass.end();encoder.copyBufferToBuffer(output,0,staging,0,output.size);device.queue.submit([encoder.finish()]);
   await wait(staging.mapAsync(GPUMapMode.READ));const values=new Float32Array(staging.getMappedRange().slice(0));staging.unmap();

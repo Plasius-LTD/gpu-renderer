@@ -5,6 +5,7 @@ import {
   createGpuWorkerJobDiagnostics,
 } from "./wavefront-frame-runtime.js"
 import { dispatchWavefrontGpuAccelerationBuild } from "./wavefront-acceleration-builder.js";
+import { createMaterialTextureResource } from "./wavefront-texture-transforms.js";
 import {
   createDefaultWavefrontSceneObjects,
   createWavefrontBvhBuildLevels,
@@ -424,7 +425,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       hasImportanceData: environmentSamplingResource.hasImportanceData,
     }),
   });
-  const brdfLutResource = createBrdfLutResource(device, constants);
+  const brdfLutResource = createBrdfLutResource(device, constants, undefined, config.transportExperiments.effective.sheen);
   const baseColorAtlasResource = createAtlasTextureResource(
     device,
     constants,
@@ -489,6 +490,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     magFilter: "linear",
     minFilter: "linear",
   });
+  const materialTextureResource = createMaterialTextureResource(device, constants, config.gpuMaterialSource.textureMetadata);
 
   const {
     bindGroupLayouts: {
@@ -530,6 +532,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       environmentSamplingResource,
       mediumTextureResource,
       extensionAtlasResources,
+      materialTextureResource,
     });
   }
 
@@ -1122,10 +1125,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       frameConfigSlots: frameConfigSlotCount,
       gpuParallelism: lastGpuParallelism,
       memory: config.memory,
+      materialTextureMetadataBytes: materialTextureResource.allocatedBytes,
     });
   }
 
   function destroy() {
+    materialTextureResource.texture.destroy?.();
     frameTelemetryResources?.destroy?.();
     activeQueue.destroy?.();
     nextQueue.destroy?.();

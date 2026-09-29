@@ -438,7 +438,7 @@ async function captureRequestedWavefrontDeviceDescriptor(options = {}, adapterLi
       navigator: createFakeWavefrontNavigator(new FakeWavefrontDevice(), {
         limits: {
           maxStorageBuffersPerShaderStage: 10,
-          maxSampledTexturesPerShaderStage: 21,
+          maxSampledTexturesPerShaderStage: 22,
           maxStorageBufferBindingSize: 4_294_967_292,
           maxBufferSize: 4_294_967_292,
           ...adapterLimits,
@@ -611,7 +611,7 @@ test("trace bind-group layout covers every declared material extension texture",
   const layouts = createWavefrontBindGroupLayouts(new FakeWavefrontDevice(), gpuConstants);
   const bindings = layouts.trace.descriptor.entries.map(({ binding }) => binding);
 
-  assert.deepEqual(bindings.slice(-12), Array.from({ length: 12 }, (_, index) => 33 + index));
+  assert.deepEqual(bindings.slice(-13), Array.from({ length: 13 }, (_, index) => 33 + index));
   assert.equal(new Set(bindings).size, bindings.length);
 });
 
@@ -2657,7 +2657,7 @@ serialWebGpuTest("wavefront compute renderer rejects unavailable WebGPU setup pa
         width: 8,
         height: 8,
       }),
-      /requires maxSampledTexturesPerShaderStage>=21/
+      /requires maxSampledTexturesPerShaderStage>=22/
     );
   });
 });
@@ -2696,7 +2696,7 @@ serialWebGpuTest("wavefront renderer rejects unsupported large-scene limits befo
         navigator: createFakeWavefrontNavigator(new FakeWavefrontDevice(), {
           limits: {
             maxStorageBuffersPerShaderStage: 10,
-            maxSampledTexturesPerShaderStage: 21,
+            maxSampledTexturesPerShaderStage: 22,
             maxStorageBufferBindingSize: 150_000_000,
             maxBufferSize: 268_435_456,
           },
@@ -2869,7 +2869,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     );
     assert.equal(
       requestedDeviceDescriptor.requiredLimits.maxSampledTexturesPerShaderStage,
-      21
+      22
     );
     assert.equal(frame.frame, 1);
     assert.equal(frame.displayQuality, true);
@@ -2985,7 +2985,7 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
     assert.ok(device.renderPasses >= 1);
     assert.equal(device.drawCalls.includes(3), true);
     assert.ok(device.queue.submissions.length >= 1);
-    assert.equal(device.queue.textureWrites.length, 22);
+    assert.equal(device.queue.textureWrites.length, 23);
     assert.equal(device.queue.textureWrites[0].size.width, 2);
     assert.equal(device.queue.textureWrites[0].size.height, 1);
     assert.equal(device.queue.textureWrites[0].layout.bytesPerRow, 256);
@@ -3916,7 +3916,7 @@ serialWebGpuTest("wavefront memory evidence matches every persistent GPU buffer 
       navigator: createFakeWavefrontNavigator(device, {
         limits: {
           maxStorageBuffersPerShaderStage: 10,
-          maxSampledTexturesPerShaderStage: 21,
+          maxSampledTexturesPerShaderStage: 22,
           maxStorageBufferBindingSize: 134_217_728,
           maxBufferSize: 268_435_456,
           minUniformBufferOffsetAlignment: 256,

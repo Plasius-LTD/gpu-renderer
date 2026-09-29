@@ -24,12 +24,13 @@ fn capture_primary_guides(@builtin(global_invocation_id) id: vec3<u32>) {
   let cloth = any(hit.materialResponse.xyz > vec3<f32>(0.0));
   let eligible=hit.hitType == 0u && hit.materialKind == 0u && hit.material.x >= 0.5
     && hit.material.y < 0.05 && hit.material.z >= 0.999 && hit.materialExtension.z <= 0.001
-    && (!cloth || hit.material.x >= 0.7) && hit.materialResponse.w == 0.0;
+    && (!cloth || hit.material.x >= 0.7) && hit.materialResponse.w == 0.0
+    && (!cloth || (config.transportExperimentFlags & 4096u) == 0u || hit.specularColor.w >= 0.5);
   var normalDepth=vec4<f32>(0.0);
   if (eligible) {
-    // Fibre-scale normal variation must not reject every neighbouring cloth
-    // sample. Macro geometry and depth still protect seams and silhouettes.
-    let n=select(hit.shadingNormal.xyz, hit.geometricNormal.xyz, cloth);
+    // Mapped-normal structure is authored signal, not noise. Similar normals
+    // can still share samples; the filter must not flatten differently lit fibres.
+    let n=hit.shadingNormal.xyz;
     normalDepth=vec4<f32>(n * inverseSqrt(max(dot(n,n),0.000001)), log2(max(hit.distance,0.000001)));
   }
   textureStore(normalDepthOutput,pixel,normalDepth);
@@ -38,7 +39,8 @@ fn capture_primary_guides(@builtin(global_invocation_id) id: vec3<u32>) {
 `;
 
 export const GUIDED_FILTER_WGSL=toneMap+`
-struct FilterConfig { width:u32, height:u32, step:u32, filtered:u32 };
+struct FilterConfig { width:u32, height:u32, step:u32, filtered:u32,
+  strength:f32, minimumBlend:f32, padding:vec2<f32> };
 @group(0) @binding(0) var<uniform> settings: FilterConfig;
 @group(0) @binding(1) var filterInput: texture_2d<f32>;
 @group(0) @binding(2) var rawInput: texture_2d<f32>;
@@ -67,7 +69,7 @@ fn guided_value(pixel:vec2<i32>,filtered:vec4<f32>) -> vec4<f32> {
   let raw=textureLoad(rawInput,pixel,0);
   if (raw.w == 0.0 || !valid_pixel(pixel)) { return vec4<f32>(0.0); }
   if (settings.filtered == 0u || textureLoad(albedoGuide,pixel,0).w == 0.0) { return raw; }
-  let blend=clamp(2.0/sqrt(max(completed_count(pixel),1.0)),0.25,1.0);
+  let blend=clamp(settings.strength/sqrt(max(completed_count(pixel),1.0)),settings.minimumBlend,1.0);
   return vec4<f32>(mix(raw.xyz,filtered.xyz,blend),raw.w);
 }
 @compute @workgroup_size(8,8)

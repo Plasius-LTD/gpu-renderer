@@ -59,6 +59,7 @@ export function createWavefrontBindGroupLayouts(device, constants) {
       { binding: 42, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
       { binding: 43, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
       { binding: 44, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      { binding: 45, visibility: constants.shader.COMPUTE, texture: { sampleType: "unfilterable-float" } },
     ],
   });
   const acceleration = device.createBindGroupLayout({

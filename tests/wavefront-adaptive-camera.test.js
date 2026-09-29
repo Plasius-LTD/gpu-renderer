@@ -19,7 +19,7 @@ test("compacted camera rays reuse camera WGSL without changing fixed transport o
     assert.equal(shader.match(/fn sample_dimension_2d\(/g)?.length, 1);
   }
   // Task 220 explicitly corrects UV selection in both fixed/adaptive shaders.
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "713b38fa57558bf6748f09cc46b56ebe18bc9d66cfc839ff5fb2572931e0eb65"); // Task 221 surface correctness, fixed and adaptive alike.
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "125b295352a229f26634c68ba1deb675d7b57079fc7e409b81a535e703bf91e5"); // Task 224 material correctness, fixed and adaptive alike.
   const entry = ADAPTIVE_CAMERA_WGSL.slice(ADAPTIVE_CAMERA_WGSL.indexOf("fn generateCompactedCameraRays"));
   assert.match(entry, /activeQueue\[slot\] = make_ray\(localPixelId\);/);
   assert.doesNotMatch(entry, /sample_dimension_2d\(/);

@@ -3,12 +3,13 @@ import {createWavefrontGpuMeshSource,createWavefrontGpuMaterialSource,createWave
 import {packWavefrontTriangles} from '/src/wavefront-packers.js';
 import {CORE_UV_TEXTURES,EXTENSION_UV_TEXTURES} from '/src/wavefront-uvs.js';
 import {assertShaderModuleCompiles} from '/src/wavefront-runtime-support.js';
+import {createMaterialTextureResource} from '/src/wavefront-texture-transforms.js';
 
 // Small analytic probe only, never performance evidence. Execute canonical material
 // functions and GPU triangle preparation from the complete assembled renderer WGSL.
 export async function runDualUvProbe(signal){
  const adapter=await navigator.gpu.requestAdapter();if(adapter?.info.isFallbackAdapter!==false)throw Error('Physical GPU required for UV probe');
- const device=await adapter.requestDevice({requiredLimits:{maxSampledTexturesPerShaderStage:17}}),owned=[];
+ const device=await adapter.requestDevice({requiredLimits:{maxSampledTexturesPerShaderStage:18}}),owned=[];
  const check=(v,m)=>{if(!v)throw Error('UV probe: '+m);};
  const wait=async promise=>{let timer;try{const value=await Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('UV probe timeout')),30000))]);check(!signal.aborted,'cancelled');return value;}finally{clearTimeout(timer);}};
  const buffer=(data,usage)=>{const b=device.createBuffer({size:typeof data==='number'?data:data.byteLength,usage:usage|GPUBufferUsage.COPY_DST});owned.push(b);if(typeof data!=='number')device.queue.writeBuffer(b,0,data);return b;};
@@ -21,6 +22,7 @@ export async function runDualUvProbe(signal){
    uvs:[0.25,0.25,0.75,0.25,0.25,0.75],uvs1:[0.75,0.25,0.75,0.75,0.25,0.25],color:[1,1,1,1],emission:[1,1,1,1],
    ...Object.fromEntries(slots.map((name,i)=>[name+'Texture',{texCoord:(mask>>i)&1,width:2,height:1,data:pixels}]))}));
   const materials=createWavefrontGpuMaterialSource(meshes),source=createWavefrontGpuMeshSource(meshes,materials),triangles=packWavefrontTriangles(createWavefrontMeshAcceleration(meshes,materials).triangles);
+  const metadata=createMaterialTextureResource(device,{texture:GPUTextureUsage},materials.textureMetadata);owned.push(metadata.texture);
   // Original triangle IDs survive CPU BVH ordering; the probe writes in that order.
   const stride=20,output=buffer(masks.length*stride*16,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),triangleBuffer=buffer(triangles.buffer,GPUBufferUsage.STORAGE);
   const code=WAVEFRONT_COMPUTE_WGSL+`
@@ -40,6 +42,8 @@ export async function runDualUvProbe(signal){
   const atlas=slots.map((name,i)=>i<5?materials[name+'Atlas']:materials.extensionAtlases[name]);
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[
    {binding:3,resource:{buffer:output}},{binding:8,resource:{buffer:triangleBuffer}},
+   {binding:5,resource:{buffer:buffer(new Uint8Array(320),GPUBufferUsage.UNIFORM)}},
+   {binding:45,resource:metadata.view},
    ...atlas.map((a,i)=>({binding:bindings[i],resource:texture(a)})),
    {binding:28,resource:device.createSampler({minFilter:'nearest',magFilter:'nearest'})}]});
   const read=async()=>{const staging=buffer(output.size,GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST),e=device.createCommandEncoder();e.copyBufferToBuffer(output,0,staging,0,output.size);device.queue.submit([e.finish()]);await wait(staging.mapAsync(GPUMapMode.READ));const f=new Float32Array(staging.getMappedRange().slice(0));staging.unmap();return f;};

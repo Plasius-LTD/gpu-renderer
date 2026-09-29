@@ -63,7 +63,7 @@ export function packWavefrontSceneObjects(sceneObjects, capacity = sceneObjects.
       object.specularColor[0] ?? 1,
       object.specularColor[1] ?? 1,
       object.specularColor[2] ?? 1,
-      1,
+      object.materialExtensions?.sheenRoughness ?? 0,
     ]);
   });
 

@@ -6,12 +6,13 @@ export function createClothProbe() {
  for(let pixel=0;pixel<count;pixel++){
   const x=pixel%width,y=Math.floor(pixel/width),slot=count-pixel-1,h=slot*60,o=pixel*4;
   const color=y>=64&&y<96?[.3,.3,.3]:[(x%2?76:90)/255,(x%2?28:36)/255,0];
-  const light=x<64?2:4,noise=y>=32&&y<64?(((Math.imul(pixel+1,1664525)+1013904223)>>>8)%101/100-.5):0;
+  const light=(x<64?2:4)*(y>=16&&y<32?(x%2?1.25:.75):1),noise=y>=32&&y<64?(((Math.imul(pixel+1,1664525)+1013904223)>>>8)%101/100-.5):0;
   const value=y>=64&&y<96?[32,24,18]:color.map((v,c)=>c===2?0.02:Math.max(v,.1)*light);
   truth.set([...value,1],o);raw.set([...value.map(v=>v*(1+noise)),1],o);words[pixel]=1|(1<<9);
+  if(y>=16&&y<32)words[pixel]=256|(256<<9); // real normal-driven signal at high fidelity
   hitWords[h+1]=pixel;hits[h+12]=x<64?1:4;
   hits.set(x<64?[0,0,1,0]:[1,0,0,0],h+20);
-  hits.set([x%2?.8:-.8,0,.6,0],h+24); // deliberately discontinuous fibre normal
+  hits.set(y>=16&&y<32?[0,x%2?.8:-.8,.6,0]:[x%2?.8:-.8,0,.6,0],h+24);
   hits.set([...color,1],h+36);hits.set([.8,0,1,1.5],h+44);hits.set([1,.329,.1,0],h+48);
   if(y>=96){
    // Protected sheen combinations: low roughness, metal, transparency,
@@ -33,26 +34,28 @@ export function createClothProbe() {
 }
 
 export function evaluateClothProbe(probe,output,guides,normals) {
- let inputError=0,outputError=0,textureRelativeError=0,constantError=0,protectedError=0,guideFailures=0,invalid=0;
+ let inputError=0,outputError=0,textureRelativeError=0,normalRelativeError=0,constantError=0,protectedError=0,guideFailures=0,invalid=0;
  for(let p=0;p<probe.width*probe.height;p++){
   const y=Math.floor(p/probe.width),x=p%probe.width,o=p*4;
   const eligible=y<96;
   if(Math.abs(guides[o+3]-(eligible?128/255:0))>0.001)guideFailures++;
-  if(eligible&&(Math.abs(normals[o+(x<64?2:0)]-1)>0.001))guideFailures++;
+  const normalAxis=y>=16&&y<32?1:0;
+  if(eligible&&(Math.abs(normals[o+normalAxis]-(x%2?.8:-.8))>.001||Math.abs(normals[o+2]-.6)>.001))guideFailures++;
   if(y>=96&&x<2){if(output[o+3]!==0)invalid++;continue;}
   for(let c=0;c<3;c++){
    const error=Math.abs(output[o+c]-probe.truth[o+c]);
    if(!Number.isFinite(error))throw Error('Nonfinite cloth result');
    // Exclude cross-band borders; include x=63/64 geometric boundary.
-   if(y>=10&&y<22)textureRelativeError=Math.max(textureRelativeError,error/Math.max(probe.truth[o+c],.01));
+   if(y>=8&&y<14)textureRelativeError=Math.max(textureRelativeError,error/Math.max(probe.truth[o+c],.01));
+   if(y>=22&&y<26)normalRelativeError=Math.max(normalRelativeError,error/Math.max(probe.truth[o+c],.01));
    if(y>=42&&y<54){inputError+=(probe.raw[o+c]-probe.truth[o+c])**2;outputError+=error**2;}
    if(y>=74&&y<86)constantError=Math.max(constantError,error);
    if(y>=96)protectedError=Math.max(protectedError,Math.abs(output[o+c]-probe.raw[o+c]));
   }
  }
  const rmseRatio=Math.sqrt(outputError/inputError);
- const result={textureRelativeError,constantError,protectedError,guideFailures,invalid,rmseRatio};
- if(textureRelativeError>.005||constantError>.001||protectedError>.002||guideFailures||invalid||!(rmseRatio<.65))throw Error('Cloth probe failed: '+JSON.stringify(result));
+ const result={textureRelativeError,normalRelativeError,constantError,protectedError,guideFailures,invalid,rmseRatio};
+ if(textureRelativeError>.005||normalRelativeError>.005||constantError>.001||protectedError>.002||guideFailures||invalid||!(rmseRatio<.65))throw Error('Cloth probe failed: '+JSON.stringify(result));
  return {passed:true,...result,scope:'synthetic-cloth-correctness-not-native-performance-or-convergence'};
 }
 

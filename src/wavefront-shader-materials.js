@@ -1,5 +1,7 @@
 import { WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL } from "./wavefront-primary-shared-shader.js";
+import { SHEEN_WGSL } from "./wavefront-sheen.js";
 export const WAVEFRONT_SHADER_MATERIALS_WGSL = `
+${SHEEN_WGSL}
 fn srgb_to_linear_channel(value: f32) -> f32 {
   if (value <= 0.04045) {
     return value / 12.92;
@@ -29,6 +31,35 @@ fn sample_atlas(textureRef: texture_2d<f32>, rect: vec4<f32>, uv: vec2<f32>) -> 
   return textureSampleLevel(textureRef, materialAtlasSampler, atlas_sample_uv(rect, uv), 0.0);
 }
 
+fn texture_affine_uv(uv: vec2<f32>, materialSlot: u32, slot: u32) -> vec2<f32> {
+  let row = i32(materialSlot);
+  let a = textureLoad(materialTextureMetadata, vec2<i32>(i32(1u + slot * 3u), row), 0);
+  let b = textureLoad(materialTextureMetadata, vec2<i32>(i32(2u + slot * 3u), row), 0);
+  return vec2<f32>(dot(a.xy, uv) + a.z, dot(b.xy, uv) + b.z);
+}
+
+fn texture_wrap(value: f32, mode: f32) -> f32 {
+  if (mode == 1.0) { return clamp(value, 0.0, 1.0); }
+  if (mode == 2.0) { return 1.0 - abs(fract(value * 0.5) * 2.0 - 1.0); }
+  return fract(value);
+}
+
+fn sample_material_atlas(textureRef: texture_2d<f32>, oldRect: vec4<f32>,
+  uv: vec2<f32>, materialSlot: u32, slot: u32, transformMask: u32) -> vec4<f32> {
+  var rect = oldRect;
+  // GPU-built triangles have no extension rectangles; both geometry paths use
+  // this same per-material record instead of duplicating extension state.
+  if (slot >= 5u) {
+    rect = textureLoad(materialTextureMetadata, vec2<i32>(i32(3u + slot * 3u), i32(materialSlot)), 0);
+  }
+  if ((transformMask & (1u << slot)) == 0u) { return sample_atlas(textureRef, rect, uv); }
+  let a = textureLoad(materialTextureMetadata, vec2<i32>(i32(1u + slot * 3u), i32(materialSlot)), 0);
+  let b = textureLoad(materialTextureMetadata, vec2<i32>(i32(2u + slot * 3u), i32(materialSlot)), 0);
+  let transformed = vec2<f32>(dot(a.xy, uv) + a.z, dot(b.xy, uv) + b.z);
+  let wrapped = vec2<f32>(texture_wrap(transformed.x, a.w), texture_wrap(transformed.y, b.w));
+  return textureSampleLevel(textureRef, materialAtlasSampler, rect.xy + wrapped * rect.zw, 0.0);
+}
+
 fn build_triangle_tangent_basis(
   triangle: TriangleRecord,
   fallbackNormal: vec3<f32>
@@ -36,9 +67,16 @@ fn build_triangle_tangent_basis(
   let edge1 = triangle.v1.xyz - triangle.v0.xyz;
   let edge2 = triangle.v2.xyz - triangle.v0.xyz;
   let secondary = (u32(triangle.textureSettings.w) & 4u) != 0u;
-  let uv0 = select(triangle.uv0uv1.xy, vec2<f32>(triangle.v0.w, triangle.n0.w), secondary);
-  let uv1 = select(triangle.uv0uv1.zw, vec2<f32>(triangle.v1.w, triangle.n1.w), secondary);
-  let uv2 = select(triangle.uv2Pad.xy, vec2<f32>(triangle.v2.w, triangle.n2.w), secondary);
+  var uv0 = select(triangle.uv0uv1.xy, vec2<f32>(triangle.v0.w, triangle.n0.w), secondary);
+  var uv1 = select(triangle.uv0uv1.zw, vec2<f32>(triangle.v1.w, triangle.n1.w), secondary);
+  var uv2 = select(triangle.uv2Pad.xy, vec2<f32>(triangle.v2.w, triangle.n2.w), secondary);
+  let transformMask = u32(textureLoad(materialTextureMetadata, vec2<i32>(0, i32(triangle.materialSlot)), 0).x);
+  if ((transformMask & 4u) != 0u) {
+    // Unwrapped coordinates: wrapping before derivatives destroys seam tangents.
+    uv0 = texture_affine_uv(uv0, triangle.materialSlot, 2u);
+    uv1 = texture_affine_uv(uv1, triangle.materialSlot, 2u);
+    uv2 = texture_affine_uv(uv2, triangle.materialSlot, 2u);
+  }
   let deltaUv1 = uv1 - uv0;
   let deltaUv2 = uv2 - uv0;
   let determinant = deltaUv1.x * deltaUv2.y - deltaUv1.y * deltaUv2.x;
@@ -74,51 +112,47 @@ fn sample_surface_material(
     vec2<f32>(triangle.v1.w, triangle.n1.w) * barycentric.y +
     vec2<f32>(triangle.v2.w, triangle.n2.w) * barycentric.z;
   let uvMask = u32(triangle.textureSettings.w);
-  let baseColorTexel = sample_atlas(baseColorAtlasTexture, triangle.baseColorAtlas, material_uv(uv, secondaryUv, uvMask, 0u));
+  let textureMetadata = textureLoad(materialTextureMetadata, vec2<i32>(0, i32(triangle.materialSlot)), 0);
+  let transformMask = u32(textureMetadata.x);
+  let baseColorTexel = sample_material_atlas(baseColorAtlasTexture, triangle.baseColorAtlas, material_uv(uv, secondaryUv, uvMask, 0u), triangle.materialSlot, 0u, transformMask);
   let baseColor = vec4<f32>(
     clamp(triangle.color.rgb * srgb_to_linear_vec3(baseColorTexel.rgb), vec3<f32>(0.0), vec3<f32>(1.0)),
     clamp(triangle.color.a * baseColorTexel.a, 0.0, 1.0)
   );
-  let metallicRoughnessTexel = sample_atlas(
+  let metallicRoughnessTexel = sample_material_atlas(
     metallicRoughnessAtlasTexture,
     triangle.metallicRoughnessAtlas,
-    material_uv(uv, secondaryUv, uvMask, 1u)
-  );
-  let normalTexel = sample_atlas(normalAtlasTexture, triangle.normalAtlas, material_uv(uv, secondaryUv, uvMask, 2u));
-  let occlusionTexel = sample_atlas(occlusionAtlasTexture, triangle.occlusionAtlas, material_uv(uv, secondaryUv, uvMask, 3u));
-  let emissiveTexel = sample_atlas(emissiveAtlasTexture, triangle.emissiveAtlas, material_uv(uv, secondaryUv, uvMask, 4u));
-  let clearcoatTexel = sample_atlas(clearcoatAtlasTexture, triangle.clearcoatAtlas, material_uv(uv, secondaryUv, uvMask, 5u));
-  let clearcoatRoughnessTexel = sample_atlas(
+    material_uv(uv, secondaryUv, uvMask, 1u), triangle.materialSlot, 1u, transformMask);
+  let normalTexel = sample_material_atlas(normalAtlasTexture, triangle.normalAtlas, material_uv(uv, secondaryUv, uvMask, 2u), triangle.materialSlot, 2u, transformMask);
+  let occlusionTexel = sample_material_atlas(occlusionAtlasTexture, triangle.occlusionAtlas, material_uv(uv, secondaryUv, uvMask, 3u), triangle.materialSlot, 3u, transformMask);
+  let emissiveTexel = sample_material_atlas(emissiveAtlasTexture, triangle.emissiveAtlas, material_uv(uv, secondaryUv, uvMask, 4u), triangle.materialSlot, 4u, transformMask);
+  let clearcoatTexel = sample_material_atlas(clearcoatAtlasTexture, triangle.clearcoatAtlas, material_uv(uv, secondaryUv, uvMask, 5u), triangle.materialSlot, 5u, transformMask);
+  let clearcoatRoughnessTexel = sample_material_atlas(
     clearcoatRoughnessAtlasTexture,
     triangle.clearcoatRoughnessAtlas,
-    material_uv(uv, secondaryUv, uvMask, 6u)
-  );
-  let clearcoatNormalTexel = sample_atlas(
+    material_uv(uv, secondaryUv, uvMask, 6u), triangle.materialSlot, 6u, transformMask);
+  let clearcoatNormalTexel = sample_material_atlas(
     clearcoatNormalAtlasTexture,
     triangle.clearcoatNormalAtlas,
-    material_uv(uv, secondaryUv, uvMask, 7u)
-  );
-  let transmissionTexel = sample_atlas(transmissionAtlasTexture, triangle.transmissionAtlas, material_uv(uv, secondaryUv, uvMask, 8u));
-  let thicknessTexel = sample_atlas(thicknessAtlasTexture, triangle.thicknessAtlas, material_uv(uv, secondaryUv, uvMask, 9u));
-  let sheenColorTexel = sample_atlas(sheenColorAtlasTexture, triangle.sheenColorAtlas, material_uv(uv, secondaryUv, uvMask, 10u));
-  let sheenRoughnessTexel = sample_atlas(
+    material_uv(uv, secondaryUv, uvMask, 7u), triangle.materialSlot, 7u, transformMask);
+  let transmissionTexel = sample_material_atlas(transmissionAtlasTexture, triangle.transmissionAtlas, material_uv(uv, secondaryUv, uvMask, 8u), triangle.materialSlot, 8u, transformMask);
+  let thicknessTexel = sample_material_atlas(thicknessAtlasTexture, triangle.thicknessAtlas, material_uv(uv, secondaryUv, uvMask, 9u), triangle.materialSlot, 9u, transformMask);
+  let sheenColorTexel = sample_material_atlas(sheenColorAtlasTexture, triangle.sheenColorAtlas, material_uv(uv, secondaryUv, uvMask, 10u), triangle.materialSlot, 10u, transformMask);
+  let sheenRoughnessTexel = sample_material_atlas(
     sheenRoughnessAtlasTexture,
     triangle.sheenRoughnessAtlas,
-    material_uv(uv, secondaryUv, uvMask, 11u)
-  );
-  let specularTexel = sample_atlas(specularAtlasTexture, triangle.specularAtlas, material_uv(uv, secondaryUv, uvMask, 12u));
-  let specularColorTexel = sample_atlas(
+    material_uv(uv, secondaryUv, uvMask, 11u), triangle.materialSlot, 11u, transformMask);
+  let specularTexel = sample_material_atlas(specularAtlasTexture, triangle.specularAtlas, material_uv(uv, secondaryUv, uvMask, 12u), triangle.materialSlot, 12u, transformMask);
+  let specularColorTexel = sample_material_atlas(
     specularColorAtlasTexture,
     triangle.specularColorAtlas,
-    material_uv(uv, secondaryUv, uvMask, 13u)
-  );
-  let iridescenceTexel = sample_atlas(iridescenceAtlasTexture, triangle.iridescenceAtlas, material_uv(uv, secondaryUv, uvMask, 14u));
-  let iridescenceThicknessTexel = sample_atlas(
+    material_uv(uv, secondaryUv, uvMask, 13u), triangle.materialSlot, 13u, transformMask);
+  let iridescenceTexel = sample_material_atlas(iridescenceAtlasTexture, triangle.iridescenceAtlas, material_uv(uv, secondaryUv, uvMask, 14u), triangle.materialSlot, 14u, transformMask);
+  let iridescenceThicknessTexel = sample_material_atlas(
     iridescenceThicknessAtlasTexture,
     triangle.iridescenceThicknessAtlas,
-    material_uv(uv, secondaryUv, uvMask, 15u)
-  );
-  let anisotropyTexel = sample_atlas(anisotropyAtlasTexture, triangle.anisotropyAtlas, material_uv(uv, secondaryUv, uvMask, 16u));
+    material_uv(uv, secondaryUv, uvMask, 15u), triangle.materialSlot, 15u, transformMask);
+  let anisotropyTexel = sample_material_atlas(anisotropyAtlasTexture, triangle.anisotropyAtlas, material_uv(uv, secondaryUv, uvMask, 16u), triangle.materialSlot, 16u, transformMask);
   let normalScale = clamp(triangle.textureSettings.x, 0.0, 1.0);
   let windingNormal = cross(triangle.v1.xyz - triangle.v0.xyz, triangle.v2.xyz - triangle.v0.xyz);
   let side = select(-1.0, 1.0, dot(windingNormal, geometricNormal) >= 0.0);
@@ -157,18 +191,18 @@ fn sample_surface_material(
       clamp(triangle.material.w, 1.0, 3.0)
     ),
     vec4<f32>(
-      triangle.materialResponse.rgb * sheenColorTexel.rgb,
+      triangle.materialResponse.rgb * select(sheenColorTexel.rgb, srgb_to_linear_vec3(sheenColorTexel.rgb), sheen_enabled()),
       triangle.materialResponse.w * clearcoatTexel.r * clearcoatNormalTexel.r
     ),
     vec4<f32>(
-      triangle.materialExtension.x * clearcoatRoughnessTexel.r * (0.5 + 0.5 * sheenRoughnessTexel.r),
+      triangle.materialExtension.x * clearcoatRoughnessTexel.r * select(0.5 + 0.5 * sheenRoughnessTexel.r, 1.0, sheen_enabled()),
       triangle.materialExtension.y * specularTexel.r * (0.5 + 0.5 * iridescenceTexel.r),
       triangle.materialExtension.z * transmissionTexel.r,
       triangle.materialExtension.w * thicknessTexel.r * (0.5 + 0.5 * iridescenceThicknessTexel.r)
     ),
     vec4<f32>(
       triangle.specularColor.rgb * specularColorTexel.rgb * (0.5 + 0.5 * anisotropyTexel.r),
-      triangle.specularColor.a
+      textureMetadata.y * sheenRoughnessTexel.a
     ),
     repair_shading_normal(geometricNormal, mappedNormal),
     clamp(

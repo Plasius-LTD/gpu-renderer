@@ -325,6 +325,14 @@ export interface CreateWavefrontAdaptiveSamplingLevelsResult {
 
 export interface WavefrontTextureSampleInput {
   readonly texCoord?: number;
+  /** UV transform applied at sampling time, without resampling source pixels. */
+  readonly transform?: {
+    readonly offset?: readonly [number, number];
+    readonly scale?: readonly [number, number];
+    readonly rotation?: number;
+  };
+  readonly wrapS?: 10497 | 33071 | 33648;
+  readonly wrapT?: 10497 | 33071 | 33648;
   readonly scale?: number;
   readonly strength?: number;
   readonly width: number;
@@ -764,6 +772,7 @@ export interface WavefrontGpuTextureAtlasSource {
 }
 
 export interface WavefrontGpuMaterialSource {
+  readonly textureMetadata: Readonly<{width: number; height: number; data: Float32Array}>;
   readonly buffer: ArrayBuffer;
   readonly count: number;
   readonly recordBytes: number;
@@ -926,6 +935,7 @@ export interface WavefrontRoughBounceSplittingConfig {
 }
 
 export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.materials.sheen.enabled"?: boolean;
   readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
   readonly "renderer.sampling.owenSobol.enabled"?: boolean;
   readonly "renderer.sampling.independentRandom.enabled"?: boolean;
@@ -941,6 +951,7 @@ export interface WavefrontRendererFeatureFlags {
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly enabled?: {
+    readonly "renderer.materials.sheen.enabled"?: boolean;
     readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
     readonly "renderer.sampling.owenSobol.enabled"?: boolean;
     readonly "renderer.sampling.independentRandom.enabled"?: boolean;
@@ -957,6 +968,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly flags?: {
+    readonly "renderer.materials.sheen.enabled"?: boolean;
     readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
     readonly "renderer.sampling.owenSobol.enabled"?: boolean;
     readonly "renderer.sampling.independentRandom.enabled"?: boolean;
@@ -973,6 +985,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly renderer?: {
+    readonly materials?: { readonly sheen?: { readonly enabled?: boolean } };
     readonly sampling?: {
       readonly owenSobol?: boolean | { readonly enabled?: boolean };
       readonly independentRandom?: boolean | { readonly enabled?: boolean };
@@ -999,6 +1012,7 @@ export interface WavefrontRendererFeatureFlags {
 }
 
 export interface WavefrontTransportExperimentFlags {
+  readonly sheen?: boolean;
   /** Default off; optional for structural compatibility with older snapshots. */
   readonly owenSobol?: boolean;
   readonly independentRandom?: boolean;
@@ -1116,6 +1130,7 @@ export interface WavefrontGpuParallelismDiagnostics {
 }
 
 export interface CreateWavefrontPathTracingComputeRendererOptions {
+  readonly "renderer.materials.sheen.enabled"?: boolean;
   readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
   readonly roughBounceSplitting?: {readonly splitDepth?: 1 | 2; readonly maximumAdditionalBytes?: number};
   readonly canvas?: HTMLCanvasElement | string;
@@ -1280,6 +1295,7 @@ export interface WavefrontPathTracingComputeRenderer {
     accelerationBuilt: boolean;
     accelerationBuildCount: number;
     frameConfigSlots: number;
+    materialTextureMetadataBytes: number;
     gpuParallelism: WavefrontGpuParallelismDiagnostics;
     memory: WavefrontPathTracingMemoryEstimate;
   }>;

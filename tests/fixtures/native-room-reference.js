@@ -25,6 +25,7 @@ for(const control of controls){
  control.addEventListener("input",clearCapture);
 }
 reset.addEventListener("click",()=>{
+ el('sheen').value='off';
  el('central-reference').value=ROOM_DEFAULTS.centralReference;
  el('fov').value=ROOM_DEFAULTS.fovYDegrees;el('models').value='all';
  el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
@@ -71,13 +72,15 @@ run.addEventListener("click",async()=>{
  const settings=roomReferenceSettings(el("resolution").value,el("sampler").value,el('spp').valueAsNumber),view=el("view").value;
  const splitDepth=Number(el("splitting").value);
  const guidedDenoise=el('denoise').value==='guided';
+ const sheen=el('sheen').value==='on';
  if(splitDepth&&settings.sampler!=="stable-pattern"){status.textContent="Select the stable sampler to test splitting.";return;}
  const placement={x:el("chair-x").valueAsNumber,z:el("chair-z").valueAsNumber,yaw:el("chair-yaw").valueAsNumber};
  clearCapture();run.disabled=true;reset.disabled=true;controls.forEach(c=>c.disabled=true);cancel.disabled=false;
  cancellation=new AbortController();let runner;
  const receipt={schemaVersion:1,scope:"room-eames-interior-reference",status:"running",settings,splitDepth,view,placement,timestamp:new Date().toISOString(),
   browser:{userAgent:navigator.userAgent,platform:navigator.platform},failures:[],qualification:"visual-reference-only-not-performance-or-convergence"};
- const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
+ receipt.materialFlags={'renderer.materials.sheen.enabled':sheen};
+ const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
  const save=async(name,dataUrl,payload)=>{
   const response=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},signal:AbortSignal.timeout(30000),
    body:JSON.stringify({path:`output/playwright/eames-environments/${receipt.provenance.captureId}/${name}.png`,dataUrl,result:payload})});
@@ -91,12 +94,14 @@ run.addEventListener("click",async()=>{
   const {runDualUvProbe}=await import('./dual-uv-probe.js');receipt.uvProbe=await runDualUvProbe(cancellation.signal);
   status.textContent='Checking sidedness, medium exits and normal-map validity';
   const {runSurfaceValidityProbe}=await import('./surface-validity-probe.js');receipt.surfaceProbe=await runSurfaceValidityProbe(cancellation.signal);
+  status.textContent='Checking transformed textures, sheen and mapped-normal cloth detail';
+  const {runMaterialFidelityProbe}=await import('./material-fidelity-probe.js');receipt.materialProbe=await runMaterialFidelityProbe(cancellation.signal);
   const source=await loadAssets(receipt,cancellation.signal),composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});receipt.scene=composed.evidence;
   check(!cancellation.signal.aborted,"Capture cancelled");
   const plan=createRadialSamplingPlan(settings.width,settings.height,settings.maximumSpp);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
-  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
+  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===settings.maxDepth&&runner.sceneSnapshot.samplesPerPixel===settings.maximumSpp&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;
   const frame=await runner.run("radial",{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,onProgress:p=>{
@@ -138,7 +143,7 @@ run.addEventListener("click",async()=>{
   cancellation.abort();run.disabled=false;reset.disabled=false;controls.forEach(c=>c.disabled=false);cancel.disabled=true;
   status.textContent=receipt.status==="failed"?`Failed: ${receipt.failures.join("; ")}`:`Captured room + Eames · ${settings.width} × ${settings.height} · ${settings.maximumSpp} SPP ceiling · ${receipt.frame.actualSamples.toLocaleString()} camera samples · ${guidedDenoise?'guided denoise comparison':'raw'} · not quality-qualified`;
   result.textContent=JSON.stringify({status:receipt.status,settings,splitDepth,scene:receipt.scene,admission:receipt.admission,actualSamples:receipt.frame?.actualSamples,
-   guidedDenoise:receipt.guidedDenoise,denoiseProbe:receipt.denoiseProbe,uvProbe:receipt.uvProbe,surfaceProbe:receipt.surfaceProbe,linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
+   materialFlags:receipt.materialFlags,materialProbe:receipt.materialProbe,guidedDenoise:receipt.guidedDenoise,denoiseProbe:receipt.denoiseProbe,uvProbe:receipt.uvProbe,surfaceProbe:receipt.surfaceProbe,linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
  }
 });
 

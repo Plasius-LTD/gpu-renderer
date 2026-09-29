@@ -48,3 +48,4 @@
 - [ADR 0045: Progressive sampling experiment](adr-0045-progressive-sampling-experiment.md)
 - [ADR 0049: Guided spatial denoising](adr-0049-guided-spatial-denoise.md)
 - [ADR 0051: Surface sidedness and normal validity](adr-0051-surface-sidedness-and-normal-validity.md)
+- [ADR 0053: Cloth material fidelity](adr-0053-cloth-material-fidelity.md)

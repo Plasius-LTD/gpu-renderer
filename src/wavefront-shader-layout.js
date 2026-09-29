@@ -266,6 +266,7 @@ struct EnvironmentPortal {
 @group(0) @binding(42) var iridescenceAtlasTexture: texture_2d<f32>;
 @group(0) @binding(43) var iridescenceThicknessAtlasTexture: texture_2d<f32>;
 @group(0) @binding(44) var anisotropyAtlasTexture: texture_2d<f32>;
+@group(0) @binding(45) var materialTextureMetadata: texture_2d<f32>;
 
 ${WAVEFRONT_SAMPLE_SEQUENCE_WGSL}
 

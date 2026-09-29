@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve per-slot texture transforms without downsampling source detail; add
+  independently flagged Charlie sheen and mapped-normal/high-SPP cloth
+  reconstruction. Add material/energy/guide regression probes (#224).
+
 - Add a centre-reference control for local sofa/spacesuit material inspection,
   forwarding layout, reset and capture identity without changing transport (#220).
 

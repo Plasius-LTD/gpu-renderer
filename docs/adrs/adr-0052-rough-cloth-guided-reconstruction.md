@@ -2,6 +2,10 @@
 
 Status: experimental; 2026-09-28. Task #222, Story site #2256, Feature #2114.
 
+The geometric-normal-only guide and compulsory blend floor are superseded by
+[ADR0053](adr-0053-cloth-material-fidelity.md). The text below records the original
+experiment, not current implementation guidance.
+
 Extend ADR 0049's opt-in spatial postprocessor with a separate rough-cloth guide
 class. Sheen colour alone previously excluded velvet completely. Restrict the
 new class to uncoated, opaque, nonmetallic base roughness >= 0.7. Smooth and

@@ -9,7 +9,9 @@ export function resolveGuidedDenoise(options={}) {
   if(![width,height,cap].every(n=>Number.isSafeInteger(n)&&n>0))throw new RangeError('Invalid guided denoise dimensions/allocation cap.');
   const textureBytes=width*height*(options.scratchView?20:28),additionalBytes=textureBytes+1024;
   if(!Number.isSafeInteger(additionalBytes)||additionalBytes>cap)throw new RangeError('Guided denoise allocation exceeds cap.');
-  return Object.freeze({enabled:true,width,height,textureBytes,uniformBytes:1024,additionalBytes,maximumAdditionalBytes:cap,passes:3});
+  const strength=options.guidedSpatialDenoise?.strength??2,minimumBlend=options.guidedSpatialDenoise?.minimumBlend??0;
+  if(!Number.isFinite(strength)||strength<0||!Number.isFinite(minimumBlend)||minimumBlend<0||minimumBlend>1)throw new RangeError('Invalid guided denoise strength/blend.');
+  return Object.freeze({enabled:true,width,height,textureBytes,uniformBytes:1024,additionalBytes,maximumAdditionalBytes:cap,passes:3,strength,minimumBlend});
 }
 
 // Internal coordinator API. Own only added resources; caller owns raw radiance,
@@ -29,15 +31,17 @@ export async function createGuidedSpatialDenoiser(device,constants,options={}) {
     const uniforms=device.createBuffer({label:'guided-denoise.uniforms',size:1024,usage:constants.buffer.UNIFORM|constants.buffer.COPY_DST});owned.push(uniforms);
     const payload=new Uint32Array(256);
     for(const [slot,step] of [1,2,4,0].entries())payload.set([width,height,step,slot===3?0:1],slot*64);
+    const floats=new Float32Array(payload.buffer);
+    for(let slot=0;slot<4;slot++)floats.set([memory.strength,memory.minimumBlend,0,0],slot*64+4);
     device.queue.writeBuffer(uniforms,0,payload);
     const stage=constants.shader.COMPUTE;
     const buffer=(binding,type,size,dynamic=false)=>({binding,visibility:stage,buffer:{type,minBindingSize:size,...(dynamic?{hasDynamicOffset:true}:{})}});
     const sampled=binding=>({binding,visibility:stage,texture:{sampleType:'unfilterable-float'}});
     const storage=(binding,format)=>({binding,visibility:stage,storageTexture:{access:'write-only',format}});
     const captureLayout=device.createBindGroupLayout({entries:[buffer(0,'uniform',320,true),buffer(1,'read-only-storage',96),buffer(2,'read-only-storage',240),buffer(3,'storage',128),storage(4,'rgba16float'),storage(5,'rgba8unorm')]});
-    const common=[buffer(0,'uniform',16,true),sampled(1),sampled(2),sampled(3),sampled(4),buffer(5,'read-only-storage',width*height*4)];
+    const common=[buffer(0,'uniform',32,true),sampled(1),sampled(2),sampled(3),sampled(4),buffer(5,'read-only-storage',width*height*4)];
     const filterLayout=device.createBindGroupLayout({entries:[...common,storage(6,'rgba16float')]});
-    const resolveLayout=device.createBindGroupLayout({entries:[buffer(0,'uniform',16,true),sampled(1),sampled(2),buffer(5,'read-only-storage',width*height*4),storage(7,'rgba8unorm')]});
+    const resolveLayout=device.createBindGroupLayout({entries:[buffer(0,'uniform',32,true),sampled(1),sampled(2),buffer(5,'read-only-storage',width*height*4),storage(7,'rgba8unorm')]});
     const module=async(label,code)=>{const m=device.createShaderModule({label,code});await assertShaderModuleCompiles(m,label);return m;};
     const captureModule=await module('guided-capture',GUIDED_CAPTURE_WGSL),filterModule=await module('guided-filter',GUIDED_FILTER_WGSL);
     const pipeline=(layout,module,entryPoint)=>device.createComputePipelineAsync({label:entryPoint,layout:device.createPipelineLayout({bindGroupLayouts:[layout]}),compute:{module,entryPoint}});
@@ -48,7 +52,7 @@ export async function createGuidedSpatialDenoiser(device,constants,options={}) {
       {binding:0,resource:{buffer:options.frameBuffer,size:320}},{binding:1,resource:{buffer:options.rayBuffer}},
       {binding:2,resource:{buffer:options.hitBuffer}},{binding:3,resource:{buffer:options.counterBuffer}},
       {binding:4,resource:normalView},{binding:5,resource:albedoView}]});
-    const base=[{binding:0,resource:{buffer:uniforms,size:16}},{binding:2,resource:options.inputView},{binding:3,resource:normalView},{binding:4,resource:albedoView},{binding:5,resource:{buffer:options.pixelState}}];
+    const base=[{binding:0,resource:{buffer:uniforms,size:32}},{binding:2,resource:options.inputView},{binding:3,resource:normalView},{binding:4,resource:albedoView},{binding:5,resource:{buffer:options.pixelState}}];
     const filterGroups=[[options.inputView,scratchA],[scratchA,viewB],[viewB,scratchA]].map(([input,output])=>device.createBindGroup({layout:filterLayout,entries:[...base,{binding:1,resource:input},{binding:6,resource:output}]}));
     const resolveGroup=device.createBindGroup({layout:resolveLayout,entries:[...base.filter(e=>e.binding!==3&&e.binding!==4),{binding:1,resource:scratchA},{binding:7,resource:options.outputView}]});
     return Object.freeze({memory,normalTexture:normals,albedoTexture:albedo,filteredView:scratchA,

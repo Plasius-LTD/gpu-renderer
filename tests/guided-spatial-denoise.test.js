@@ -19,10 +19,11 @@ function mock(fail=false){
  return {device,allocations,commands,encoder};
 }
 const args={width:1920,height:1080,[flag]:true,inputView:{},outputView:{},scratchView:{},pixelState:{},frameBuffer:{},hitBuffer:{},rayBuffer:{},counterBuffer:{}};
-test('rough cloth has a separate geometric guide and bounded texture-preserving reconstruction',()=>{
+test('cloth keeps mapped normals and bounded texture-preserving reconstruction',()=>{
  assert.match(GUIDED_CAPTURE_WGSL,/let cloth = any\(hit\.materialResponse\.xyz > vec3<f32>\(0\.0\)\)/);
  assert.match(GUIDED_CAPTURE_WGSL,/!cloth \|\| hit\.material\.x >= 0\.7/);
- assert.match(GUIDED_CAPTURE_WGSL,/select\(hit\.shadingNormal\.xyz, hit\.geometricNormal\.xyz, cloth\)/);
+ assert.match(GUIDED_CAPTURE_WGSL,/let n=hit\.shadingNormal\.xyz/);
+ assert.doesNotMatch(GUIDED_FILTER_WGSL,/sqrt\(max\(completed_count\(pixel\),1\.0\)\)\),0\.25/);
  assert.match(GUIDED_CAPTURE_WGSL,/select\(1\.0, 0\.5, cloth\)/);
  assert.match(GUIDED_FILTER_WGSL,/abs\(a\.w-albedo\.w\) > 0\.1/);
  assert.match(GUIDED_FILTER_WGSL,/max\(albedo\.xyz,vec3<f32>\(0\.1\)\)/);
@@ -36,6 +37,9 @@ test('guided denoise is default off, validates native allocation before work, an
  for(const v of [{[flag]:true},{featureFlags:{[flag]:true}},{featureFlags:{enabled:{[flag]:true}}},{featureFlags:{flags:{[flag]:true}}},{featureFlags:{renderer:{denoise:{guidedSpatial:{enabled:true}}}}}])assert.equal(resolveGuidedDenoise({...args,...v}).enabled,true);
  assert.equal(resolveGuidedDenoise({...args,[flag]:false,featureFlags:{[flag]:true}}).enabled,false);
  assert.equal(resolveGuidedDenoise(args).additionalBytes,1920*1080*20+1024);
+ assert.equal(resolveGuidedDenoise(args).minimumBlend,0);
+ assert.equal(resolveGuidedDenoise({...args,guidedSpatialDenoise:{strength:1,minimumBlend:.05}}).strength,1);
+ for(const guidedSpatialDenoise of [{strength:-1},{strength:NaN},{minimumBlend:2},{minimumBlend:NaN}])assert.throws(()=>resolveGuidedDenoise({...args,guidedSpatialDenoise}));
  assert.equal(resolveGuidedDenoise({...args,width:3840,height:2160}).additionalBytes,3840*2160*20+1024);
  for(const v of [{width:0},{height:NaN},{width:1.5},{guidedSpatialDenoise:{maximumAdditionalBytes:1}},{guidedSpatialDenoise:{maximumAdditionalBytes:NaN}},{width:3840,height:2160,scratchView:null}])assert.throws(()=>resolveGuidedDenoise({...args,...v}));
  const m=mock();await assert.rejects(()=>createGuidedSpatialDenoiser(m.device,constants,{...args,width:9000}));assert.equal(m.allocations.length,0);
@@ -72,7 +76,7 @@ test('final assembled guided pipelines reflect canonical records and the exact r
   for(const [entryPoint,used] of entries)pipelines.push({kind:'compute',pipelineId:entryPoint,layout:{bindGroups:[{group:0,entries:bindings.filter(b=>used.includes(b.binding)).map(b=>({...b,visibility:['compute']}))}]},compute:{moduleId,entryPoint,constants:{}}});
  }
  const manifest=await reflectGpuInterface({interfaceId:'plasius.renderer.guided-spatial',interfaceVersion:'1.0.0',modules:sources.map(([moduleId,source])=>({moduleId,source})),pipelines,modelFacingRecordNames:['FrameConfig','HitRecord','RayRecord','FilterConfig'],modelFacingBindings:[],semantics:[]});
- for(const [name,bytes] of [['FrameConfig',320],['HitRecord',240],['RayRecord',96],['FilterConfig',16]])assert.equal(manifest.records.find(r=>r.name===name).byteSize,bytes);
+ for(const [name,bytes] of [['FrameConfig',320],['HitRecord',240],['RayRecord',96],['FilterConfig',32]])assert.equal(manifest.records.find(r=>r.name===name).byteSize,bytes);
  assert.equal(manifest.entryPoints.length,3);
 });
 test('primary guide capture runs between intersection and surface, once at sample zero only; off order unchanged',()=>{
