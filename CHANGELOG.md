@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.46] - 2026-09-29
+
 - Add native showcase surface drawing with filtered shadows, HDR planar water
   reflections, analytic waves, four-sample antialiasing and bounded resource ownership.
 - Add an optional multipass `encodeFrame` hook to the existing renderer lifecycle.
@@ -1134,3 +1148,4 @@ All notable changes to this project will be documented in this file.
 [0.2.43]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.43
 [0.2.44]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.44
 [0.2.45]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.45
+[0.2.46]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.46
