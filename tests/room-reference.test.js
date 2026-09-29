@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 test("room reference exposes original-scene placement, native resolutions and explicit render controls",()=>{
  const html=readFileSync(new URL("./fixtures/native-room-reference.html",import.meta.url),"utf8");
- for(const id of ["resolution","spp","sampler","view","chair-x","chair-z","chair-yaw","fov","models"])assert.match(html,new RegExp(`<label for="${id}">`));
+ for(const id of ["resolution","spp","sampler","view","chair-x","chair-z","chair-yaw","fov","models","central-reference"])assert.match(html,new RegExp(`<label for="${id}">`));
  for(const text of ["1920 × 1080","3840 × 2160","Render room","Reset view","Stop after pending GPU work","No added studio walls","External daylight"])assert(html.includes(text));
  assert.match(html,/<option value="fixed-pattern" selected>/);
  assert.match(html,/img:not\(\[hidden\]\)/);
@@ -12,6 +12,16 @@ test("room reference exposes original-scene placement, native resolutions and ex
  assert.match(html,/<input id="chair-z"[^>]*value="-2.5"/);
  assert.match(html,/uniformly scaled to 1\.5 m wide/);
  assert.match(html,/preserving its proportions/);
+});
+test('central reference control forwards layout and preserves default reset and capture identity',()=>{
+ const html=readFileSync(new URL('./fixtures/native-room-reference.html',import.meta.url),'utf8');
+ const js=readFileSync(new URL('./fixtures/native-room-reference.js',import.meta.url),'utf8');
+ assert.match(html,/<option value="seating">Sofa/);
+ assert.match(html,/<option value="standing">Spacesuit/);
+ assert.match(js,/centralReference:el\('central-reference'\).value/);
+ assert.match(js,/el\('central-reference'\).value=ROOM_DEFAULTS.centralReference/);
+ assert.match(js,/'-seating-centre'/);
+ assert.match(js,/controls.forEach\(c=>c.disabled=true\)/);
 });
 test('room ceiling is configurable, forwarded and verified rather than a hard-coded preset',()=>{
  const fixture=name=>readFileSync(new URL(`./fixtures/${name}.js`,import.meta.url),'utf8');

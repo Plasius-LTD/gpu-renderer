@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add a centre-reference control for local sofa/spacesuit material inspection,
+  forwarding layout, reset and capture identity without changing transport (#220).
+
 - Make the local room SPP ceiling configurable through the supported 1–256 range;
   derive radial tiers and propagate the ceiling through sequence, dispatch and
   count verification, preserving default behavior and tile-bounded queues (#223).

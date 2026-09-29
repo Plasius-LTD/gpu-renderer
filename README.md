@@ -1,5 +1,12 @@
 # @plasius/gpu-renderer
 
+Choose **Centre reference → Sofa — upholstery inspection** in the local room
+page to exchange sofa/spacesuit floor positions while keeping their rotations,
+materials, 1.5 m seating scale and camera unchanged. Reset restores the previous
+spacesuit-centre layout. It is ignored in Eames-only mode; selecting it never
+changes SPP. Choose the sampling ceiling separately, then Render room. Raw/clean
+comparison remains available; non-default capture names include seating-centre.
+
 The local room reference has a numeric **SPP ceiling**, default 32, accepting
 integers 1–256 (the packed count limit). Radial tiers derive by halving that
 ceiling, rounding upwards with a one-sample floor, preserving the existing

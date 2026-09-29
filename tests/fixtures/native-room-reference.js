@@ -8,6 +8,7 @@ import {compareDenoisedRadiance} from "/lighting/demo/eames-environments/guided-
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
 const controls=[...el("controls").querySelectorAll("input,select"),el("benchmark")];
+el('central-reference').value=ROOM_DEFAULTS.centralReference;
 el('spp').min='1';el('spp').max=String(RADIAL_MAXIMUM_SPP);el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
 function describeSampling(){
  if(!el('spp').checkValidity()){el('sampling-description').textContent=`Choose an integer ceiling from 1 to ${RADIAL_MAXIMUM_SPP}.`;return;}
@@ -24,6 +25,7 @@ for(const control of controls){
  control.addEventListener("input",clearCapture);
 }
 reset.addEventListener("click",()=>{
+ el('central-reference').value=ROOM_DEFAULTS.centralReference;
  el('fov').value=ROOM_DEFAULTS.fovYDegrees;el('models').value='all';
  el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
  el("chair-x").value=ROOM_DEFAULTS.x;el("chair-z").value=ROOM_DEFAULTS.z;el("chair-yaw").value=ROOM_DEFAULTS.yaw;
@@ -63,7 +65,7 @@ export async function loadAssets(receipt,signal){
  el('model-names').textContent=referenceModels.length?`Available: Eames + ${referenceModels.map(m=>m.asset.name).join(' + ')}. Private assets; default material variants.`:'Available: Eames only; no additional local models supplied.';
  assets={room,roomAsset,eames,referenceModels,sourceKey,createProductStudioMeshes,lightingOptions,eamesSource:receipt.eamesSource};return assets;
 }
-export function roomCompositionControls(source){return {placement:{x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view:el('view').value,fovYDegrees:el('fov').valueAsNumber,referenceModels:el('models').value==='all'?source.referenceModels:[]};}
+export function roomCompositionControls(source){return {placement:{x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view:el('view').value,fovYDegrees:el('fov').valueAsNumber,centralReference:el('central-reference').value,referenceModels:el('models').value==='all'?source.referenceModels:[]};}
 run.addEventListener("click",async()=>{
  for(const control of controls)if(!control.checkValidity()){control.reportValidity();status.textContent="Invalid settings. Check the highlighted field.";return;}
  const settings=roomReferenceSettings(el("resolution").value,el("sampler").value,el('spp').valueAsNumber),view=el("view").value;
@@ -75,7 +77,7 @@ run.addEventListener("click",async()=>{
  cancellation=new AbortController();let runner;
  const receipt={schemaVersion:1,scope:"room-eames-interior-reference",status:"running",settings,splitDepth,view,placement,timestamp:new Date().toISOString(),
   browser:{userAgent:navigator.userAgent,platform:navigator.platform},failures:[],qualification:"visual-reference-only-not-performance-or-convergence"};
- const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
+ const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
  const save=async(name,dataUrl,payload)=>{
   const response=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},signal:AbortSignal.timeout(30000),
    body:JSON.stringify({path:`output/playwright/eames-environments/${receipt.provenance.captureId}/${name}.png`,dataUrl,result:payload})});
