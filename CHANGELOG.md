@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add native showcase surface drawing with filtered shadows, HDR planar water
+  reflections, analytic waves, four-sample antialiasing and bounded resource ownership.
+- Add an optional multipass `encodeFrame` hook to the existing renderer lifecycle.
+
 - **Added**
   - Internal reflected adaptive budget/count metadata, optional bounded classifier
     and packed-history buffers, and lazy allocation admission with a 128 MiB cap.

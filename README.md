@@ -1,5 +1,26 @@
 # @plasius/gpu-renderer
 
+## Native animated showcase surfaces
+
+`createNativeSceneRenderer({ canvas })` draws interleaved world-space triangles
+with depth testing, four-sample antialiasing, filtered directional shadows and
+animated water with a planar reflection. Call `render({ vertices, camera, time,
+wakes })` from the caller's animation loop and `destroy()` on teardown. Each vertex
+has twelve floats: position XYZ, normal XYZ, linear colour RGB, roughness,
+metalness, and procedural detail kind (0 plain, 1 wood, 2 mineral/cloth, 3 terrain).
+`camera` supplies `eye`, `target` and optional vertical `fov`. At most four wakes
+contain `[x, z, headingRadians]`; water can be disabled with `water: false`.
+
+The input limit defaults to 300,000 vertices. Colour/depth targets are reused and
+render dimensions are capped at 3840 per axis and a 1080p pixel budget. Snapshots identify `webgpu-raster`
+and count submitted frames; they do not claim ray tracing, GPU completion or
+photorealism. Native initialization failures reject; device loss changes
+`available` and calls `onUnavailable`. The existing wavefront APIs are unchanged.
+
+Enable only through the consumer's remote `gpu-demo.scene-fidelity.enabled`
+decision and existing access capability. See [design](docs/design/native-showcase-surfaces.md)
+and [ADR-0030](docs/adrs/adr-0030-native-showcase-surfaces.md) for rollout and limits.
+
 [![npm version](https://img.shields.io/npm/v/@plasius/gpu-renderer.svg)](https://www.npmjs.com/package/@plasius/gpu-renderer)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Plasius-LTD/gpu-renderer/ci.yml?branch=main&label=build&style=flat)](https://github.com/Plasius-LTD/gpu-renderer/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/codecov/c/github/Plasius-LTD/gpu-renderer)](https://codecov.io/gh/Plasius-LTD/gpu-renderer)
