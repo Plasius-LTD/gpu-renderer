@@ -1,3 +1,4 @@
+export { createNativeSceneRenderer } from "./native-scene-renderer.js";
 export {
   createAnimatedSceneRenderer,
 } from "./animated-scene-renderer.js";

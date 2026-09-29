@@ -1582,7 +1582,46 @@ export interface RendererSnapshot {
   xrActive: boolean;
 }
 
+/** Interleaved world-space triangles: position, normal, linear colour, roughness/metalness/detail. */
+export interface NativeSceneFrame {
+  vertices: Float32Array;
+  camera: { eye: [number, number, number]; target: [number, number, number]; fov?: number };
+  time?: number;
+  water?: boolean;
+  waterLevel?: number;
+  wakes?: [number, number, number][];
+}
+export interface NativeSceneSnapshot {
+  backend: "webgpu-raster";
+  available: boolean;
+  submittedFrames: number;
+  vertexCount: number;
+  shadowMapSize: number;
+  samples: number;
+  width: number;
+  height: number;
+}
+export function createNativeSceneRenderer(options: {
+  canvas: HTMLCanvasElement;
+  navigator?: Navigator | { gpu?: GPU };
+  maxVertices?: number;
+  onUnavailable?: (message: string) => void;
+}): Promise<{
+  render(frame: NativeSceneFrame): NativeSceneSnapshot;
+  getSnapshot(): NativeSceneSnapshot;
+  destroy(): void;
+}>;
+
 export interface RendererHooks {
+  /** Advanced multipass encoding replaces the default clear pass and onBeforeEncode. */
+  encodeFrame?: (event: {
+    device: GPUDevice;
+    context: GPUCanvasContext;
+    encoder: GPUCommandEncoder;
+    view: GPUTextureView;
+    canvas: HTMLCanvasElement;
+    timestamp: number;
+  }) => void;
   onFrameStart?: (event: RendererFrameEvent) => void;
   onBeforeEncode?: (event: {
     frame: number;
