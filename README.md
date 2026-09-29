@@ -6,6 +6,9 @@ materials, 1.5 m seating scale and camera unchanged. Reset restores the previous
 spacesuit-centre layout. It is ignored in Eames-only mode; selecting it never
 changes SPP. Choose the sampling ceiling separately, then Render room. Raw/clean
 comparison remains available; non-default capture names include seating-centre.
+The [sofa-centred 4K inspection](docs/evidence/sofa-centre-2026-09-29.md) retains
+raw/cleaned evidence with 394,813,440 completed camera samples. Fine cloth detail
+remains a material-fidelity concern; the layout change is not a rendering fix.
 
 The local room reference has a numeric **SPP ceiling**, default 32, accepting
 integers 1–256 (the packed count limit). Radial tiers derive by halving that
