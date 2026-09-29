@@ -18,6 +18,14 @@ body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-
 <div class="field"><label for="denoise">Guided denoising</label><select id="denoise"><option value="off">Off — raw reference</option><option value="guided">On — compare same-frame raw / cleaned</option></select></div>
 <div class="field"><label for="sheen">Cloth sheen model</label><select id="sheen"><option value="off">Off — comparison control</option><option value="on">On — layered Charlie sheen</option></select></div>
 <div class="field"><label for="view">Interior viewpoint</label><select id="view"><option value="entry">Room entrance</option><option value="front">Front comparison view</option><option value="corner">Opposite corner</option></select></div>
+<div class="field"><label for="inspection-camera">Camera framing</label><select id="inspection-camera"><option value="room">Room view</option><option value="cloth">Sofa cloth close-up</option></select></div>
+<div class="field"><label for="inspection-distance">Close-up distance m</label><input id="inspection-distance" type="number" min="0.3" max="3" step="0.05" required></div>
+<div class="field"><label for="inspection-elevation">Close-up elevation °</label><input id="inspection-elevation" type="number" min="5" max="85" step="1" required></div>
+<div class="field"><label for="inspection-target-x">Cloth target width 0–1</label><input id="inspection-target-x" type="number" min="0" max="1" step="0.05" required></div>
+<div class="field"><label for="inspection-target-y">Cloth target height 0–1</label><input id="inspection-target-y" type="number" min="0" max="1" step="0.05" required></div>
+<div class="field"><label for="inspection-target-z">Cloth target depth 0–1</label><input id="inspection-target-z" type="number" min="0" max="1" step="0.05" required></div>
+<div class="field"><label for="sample-distribution">Sample distribution</label><select id="sample-distribution"><option value="radial">Adaptive rings</option><option value="uniform">Uniform — every pixel at ceiling</option></select></div>
+<div class="field"><label for="material-inspection">Material inspection</label><select id="material-inspection"><option value="off">Off</option><option value="on">Capture colour and normals</option></select></div>
 <div class="field"><label for="chair-x">Eames X</label><input id="chair-x" type="number" min="-5" max="5" step="0.1" value="2.3" required></div>
 <div class="field"><label for="chair-z">Eames Z</label><input id="chair-z" type="number" min="-4" max="4" step="0.1" value="-2.5" required></div>
 <div class="field"><label for="chair-yaw">Rotation °</label><input id="chair-yaw" type="number" min="-180" max="180" step="5" value="-25" required></div>
@@ -26,12 +34,13 @@ body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-
 <p id="model-names" role="status">Additional assets are loaded only from the local server and verified on Render.</p>
 <button id="run">Render room</button><button id="reset">Reset view</button><button id="cancel" disabled>Stop after pending GPU work</button>
 <p>Splitting requires the stable sampler. It adds secondary rays, not camera SPP. No split after the selected depth.</p>
+<p>Close-up moves the camera, not the model or its texture scale. Uniform sampling removes radial quality bands. Material inspection requires guided denoising: it displays the same frame's first-sample base colour and mapped world normals, not another renderer. Colour includes the authored tint; magenta normals mean unavailable/protected. These single-sample guides are not antialiased or photographic output.</p>
 <button id="benchmark">Measure splitting: off vs first vs first two</button>
 <p>Splitting benchmark always uses the default sampling ceiling, denoising off and the stable sampler for every variant: one warmup, three rotated timing rounds, then diagnostic images. Keep this tab visible; it may take several minutes.</p>
 <p id="status" role="status" aria-live="polite">Ready. Render to view the Eames inside the room.</p>
 <canvas id="canvas" width="1920" height="1080" aria-hidden="true"></canvas>
 <a id="download" hidden>Save native PNG</a>
-<div id="comparison" hidden><button id="show-raw">Show raw input</button><button id="show-clean">Show cleaned result</button><span id="comparison-label" role="status"></span></div>
+<div id="comparison" hidden><button id="show-raw">Show raw input</button><button id="show-clean">Show cleaned result</button><button id="show-albedo" hidden>Show base colour</button><button id="show-normal" hidden>Show mapped normals</button><span id="comparison-label" role="status"></span></div>
 <img id="preview" hidden alt="Eames chair and ottoman inside the supplied room">
 <details><summary>Scene and capture evidence</summary><pre id="result" aria-label="Capture settings and verification"></pre></details>
 <p><a href="./native-stable-reference.html">Previous studio comparison</a></p>

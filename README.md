@@ -1,5 +1,21 @@
 # @plasius/gpu-renderer
 
+### Local cloth close-up diagnostics
+
+The native room fixture now offers a configurable sofa close-up, uniform camera
+SPP, and opt-in same-frame base-colour/mapped-normal views (#225). Select all
+reference models, **Sofa cloth close-up**, **Uniform**, guided denoising and
+**Capture colour and normals**. Distance, elevation and normalized target remain
+adjustable; the model's proportions and authored texture scales are unchanged.
+Inspect **Show base colour**, **Show mapped normals**, **Show raw input** and
+**Show cleaned result** after capture. Colour includes the authored tint without
+lighting or tone mapping; normals are world-space, with magenta marking missing
+or protected guides. The guide views are quantized single-camera-sample data,
+not antialiased beauty renders. Reset restores the unchanged room/radial path.
+
+These local diagnostics do not establish photo equivalence or performance
+improvement. See [the comparison design and QA inventory](docs/design/cloth-closeup-inspection.md).
+
 Cloth fidelity (experimental, Task #224): texture inputs accept per-slot
 `transform: {offset, scale, rotation}` and glTF `wrapS/wrapT`. Keep original
 pixels; UV transforms run on GPU, including the normal-map tangent frame.

@@ -1,5 +1,6 @@
 import {createGuidedSpatialDenoiser} from '/src/wavefront-guided-denoise.js';
 import {assertShaderModuleCompiles} from '/src/wavefront-runtime-support.js';
+import {CLOTH_INSPECTION_WGSL} from './cloth-inspection-shader.js';
 
 // Read only for retained evidence, never part of timed denoising. Chunk-sized
 // staging avoids a second full-screen readback allocation at 4K.
@@ -35,7 +36,7 @@ export async function createGuidedRoomPostprocess(c) {
   'renderer.denoise.guidedSpatial.enabled':true,width:native.width,height:native.height,
   inputView:rawView,scratchView:views.find(e=>e.binding===15).resource,outputView:trace.find(e=>e.binding===7).resource,
   pixelState:b.pixelState,frameBuffer:frame,hitBuffer:trace.find(e=>e.binding===2).resource.buffer,rayBuffer:queue,counterBuffer:counters});
- let query,queryResolve,queryReadback;
+ let query,queryResolve,queryReadback,inspectionPipeline,inspectionGroup,inspectionSettings;
  try{
   if(device.features.has('timestamp-query')){
    query=device.createQuerySet({type:'timestamp',count:2});
@@ -44,6 +45,23 @@ export async function createGuidedRoomPostprocess(c) {
   }
   const readTexture=await createTextureReader({device,makeBuffer,read,wait,width:native.width,height:native.height});
   return {denoiser,rawView,readTexture,memory:{...denoiser.memory,diagnosticStagingBytes:16384*16+16+(query?32:0),diagnosticStagingIncludedInFixtureTotal:true},
+   async inspect(mode){
+    active();if(!['albedo','normal'].includes(mode))throw new Error('Unknown material inspection view');
+    if(!inspectionPipeline){
+     const module=device.createShaderModule({label:'cloth-inspection',code:CLOTH_INSPECTION_WGSL});
+     await wait(assertShaderModuleCompiles(module,'cloth-inspection'));
+     inspectionPipeline=await wait(device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'display_material_guides'}}));
+     inspectionSettings=makeBuffer(16,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
+     inspectionGroup=device.createBindGroup({layout:inspectionPipeline.getBindGroupLayout(0),entries:[
+      {binding:0,resource:{buffer:inspectionSettings}},{binding:1,resource:denoiser.normalTexture.createView()},
+      {binding:2,resource:denoiser.albedoTexture.createView()},{binding:3,resource:trace.find(e=>e.binding===7).resource}]});
+    }
+    device.queue.writeBuffer(inspectionSettings,0,new Uint32Array([native.width,native.height,mode==='normal'?1:0,0]));
+    const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(inspectionPipeline);pass.setBindGroup(0,inspectionGroup);
+    pass.dispatchWorkgroups(Math.ceil(native.width/8),Math.ceil(native.height/8));pass.end();frameEncoder.encodePresent(encoder);
+    device.queue.submit([encoder.finish()]);await wait(device.queue.onSubmittedWorkDone());
+    const error=await wait(device.popErrorScope());device.pushErrorScope('validation');if(error)throw new Error(error.message);
+   },
    async apply(filtered){
     active();const start=performance.now(),e=device.createCommandEncoder();
     denoiser.encode(e,{filtered,...(query?{timestampWrites:{querySet:query,beginningOfPassWriteIndex:0,endOfPassWriteIndex:1}}:{})});

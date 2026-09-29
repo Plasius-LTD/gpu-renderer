@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add configurable cloth close-up and uniform-SPP fixture controls with
+  same-frame GPU colour/normal inspection, validated counts and retained private
+  diagnostic evidence; no transport or material changes (#225).
+
 - Preserve per-slot texture transforms without downsampling source detail; add
   independently flagged Charlie sheen and mapped-normal/high-SPP cloth
   reconstruction. Add material/energy/guide regression probes (#224).

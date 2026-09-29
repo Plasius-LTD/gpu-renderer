@@ -4,14 +4,20 @@ import {ROOM_DEFAULTS,composeRoomEamesScene,roomReferenceSettings,validateRoomFr
 import {createRadialSamplingPlan,radialSamplingTiers,RADIAL_SAMPLING_DEFAULTS,RADIAL_MAXIMUM_SPP} from "/lighting/demo/eames-environments/radial-sampling-plan.js";
 import {encodeLinearImageChunks} from "/lighting/demo/eames-environments/linear-image-chunks.js";
 import {compareDenoisedRadiance} from "/lighting/demo/eames-environments/guided-denoise-probe.js";
+import {CLOTH_INSPECTION_DEFAULTS,clothCloseupCamera,selectInspectionPlan,validateInspectionFrame} from './cloth-inspection-settings.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
 const controls=[...el("controls").querySelectorAll("input,select"),el("benchmark")];
 el('central-reference').value=ROOM_DEFAULTS.centralReference;
 el('spp').min='1';el('spp').max=String(RADIAL_MAXIMUM_SPP);el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
+function resetInspection(){el('inspection-camera').value='room';el('sample-distribution').value='radial';el('material-inspection').value='off';
+ el('inspection-distance').value=CLOTH_INSPECTION_DEFAULTS.distance;el('inspection-elevation').value=CLOTH_INSPECTION_DEFAULTS.elevation;
+ for(const [i,axis] of ['x','y','z'].entries())el('inspection-target-'+axis).value=CLOTH_INSPECTION_DEFAULTS.target[i];}
+resetInspection();
 function describeSampling(){
  if(!el('spp').checkValidity()){el('sampling-description').textContent=`Choose an integer ceiling from 1 to ${RADIAL_MAXIMUM_SPP}.`;return;}
+ if(el('sample-distribution').value==='uniform'){el('sampling-description').textContent=`Uniform ${el('spp').value} camera samples at every pixel; no radial reductions.`;return;}
  const tiers=radialSamplingTiers(el('spp').valueAsNumber),shares=RADIAL_SAMPLING_DEFAULTS.areaPercent;
  el('sampling-description').textContent=`${tiers.join('/')} SPP rings (${(tiers.reduce((sum,n,i)=>sum+n*shares[i],0)/100).toFixed(2)} average); ${shares.join('/')}% of pixels. Integer sample counts round upwards, with a minimum of one.`;
 }
@@ -19,12 +25,14 @@ describeSampling();
 let cancellation,assets,comparison;
 function showComparison(clean){if(!comparison)return;const image=clean?comparison.clean:comparison.raw;preview.src=image;download.href=image;download.download=comparison.stem+(clean?'-guided':'-raw')+'.png';el('comparison-label').textContent=clean?'Cleaned · same camera samples':'Raw · same camera samples';}
 el('show-raw').addEventListener('click',()=>showComparison(false));el('show-clean').addEventListener('click',()=>showComparison(true));
-function clearCapture(){describeSampling();comparison=null;el('comparison').hidden=true;preview.hidden=true;preview.removeAttribute("src");download.hidden=true;download.removeAttribute("href");result.textContent="";status.textContent="Settings changed. Render to update the room view.";}
+for(const mode of ['albedo','normal'])el('show-'+mode).addEventListener('click',()=>{if(!comparison?.[mode])return;preview.src=comparison[mode];download.href=comparison[mode];download.download=comparison.stem+'-'+mode+'.png';el('comparison-label').textContent=mode==='albedo'?'Base colour · no lighting / tone mapping · single first sample':'Mapped world normals · magenta = unavailable · single first sample';});
+function clearCapture(){describeSampling();comparison=null;el('comparison').hidden=true;el('show-albedo').hidden=true;el('show-normal').hidden=true;preview.hidden=true;preview.removeAttribute("src");download.hidden=true;download.removeAttribute("href");result.textContent="";status.textContent="Settings changed. Render to update the room view.";}
 for(const control of controls){
  control.addEventListener("change",clearCapture);
  control.addEventListener("input",clearCapture);
 }
 reset.addEventListener("click",()=>{
+ resetInspection();
  el('sheen').value='off';
  el('central-reference').value=ROOM_DEFAULTS.centralReference;
  el('fov').value=ROOM_DEFAULTS.fovYDegrees;el('models').value='all';
@@ -73,6 +81,9 @@ run.addEventListener("click",async()=>{
  const splitDepth=Number(el("splitting").value);
  const guidedDenoise=el('denoise').value==='guided';
  const sheen=el('sheen').value==='on';
+ const distribution=el('sample-distribution').value,materialInspection=el('material-inspection').value==='on';
+ const closeup={enabled:el('inspection-camera').value==='cloth',distance:el('inspection-distance').valueAsNumber,elevation:el('inspection-elevation').valueAsNumber,target:['x','y','z'].map(axis=>el('inspection-target-'+axis).valueAsNumber)};
+ if(materialInspection&&!guidedDenoise){status.textContent='Select guided denoising to capture material inspection views.';return;}
  if(splitDepth&&settings.sampler!=="stable-pattern"){status.textContent="Select the stable sampler to test splitting.";return;}
  const placement={x:el("chair-x").valueAsNumber,z:el("chair-z").valueAsNumber,yaw:el("chair-yaw").valueAsNumber};
  clearCapture();run.disabled=true;reset.disabled=true;controls.forEach(c=>c.disabled=true);cancel.disabled=false;
@@ -80,7 +91,8 @@ run.addEventListener("click",async()=>{
  const receipt={schemaVersion:1,scope:"room-eames-interior-reference",status:"running",settings,splitDepth,view,placement,timestamp:new Date().toISOString(),
   browser:{userAgent:navigator.userAgent,platform:navigator.platform},failures:[],qualification:"visual-reference-only-not-performance-or-convergence"};
  receipt.materialFlags={'renderer.materials.sheen.enabled':sheen};
- const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
+ receipt.inspection={closeup,distribution,materialViews:materialInspection};
+ const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}${closeup.enabled?'-closeup':''}${distribution==='uniform'?'-uniform':''}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
  const save=async(name,dataUrl,payload)=>{
   const response=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},signal:AbortSignal.timeout(30000),
    body:JSON.stringify({path:`output/playwright/eames-environments/${receipt.provenance.captureId}/${name}.png`,dataUrl,result:payload})});
@@ -90,6 +102,7 @@ run.addEventListener("click",async()=>{
   status.textContent="Loading original room and Eames assets";
   const response=await fetch("/__provenance",{signal:AbortSignal.timeout(10000)});check(response.ok,"Missing provenance");receipt.provenance=await response.json();
   if(guidedDenoise){status.textContent='Checking denoiser against analytic HDR/edge/noise probes';const {runGuidedDenoiseProbe}=await import('./guided-denoise-probe.js');receipt.denoiseProbe=await runGuidedDenoiseProbe(cancellation.signal);}
+  if(materialInspection){const {runClothInspectionProbe}=await import('./cloth-inspection-probe.js');receipt.inspection.probe=await runClothInspectionProbe(cancellation.signal);}
   status.textContent='Checking UV0/UV1 texture sampling and CPU/GPU geometry parity';
   const {runDualUvProbe}=await import('./dual-uv-probe.js');receipt.uvProbe=await runDualUvProbe(cancellation.signal);
   status.textContent='Checking sidedness, medium exits and normal-map validity';
@@ -97,17 +110,19 @@ run.addEventListener("click",async()=>{
   status.textContent='Checking transformed textures, sheen and mapped-normal cloth detail';
   const {runMaterialFidelityProbe}=await import('./material-fidelity-probe.js');receipt.materialProbe=await runMaterialFidelityProbe(cancellation.signal);
   const source=await loadAssets(receipt,cancellation.signal),composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});receipt.scene=composed.evidence;
+  composed.scene.camera=clothCloseupCamera(composed.scene,composed.evidence,closeup);receipt.scene.camera={...composed.scene.camera};
   check(!cancellation.signal.aborted,"Capture cancelled");
-  const plan=createRadialSamplingPlan(settings.width,settings.height,settings.maximumSpp);
+  const plan=selectInspectionPlan(distribution,createRadialSamplingPlan(settings.width,settings.height,settings.maximumSpp),settings.maximumSpp);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
   runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===settings.maxDepth&&runner.sceneSnapshot.samplesPerPixel===settings.maximumSpp&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;
-  const frame=await runner.run("radial",{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,onProgress:p=>{
+  const frame=await runner.run(distribution,{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,onProgress:p=>{
    status.textContent=`Rendering room · ${p.completedTiles}/${p.totalTiles} tiles completed`;
   }});
-  validateRoomFrame(frame,plan,settings);let snapshot=canvas.toDataURL("image/png");const rawSnapshot=snapshot,image=frame.image;delete frame.image;receipt.frame=frame;
+  if(distribution==='radial')validateRoomFrame(frame,plan,settings);
+  validateInspectionFrame(frame,plan,settings,distribution);let snapshot=canvas.toDataURL("image/png");const rawSnapshot=snapshot,image=frame.image;delete frame.image;receipt.frame=frame;
   if(guidedDenoise){
    status.textContent='Denoising and measuring the same completed frame';
    const post=runner.guidedPostprocess;
@@ -122,6 +137,23 @@ run.addEventListener("click",async()=>{
    receipt.guidedDenoise.filteredHdrChunks=[];let n=0;
    for await(const chunk of encodeLinearImageChunks(filtered))receipt.guidedDenoise.filteredHdrChunks.push(await save(`${stem}-guided-hdr-${n++}`,marker.toDataURL(),{provenance:receipt.provenance,chunk}));
    comparison={raw:rawSnapshot,clean:snapshot,stem};
+   if(materialInspection){
+    status.textContent='Retaining same-frame colour and mapped-normal inspection';
+    receipt.inspection.additionalBufferBytes=16;receipt.inspection.additionalTextureBytes=0;
+    receipt.inspection.scope='first-sample canonical denoiser guides; albedo RGBA8 linear, normals RGBA16 world-space; protected normals unavailable';
+    receipt.inspection.views={};
+    for(const mode of ['albedo','normal']){
+     const data=await post.readTexture((mode==='albedo'?post.denoiser.albedoTexture:post.denoiser.normalTexture).createView());
+     const sha256=await hashBytes(data.buffer);const chunks=[];let n=0;
+     for await(const chunk of encodeLinearImageChunks(data))chunks.push(await save(`${stem}-${mode}-data-${n++}`,marker.toDataURL(),{provenance:receipt.provenance,chunk}));
+     await post.inspect(mode);comparison[mode]=canvas.toDataURL('image/png');
+     receipt.inspection.views[mode]={sha256,chunks,png:await save(stem+'-'+mode,comparison[mode],{provenance:receipt.provenance,inspection:receipt.inspection.scope,camera:receipt.scene.camera,mode})};
+    }
+    check(await hashBytes((await post.readTexture(post.rawView)).buffer)===receipt.guidedDenoise.rawTextureSha256,'Inspection changed raw HDR');
+    check(await hashBytes((await post.readTexture(post.denoiser.filteredView)).buffer)===receipt.guidedDenoise.filteredSha256,'Inspection changed filtered HDR');
+    receipt.inspection.radianceUnchanged=true;el('show-albedo').hidden=false;el('show-normal').hidden=false;
+    await post.apply(true);
+   }
   }
   receipt.linearImage={sha256:await hashBytes(image.buffer),format:"rgba-float32-little-endian",uncompressedBytes:image.byteLength,chunks:[]};
   status.textContent="Retaining native image and linear HDR evidence";let index=0;
@@ -132,7 +164,7 @@ run.addEventListener("click",async()=>{
   }
   runner.destroy();runner=null;receipt.cleanupPassed=true;receipt.status="captured-reference-not-qualified";
   await save(stem+(guidedDenoise?'-guided':''),snapshot,receipt);
-  preview.alt=`Eames inside ${source.roomAsset.name}, ${settings.width} by ${settings.height}, ${view}, ${settings.sampler}`;preview.src=snapshot;preview.hidden=false;
+  preview.alt=`${closeup.enabled?'Sofa cloth close-up':'Eames room view'} inside ${source.roomAsset.name}, ${settings.width} by ${settings.height}, ${distribution}, ${settings.sampler}`;preview.src=snapshot;preview.hidden=false;
   download.download=stem+".png";download.href=snapshot;download.hidden=false;
   if(guidedDenoise){el('comparison').hidden=false;showComparison(true);}
  }catch(error){
@@ -143,7 +175,7 @@ run.addEventListener("click",async()=>{
   cancellation.abort();run.disabled=false;reset.disabled=false;controls.forEach(c=>c.disabled=false);cancel.disabled=true;
   status.textContent=receipt.status==="failed"?`Failed: ${receipt.failures.join("; ")}`:`Captured room + Eames · ${settings.width} × ${settings.height} · ${settings.maximumSpp} SPP ceiling · ${receipt.frame.actualSamples.toLocaleString()} camera samples · ${guidedDenoise?'guided denoise comparison':'raw'} · not quality-qualified`;
   result.textContent=JSON.stringify({status:receipt.status,settings,splitDepth,scene:receipt.scene,admission:receipt.admission,actualSamples:receipt.frame?.actualSamples,
-   materialFlags:receipt.materialFlags,materialProbe:receipt.materialProbe,guidedDenoise:receipt.guidedDenoise,denoiseProbe:receipt.denoiseProbe,uvProbe:receipt.uvProbe,surfaceProbe:receipt.surfaceProbe,linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
+   inspection:receipt.inspection,materialFlags:receipt.materialFlags,materialProbe:receipt.materialProbe,guidedDenoise:receipt.guidedDenoise,denoiseProbe:receipt.denoiseProbe,uvProbe:receipt.uvProbe,surfaceProbe:receipt.surfaceProbe,linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
  }
 });
 
