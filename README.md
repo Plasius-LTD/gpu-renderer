@@ -15,6 +15,9 @@ not antialiased beauty renders. Reset restores the unchanged room/radial path.
 
 These local diagnostics do not establish photo equivalence or performance
 improvement. See [the comparison design and QA inventory](docs/design/cloth-closeup-inspection.md).
+The [retained 1080p/128-SPP comparison](docs/evidence/cloth-closeup-2026-09-29.md)
+shows fine signal in the colour/normal guides but does not yet match the reference
+application's lit fabric response; denoising alone does not explain the gap.
 
 Cloth fidelity (experimental, Task #224): texture inputs accept per-slot
 `transform: {offset, scale, rotation}` and glTF `wrapS/wrapT`. Keep original
