@@ -18,6 +18,7 @@ import {
 } from "./wavefront-core.js";
 import { writeVec4 } from "./wavefront-binary.js";
 import { normalizeWavefrontMesh } from "./wavefront-scene-normalizers.js";
+import { createMaterialTextureMetadata, texturePaddingIndex } from "./wavefront-texture-transforms.js";
 
 function clampUnit(value) {
   return clamp(Number(value) || 0, 0, 1);
@@ -64,6 +65,7 @@ function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
           uv0: Object.freeze(uv0),
           uv1: Object.freeze(uv1),
           uv2: Object.freeze(uv2),
+          uvs1: Object.freeze([a, b, c].flatMap(vertex => mesh.uvs1 ? readVector2(mesh.uvs1, vertex) : [0, 0])),
           color: mesh.color,
           emission: mesh.emission,
           material: Object.freeze([
@@ -121,7 +123,7 @@ function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
             clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
             clampUnit(mesh.occlusionTexture?.strength ?? 1),
             clampUnit(mesh.emissiveTexture?.strength ?? 1),
-            0,
+            mesh.textureUvMask,
           ]),
           extensionTextures: Object.freeze(
             Object.fromEntries(
@@ -372,11 +374,11 @@ function buildTextureAtlas(textures, fallbackColor) {
   };
 
   const rects = placements.map((placement, entryIndex) => {
-    const { texture } = uniqueEntries[entryIndex];
+    const { texture, source } = uniqueEntries[entryIndex];
     for (let y = 0; y < placement.tileHeight; y += 1) {
       for (let x = 0; x < placement.tileWidth; x += 1) {
-        const sampleX = Math.max(0, Math.min(texture.width - 1, x - padding));
-        const sampleY = Math.max(0, Math.min(texture.height - 1, y - padding));
+        const sampleX = texturePaddingIndex(x - padding, texture.width, source, 0);
+        const sampleY = texturePaddingIndex(y - padding, texture.height, source, 1);
         const sourceOffset = (sampleY * texture.width + sampleX) * 4;
         writePixel(placement.x + x, placement.y + y, texture.data.slice(sourceOffset, sourceOffset + 4));
       }
@@ -499,7 +501,7 @@ export function createWavefrontGpuMaterialSource(meshes = []) {
       clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
       clampUnit(mesh.occlusionTexture?.strength ?? 1),
       clampUnit(mesh.emissiveTexture?.strength ?? 1),
-      0,
+      mesh.textureUvMask,
     ]);
   });
 
@@ -514,6 +516,11 @@ export function createWavefrontGpuMaterialSource(meshes = []) {
     occlusionAtlas,
     emissiveAtlas,
     extensionAtlases,
+    textureMetadata: createMaterialTextureMetadata(normalized, {
+      baseColor: baseColorAtlas, metallicRoughness: metallicRoughnessAtlas,
+      normal: normalAtlas, occlusion: occlusionAtlas, emissive: emissiveAtlas,
+      ...extensionAtlases,
+    }),
   });
 }
 
@@ -628,8 +635,8 @@ export function createWavefrontGpuMeshSource(meshes = [], gpuMaterialSourceInput
       vertexFloats[recordOffset + 7] = mesh.normals ? 1 : 0;
       vertexFloats[recordOffset + 8] = uv[0];
       vertexFloats[recordOffset + 9] = uv[1];
-      vertexFloats[recordOffset + 10] = mesh.uvs ? 1 : 0;
-      vertexFloats[recordOffset + 11] = 0;
+      vertexFloats[recordOffset + 10] = mesh.uvs1?.[vertexIndex * 2] ?? 0;
+      vertexFloats[recordOffset + 11] = mesh.uvs1?.[vertexIndex * 2 + 1] ?? 0;
     }
 
     mesh.indices.forEach((indexValue, localIndex) => {
@@ -705,7 +712,7 @@ export function createWavefrontGpuMeshSource(meshes = [], gpuMaterialSourceInput
       clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
       clampUnit(mesh.occlusionTexture?.strength ?? 1),
       clampUnit(mesh.emissiveTexture?.strength ?? 1),
-      0,
+      mesh.textureUvMask,
     ]);
 
     vertexCursor += meshVertexCount;

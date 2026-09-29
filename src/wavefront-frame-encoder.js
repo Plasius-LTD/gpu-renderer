@@ -25,12 +25,18 @@ export function createWavefrontFrameEncoder({
   presentBindGroup,
   context,
   getFrameTelemetry = () => null,
+  getPreparedContinuationPipelines = () => null,
+  getPrimaryGuideCapture = () => null,
 }) {
   const resolveConfig = resolveGetter(getConfig);
   const resolveBindGroups = resolveGetter(getBindGroups);
 
-  function encodeContinuations(encoder, config, bindGroups, frameTelemetry, tileWorkgroups, configOffset, parallelism) {
+  function encodeContinuations(encoder, config, bindGroups, frameTelemetry, tileWorkgroups, configOffset, parallelism, preparedPipelines = null) {
     for (let bounceIndex = 0; bounceIndex < config.maxDepth; bounceIndex += 1) {
+      // Metadata only: primary count is unchanged, later queues may fan out.
+      const queueFactor = bounceIndex > 0 && config.roughBounceSplitting?.enabled
+        ? config.roughBounceSplitting.queueFactor : 1;
+      const queueWorkgroupsUpperBound = tileWorkgroups * queueFactor;
       frameTelemetry?.recordActiveRayCount(encoder, counterBuffer, bounceIndex);
       encoder.copyBufferToBuffer(
         counterBuffer,
@@ -43,13 +49,27 @@ export function createWavefrontFrameEncoder({
         label: `plasius.wavefront.bounce.${bounceIndex}`,
       });
       passEncoder.setBindGroup(0, bindGroups[bounceIndex % 2], [configOffset]);
-      passEncoder.setPipeline(pipelines.intersectActiveQueue);
-      passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
-      recordIndirectDispatch(parallelism, tileWorkgroups, WORKGROUP_SIZE);
-      passEncoder.setPipeline(pipelines.resolveSurfaceRecords);
-      passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
-      recordIndirectDispatch(parallelism, tileWorkgroups, WORKGROUP_SIZE);
-      passEncoder.setPipeline(pipelines.compactAndSwapQueues);
+      if (preparedPipelines?.traceAndResolve) {
+        passEncoder.setPipeline(preparedPipelines.traceAndResolve);
+        passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
+        recordIndirectDispatch(parallelism, queueWorkgroupsUpperBound, WORKGROUP_SIZE);
+      } else {
+        passEncoder.setPipeline(pipelines.intersectActiveQueue);
+        passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
+        recordIndirectDispatch(parallelism, queueWorkgroupsUpperBound, WORKGROUP_SIZE);
+        const capture = bounceIndex === 0 ? getPrimaryGuideCapture(configOffset) : null;
+        if (capture) {
+          passEncoder.setPipeline(capture.pipeline);
+          passEncoder.setBindGroup(0, capture.bindGroup, [configOffset]);
+          passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
+          recordIndirectDispatch(parallelism, tileWorkgroups, WORKGROUP_SIZE);
+          passEncoder.setBindGroup(0, bindGroups[bounceIndex % 2], [configOffset]);
+        }
+        passEncoder.setPipeline(pipelines.resolveSurfaceRecords);
+        passEncoder.dispatchWorkgroupsIndirect(activeDispatchBuffer, 0);
+        recordIndirectDispatch(parallelism, queueWorkgroupsUpperBound, WORKGROUP_SIZE);
+      }
+      passEncoder.setPipeline(preparedPipelines?.compactAndSwapQueues ?? pipelines.compactAndSwapQueues);
       passEncoder.dispatchWorkgroups(1);
       recordDirectDispatch(parallelism, [1], 1);
       passEncoder.end();
@@ -85,7 +105,7 @@ export function createWavefrontFrameEncoder({
       const bindGroups = resolveBindGroups();
       const frameTelemetry = getFrameTelemetry();
       const tileWorkgroups = Math.ceil((tile.width * tile.height) / WORKGROUP_SIZE);
-      encodeContinuations(encoder, config, bindGroups, frameTelemetry, tileWorkgroups, configOffset, parallelism);
+      encodeContinuations(encoder, config, bindGroups, frameTelemetry, tileWorkgroups, configOffset, parallelism, getPreparedContinuationPipelines());
     },
 
     encodeTileOutput(encoder, tile, configOffset, parallelism) {

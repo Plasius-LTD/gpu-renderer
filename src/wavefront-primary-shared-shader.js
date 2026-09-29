@@ -38,24 +38,3 @@ export const WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL = `fn deferred_path_resolve_en
   return config.pathResolveSettings.x > 0.5;
 }`;
 
-export const WAVEFRONT_CLEAR_DEFERRED_PATH_WGSL = `fn path_vertex_count_per_ray() -> u32 {
-  return config.maxDepth + 1u;
-}
-
-fn path_vertex_index(rayId: u32, depth: u32) -> u32 {
-  return rayId * path_vertex_count_per_ray() + min(depth, config.maxDepth);
-}
-
-fn clear_deferred_path(rayId: u32) {
-  if (!deferred_path_resolve_enabled()) {
-    return;
-  }
-
-  for (var depth = 0u; depth <= config.maxDepth; depth = depth + 1u) {
-    pathVertices[path_vertex_index(rayId, depth)] = vec4<f32>(0.0);
-    if (depth == config.maxDepth) {
-      break;
-    }
-  }
-}`;
-

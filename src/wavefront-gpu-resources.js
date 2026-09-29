@@ -20,6 +20,7 @@ import {
   importanceSampleGgx,
   integrateBrdfSample,
 } from "./wavefront-sampling.js";
+import { integrateSheenDirectionalAlbedo, sheenProjectedArea } from "./wavefront-sheen.js";
 
 export function clampTileSizeForDevice(config, device) {
   const limit = Number(device?.limits?.maxStorageBufferBindingSize);
@@ -131,9 +132,10 @@ function readEnvironmentMapComponent(data, index, fallback, integerScale = 1) {
 
 function createBrdfLutUploadBytes(
   size = DEFAULT_BRDF_LUT_SIZE,
-  sampleCount = DEFAULT_BRDF_LUT_SAMPLE_COUNT
+  sampleCount = DEFAULT_BRDF_LUT_SAMPLE_COUNT,
+  sheenEnabled = false
 ) {
-  const cacheKey = `${Math.max(1, Math.trunc(size))}:${Math.max(1, Math.trunc(sampleCount))}`;
+  const cacheKey = `${Math.max(1, Math.trunc(size))}:${Math.max(1, Math.trunc(sampleCount))}:${sheenEnabled}`;
   const cached = BRDF_LUT_UPLOAD_CACHE.get(cacheKey);
   if (cached) {
     return cached;
@@ -152,8 +154,8 @@ function createBrdfLutUploadBytes(
       const offset = y * bytesPerRow + x * 8;
       view.setUint16(offset, float32ToFloat16Bits(scaleTerm), true);
       view.setUint16(offset + 2, float32ToFloat16Bits(biasTerm), true);
-      view.setUint16(offset + 4, float32ToFloat16Bits(0), true);
-      view.setUint16(offset + 6, float32ToFloat16Bits(1), true);
+      view.setUint16(offset + 4, float32ToFloat16Bits(sheenEnabled ? integrateSheenDirectionalAlbedo(nDotV, roughness) : 0), true);
+      view.setUint16(offset + 6, float32ToFloat16Bits(sheenEnabled ? sheenProjectedArea(nDotV, roughness) : 1), true);
     }
   }
   const upload = Object.freeze({ bytes, bytesPerRow, width, height });
@@ -529,8 +531,8 @@ export function createEnvironmentSamplingTextureResource(device, constants, envi
   });
 }
 
-export function createBrdfLutResource(device, constants, size = DEFAULT_BRDF_LUT_SIZE) {
-  const upload = createBrdfLutUploadBytes(size);
+export function createBrdfLutResource(device, constants, size = DEFAULT_BRDF_LUT_SIZE, sheenEnabled = false) {
+  const upload = createBrdfLutUploadBytes(size, DEFAULT_BRDF_LUT_SAMPLE_COUNT, sheenEnabled);
   const texture = device.createTexture({
     label: "plasius.wavefront.brdfLut",
     size: { width: upload.width, height: upload.height },

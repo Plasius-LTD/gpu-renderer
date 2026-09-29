@@ -91,6 +91,17 @@ function repairReferenceShadingNormal(geometricNormal, shadingNormal) {
   return dot(normal, geometricNormal) < 0 ? scale(normal, -1) : normal;
 }
 
+// Reference counterpart of valid_surface_normal; all inputs are unit vectors.
+export function repairWavefrontReferenceNormal(geometricNormal, shadingNormal, view) {
+  const n = repairReferenceShadingNormal(geometricNormal, shadingNormal);
+  const reflected = subtract(scale(n, 2 * dot(n, view)), view);
+  const height = dot(reflected, geometricNormal);
+  const threshold = Math.min(0.01, 0.9 * Math.max(0, dot(view, geometricNormal)));
+  if (height >= threshold && dot(n, view) > 0) return n;
+  const safeReflection = normalize(add(reflected, scale(geometricNormal, threshold - height)), geometricNormal);
+  return normalize(add(view, safeReflection), geometricNormal);
+}
+
 function readOptionalMaxDistance(value) {
   if (value === undefined || value === null) {
     return Number.POSITIVE_INFINITY;
@@ -177,6 +188,10 @@ export function intersectWavefrontReferenceTriangle(ray, triangle, options = {})
   if (Math.abs(determinant) < 0.0000001) {
     return null;
   }
+  const insideMedium = ray.mediumStackDepth > 0 ? ray.mediumStack?.[Math.min(ray.mediumStackDepth, 4) - 1] : (ray.mediumRefId ?? 0);
+  const mediumExit = triangle.mediumRefId > 0 && triangle.mediumRefId === insideMedium &&
+    ((triangle.materialExtension?.[2] ?? 0) > 0.001 || triangle.material[2] < 0.999);
+  if (determinant < 0 && (triangle.flags & 0x40000000) === 0 && !mediumExit) return null;
 
   const invDet = 1 / determinant;
   const tvec = subtract(ray.origin, triangle.v0);
@@ -205,7 +220,7 @@ export function intersectWavefrontReferenceTriangle(ray, triangle, options = {})
     triangle.n0[1] * w + triangle.n1[1] * u + triangle.n2[1] * v,
     triangle.n0[2] * w + triangle.n1[2] * u + triangle.n2[2] * v,
   ];
-  const shadingNormal = repairReferenceShadingNormal(orientedGeometric, interpolated);
+  const shadingNormal = repairWavefrontReferenceNormal(orientedGeometric, interpolated, scale(ray.direction, -1));
   const uv = [
     triangle.uv0[0] * w + triangle.uv1[0] * u + triangle.uv2[0] * v,
     triangle.uv0[1] * w + triangle.uv1[1] * u + triangle.uv2[1] * v,

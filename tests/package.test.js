@@ -1273,6 +1273,7 @@ test("wavefront frame runtime tracks dispatch diagnostics without renderer state
 
 test("wavefront transport guardrails summarize throughput memory and queue health", () => {
   const guardrails = createWavefrontTransportGuardrailSummary({
+    pathCompletionValid: true,
     commandSubmissions: 2,
     maxFramePassesPerSubmission: 8,
     queueOverflow: 0,
@@ -1306,7 +1307,7 @@ test("wavefront transport guardrails summarize throughput memory and queue healt
     legacyClampEquivalentSamples: 0,
   });
   assert.equal(guardrails.current.rayCountStatus, "not-requested");
-  assert.equal(guardrails.checks.length, 5);
+  assert.equal(guardrails.checks.length, 6);
   assert.ok(guardrails.checks.every((check) => check.status === "pass"));
   assert.match(
     guardrails.checks.find((check) => check.id === "submission-batching").details,

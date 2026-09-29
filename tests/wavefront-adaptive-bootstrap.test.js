@@ -14,8 +14,9 @@ test("bootstrap reuses canonical declarations and clearing without changing the 
     assert.ok(ADAPTIVE_BOOTSTRAP_WGSL.includes(fragment));
   }
   assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),
-    "6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0");
-  assert.match(ADAPTIVE_BOOTSTRAP_WGSL, /clear_deferred_path\(localPixelId\)/u);
+    "125b295352a229f26634c68ba1deb675d7b57079fc7e409b81a535e703bf91e5"); // Task 224 material correctness, fixed and adaptive alike.
+  assert.match(ADAPTIVE_BOOTSTRAP_WGSL, /pathNodes\[localPixelId\] = PathNode\(\)/u);
+  assert.doesNotMatch(ADAPTIVE_BOOTSTRAP_WGSL, /pathVertices|clear_deferred_path/u);
   assert.doesNotMatch(ADAPTIVE_BOOTSTRAP_WGSL, /fn make_ray\(|bsdf|textureSample/u);
 });
 
@@ -26,6 +27,7 @@ test("the executed final bootstrap module reflects the existing buffer ABI", asy
   assert.equal(record("TerminationMetrics").byteSize, 80);
   assert.equal(record("FrameConfig").byteSize, 320);
   assert.equal(record("RayRecord").byteSize, 96);
+  assert.equal(record("PathNode").byteSize, 64);
   assert.equal(record("AdaptiveBootstrapControl").byteSize, 16);
   assert.equal(record("AdaptiveBootstrapTile").byteSize, 32);
   assert.deepEqual(record("AdaptiveBootstrapControl").members.map(({ name, offset }) => [name, offset]),

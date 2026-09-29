@@ -211,6 +211,6 @@ test("pipeline compilation failures propagate without returning partial pipeline
   }
 });
 
-test("the fixed assembled transport remains byte-identical", () => {
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0");
+test("the Task 224 material-corrected fixed shader remains canonical", () => {
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "125b295352a229f26634c68ba1deb675d7b57079fc7e409b81a535e703bf91e5");
 });

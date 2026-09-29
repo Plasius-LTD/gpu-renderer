@@ -396,13 +396,16 @@ fn surface_bsdf_sampling_weights(hit: HitRecord) -> vec3<f32> {
   let metallic = clamp(hit.material.y, 0.0, 1.0);
   let clearcoat = clamp(hit.materialResponse.w, 0.0, 1.0);
   let specularWeight = clamp(hit.materialExtension.y, 0.0, 1.0);
-  let diffuseWeight = clamp(
+  var diffuseWeight = clamp(
     (1.0 - metallic) * max(1.0 - specularWeight * 0.5 - clearcoat * 0.25, 0.15),
     0.0,
     1.0
   );
   let specWeight = clamp(max(metallic, specularWeight * 0.75) * (1.0 - clearcoat * 0.5), 0.0, 1.0);
   let clearcoatWeight = clamp(clearcoat, 0.0, 1.0);
+  // A cosine proposal covers the complete hemisphere for the added sheen,
+  // including metallic bases. Sampling and PDF evaluation share these weights.
+  if (sheen_enabled()) { diffuseWeight = max(diffuseWeight, clamp(max_component(hit.materialResponse.xyz), 0.0, 1.0)); }
   let totalWeight = max(diffuseWeight + specWeight + clearcoatWeight, 0.000001);
   return vec3<f32>(
     diffuseWeight / totalWeight,
@@ -441,7 +444,17 @@ fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirectio
     (clearcoatDistribution * clearcoatGeometry * clearcoatFresnel) /
     max(4.0 * nDotV * nDotL, 0.000001) *
     clearcoat;
-  return (diffuse + specular + clearcoatTerm) * mix(0.42, 1.0, occlusion);
+  var base = diffuse + specular;
+  if (sheen_enabled() && max_component(hit.materialResponse.xyz) > 0.0) {
+    let color = clamp(hit.materialResponse.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
+    let sheenRoughness = clamp(hit.specularColor.w, 0.0, 1.0);
+    let energy = max(sheen_directional_albedo(nDotV, sheenRoughness), sheen_directional_albedo(nDotL, sheenRoughness));
+    let scale = max(0.0, 1.0 - max_component(color) * energy);
+    // Clearcoat remains the top layer and attenuates the added sheen.
+    base = base * scale + color * charlie_sheen(nDotV, nDotL, saturate(dot(normal, halfVector)), sheenRoughness)
+      * (1.0 - clearcoat * max_component(clearcoatFresnel));
+  }
+  return (base + clearcoatTerm) * mix(0.42, 1.0, occlusion);
 }
 
 fn diffuse_pdf(normal: vec3<f32>, lightDirection: vec3<f32>) -> f32 {

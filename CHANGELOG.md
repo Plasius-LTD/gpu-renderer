@@ -11,7 +11,137 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add configurable cloth close-up and uniform-SPP fixture controls with
+  same-frame GPU colour/normal inspection, validated counts and retained private
+  diagnostic evidence; no transport or material changes (#225).
+
+- Preserve per-slot texture transforms without downsampling source detail; add
+  independently flagged Charlie sheen and mapped-normal/high-SPP cloth
+  reconstruction. Add material/energy/guide regression probes (#224).
+
+- Add a centre-reference control for local sofa/spacesuit material inspection,
+  forwarding layout, reset and capture identity without changing transport (#220).
+
+- Make the local room SPP ceiling configurable through the supported 1–256 range;
+  derive radial tiers and propagate the ceiling through sequence, dispatch and
+  count verification, preserving default behavior and tile-bounded queues (#223).
+
+- Include eligible rough cloth in opt-in guided GPU denoising, with geometric
+  guides and bounded colour-detail reconstruction; preserve protected surfaces,
+  raw transport, pass counts and memory allocation (#222).
+
+- Honor explicit mesh sidedness in CPU/GPU traversal, preserving matching transmissive-medium exits; orthonormalize normal-map frames and repair invalid reflection hemispheres consistently before BSDF evaluation/sampling (#221). Add physical surface-validity probes; no extra allocations or dispatches in rendering.
+
+- Align room controls/Reset with swapped Eames and standing-reference positions; disclose the first seating model's proportion-preserving uniform 1.5 m width override, revised after review of the 2.1 m trial (#220).
+
+- Correct per-texture UV0/UV1 sampling and normal tangents without increasing GPU record sizes; add physical parity probes, narrower FOV and private multi-model references (#220).
+
+- Admit checksum-bound replacement rooms in the native adaptive reference fixture
+  with model-specific geometry counts and labels, retaining the original Eames,
+  transport and default public room (#219).
+
+- Add default-off GPU guided spatial denoising to the native adaptive room lane,
+  with first-hit guides, completed-count weighting, same-input raw/cleaned
+  controls and separate timing/HDR evidence (renderer#218, site#2249).
+
+- Add default-off bounded rough-bounce splitting with 2/1 or 2/2/1 schedules,
+  branch-decorrelated lighting, half-throughput/count-once accounting and capped
+  tile-local allocations. Add room controls and same-sampler native comparisons;
+  keep production defaults and all disabled shader bytes unchanged.
+  Account for expanded continuation queues in indirect-workgroup upper-bound
+  telemetry without changing encoded commands or measured ray counts.
+
+- Add a separate room-plus-Eames reference page with native 1080p/4K rendering,
+  interior camera/placement controls and retained count/HDR/source evidence;
+  reuse existing GPU transport and preserve the previous studio comparison.
+
+- Restore fast fixed-pattern as the local six-bounce reference default, retain
+  explicit stable comparison and prevent stale/mislabelled sampler evidence.
+  Characterize cross-event correlation without modifying either shader or
+  production flags; brightness and performance qualification remain open.
+
+- Add a separately admitted native 4K, six-bounce corrected stable-pattern
+  visual reference capture; preserve four-bounce baselines and production defaults.
+  Verify actual counts and bit-identical repeated HDR on a physical Apple GPU;
+  keep the preview hidden until capture succeeds and retain the native image.
+
+- Record native stable-pattern correction results: brightness and static
+  repeatability pass at 1080p/4K, but grain remains and the old speed advantage
+  is lost. Select it for further fixed-camera experiments, not production.
+
+- Add default-off stable-pattern correction candidate with centre-first camera
+  points and temporally stable, spatial/event-decorrelated lighting sampling;
+  preserve the rejected shared-point experiment and exact disabled path.
+  Add native Eames camera-control, GPU parity and unchanged brightness gates.
+
+- Add default-off fixed relative sampling experiment covering all camera/light
+  sample dimensions, centre-first camera rays, exact disabled-source preservation,
+  native Eames repeatability and common-reference brightness/error controls.
+
+- Add mutually exclusive default-off Owen–Sobol and independent-random sampling
+  flags without changing the legacy sequence or buffer ABI. Cover progressive
+  prefixes, scrambling and remote snapshots; add full-source Eames causal
+  brightness-band controls, physical GPU word parity and separate timing capture.
+
+- Add original-Eames native trace using canonical shared Product Studio scene
+  construction and lighting-owned source fidelity admission. Preserve original
+  textures/materials and geometry, record setup separately, and reject asset or
+  renderer-scene mismatches without substituting a simpler workload.
+
+- Link native radial physical traces with exact GPU-completed counts, separate
+  CPU/GPU diagnostics and lower-SPP timing savings. Preserve failed 4K fusion
+  identity and reduced-prefix image differences; no real-time or quality approval.
+
+- Disable optional hit fusion by default in the native adaptive trace after its
+  4K equal-budget identity control failed; retain ordinary/fused isolation evidence
+  and keep the original identity tolerance unchanged.
+
+- Bound native HDR evidence uploads through lighting-owned lossless chunks;
+  retain display snapshots before asynchronous encoding and report upload errors.
+
+- Add opt-in native radial adaptive tracing with cached per-tile tier plans,
+  partial-tile full-screen output/count gathering, separate timing-only and
+  CPU/GPU/HDR diagnostics. Preserve canonical fixed transport and public defaults.
+
+- Fix native screening fixture adapter reuse: obtain a fresh adapter for each
+  independent resolution/device and test consumed-adapter and failure handling.
+  Retain physical full-frame results showing both resolutions over the 60 Hz
+  budget, without treating fixed-path measurements as adaptive qualification.
+
 - **Added**
+  - Full native 1080p/4K fixed32 screening page and explicit 1080p/60 Hz minimum
+    acceptance. Includes all tiles and GPU presentation commands; reports shortfalls
+    without treating short runs, tiny probes or missing quality evidence as success.
+  - Opt-in completion-driven frame loop with a drain promise, single-flight
+    scheduling, next-frame budget hooks and truthful elapsed/confirmed-tile
+    progress. Default diagnostic readbacks off; existing GPU waits and transport
+    unchanged. Adds independent-work/identity verification, not a speedup claim.
+  - Opt-in per-frame CPU attribution: separate host preparation/encoding/upload/
+    submit spans, GPU waits, post-job readback, API counts and known temporary
+    buffer bytes. Includes bounded browser timing markers and paired profiler
+    off/on adaptive diagnostics; no transport or scheduling changes.
+  - Independent experimental prepared-path options for immediate hit consumption
+    and zero-work empty queues. Reuse canonical traversal/shading bodies, preserve
+    fixed shader bytes and command order, and retain source-bound paired/physical
+    safety evidence. No temporal ray cache, allocation saving, public enablement
+    or matched-quality performance claim.
+  - Experimental shared-round adaptive scheduler: range-based GPU worklists,
+    compacted fused prepare/commit, reflected phase ABI and batched configuration
+    uploads around unchanged transport. Adds paired image/timing and physical
+    safety diagnostics. Public adaptation remains off; no matched-quality,
+    real-time or memory-reduction claim is made.
+  - Internal opt-in complete compute-pass timestamp pairs for physical diagnostics;
+    default public telemetry descriptors and memory remain unchanged.
+  - Before/after physical diagnostic fixture with equal-budget identity control,
+    preassigned reduced tiers, reference images, actual queue/timestamp telemetry
+    and lighting-owned quality/timing gates. No rollout or claimed speedup.
+  - Experimental integration of branch-owned transport with compacted sampling:
+    canonical complete-tree camera-sample production followed by selected-tier
+    completed-count normalization, using existing capped storage. Bootstrap now
+    binds 64-byte PathNode roots. Public adaptation and performance claims remain
+    off; fixed equivalence is against the separately corrected PR 214 baseline.
+    Retained physical complete-sample, diffuse same-prefix and failure evidence
+    with a dated publication-readiness ledger; no matched-quality speedup claim.
   - Internal default-off prepared-sample coordinator composing validated bootstrap,
     compacted camera generation and the unchanged shared bounce command loop.
     Counts preparation dispatch overhead without claiming actual-ray telemetry;
@@ -52,6 +182,18 @@ All notable changes to this project will be documented in this file.
   - Corrected the internal count-resolve physical fixture to use WGSL's specified
     division accuracy instead of bit-exact CPU/GPU equality; exact count and sum
     checks remain enforced, with no transport or image-tolerance changes.
+  - Exclude primary camera environment/emissive visibility from terminal MIS
+    without changing secondary non-delta or delta weighting. Add fixed
+    1/32/128-SPP linear-HDR/count probes. All 24 controlled Apple Metal-3 lanes
+    passed; full-scene/noise/baseline qualification remains pending.
+  - Replace shared sibling radiance/throughput addresses with tile/depth-owned
+    path nodes and a single complete-camera-sample reduction in both resolve modes.
+    Reject incomplete/overflowing paths visibly and expose optional completion
+    integrity readback; retain failure status through denoise and subsequent samples.
+  - Exclude ideal metals from dielectric splitting, share entering/exiting
+    refraction ratios, retain total-internal-reflection energy and compensate
+    both siblings for a shared roulette decision. Focused physical checks are
+    retained; broad transport/image/performance qualification remains outstanding.
   - (placeholder)
 
 - **Security**
