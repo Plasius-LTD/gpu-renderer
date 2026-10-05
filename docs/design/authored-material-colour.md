@@ -3,6 +3,10 @@
 Task renderer#226 / Story site#2268 / Feature site#2114. Continue the retained
 cloth-map investigation without inventing missing textures or boosting normals.
 
+Implemented in `798822458dc55d4de5736705c02c8525301b22a7`; the requirements below
+describe the pre-fix defect and frozen checks. See the
+[physical evidence and remaining limitations](../evidence/authored-colour-2026-10-05.md).
+
 ## Evidence and scope
 
 The supplied default fabric has base colour (UV0, 7x), normal (UV0, 2x,

@@ -10,6 +10,10 @@ cloth photo-equivalence are not claimed. See the
 Local room captures now audit authored versus decoded model texture slots,
 including UVs, transforms, strengths, dimensions and pixel hashes. Missing slots
 fail capture; factors without authored texture maps are not reported as missing.
+The [map audit and physical colour-correction evidence](docs/evidence/authored-colour-2026-10-05.md)
+confirm all three fabric maps are present and the corrected GPU response passes
+independent analytic checks. Matched 4K lighting-only and 1080p full-render captures
+show a modest change, not a complete solution for the remaining fine-cloth detail.
 
 ### Local cloth close-up diagnostics
 
