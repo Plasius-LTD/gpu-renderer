@@ -11,12 +11,17 @@ struct Frame {
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(1) @binding(0) var shadowMap: texture_depth_2d;
 @group(1) @binding(1) var shadowSampler: sampler_comparison;
-@group(2) @binding(0) var reflectionMap: texture_2d<f32>;
-@group(2) @binding(1) var reflectionSampler: sampler;
+@group(3) @binding(0) var reflectionMap: texture_2d<f32>;
+@group(3) @binding(1) var reflectionSampler: sampler;
+@group(2) @binding(0) var baseColourMap: texture_2d<f32>;
+@group(2) @binding(1) var normalMap: texture_2d<f32>;
+@group(2) @binding(2) var ormMap: texture_2d<f32>;
+@group(2) @binding(3) var materialSampler: sampler;
+@group(2) @binding(4) var<uniform> materialParameters: vec4f;
 struct Surface {
   @builtin(position) clip: vec4f,
   @location(0) world: vec3f, @location(1) normal: vec3f,
-  @location(2) colour: vec3f, @location(3) material: vec3f,
+  @location(2) colour: vec3f, @location(3) material: vec3f, @location(4) uv: vec2f,
 };
 fn project(p: vec3f) -> vec4f {
   let d = p - frame.eye.xyz;
@@ -30,8 +35,8 @@ fn lightProject(p: vec3f) -> vec4f {
     dot(d, frame.lightUp.xyz) / 34.0, dot(d, frame.lightForward.xyz) / 100.0, 1.0);
 }
 @vertex fn surfaceVertex(@location(0) p: vec3f, @location(1) n: vec3f,
-  @location(2) c: vec3f, @location(3) m: vec3f) -> Surface {
-  return Surface(project(p), p, n, c, m);
+  @location(2) c: vec3f, @location(3) m: vec3f, @location(4) uv: vec2f) -> Surface {
+  return Surface(project(p), p, n, c, m, uv);
 }
 @vertex fn shadowVertex(@location(0) p: vec3f) -> @builtin(position) vec4f {
   return lightProject(p);
@@ -104,20 +109,37 @@ fn surfaceRadiance(s: Surface, front: bool) -> vec3f {
   let facing = select(select(-1.0,1.0,front),select(1.0,-1.0,front),frame.info.y>0.5);
   var n = normalize(s.normal) * facing;
   let v = normalize(frame.eye.xyz - s.world);
-  var c = s.colour;
-  if (s.material.z > 2.5) {
+  // Derivatives and samples must be uniform across each fragment quad.
+  let dx = dpdx(s.world); let dy = dpdy(s.world);
+  let ux = dpdx(s.uv); let uy = dpdy(s.uv);
+  let determinant = ux.x * uy.y - ux.y * uy.x;
+  let tangent = dx * uy.y - dy * ux.y;
+  let bitangent = dy * ux.x - dx * uy.x;
+  let sampledNormal = textureSample(normalMap, materialSampler, s.uv).xyz * 2.0 - 1.0;
+  var c = s.colour * textureSample(baseColourMap, materialSampler, s.uv).rgb;
+  let orm = textureSample(ormMap, materialSampler, s.uv).rgb;
+  let roughness = clamp(s.material.x * orm.g, 0.04, 1.0);
+  let metalness = clamp(s.material.y * orm.b, 0.0, 1.0);
+  let orthogonalTangent = tangent - n * dot(n,tangent);
+  let orthogonalBitangent = bitangent - n * dot(n,bitangent);
+  if (abs(determinant) > 0.00000001 && dot(orthogonalTangent,orthogonalTangent) > 0.00000001 && dot(orthogonalBitangent,orthogonalBitangent) > 0.00000001) {
+    let t = normalize(orthogonalTangent) * sign(determinant);
+    let b = normalize(orthogonalBitangent) * sign(determinant);
+    n = normalize(t * sampledNormal.x * materialParameters.x + b * sampledNormal.y * materialParameters.x + n * max(0.001,sampledNormal.z));
+  }
+  if (materialParameters.y < 0.5 && s.material.z > 2.5) {
     let rock = smoothstep(0.45,0.68,noise(s.world*0.27));
     c = mix(c,vec3f(0.16,0.145,0.11),rock*0.7);
     c *= 0.75+0.45*noise(s.world*2.4);
     n = normalize(n+vec3f(noise(s.world*4.0)-0.5,0,noise(s.world*4.0+vec3f(13))-0.5)*0.28);
-  } else if (s.material.z > 0.5 && s.material.z < 1.5) {
+  } else if (materialParameters.y < 0.5 && s.material.z > 0.5 && s.material.z < 1.5) {
     let grain = noise(s.world * vec3f(18, 3, 1.6));
     c *= 0.82 + 0.30 * grain;
-  } else if (s.material.z > 1.5) { c *= 0.88 + 0.18 * noise(s.world * 12.0); }
+  } else if (materialParameters.y < 0.5 && s.material.z > 1.5) { c *= 0.88 + 0.18 * noise(s.world * 12.0); }
   let hemi = mix(vec3f(0.06,0.05,0.035), vec3f(0.16,0.22,0.29), n.y * 0.5 + 0.5);
-  let direct = brdf(c, n, v, s.material.x, s.material.y) * vec3f(3.0, 2.65, 2.15) * visibility(s.world, n);
-  let ambient = c * hemi * (1.0 - s.material.y * 0.7);
-  let env = sky(reflect(-v,n)) * mix(vec3f(0.04), c, s.material.y) * (1.0-s.material.x) * 0.30;
+  let direct = brdf(c, n, v, roughness, metalness) * vec3f(3.0, 2.65, 2.15) * visibility(s.world, n);
+  let ambient = c * hemi * (1.0 - metalness * 0.7) * orm.r;
+  let env = sky(reflect(-v,n)) * mix(vec3f(0.04), c, metalness) * (1.0-roughness) * orm.r * 0.30;
   return fog(direct + ambient + env, s.world);
 }
 @fragment fn surfaceFragment(s: Surface, @builtin(front_facing) front: bool) -> @location(0) vec4f {
@@ -172,7 +194,8 @@ struct WaterResult { @location(0) colour: vec4f, @builtin(frag_depth) depth: f32
   return vec4f(sky(cameraRay(pixel.xy)),1);
 }
 @fragment fn reflectionSurface(s: Surface, @builtin(front_facing) front: bool) -> @location(0) vec4f {
+  let radiance = surfaceRadiance(s,front);
   if (s.world.y < frame.viewport.z) { discard; }
-  return vec4f(surfaceRadiance(s,front),1);
+  return vec4f(radiance,1);
 }
 `;

@@ -1,5 +1,9 @@
 import { createGpuRenderer } from "./renderer-webgpu-runtime.js";
 import { nativeSceneShader } from "./native-scene-shader.js";
+import {
+  validateNativeMaterials,
+  createNativeMaterialTextures,
+} from "./native-surface-materials.js";
 
 const STRIDE = 12;
 const UNIFORM_BYTES = 256;
@@ -17,7 +21,7 @@ const unit = (a) => {
 const finiteVector = (a) =>
   Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
 
-function validateFrame(frame, maxVertices) {
+function validateFrame(frame, maxVertices, materialCount) {
   const { vertices, camera, time = 0 } = frame ?? {};
   if (
     !(vertices instanceof Float32Array) ||
@@ -55,6 +59,48 @@ function validateFrame(frame, maxVertices) {
     throw new Error(
       "wakes must contain at most four finite [x, z, heading] entries.",
     );
+  }
+  const count = vertices.length / STRIDE;
+  if (
+    frame.texcoords !== undefined &&
+    (!(frame.texcoords instanceof Float32Array) ||
+      frame.texcoords.length !== count * 2 ||
+      !frame.texcoords.every(Number.isFinite))
+  ) {
+    throw new Error(
+      "texcoords must contain two finite coordinates per vertex.",
+    );
+  }
+  if (frame.surfaces !== undefined) {
+    if (
+      !Array.isArray(frame.surfaces) ||
+      frame.surfaces.length > 256 ||
+      !frame.texcoords
+    ) {
+      throw new Error(
+        "surfaces require texcoords and at most 256 contiguous draw ranges.",
+      );
+    }
+    let end = 0;
+    for (const range of frame.surfaces) {
+      if (
+        !range ||
+        range.firstVertex !== end ||
+        !Number.isInteger(range.vertexCount) ||
+        range.vertexCount <= 0 ||
+        range.vertexCount % 3 !== 0 ||
+        !Number.isInteger(range.materialIndex) ||
+        range.materialIndex < 0 ||
+        range.materialIndex >= materialCount
+      ) {
+        throw new Error(
+          "surface ranges must cover triangles in order and reference a valid material.",
+        );
+      }
+      end += range.vertexCount;
+    }
+    if (end !== count)
+      throw new Error("surface ranges must cover every vertex exactly once.");
   }
   return { ...frame, time };
 }
@@ -106,6 +152,9 @@ function frameUniforms(frame, width, height, reflected = false) {
 /** Native raster surfaces. The caller owns simulation, animation and scheduling. */
 export async function createNativeSceneRenderer(options = {}) {
   const maxVertices = options.maxVertices ?? 300_000;
+  const materials = options.materials ?? [];
+  validateNativeMaterials(materials);
+  const materialCount = materials.length;
   if (
     !Number.isInteger(maxVertices) ||
     maxVertices < 3 ||
@@ -118,6 +167,7 @@ export async function createNativeSceneRenderer(options = {}) {
   let available = true;
   let targets = null;
   let vertexBuffer = null;
+  let uvBuffer = null;
   let vertexCapacity = 0;
   let pendingFrame = null;
   let submittedFrames = 0;
@@ -185,6 +235,62 @@ export async function createNativeSceneRenderer(options = {}) {
         { binding: 0, visibility: 2, texture: { sampleType: "float" } },
         { binding: 1, visibility: 2, sampler: { type: "filtering" } },
       ],
+    });
+    const materialLayout = device.createBindGroupLayout({
+      entries: [
+        ...[0, 1, 2].map((binding) => ({
+          binding,
+          visibility: 2,
+          texture: { sampleType: "float" },
+        })),
+        { binding: 3, visibility: 2, sampler: { type: "filtering" } },
+        {
+          binding: 4,
+          visibility: 2,
+          buffer: { type: "uniform", minBindingSize: 16 },
+        },
+      ],
+    });
+    const materialSampler = device.createSampler({
+      addressModeU: "repeat",
+      addressModeV: "repeat",
+      minFilter: "linear",
+      magFilter: "linear",
+      mipmapFilter: "linear",
+      maxAnisotropy: 4,
+    });
+    const materialGroups = createNativeMaterialTextures(
+      device,
+      materials,
+      own,
+    ).map((material) => {
+      const params = own(
+        device.createBuffer({
+          size: 16,
+          usage: 0x48,
+          label: "native.material-parameters",
+        }),
+      );
+      device.queue.writeBuffer(
+        params,
+        0,
+        new Float32Array([
+          material.normalScale,
+          material.authored ? 1 : 0,
+          0,
+          0,
+        ]),
+      );
+      return device.createBindGroup({
+        layout: materialLayout,
+        entries: [
+          { binding: 0, resource: material.baseColor },
+          { binding: 1, resource: material.normal },
+          { binding: 2, resource: material.orm },
+          { binding: 3, resource: materialSampler },
+          { binding: 4, resource: { buffer: params } },
+        ],
+      });
     });
     const uniformBuffer = own(
       device.createBuffer({
@@ -267,6 +373,20 @@ export async function createNativeSceneRenderer(options = {}) {
                         ? attributes.slice(0, 1)
                         : attributes,
                   },
+                  ...(vertex === "shadowVertex"
+                    ? []
+                    : [
+                        {
+                          arrayStride: 8,
+                          attributes: [
+                            {
+                              shaderLocation: 4,
+                              offset: 0,
+                              format: "float32x2",
+                            },
+                          ],
+                        },
+                      ]),
                 ],
               }
             : {}),
@@ -303,7 +423,7 @@ export async function createNativeSceneRenderer(options = {}) {
       "surfaceFragment",
       format,
       4,
-      [uniformLayout, shadowLayout],
+      [uniformLayout, shadowLayout, materialLayout],
       true,
     );
     const skyPipeline = await pipeline(
@@ -320,7 +440,7 @@ export async function createNativeSceneRenderer(options = {}) {
       "waterFragment",
       format,
       4,
-      [uniformLayout, shadowLayout, reflectionLayout],
+      [uniformLayout, shadowLayout, materialLayout, reflectionLayout],
     );
     const reflectedSurfacePipeline = await pipeline(
       "reflection-surface",
@@ -328,7 +448,7 @@ export async function createNativeSceneRenderer(options = {}) {
       "reflectionSurface",
       "rgba16float",
       1,
-      [uniformLayout, shadowLayout],
+      [uniformLayout, shadowLayout, materialLayout],
       true,
     );
     const reflectedSkyPipeline = await pipeline(
@@ -434,7 +554,20 @@ export async function createNativeSceneRenderer(options = {}) {
         if (p !== shadowPipeline) pass.setBindGroup(1, shadowGroup);
         if (vertexCount > 0) {
           pass.setVertexBuffer(0, vertexBuffer);
-          pass.draw(vertexCount);
+          if (p === shadowPipeline) {
+            pass.draw(vertexCount);
+          } else {
+            pass.setVertexBuffer(1, uvBuffer);
+            if (pendingFrame.surfaces) {
+              for (const range of pendingFrame.surfaces) {
+                pass.setBindGroup(2, materialGroups[range.materialIndex + 1]);
+                pass.draw(range.vertexCount, 1, range.firstVertex);
+              }
+            } else {
+              pass.setBindGroup(2, materialGroups[0]);
+              pass.draw(vertexCount);
+            }
+          }
         }
       };
       const shadowPass = encoder.beginRenderPass({
@@ -480,7 +613,8 @@ export async function createNativeSceneRenderer(options = {}) {
       if (pendingFrame.water !== false) {
         pass.setPipeline(waterPipeline);
         pass.setBindGroup(1, shadowGroup);
-        pass.setBindGroup(2, targets.reflectionGroup);
+        pass.setBindGroup(2, materialGroups[0]);
+        pass.setBindGroup(3, targets.reflectionGroup);
         pass.draw(3);
       }
       drawGeometry(pass, surfacePipeline, mainGroup);
@@ -491,14 +625,22 @@ export async function createNativeSceneRenderer(options = {}) {
       render(input) {
         if (destroyed) throw new Error("Native scene renderer was destroyed.");
         if (!available) throw new Error("WebGPU device was lost.");
-        pendingFrame = validateFrame(input, maxVertices);
+        pendingFrame = validateFrame(input, maxVertices, materialCount);
         const data = pendingFrame.vertices;
         ensureTargets();
         if (data.byteLength > vertexCapacity) {
           if (vertexBuffer) release(vertexBuffer);
+          if (uvBuffer) release(uvBuffer);
           vertexCapacity = Math.min(
             maxVertices * STRIDE * 4,
             Math.max(4096, 2 ** Math.ceil(Math.log2(data.byteLength))),
+          );
+          uvBuffer = own(
+            device.createBuffer({
+              label: "native.surface-uvs",
+              size: Math.ceil(vertexCapacity / (STRIDE * 4)) * 8,
+              usage: 0x28,
+            }),
           );
           vertexBuffer = own(
             device.createBuffer({
@@ -508,6 +650,8 @@ export async function createNativeSceneRenderer(options = {}) {
             }),
           );
         }
+        if (pendingFrame.texcoords?.byteLength)
+          device.queue.writeBuffer(uvBuffer, 0, pendingFrame.texcoords);
         vertexCount = data.length / STRIDE;
         if (data.byteLength) device.queue.writeBuffer(vertexBuffer, 0, data);
         device.queue.writeBuffer(

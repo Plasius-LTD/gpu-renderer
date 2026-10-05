@@ -751,3 +751,25 @@ there is no npm write-token fallback. CD remains disabled until the npm trusted
 publisher binding and protected-branch-only production environment are
 independently verified.
 <!-- END PLASIUS RELEASE INTEGRITY -->
+
+### Authored materials in native surfaces
+
+`createNativeSceneRenderer({ canvas, materials })` accepts up to 16 opaque
+materials containing decoded RGBA8 `baseColor`, `normal`, and/or `orm` maps.
+This matches images returned by the `@plasius/gpu-shared` glTF loader. Colour maps
+are sRGB; normals and ORM (occlusion/roughness/metalness) are linear. Optional
+`normalScale` defaults to 1. Maps must be power-of-two, up to 2048 pixels per axis,
+with a 64 MiB combined decoded-source budget. Textures are uploaded once and mip
+filtered; the renderer owns GPU disposal, while callers own image loading.
+
+For textured frames, supply `texcoords` (two floats per vertex) and `surfaces`
+containing `{ firstVertex, vertexCount, materialIndex }`. Ranges must cover the
+whole triangle list in order, refer to the initialization-time materials, and
+contain whole triangles. At most 256 ranges are accepted. Linear vertex colour
+and roughness/metalness factors multiply the maps. Omit both new frame fields to
+retain the existing procedural/untextured path. Main and reflection passes use
+the same authored material; alpha/transmission/skinning are not added here.
+
+See [material design](docs/design/native-textured-surfaces.md) and
+[ADR-0031](docs/adrs/adr-0031-native-authored-materials.md). Rollout inherits
+`gpu-demo.scene-fidelity.enabled`; access remains governed by the site's capability.
