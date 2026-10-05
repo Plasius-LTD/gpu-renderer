@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add opt-in canonical cloth-response diagnostics comparing normal maps on/off
+  and centred/averaged camera samples under a configurable raking light, with
+  normal-correction and detail-signal measurements; no runtime changes (#226).
+
 - Add configurable cloth close-up and uniform-SPP fixture controls with
   same-frame GPU colour/normal inspection, validated counts and retained private
   diagnostic evidence; no transport or material changes (#225).

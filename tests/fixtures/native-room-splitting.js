@@ -9,7 +9,7 @@ let busy=false;
 export async function runRoomSplittingBenchmark({loadAssets,clearCapture,roomCompositionControls}){
  if(busy)return;busy=true;
  const abort=new AbortController(),stop=()=>abort.abort(),runners=[],canvases=[];
- const locked=[...document.querySelectorAll('#controls input,#controls select,#run,#reset,#benchmark')];
+ const locked=[...document.querySelectorAll('#controls input,#controls select,#run,#reset,#benchmark,#cloth-response')];
  const report={schemaVersion:1,scope:'room-rough-bounce-splitting',status:'running',timings:[],diagnostics:[],failures:[],qualification:'experimental-not-converged-not-matched-quality'};
  let finalImage;
  const marker=document.createElement('canvas');marker.width=32;marker.height=32;

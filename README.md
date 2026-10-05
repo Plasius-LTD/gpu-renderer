@@ -19,6 +19,16 @@ The [retained 1080p/128-SPP comparison](docs/evidence/cloth-closeup-2026-09-29.m
 shows fine signal in the colour/normal guides but does not yet match the reference
 application's lit fabric response; denoising alone does not explain the gap.
 
+**Diagnose cloth normal detail** (#226) isolates four combinations: normal maps
+on/off, each at pixel centres or averaged stable camera samples. Select the
+cloth close-up and SPP ceiling, then adjust diagnostic light elevation/intensity.
+The same canonical GPU material code is evaluated under one unoccluded white
+directional light, with no shadows, indirect transport or denoising. This is a
+diagnostic, **not** the full renderer or a speed benchmark. It retains native
+PNGs/HDR and reports normal-correction angles and map-detail signal; the authored
+material and ordinary Render path are unchanged. See the
+[experiment and QA criteria](docs/design/cloth-response-diagnostic.md).
+
 Cloth fidelity (experimental, Task #224): texture inputs accept per-slot
 `transform: {offset, scale, rotation}` and glTF `wrapS/wrapT`. Keep original
 pixels; UV transforms run on GPU, including the normal-map tangent frame.

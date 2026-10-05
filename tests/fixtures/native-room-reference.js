@@ -5,13 +5,15 @@ import {createRadialSamplingPlan,radialSamplingTiers,RADIAL_SAMPLING_DEFAULTS,RA
 import {encodeLinearImageChunks} from "/lighting/demo/eames-environments/linear-image-chunks.js";
 import {compareDenoisedRadiance} from "/lighting/demo/eames-environments/guided-denoise-probe.js";
 import {CLOTH_INSPECTION_DEFAULTS,clothCloseupCamera,selectInspectionPlan,validateInspectionFrame} from './cloth-inspection-settings.js';
+import {CLOTH_RESPONSE_DEFAULTS} from './cloth-response-settings.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
-const controls=[...el("controls").querySelectorAll("input,select"),el("benchmark")];
+const controls=[...el("controls").querySelectorAll("input,select"),el("benchmark"),el('cloth-response')];
 el('central-reference').value=ROOM_DEFAULTS.centralReference;
 el('spp').min='1';el('spp').max=String(RADIAL_MAXIMUM_SPP);el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
 function resetInspection(){el('inspection-camera').value='room';el('sample-distribution').value='radial';el('material-inspection').value='off';
+ el('response-elevation').value=CLOTH_RESPONSE_DEFAULTS.elevation;el('response-intensity').value=CLOTH_RESPONSE_DEFAULTS.intensity;
  el('inspection-distance').value=CLOTH_INSPECTION_DEFAULTS.distance;el('inspection-elevation').value=CLOTH_INSPECTION_DEFAULTS.elevation;
  for(const [i,axis] of ['x','y','z'].entries())el('inspection-target-'+axis).value=CLOTH_INSPECTION_DEFAULTS.target[i];}
 resetInspection();
@@ -26,7 +28,7 @@ let cancellation,assets,comparison;
 function showComparison(clean){if(!comparison)return;const image=clean?comparison.clean:comparison.raw;preview.src=image;download.href=image;download.download=comparison.stem+(clean?'-guided':'-raw')+'.png';el('comparison-label').textContent=clean?'Cleaned · same camera samples':'Raw · same camera samples';}
 el('show-raw').addEventListener('click',()=>showComparison(false));el('show-clean').addEventListener('click',()=>showComparison(true));
 for(const mode of ['albedo','normal'])el('show-'+mode).addEventListener('click',()=>{if(!comparison?.[mode])return;preview.src=comparison[mode];download.href=comparison[mode];download.download=comparison.stem+'-'+mode+'.png';el('comparison-label').textContent=mode==='albedo'?'Base colour · no lighting / tone mapping · single first sample':'Mapped world normals · magenta = unavailable · single first sample';});
-function clearCapture(){describeSampling();comparison=null;el('comparison').hidden=true;el('show-albedo').hidden=true;el('show-normal').hidden=true;preview.hidden=true;preview.removeAttribute("src");download.hidden=true;download.removeAttribute("href");result.textContent="";status.textContent="Settings changed. Render to update the room view.";}
+function clearCapture(){describeSampling();comparison=null;el('response-comparison').hidden=true;el('response-view').onchange=null;el('comparison').hidden=true;el('show-albedo').hidden=true;el('show-normal').hidden=true;preview.hidden=true;preview.removeAttribute("src");download.hidden=true;download.removeAttribute("href");result.textContent="";status.textContent="Settings changed. Render to update the room view.";}
 for(const control of controls){
  control.addEventListener("change",clearCapture);
  control.addEventListener("input",clearCapture);
@@ -75,6 +77,7 @@ export async function loadAssets(receipt,signal){
  assets={room,roomAsset,eames,referenceModels,sourceKey,createProductStudioMeshes,lightingOptions,eamesSource:receipt.eamesSource};return assets;
 }
 export function roomCompositionControls(source){return {placement:{x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view:el('view').value,fovYDegrees:el('fov').valueAsNumber,centralReference:el('central-reference').value,referenceModels:el('models').value==='all'?source.referenceModels:[]};}
+function closeupControls(){return {enabled:el('inspection-camera').value==='cloth',distance:el('inspection-distance').valueAsNumber,elevation:el('inspection-elevation').valueAsNumber,target:['x','y','z'].map(axis=>el('inspection-target-'+axis).valueAsNumber)};}
 run.addEventListener("click",async()=>{
  for(const control of controls)if(!control.checkValidity()){control.reportValidity();status.textContent="Invalid settings. Check the highlighted field.";return;}
  const settings=roomReferenceSettings(el("resolution").value,el("sampler").value,el('spp').valueAsNumber),view=el("view").value;
@@ -82,7 +85,7 @@ run.addEventListener("click",async()=>{
  const guidedDenoise=el('denoise').value==='guided';
  const sheen=el('sheen').value==='on';
  const distribution=el('sample-distribution').value,materialInspection=el('material-inspection').value==='on';
- const closeup={enabled:el('inspection-camera').value==='cloth',distance:el('inspection-distance').valueAsNumber,elevation:el('inspection-elevation').valueAsNumber,target:['x','y','z'].map(axis=>el('inspection-target-'+axis).valueAsNumber)};
+ const closeup=closeupControls();
  if(materialInspection&&!guidedDenoise){status.textContent='Select guided denoising to capture material inspection views.';return;}
  if(splitDepth&&settings.sampler!=="stable-pattern"){status.textContent="Select the stable sampler to test splitting.";return;}
  const placement={x:el("chair-x").valueAsNumber,z:el("chair-z").valueAsNumber,yaw:el("chair-yaw").valueAsNumber};
@@ -182,4 +185,8 @@ run.addEventListener("click",async()=>{
 el('benchmark').addEventListener('click',async()=>{
  const {runRoomSplittingBenchmark}=await import('./native-room-splitting.js');
  await runRoomSplittingBenchmark({loadAssets,clearCapture,roomCompositionControls});
+});
+el('cloth-response').addEventListener('click',async()=>{
+ const {runRoomClothResponse}=await import('./native-room-cloth-response.js');
+ await runRoomClothResponse({loadAssets,clearCapture,roomCompositionControls,closeupControls});
 });

@@ -26,6 +26,8 @@ body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-
 <div class="field"><label for="inspection-target-z">Cloth target depth 0–1</label><input id="inspection-target-z" type="number" min="0" max="1" step="0.05" required></div>
 <div class="field"><label for="sample-distribution">Sample distribution</label><select id="sample-distribution"><option value="radial">Adaptive rings</option><option value="uniform">Uniform — every pixel at ceiling</option></select></div>
 <div class="field"><label for="material-inspection">Material inspection</label><select id="material-inspection"><option value="off">Off</option><option value="on">Capture colour and normals</option></select></div>
+<div class="field"><label for="response-elevation">Diagnostic light elevation °</label><input id="response-elevation" type="number" min="1" max="90" step="1" required></div>
+<div class="field"><label for="response-intensity">Diagnostic white-light intensity</label><input id="response-intensity" type="number" min="0.01" max="100" step="0.01" required></div>
 <div class="field"><label for="chair-x">Eames X</label><input id="chair-x" type="number" min="-5" max="5" step="0.1" value="2.3" required></div>
 <div class="field"><label for="chair-z">Eames Z</label><input id="chair-z" type="number" min="-4" max="4" step="0.1" value="-2.5" required></div>
 <div class="field"><label for="chair-yaw">Rotation °</label><input id="chair-yaw" type="number" min="-180" max="180" step="5" value="-25" required></div>
@@ -33,10 +35,13 @@ body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-
 <p>Placement moves the Eames chair and ottoman together; the comparison camera target stays fixed. Centre reference exchanges the sofa and spacesuit floor positions without changing their rotation; it has no effect in Eames-only mode. The first additional seating model is uniformly scaled to 1.5 m wide, preserving its proportions; the standing model keeps its source scale. All retain default materials. Changes apply on Render; wall collisions are not checked. FOV defaults to 52° (previously 62°); this remains a single-camera, not stereo, view.</p>
 <p id="model-names" role="status">Additional assets are loaded only from the local server and verified on Render.</p>
 <button id="run">Render room</button><button id="reset">Reset view</button><button id="cancel" disabled>Stop after pending GPU work</button>
+<button id="cloth-response">Diagnose cloth normal detail</button>
+<p>The cloth diagnostic uses the selected camera and SPP ceiling, uniform stable camera samples and the selected sheen model. It compares normal maps on/off and pixel-centre/multi-sample camera rays under one unoccluded white light. It omits shadows, indirect bounces, splitting and denoising. Not a full render or performance benchmark; no authored texture changes.</p>
+<div id="response-comparison" hidden><label for="response-view">Cloth diagnostic view</label><select id="response-view"><option value="0">Pixel centre · normal map on</option><option value="1">Pixel centre · normal map off</option><option value="2">Multi-sample · normal map on</option><option value="3">Multi-sample · normal map off</option></select></div>
 <p>Splitting requires the stable sampler. It adds secondary rays, not camera SPP. No split after the selected depth.</p>
 <p>Close-up moves the camera, not the model or its texture scale. Uniform sampling removes radial quality bands. Material inspection requires guided denoising: it displays the same frame's first-sample base colour and mapped world normals, not another renderer. Colour includes the authored tint; magenta normals mean unavailable/protected. These single-sample guides are not antialiased or photographic output.</p>
 <button id="benchmark">Measure splitting: off vs first vs first two</button>
-<p>Splitting benchmark always uses the default sampling ceiling, denoising off and the stable sampler for every variant: one warmup, three rotated timing rounds, then diagnostic images. Keep this tab visible; it may take several minutes.</p>
+<p>Splitting benchmark uses room-view framing, radial budgets at the default ceiling, denoising off and the stable sampler for every variant. Close-up and material-inspection controls do not apply. One warmup, three rotated timing rounds, then diagnostic images. Keep this tab visible; it may take several minutes.</p>
 <p id="status" role="status" aria-live="polite">Ready. Render to view the Eames inside the room.</p>
 <canvas id="canvas" width="1920" height="1080" aria-hidden="true"></canvas>
 <a id="download" hidden>Save native PNG</a>

@@ -34,6 +34,10 @@ export async function createNativeAdaptiveRunner(c) {
     cachedBudgetHostBytes:budgets.byteLength+words.byteLength+uniform.byteLength};
   return {adapter:c.adapter,memory,planSetupMs,tiles:plan.length,
     guidedPostprocess:c.guidePostprocess,
+    async inspectClothResponse(options){
+      const {runClothResponse}=await import('./cloth-response-gpu.js');
+      return runClothResponse(c,options);
+    },
     sceneSnapshot:{triangleCount:renderer.config.triangleCount,bvhNodeCount:renderer.config.bvhNodeCount,
       displayQuality:renderer.config.displayQuality,accelerationBuildMode:renderer.config.accelerationBuildMode,
       maxDepth:renderer.config.maxDepth,samplesPerPixel:renderer.config.samplesPerPixel,camera:renderer.config.camera},
