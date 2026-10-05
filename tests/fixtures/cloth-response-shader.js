@@ -1,6 +1,7 @@
 import {createWavefrontPathTracingComputeShaderSource} from '../../src/wavefront-shaders.js';
 import {WAVEFRONT_MAKE_CAMERA_RAY_WGSL} from '../../src/wavefront-camera-shared-shader.js';
 export const CLOTH_RESPONSE_BINDINGS=Object.freeze([3,5,8,9,...Array.from({length:8},(_,i)=>23+i),...Array.from({length:13},(_,i)=>33+i),46]);
+export const CLOTH_RESPONSE_VECTORS=6;
 
 export function createClothResponseShader(){
  const signature='fn make_ray(pixelIndex: u32) -> RayRecord',ordinal='  let sampleId = u32(config.projectionAndSampling.w);';
@@ -35,17 +36,19 @@ fn cloth_sample(pixel:u32, ordinal:u32) -> ClothSample {
  if(id.x>=config.tilePixelCount){return;}
  let center=cloth_sample(id.x,0u);var on=center.on;var off=center.off;
  var tilt=center.tilt;var correction=center.correction;var maximum=center.correction;
- var changed=select(0.0,1.0,center.correction>0.1);var sameMesh=true;
+ var changed=select(0.0,1.0,center.correction>0.1);var sameMesh=true;var completed=1u;
  for(var ordinal=1u;ordinal<config.samplesPerPixel;ordinal++){
   let s=cloth_sample(id.x,ordinal);on+=s.on;off+=s.off;
   sameMesh=sameMesh&&s.mesh==center.mesh;tilt+=s.tilt;correction+=s.correction;
   maximum=max(maximum,s.correction);changed+=select(0.0,1.0,s.correction>0.1);
+  completed++;
  }
- let base=id.x*5u;let count=f32(config.samplesPerPixel);
+ let base=id.x*${CLOTH_RESPONSE_VECTORS}u;let count=f32(completed);
  accumulation[base]=vec4<f32>(center.on,f32(center.mesh));
  accumulation[base+1u]=vec4<f32>(center.off,1);
  accumulation[base+2u]=vec4<f32>(on/count,select(0.0,f32(center.mesh),sameMesh));
  accumulation[base+3u]=vec4<f32>(off/count,1);
  accumulation[base+4u]=vec4<f32>(tilt/count,correction/count,maximum,changed);
+ accumulation[base+5u]=vec4<f32>(count,f32(config.samplesPerPixel),0,0);
 }`;
 }
