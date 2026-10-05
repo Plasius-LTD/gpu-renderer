@@ -28,6 +28,10 @@ diagnostic, **not** the full renderer or a speed benchmark. It retains native
 PNGs/HDR and reports normal-correction angles and map-detail signal; the authored
 material and ordinary Render path are unchanged. See the
 [experiment and QA criteria](docs/design/cloth-response-diagnostic.md).
+The [retained 1080p/4K lighting-only experiment](docs/evidence/cloth-response-2026-10-05.md)
+finds that camera averaging retains about 93–94.5% of measured fine normal-map
+signal; light direction changes its response much more. This narrows the
+investigation but does not qualify the full renderer or establish photo equivalence.
 
 Cloth fidelity (experimental, Task #224): texture inputs accept per-slot
 `transform: {offset, scale, rotation}` and glTF `wrapS/wrapT`. Keep original
