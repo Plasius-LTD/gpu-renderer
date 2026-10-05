@@ -1596,6 +1596,10 @@ export interface NativeSurfaceMaterial {
   /** Linear R occlusion, G roughness, B metalness. */
   orm?: NativeSurfaceImage;
   normalScale?: number;
+  /** Independent dielectric coating strength, 0–1; defaults to 0 (off). */
+  clearcoat?: number;
+  /** Coating roughness, 0–1; independent of the base map; defaults to 0. */
+  clearcoatRoughness?: number;
 }
 /** Interleaved world-space triangles: position, normal, linear colour, roughness/metalness/detail. */
 export interface NativeSceneFrame {

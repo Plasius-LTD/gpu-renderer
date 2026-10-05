@@ -115,3 +115,29 @@ test("all mip levels reach 1x1 for rectangular maps and own every allocation", (
   );
   assert.equal(groups[1].normalScale, 0.5);
 });
+
+test("clearcoat parameters are independent and bounded, and default to uncoated", () => {
+  for (const material of [
+    { clearcoat: -1 },
+    { clearcoat: 1.1 },
+    { clearcoat: NaN },
+    { clearcoatRoughness: Infinity },
+    { clearcoatRoughness: -0.1 },
+    { clearcoatRoughness: 2 },
+  ]) {
+    assert.throws(() => validateNativeMaterials([material]), /clearcoat/i);
+  }
+  const f = fixture();
+  const materials = [
+    { clearcoat: 0.7, clearcoatRoughness: 0.24 },
+    { clearcoat: 0, clearcoatRoughness: 0 },
+  ];
+  validateNativeMaterials(materials);
+  const uploaded = createNativeMaterialTextures(f.device, materials, (x) => x);
+  assert.equal(uploaded[0].clearcoat, 0);
+  assert.equal(uploaded[0].clearcoatRoughness, 0);
+  assert.equal(uploaded[1].clearcoat, 0.7);
+  assert.equal(uploaded[1].clearcoatRoughness, 0.24);
+  assert.equal(uploaded[2].clearcoat, 0);
+  assert.equal(uploaded[2].clearcoatRoughness, 0);
+});

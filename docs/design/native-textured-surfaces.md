@@ -58,3 +58,22 @@ No browser errors or warnings were recorded. The existing untextured Shoreline
 scene also rendered water, geometry, shadows and reflections with the new pipeline
 layout and paused correctly. See the [asset review](cc0-demo-asset-review.md).
 These are local checks; remote CI/CD and downstream publication are still required.
+
+## Review refinement: varnished wood (2026-10-05)
+
+The user identified reflection appearing at the wood-colour level. Add an opt-in
+clearcoat following the layered dielectric model in
+[KHR_materials_clearcoat](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_clearcoat).
+Use independent `clearcoat` strength and `clearcoatRoughness` in [0,1]. A zero
+strength preserves old callers. The coat uses the geometric normal, independently
+of the base's grain normal, and neutral dielectric Fresnel; attenuate the base
+radiance by the coating's reflected fraction rather than adding unconstrained
+brightness. Apply it consistently to direct light and environment reflection.
+No clearcoat texture or separate clearcoat normal map is claimed by this slice.
+
+Tests must reject invalid coat parameters, check defaults and uploaded uniforms,
+and preserve the existing old-call tests. Verify actual browser views at multiple
+angles with coat enabled/disabled, without errors. The preview also needs the
+already tracked glTF omission fix in gpu-shared#131; read its existing local source
+for visual qualification, but require its published release for site consumption.
+Do not duplicate or modify that separately owned loader fix.

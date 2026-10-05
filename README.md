@@ -773,3 +773,10 @@ the same authored material; alpha/transmission/skinning are not added here.
 See [material design](docs/design/native-textured-surfaces.md) and
 [ADR-0031](docs/adrs/adr-0031-native-authored-materials.md). Rollout inherits
 `gpu-demo.scene-fidelity.enabled`; access remains governed by the site's capability.
+
+For varnished wood, set optional `clearcoat` and `clearcoatRoughness` (both 0–1).
+The coating reflects neutral light using its own smooth geometric normal above
+the coloured, normal-mapped wood; Fresnel layering attenuates the underlying
+material instead of simply adding shine. Strength defaults to zero, preserving
+uncoated callers. Coating roughness defaults to zero and is independent of the
+base roughness map. This slice does not implement clearcoat texture/normal maps.

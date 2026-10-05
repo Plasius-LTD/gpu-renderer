@@ -89,17 +89,25 @@ fn visibility(p: vec3f, n: vec3f) -> f32 {
   }
   return result / 9.0;
 }
-fn brdf(c: vec3f, n: vec3f, v: vec3f, roughness: f32, metal: f32) -> vec3f {
+// Dielectric coating is evaluated independently from the coloured substrate.
+// This returns the microfacet lobe without Fresnel, including the cosine term.
+fn specularLobe(n: vec3f, v: vec3f, roughness: f32) -> f32 {
   let l = frame.sun.xyz; let h = normalize(l + v);
   let nl = max(dot(n,l),0.0); let nv = max(dot(n,v),0.001);
-  let nh = max(dot(n,h),0.0); let vh = max(dot(v,h),0.0);
+  let nh = max(dot(n,h),0.0);
   let a = max(0.035, roughness * roughness); let a2 = a * a;
   let d = a2 / max(0.00001, 3.14159265 * pow(nh * nh * (a2 - 1.0) + 1.0, 2.0));
   let k = pow(roughness + 1.0, 2.0) / 8.0;
   let g = (nl / (nl * (1.0-k) + k)) * (nv / (nv * (1.0-k) + k));
+  return d * g / max(0.001, 4.0*nl*nv) * nl;
+}
+fn brdf(c: vec3f, n: vec3f, v: vec3f, roughness: f32, metal: f32) -> vec3f {
+  let h = normalize(frame.sun.xyz + v);
+  let nl = max(dot(n,frame.sun.xyz),0.0);
+  let vh = max(dot(v,h),0.0);
   let f0 = mix(vec3f(0.04), c, metal);
   let f = f0 + (1.0-f0) * pow(1.0-vh, 5.0);
-  return ((1.0-f) * (1.0-metal) * c / 3.14159265 + d * g * f / max(0.001, 4.0*nl*nv)) * nl;
+  return (1.0-f) * (1.0-metal) * c / 3.14159265 * nl + specularLobe(n,v,roughness) * f;
 }
 fn fog(c: vec3f, p: vec3f) -> vec3f {
   let amount = 1.0 - exp(-distance(frame.eye.xyz, p) * 0.0018);
@@ -107,7 +115,8 @@ fn fog(c: vec3f, p: vec3f) -> vec3f {
 }
 fn surfaceRadiance(s: Surface, front: bool) -> vec3f {
   let facing = select(select(-1.0,1.0,front),select(1.0,-1.0,front),frame.info.y>0.5);
-  var n = normalize(s.normal) * facing;
+  let coatNormal = normalize(s.normal) * facing;
+  var n = coatNormal;
   let v = normalize(frame.eye.xyz - s.world);
   // Derivatives and samples must be uniform across each fragment quad.
   let dx = dpdx(s.world); let dy = dpdy(s.world);
@@ -140,7 +149,16 @@ fn surfaceRadiance(s: Surface, front: bool) -> vec3f {
   let direct = brdf(c, n, v, roughness, metalness) * vec3f(3.0, 2.65, 2.15) * visibility(s.world, n);
   let ambient = c * hemi * (1.0 - metalness * 0.7) * orm.r;
   let env = sky(reflect(-v,n)) * mix(vec3f(0.04), c, metalness) * (1.0-roughness) * orm.r * 0.30;
-  return fog(direct + ambient + env, s.world);
+  let baseRadiance = direct + ambient + env;
+  if (materialParameters.z <= 0.0) { return fog(baseRadiance,s.world); }
+  // KHR_materials_clearcoat's simple Fresnel layering: varnish has its own
+  // smooth normal and roughness. Its reflection never inherits the wood colour.
+  let coatFresnel = 0.04 + 0.96 * pow(1.0-clamp(abs(dot(coatNormal,v)),0.0,1.0),5.0);
+  let coatWeight = materialParameters.z * coatFresnel;
+  let coatRoughness = clamp(materialParameters.w,0.04,1.0);
+  let coatDirect = vec3f(3.0,2.65,2.15) * specularLobe(coatNormal,v,coatRoughness) * visibility(s.world,coatNormal);
+  let coatEnvironment = sky(reflect(-v,coatNormal)) * (1.0-coatRoughness) * orm.r * 0.30;
+  return fog(baseRadiance * (1.0-coatWeight) + (coatDirect+coatEnvironment) * coatWeight, s.world);
 }
 @fragment fn surfaceFragment(s: Surface, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   return vec4f(display(surfaceRadiance(s,front)),1);

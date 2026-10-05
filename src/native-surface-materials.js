@@ -23,6 +23,12 @@ export function validateNativeMaterials(materials) {
     ) {
       throw new Error("material normalScale must be between 0 and 4.");
     }
+    for (const key of ["clearcoat", "clearcoatRoughness"]) {
+      const value = material[key] ?? 0;
+      if (!Number.isFinite(value) || value < 0 || value > 1) {
+        throw new Error(`material ${key} must be between 0 and 1.`);
+      }
+    }
     for (const key of MAPS) {
       const map = material[key];
       if (map === undefined) continue;
@@ -81,6 +87,8 @@ export function createNativeMaterialTextures(device, materials, own) {
     const result = {
       normalScale: material.normal ? (material.normalScale ?? 1) : 0,
       authored: MAPS.some((key) => material[key]),
+      clearcoat: material.clearcoat ?? 0,
+      clearcoatRoughness: material.clearcoatRoughness ?? 0,
     };
     for (const key of MAPS) {
       let level = material[key] ?? {

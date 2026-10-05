@@ -277,8 +277,8 @@ export async function createNativeSceneRenderer(options = {}) {
         new Float32Array([
           material.normalScale,
           material.authored ? 1 : 0,
-          0,
-          0,
+          material.clearcoat,
+          material.clearcoatRoughness,
         ]),
       );
       return device.createBindGroup({

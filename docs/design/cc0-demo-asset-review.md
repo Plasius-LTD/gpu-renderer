@@ -57,3 +57,11 @@ measured loading, texture, triangle and GPU memory budgets and visual checks aft
 optimization. Foliage also needs alpha-cutout rendering, which this opaque-material
 slice does not provide. Animation still needs actual textured skinning, authored
 root motion and an assembled environment before its professional flag can launch.
+
+## Varnish review variant
+
+The local visual review now uses the separately tracked glTF default-factor fix
+in gpu-shared#131 and an explicit satin-coating preset on the crate body/lid.
+The original downloaded files remain unchanged. The preset is Plasius-authored
+shading for review, not a claim that the source asset includes a clearcoat extension.
+Source loader correction must publish before downstream site adoption.

@@ -42,3 +42,14 @@ colour-pass bindings, upload reuse and resource disposal. Require actual WebGPU
 textured-model evidence, changed-source LCOV, types/lint/build and approved CI/CD.
 Consumers adopt only the published version. The scene-fidelity flag rolls back
 public exposure; the library retains its untextured API for existing callers.
+
+## Review refinement: dielectric coating
+
+User review identified a missing varnish layer. Add optional `clearcoat` strength
+and `clearcoatRoughness`, passed through the existing two spare material-uniform
+components. This leaves resource bindings and allocation limits unchanged. The
+coating uses an untinted microfacet response and its own geometric normal above
+the base normal map, with view-dependent Fresnel attenuation. It is off by default;
+the zero-strength path skips the additional lighting calculation. This follows
+the simple layered approximation described by KHR_materials_clearcoat, rather
+than modelling volumetric varnish, multiple scattering or refraction between layers.

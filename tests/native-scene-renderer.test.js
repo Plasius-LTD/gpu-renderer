@@ -29,7 +29,12 @@ function gpuFixture() {
         ]);
       },
       writeBuffer(...args) {
-        calls.push(["write", args[0].descriptor.label, args[2].length]);
+        calls.push([
+          "write",
+          args[0].descriptor.label,
+          args[2].length,
+          [...args[2]],
+        ]);
       },
       submit() {
         calls.push(["submit"]);
@@ -323,5 +328,19 @@ test("caller material-list mutation cannot change the uploaded material range", 
       }),
     /valid material/,
   );
+  renderer.destroy();
+});
+
+test("native materials upload independent clearcoat strength and roughness", async () => {
+  const f = gpuFixture();
+  const renderer = await createNativeSceneRenderer({
+    ...f,
+    materials: [{ clearcoat: 0.5, clearcoatRoughness: 0.25 }],
+  });
+  const parameters = f.calls.filter(
+    (c) => c[0] === "write" && c[1] === "native.material-parameters",
+  );
+  assert.deepEqual(parameters[0][3], [0, 0, 0, 0]);
+  assert.deepEqual(parameters[1][3], [0, 0, 0.5, 0.25]);
   renderer.destroy();
 });
