@@ -1233,7 +1233,7 @@ test("wavefront compute uses physical continuation throughput with strict physic
   assert.match(source, /let bsdf = evaluate_surface_bsdf\(hit, viewDirection, lightDirection\);/);
   assert.match(source, /let nDotL = saturate\(dot\(normal, lightDirection\)\);/);
   assert.match(source, /return sanitize_path_throughput\(bsdf \* \(nDotL \/ scatter\.pdf\)\);/);
-  assert.match(source, /let surfaceColor = max\(hit\.color\.xyz, config\.ambientColor\.xyz\);/);
+  assert.match(source, /let surfaceColor = max\(hit\.color\.xyz, vec3<f32>\(0\.0\)\);/);
   assert.match(source, /let sunlitFloor = sunlit_baseline_radiance\(normal\);/);
   assert.match(source, /let glossiness = surface_glossiness\(hit\);/);
   assert.match(source, /max\(config\.ambientColor\.xyz, sunlitFloor \* 0\.82\)/);

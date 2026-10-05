@@ -211,6 +211,6 @@ test("pipeline compilation failures propagate without returning partial pipeline
   }
 });
 
-test("the Task 224 material-corrected fixed shader remains canonical", () => {
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "125b295352a229f26634c68ba1deb675d7b57079fc7e409b81a535e703bf91e5");
+test("the Task 226 material-corrected fixed shader remains canonical", () => {
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "d6de59aa9638491ef9c4b999c9db66f959cdcdbac975f72b10f1a656a39dad6f");
 });

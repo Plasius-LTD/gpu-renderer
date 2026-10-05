@@ -14,7 +14,7 @@ test("bootstrap reuses canonical declarations and clearing without changing the 
     assert.ok(ADAPTIVE_BOOTSTRAP_WGSL.includes(fragment));
   }
   assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),
-    "125b295352a229f26634c68ba1deb675d7b57079fc7e409b81a535e703bf91e5"); // Task 224 material correctness, fixed and adaptive alike.
+    "d6de59aa9638491ef9c4b999c9db66f959cdcdbac975f72b10f1a656a39dad6f"); // Task 226 colour fix; terminal-MIS test reverses exactly those edits against the prior hash.
   assert.match(ADAPTIVE_BOOTSTRAP_WGSL, /pathNodes\[localPixelId\] = PathNode\(\)/u);
   assert.doesNotMatch(ADAPTIVE_BOOTSTRAP_WGSL, /pathVertices|clear_deferred_path/u);
   assert.doesNotMatch(ADAPTIVE_BOOTSTRAP_WGSL, /fn make_ray\(|bsdf|textureSample/u);

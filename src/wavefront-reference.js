@@ -467,12 +467,12 @@ function surfaceBsdfSamplingWeightsReference(hit) {
   ]);
 }
 
-function evaluateWavefrontSurfaceBsdfReference(hitInput, viewDirectionInput, lightDirectionInput, ambientColor = [0.018, 0.022, 0.026]) {
+function evaluateWavefrontSurfaceBsdfReference(hitInput, viewDirectionInput, lightDirectionInput) {
   const hit = normalizeWavefrontReferenceHit(hitInput);
   const normal = normalize(hit.shadingNormal, [0, 1, 0]);
   const viewDirection = normalize(viewDirectionInput, normal);
   const lightDirection = normalize(lightDirectionInput, normal);
-  const surfaceColor = clampVec3(maxVec3(hit.color, scale(asVec3(ambientColor, [0.018, 0.022, 0.026]), 0.35)), 0, 1);
+  const surfaceColor = clampVec3(hit.color, 0, 1);
   const roughness = clamp(hit.material[0], 0, 1);
   const metallic = clamp(hit.material[1], 0, 1);
   const clearcoat = clamp(hit.materialResponse[3], 0, 1);
@@ -611,7 +611,6 @@ export function validateWavefrontBsdfSample({
   lightDirection = [0, 1, 0],
   sampledPdf,
   lightPdf = 0,
-  ambientColor = [0.018, 0.022, 0.026],
 } = {}) {
   const normalizedHit = normalizeWavefrontReferenceHit(hit);
   const normal = normalize(normalizedHit.shadingNormal, [0, 1, 0]);
@@ -620,8 +619,7 @@ export function validateWavefrontBsdfSample({
   const bsdf = evaluateWavefrontSurfaceBsdfReference(
     normalizedHit,
     resolvedViewDirection,
-    resolvedLightDirection,
-    ambientColor
+    resolvedLightDirection
   );
   const expectedPdf = evaluateWavefrontSurfaceBsdfPdfReference(
     normalizedHit,
@@ -671,8 +669,7 @@ export function estimateWavefrontDirectionalHemisphericalReflectance(
     const bsdf = evaluateWavefrontSurfaceBsdfReference(
       normalizedHit,
       resolvedViewDirection,
-      lightDirection,
-      options.ambientColor ?? [0.018, 0.022, 0.026]
+      lightDirection
     );
     const nDotL = clamp(dot(normal, lightDirection), 0, 1);
     total = addVec3(total, bsdf.map((value) => value * nDotL * ((2 * Math.PI) / sampleCount)));
@@ -707,7 +704,7 @@ export function computeWavefrontTerminalEnvironmentContributionReference(
     reflectionDirection
   ).slice(0, 3);
   const surfaceColor = clampVec3(
-    maxVec3(hit.color, scale(asVec3(config.ambientColor, [0.018, 0.022, 0.026]), 0.35)),
+    hit.color,
     0,
     1
   );
@@ -745,7 +742,7 @@ export function computeWavefrontTerminalEnvironmentContributionReference(
   const contribution = sanitizeWavefrontSampleRadiance(
     scale(
       multiplyVec3(
-        multiplyVec3(sanitizeWavefrontThroughput(throughputInput), maxVec3(hit.color, ambientColor)),
+        multiplyVec3(sanitizeWavefrontThroughput(throughputInput), maxVec3(hit.color, [0, 0, 0])),
         source
       ),
       occlusion

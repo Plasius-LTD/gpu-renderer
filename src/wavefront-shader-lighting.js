@@ -416,7 +416,7 @@ fn surface_bsdf_sampling_weights(hit: HitRecord) -> vec3<f32> {
 
 fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirection: vec3<f32>) -> vec3<f32> {
   let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
-  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
+  let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let metallic = clamp(hit.material.y, 0.0, 1.0);
   let clearcoat = clamp(hit.materialResponse.w, 0.0, 1.0);
@@ -690,7 +690,7 @@ fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f
     mix(0.88, 0.38, glossiness)
   );
   let reflectionEnvironment = prefiltered_environment_radiance(reflectionDirection, roughness);
-  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
+  let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let f0 = surface_specular_f0(hit, surfaceColor);
   let brdfTerm = sample_brdf_lut(saturate(dot(normal, viewDirection)), roughness);
   let specularEnvironment = reflectionEnvironment * (f0 * brdfTerm.x + vec3<f32>(brdfTerm.y));
@@ -719,7 +719,7 @@ fn terminal_surface_environment_contribution(
   throughput: vec3<f32>,
   hit: HitRecord
 ) -> vec3<f32> {
-  let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);
+  let surfaceColor = max(hit.color.xyz, vec3<f32>(0.0));
   let occlusion = mix(0.75, 1.0, clamp(hit.occlusion, 0.0, 1.0));
   return sanitize_linear_radiance(
     throughput *

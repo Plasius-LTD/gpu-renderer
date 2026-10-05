@@ -6,6 +6,7 @@ import {encodeLinearImageChunks} from "/lighting/demo/eames-environments/linear-
 import {compareDenoisedRadiance} from "/lighting/demo/eames-environments/guided-denoise-probe.js";
 import {CLOTH_INSPECTION_DEFAULTS,clothCloseupCamera,selectInspectionPlan,validateInspectionFrame} from './cloth-inspection-settings.js';
 import {CLOTH_RESPONSE_DEFAULTS} from './cloth-response-settings.js';
+import {auditMaterialMaps} from './material-map-inventory.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
@@ -45,7 +46,7 @@ reset.addEventListener("click",()=>{
 cancel.addEventListener("click",()=>cancellation?.abort());
 export async function loadAssets(receipt,signal){
  const sourceKey=JSON.stringify([receipt.provenance.sources,receipt.provenance.assets]);
- if(assets){check(assets.sourceKey===sourceKey,'Server sources changed; reload this page before rendering');receipt.eamesSource=assets.eamesSource;return assets;}
+ if(assets){check(assets.sourceKey===sourceKey,'Server sources changed; reload this page before rendering');receipt.eamesSource=assets.eamesSource;receipt.referenceMaterialMaps=assets.referenceMaterialMaps;return assets;}
  const [{loadGltfModel},{createProductStudioMeshes},{createWavefrontEnvironmentLightingOptions}]=await Promise.all([
   import("/shared/src/gltf-loader.js"),import("/shared/src/product-studio-runtime.js"),import("/lighting/src/index.js")]);
  const manifestResponse=await fetch('/__room-manifest.json',{signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])});
@@ -61,20 +62,22 @@ export async function loadAssets(receipt,signal){
  check(extraResponse.ok,'Reference model manifest missing');const manifests=await extraResponse.json();
  check(Array.isArray(manifests)&&manifests.length<=2,'Invalid reference model list');
  check(JSON.stringify(manifests)===JSON.stringify(receipt.provenance.assets?.models??[]),'Reference model provenance mismatch');
- const referenceModels=[];
+ const referenceModels=[],referenceMaterialMaps=[];
  for(const [i,asset] of manifests.entries()){
   const response=await fetch(`/__reference-model-${i}.glb`,{signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});
   check(response.ok,'Reference model missing');const bytes=await response.arrayBuffer();
   check(bytes.byteLength===asset.bytes&&await hashBytes(bytes)===asset.sha256,'Reference model checksum mismatch');
   const url=URL.createObjectURL(new Blob([bytes],{type:'model/gltf-binary'}));let model;
   try{model=await loadGltfModel(url);}finally{URL.revokeObjectURL(url);}
+  referenceMaterialMaps.push({assetSha256:asset.sha256,materials:await auditMaterialMaps(bytes,model)});
   check(!signal.aborted,'Loading cancelled');referenceModels.push({model,asset});
  }
  const eames=await loadOriginalEames(receipt,signal,{maxDepth:6});receipt.eamesSource=receipt.scene;
  const lightingOptions=createWavefrontEnvironmentLightingOptions({preset:"neutral-studio",sunDirection:[0.18,0.93,0.24],sunColor:[2.4,2.25,2,1],intensity:1});
  el('room-name').textContent=roomAsset.name;document.title=`Eames inside ${roomAsset.name} · GPU reference`;
  el('model-names').textContent=referenceModels.length?`Available: Eames + ${referenceModels.map(m=>m.asset.name).join(' + ')}. Private assets; default material variants.`:'Available: Eames only; no additional local models supplied.';
- assets={room,roomAsset,eames,referenceModels,sourceKey,createProductStudioMeshes,lightingOptions,eamesSource:receipt.eamesSource};return assets;
+ receipt.referenceMaterialMaps=referenceMaterialMaps;
+ assets={room,roomAsset,eames,referenceModels,referenceMaterialMaps,sourceKey,createProductStudioMeshes,lightingOptions,eamesSource:receipt.eamesSource};return assets;
 }
 export function roomCompositionControls(source){return {placement:{x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view:el('view').value,fovYDegrees:el('fov').valueAsNumber,centralReference:el('central-reference').value,referenceModels:el('models').value==='all'?source.referenceModels:[]};}
 function closeupControls(){return {enabled:el('inspection-camera').value==='cloth',distance:el('inspection-distance').valueAsNumber,elevation:el('inspection-elevation').valueAsNumber,target:['x','y','z'].map(axis=>el('inspection-target-'+axis).valueAsNumber)};}

@@ -1,5 +1,16 @@
 # @plasius/gpu-renderer
 
+Material colour no longer inherits a brightness floor from ambient illumination
+(Task #226). Authored dark/saturated texture channels remain material properties;
+ambient light remains a radiance source. This affects fixed and adaptive rendering
+equally, without additional rays, passes or buffers. Existing approximate terminal
+lighting and AO policy are otherwise unchanged; full material conformance and
+cloth photo-equivalence are not claimed. See the
+[colour correction and qualification design](docs/design/authored-material-colour.md).
+Local room captures now audit authored versus decoded model texture slots,
+including UVs, transforms, strengths, dimensions and pixel hashes. Missing slots
+fail capture; factors without authored texture maps are not reported as missing.
+
 ### Local cloth close-up diagnostics
 
 The native room fixture now offers a configurable sofa close-up, uniform camera

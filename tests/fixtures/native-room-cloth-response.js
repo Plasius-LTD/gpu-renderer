@@ -23,6 +23,8 @@ export async function runRoomClothResponse({loadAssets,clearCapture,roomComposit
   const settings=roomReferenceSettings(el('resolution').value,'stable-pattern',el('spp').valueAsNumber);report.settings=settings;
   const response=await fetch('/__provenance',{signal:AbortSignal.timeout(10000)});check(response.ok,'Missing provenance');report.provenance=await response.json();
   el('status').textContent='Preparing canonical cloth response diagnostic';
+  const {runMaterialFidelityProbe}=await import('./material-fidelity-probe.js');
+  report.materialProbe=await runMaterialFidelityProbe(abort.signal);
   const source=await loadAssets(report,abort.signal),composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});
   report.closeup=closeupControls();composed.scene.camera=clothCloseupCamera(composed.scene,composed.evidence,report.closeup);
   report.scene={...composed.evidence,camera:composed.scene.camera};

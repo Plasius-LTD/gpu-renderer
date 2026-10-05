@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve authored material colour instead of raising dark channels to an
+  ambient-dependent floor in BSDF and terminal helpers. Add analytic CPU/GPU
+  colour regressions and source/decoded-map capture audits (#226); no added rays,
+  passes or runtime resources. Full cloth-fidelity qualification remains open.
+
 - Add opt-in canonical cloth-response diagnostics comparing normal maps on/off
   and centred/averaged camera samples under a configurable raking light, with
   normal-correction and detail-signal measurements; no runtime changes (#226).
