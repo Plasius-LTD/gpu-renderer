@@ -67,6 +67,24 @@ Material response is visibly clearer; fine-weave equivalence, converged quality
 and performance remain unqualified. The 4K high-sample diagnostic is slower,
 not evidence of a speedup.
 
+Experimental clearcoat (#232): set `renderer.materials.layeredClearcoat.enabled`
+in the same feature-flag snapshot (default **false**). Corrected coating has an
+independent normal/roughness and attenuates the whole base before adding its
+reflection. Hit-record stride and allocated memory are unchanged; no extra
+surface, bounce or camera sample is introduced. Coated emissive-light evaluation
+adds conditional material-sampling work. This is not a performance claim.
+
+In the local room choose **Layered clearcoat renderer → On**, then **Seat wood
+material variant → Add adjustable clear varnish**. Strength and roughness are
+editable in [0,1], initially 1 and 0.18. Only the verified Eames wood and seating
+frame change. Source models, textures, geometry and cached materials are preserved;
+capture receipts record each override. Both switches reset off. Use the same
+camera, lighting and sample budget for comparisons. The cloth diagnostic and
+benchmark are separate controls and do not apply this authoring variant.
+See [ADR0054](docs/adrs/adr-0054-layered-clearcoat.md). This thin clear layer does
+not model tinted absorption or change water/glass transport; coated delta-metal
+and transmissive cases are not qualified. No photo-equivalence or speedup claim.
+
 Choose **Centre reference → Sofa — upholstery inspection** in the local room
 page to exchange sofa/spacesuit floor positions while keeping their rotations,
 materials, 1.5 m seating scale and camera unchanged. Reset restores the previous

@@ -67,7 +67,8 @@ test('specialized assembled shaders preserve off bytes, binary ABI, identity, we
   assert.throws(()=>createWavefrontPathTracingComputeShaderSource({roughBounceSplitting:splitting}),/stable/);
   const source=createWavefrontPathTracingComputeShaderSource({progressiveSampling:'stable-pattern',roughBounceSplitting:splitting});
   const analyzed=analyzeWgslSource(source,'split');
-  const used=[0,1,2,4,5,6,8,9,19,20,21,22,29,30,31,32];
+  // Coated emissive NEE shares real material evaluation with terminal hits.
+  const used=[0,1,2,4,5,6,8,9,19,20,21,22,...Array.from({length:23},(_,i)=>23+i)];
   const manifest=await reflectGpuInterface({interfaceId:'plasius.renderer.rough-split',interfaceVersion:'1.0.0',modules:[{moduleId:'split',source}],
    pipelines:[{kind:'compute',pipelineId:'shade',layout:{bindGroups:[{group:0,entries:analyzed.bindings.filter(b=>used.includes(b.binding)).map(b=>({...b,visibility:['compute']}))}]},compute:{moduleId:'split',entryPoint:'resolveSurfaceRecords',constants:{}}}],
    modelFacingRecordNames:['RayRecord','HitRecord','PathNode'],modelFacingBindings:[],semantics:[]});

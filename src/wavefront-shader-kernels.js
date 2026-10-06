@@ -66,6 +66,8 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
   let hitSpecularColor = select(hitObject.specularColor, meshSurface.specularColor, candidate.triangleIndex != 0xffffffffu);
   let hitShadingNormal = valid_surface_normal(candidate.geometricNormal,
     select(candidate.shadingNormal, meshSurface.shadingNormal, candidate.triangleIndex != 0xffffffffu), -ray.direction.xyz);
+  let hitClearcoatNormal = valid_surface_normal(candidate.geometricNormal,
+    select(candidate.shadingNormal, meshSurface.clearcoatNormal, candidate.triangleIndex != 0xffffffffu), -ray.direction.xyz);
   let hitPrimitiveId = select(candidate.primitiveId, hitTriangle.triangleId, candidate.triangleIndex != 0xffffffffu);
   let hitMaterialRefId = select(candidate.materialRefId, hitTriangle.materialRefId, candidate.triangleIndex != 0xffffffffu);
   let hitMediumRefId = select(candidate.mediumRefId, hitTriangle.mediumRefId, candidate.triangleIndex != 0xffffffffu);
@@ -89,11 +91,11 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
     hitMaterialRefId,
     hitMediumRefId,
     hitMaterialSlot,
-    0u,
-    0u,
+    hitClearcoatNormal.xy,
     candidate.distance,
     hitOcclusion,
-    vec2<f32>(0.0),
+    hitClearcoatNormal.z,
+    0.0,
     vec4<f32>(position, 1.0),
     vec4<f32>(candidate.geometricNormal, 0.0),
     vec4<f32>(hitShadingNormal, 0.0),
@@ -113,6 +115,9 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  let segmentTransmittance = medium_
   if (hit.hitType == 1u) {
     let guidedLightWeight = select(1.0, 0.24, (ray.flags & RAY_FLAG_GUIDED_EMISSIVE) != 0u);
     var sourceRadiance = max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight;
+    if (layered_clearcoat_active(hit)) {
+      sourceRadiance *= 1.0 - coating_fresnel(hit.materialResponse.w, surface_clearcoat_normal(hit), -ray.direction.xyz);
+    }
     if (terminal_mis_enabled(ray)) {
       let bsdfPdf = max(ray.throughput.w, 0.000001);
       let lightPdf = terminal_emissive_light_pdf(ray, hit);
@@ -896,12 +901,19 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
     let halfVector = importance_sample_ggx(
       clearcoatSample,
       max(clamp(hit.materialExtension.x, 0.0, 1.0), 0.02),
-      normal
+      surface_clearcoat_normal(hit)
     );
+    if (layered_clearcoat_active(hit) && dot(viewDirection, halfVector) <= 0.0) {
+      return ScatterResult(vec4<f32>(normal, 0.0), 0.0, ray.mediumRefId, 0u, SCATTER_LOBE_CLEARCOAT);
+    }
     lightDirection = safe_normalize(reflect(-viewDirection, halfVector), normal);
     lobeKind = SCATTER_LOBE_CLEARCOAT;
   }
   if (dot(normal, lightDirection) <= 0.000001) {
+    // A rejected GGX proposal is a null event, not a different cosine proposal.
+    if (layered_clearcoat_active(hit)) {
+      return ScatterResult(vec4<f32>(lightDirection, 0.0), 0.0, ray.mediumRefId, 0u, lobeKind);
+    }
     let fallbackSample = sample_dimension_2d(
       ray.sourcePixelId,
       ray.sampleId,

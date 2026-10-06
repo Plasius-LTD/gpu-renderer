@@ -935,6 +935,7 @@ export interface WavefrontRoughBounceSplittingConfig {
 }
 
 export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
   readonly "renderer.materials.sheen.enabled"?: boolean;
   readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
   readonly "renderer.sampling.owenSobol.enabled"?: boolean;
@@ -951,6 +952,7 @@ export interface WavefrontRendererFeatureFlags {
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly enabled?: {
+    readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
     readonly "renderer.materials.sheen.enabled"?: boolean;
     readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
     readonly "renderer.sampling.owenSobol.enabled"?: boolean;
@@ -968,6 +970,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly flags?: {
+    readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
     readonly "renderer.materials.sheen.enabled"?: boolean;
     readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
     readonly "renderer.sampling.owenSobol.enabled"?: boolean;
@@ -985,7 +988,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly renderer?: {
-    readonly materials?: { readonly sheen?: { readonly enabled?: boolean } };
+    readonly materials?: { readonly sheen?: { readonly enabled?: boolean }; readonly layeredClearcoat?: { readonly enabled?: boolean } };
     readonly sampling?: {
       readonly owenSobol?: boolean | { readonly enabled?: boolean };
       readonly independentRandom?: boolean | { readonly enabled?: boolean };
@@ -1012,6 +1015,7 @@ export interface WavefrontRendererFeatureFlags {
 }
 
 export interface WavefrontTransportExperimentFlags {
+  readonly layeredClearcoat?: boolean;
   readonly sheen?: boolean;
   /** Default off; optional for structural compatibility with older snapshots. */
   readonly owenSobol?: boolean;
@@ -1130,6 +1134,7 @@ export interface WavefrontGpuParallelismDiagnostics {
 }
 
 export interface CreateWavefrontPathTracingComputeRendererOptions {
+  readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
   readonly "renderer.materials.sheen.enabled"?: boolean;
   readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
   readonly roughBounceSplitting?: {readonly splitDepth?: 1 | 2; readonly maximumAdditionalBytes?: number};

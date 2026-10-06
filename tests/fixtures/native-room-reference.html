@@ -19,6 +19,10 @@ body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-
 <div class="field"><label for="splitting">Rough bounce splitting</label><select id="splitting"><option value="0">Off</option><option value="1">2 / 1 / 1 — first bounce</option><option value="2">2 / 2 / 1 — first two bounces</option></select></div>
 <div class="field"><label for="denoise">Guided denoising</label><select id="denoise"><option value="off">Off — raw reference</option><option value="guided">On — compare same-frame raw / cleaned</option></select></div>
 <div class="field"><label for="sheen">Cloth sheen model</label><select id="sheen"><option value="off">Off — comparison control</option><option value="on">On — layered Charlie sheen</option></select></div>
+<div class="field"><label for="clearcoat">Layered clearcoat renderer</label><select id="clearcoat"><option value="off">Off — original comparison</option><option value="on">On — separate coating layer</option></select></div>
+<div class="field"><label for="wood-coat">Seat wood material variant</label><select id="wood-coat"><option value="off">Authored materials unchanged</option><option value="on">Add adjustable clear varnish</option></select></div>
+<div class="field"><label for="coat-weight">Varnish coating strength</label><input id="coat-weight" type="number" min="0" max="1" step="0.01"></div>
+<div class="field"><label for="coat-roughness">Varnish roughness</label><input id="coat-roughness" type="number" min="0" max="1" step="0.01"></div>
 <div class="field"><label for="view">Interior viewpoint</label><select id="view"><option value="entry">Room entrance</option><option value="front">Front comparison view</option><option value="corner">Opposite corner</option></select></div>
 <div class="field"><label for="inspection-camera">Camera framing</label><select id="inspection-camera"><option value="room">Room view</option><option value="cloth">Sofa cloth close-up</option></select></div>
 <div class="field"><label for="inspection-distance">Close-up distance m</label><input id="inspection-distance" type="number" min="0.3" max="3" step="0.05" required></div>

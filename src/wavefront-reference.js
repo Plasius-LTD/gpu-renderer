@@ -408,6 +408,9 @@ function normalizeWavefrontReferenceHit(input = {}) {
   const materialExtension = Array.isArray(input.materialExtension) ? input.materialExtension : [];
   return Object.freeze({
     color: Object.freeze(coerceWavefrontVec3(input.color, [0.8, 0.8, 0.8])),
+    layeredClearcoat: input.layeredClearcoat === true,
+    clearcoatNormal: Object.freeze(normalize(coerceWavefrontVec3(input.clearcoatNormal,
+      coerceWavefrontVec3(input.shadingNormal, [0, 1, 0])), [0, 1, 0])),
     shadingNormal: Object.freeze(
       normalize(coerceWavefrontVec3(input.shadingNormal, [0, 1, 0]), [0, 1, 0])
     ),
@@ -494,7 +497,7 @@ function evaluateWavefrontSurfaceBsdfReference(hitInput, viewDirectionInput, lig
     (value) => (distribution * geometry * value) / Math.max(4 * nDotV * nDotL, 0.000001)
   );
   const diffuseWeight =
-    (1 - metallic) * (1 - clearcoat * 0.24) * (1 - clamp(maxComponentVec3(fresnel), 0, 0.98));
+    (1 - metallic) * (hit.layeredClearcoat ? 1 : 1 - clearcoat * 0.24) * (1 - clamp(maxComponentVec3(fresnel), 0, 0.98));
   const diffuse = surfaceColor.map((value) => (value * diffuseWeight) / Math.PI);
   const clearcoatHalf = normalize(add(viewDirection, lightDirection), normal);
   const clearcoatVDotH = clamp(dot(viewDirection, clearcoatHalf), 0, 1);
@@ -511,6 +514,15 @@ function evaluateWavefrontSurfaceBsdfReference(hitInput, viewDirectionInput, lig
       clearcoat
   );
   const occlusionWeight = mixScalar(0.42, 1, occlusion);
+  if (hit.layeredClearcoat && clearcoat > 0) {
+    const coatNv = clamp(dot(hit.clearcoatNormal, viewDirection), 0, 1);
+    const coatNl = clamp(dot(hit.clearcoatNormal, lightDirection), 0, 1);
+    const coatFresnel = clearcoat * (0.04 + 0.96 * (1 - coatNv) ** 5);
+    const coat = coatNv > 0 && coatNl > 0 ? coatFresnel *
+      distributionGgx(clamp(dot(hit.clearcoatNormal, halfVector), 0, 1), Math.max(clearcoatRoughness, 0.02)) *
+      geometrySmith(coatNv, coatNl, Math.max(clearcoatRoughness, 0.02)) / Math.max(4 * coatNv * coatNl, 0.000001) : 0;
+    return Object.freeze(addVec3(diffuse, specular).map(value => (value * (1 - coatFresnel) + coat) * occlusionWeight));
+  }
   return Object.freeze(
     addVec3(addVec3(diffuse, specular), clearcoatTerm).map((value) => value * occlusionWeight)
   );
@@ -540,7 +552,7 @@ function evaluateWavefrontSurfaceBsdfPdfReference(hitInput, viewDirectionInput, 
     weights[1] * ggxPdfReference(normal, viewDirection, lightDirection, Math.max(roughness, 0.02)) +
     weights[2] *
       ggxPdfReference(
-        normal,
+        hit.layeredClearcoat && hit.materialResponse[3] > 0 ? hit.clearcoatNormal : normal,
         viewDirection,
         lightDirection,
         Math.max(clamp(hit.materialExtension[0], 0, 1), 0.02)

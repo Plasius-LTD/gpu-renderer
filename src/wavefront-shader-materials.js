@@ -2,6 +2,25 @@ import { WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL } from "./wavefront-primary-shared
 import { SHEEN_WGSL } from "./wavefront-sheen.js";
 export const WAVEFRONT_SHADER_MATERIALS_WGSL = `
 ${SHEEN_WGSL}
+fn layered_clearcoat_enabled() -> bool {
+  return transport_experiment_enabled(8192u);
+}
+
+fn layered_clearcoat_active(hit: HitRecord) -> bool {
+  return layered_clearcoat_enabled() && hit.materialResponse.w > 0.0;
+}
+
+fn surface_clearcoat_normal(hit: HitRecord) -> vec3<f32> {
+  let baseNormal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
+  if (!layered_clearcoat_active(hit)) { return baseNormal; }
+  return safe_normalize(vec3<f32>(hit.clearcoatNormalXY, hit.clearcoatNormalZ), baseNormal);
+}
+
+// KHR_materials_clearcoat's infinitely thin, IOR 1.5 top-layer approximation.
+fn coating_fresnel(weight: f32, normal: vec3<f32>, view: vec3<f32>) -> f32 {
+  return clamp(weight, 0.0, 1.0) * (0.04 + 0.96 * pow(1.0 - clamp(dot(normal, view), 0.0, 1.0), 5.0));
+}
+
 fn srgb_to_linear_channel(value: f32) -> f32 {
   if (value <= 0.04045) {
     return value / 12.92;
@@ -60,22 +79,23 @@ fn sample_material_atlas(textureRef: texture_2d<f32>, oldRect: vec4<f32>,
   return textureSampleLevel(textureRef, materialAtlasSampler, rect.xy + wrapped * rect.zw, 0.0);
 }
 
-fn build_triangle_tangent_basis(
+fn build_triangle_texture_tangent_basis(
   triangle: TriangleRecord,
-  fallbackNormal: vec3<f32>
+  fallbackNormal: vec3<f32>,
+  slot: u32
 ) -> TangentBasis {
   let edge1 = triangle.v1.xyz - triangle.v0.xyz;
   let edge2 = triangle.v2.xyz - triangle.v0.xyz;
-  let secondary = (u32(triangle.textureSettings.w) & 4u) != 0u;
+  let secondary = (u32(triangle.textureSettings.w) & (1u << slot)) != 0u;
   var uv0 = select(triangle.uv0uv1.xy, vec2<f32>(triangle.v0.w, triangle.n0.w), secondary);
   var uv1 = select(triangle.uv0uv1.zw, vec2<f32>(triangle.v1.w, triangle.n1.w), secondary);
   var uv2 = select(triangle.uv2Pad.xy, vec2<f32>(triangle.v2.w, triangle.n2.w), secondary);
   let transformMask = u32(textureLoad(materialTextureMetadata, vec2<i32>(0, i32(triangle.materialSlot)), 0).x);
-  if ((transformMask & 4u) != 0u) {
+  if ((transformMask & (1u << slot)) != 0u) {
     // Unwrapped coordinates: wrapping before derivatives destroys seam tangents.
-    uv0 = texture_affine_uv(uv0, triangle.materialSlot, 2u);
-    uv1 = texture_affine_uv(uv1, triangle.materialSlot, 2u);
-    uv2 = texture_affine_uv(uv2, triangle.materialSlot, 2u);
+    uv0 = texture_affine_uv(uv0, triangle.materialSlot, slot);
+    uv1 = texture_affine_uv(uv1, triangle.materialSlot, slot);
+    uv2 = texture_affine_uv(uv2, triangle.materialSlot, slot);
   }
   let deltaUv1 = uv1 - uv0;
   let deltaUv2 = uv2 - uv0;
@@ -95,6 +115,10 @@ fn build_triangle_tangent_basis(
   let handedness = select(-1.0, 1.0, dot(cross(tangent, rawBitangent), fallbackNormal) >= 0.0);
   let bitangent = handedness * safe_normalize(cross(fallbackNormal, tangent), vec3<f32>(0.0, 0.0, 1.0));
   return TangentBasis(tangent, bitangent);
+}
+
+fn build_triangle_tangent_basis(triangle: TriangleRecord, fallbackNormal: vec3<f32>) -> TangentBasis {
+  return build_triangle_texture_tangent_basis(triangle, fallbackNormal, 2u);
 }
 
 fn material_uv(primary: vec2<f32>, secondary: vec2<f32>, mask: u32, slot: u32) -> vec2<f32> {
@@ -181,6 +205,15 @@ fn sample_surface_material(
     ),
     clamp(triangle.emission.a * emissiveTexel.a, 0.0, 1.0)
   );
+  var coatNormal = shadingNormal;
+  if (layered_clearcoat_enabled() && textureMetadata.w > 0.0) {
+    let coatBasis = build_triangle_texture_tangent_basis(triangle, authoredNormal, 7u);
+    let coatTangent = safe_normalize(vec3<f32>((clearcoatNormalTexel.xy * 2.0 - 1.0) * textureMetadata.z,
+      clearcoatNormalTexel.z * 2.0 - 1.0), vec3<f32>(0.0, 0.0, 1.0));
+    coatNormal = repair_shading_normal(geometricNormal, safe_normalize(
+      coatBasis.tangent * coatTangent.x + coatBasis.bitangent * coatTangent.y + authoredNormal * coatTangent.z,
+      authoredNormal) * side);
+  }
   return SurfaceMaterialSample(
     baseColor,
     emission,
@@ -192,10 +225,10 @@ fn sample_surface_material(
     ),
     vec4<f32>(
       triangle.materialResponse.rgb * select(sheenColorTexel.rgb, srgb_to_linear_vec3(sheenColorTexel.rgb), sheen_enabled()),
-      triangle.materialResponse.w * clearcoatTexel.r * clearcoatNormalTexel.r
+      triangle.materialResponse.w * clearcoatTexel.r * select(clearcoatNormalTexel.r, 1.0, layered_clearcoat_enabled())
     ),
     vec4<f32>(
-      triangle.materialExtension.x * clearcoatRoughnessTexel.r * select(0.5 + 0.5 * sheenRoughnessTexel.r, 1.0, sheen_enabled()),
+      triangle.materialExtension.x * select(clearcoatRoughnessTexel.r * select(0.5 + 0.5 * sheenRoughnessTexel.r, 1.0, sheen_enabled()), clearcoatRoughnessTexel.g, layered_clearcoat_enabled()),
       triangle.materialExtension.y * specularTexel.r * (0.5 + 0.5 * iridescenceTexel.r),
       triangle.materialExtension.z * transmissionTexel.r,
       triangle.materialExtension.w * thicknessTexel.r * (0.5 + 0.5 * iridescenceThicknessTexel.r)
@@ -209,7 +242,8 @@ fn sample_surface_material(
       mix(1.0, occlusionTexel.x, clamp(triangle.textureSettings.y, 0.0, 1.0)),
       0.0,
       1.0
-    )
+    ),
+    coatNormal
   );
 }
 

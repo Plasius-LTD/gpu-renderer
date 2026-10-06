@@ -8,6 +8,7 @@ import {CLOTH_INSPECTION_DEFAULTS,clothCloseupCamera,selectInspectionPlan,valida
 import {CLOTH_RESPONSE_DEFAULTS} from './cloth-response-settings.js';
 import {auditMaterialMaps} from './material-map-inventory.js';
 import {ROOM_LIGHTING_DEFAULTS,withRoomLighting} from './room-lighting-settings.js';
+import {ROOM_COAT_DEFAULTS,withRoomWoodCoat} from './room-clearcoat-settings.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
@@ -16,6 +17,9 @@ function lightingSelection(){return {style:el('lighting-style').value,intensity:
 function resetLighting(){el('lighting-style').value=ROOM_LIGHTING_DEFAULTS.style;el('lighting-intensity').value=ROOM_LIGHTING_DEFAULTS.intensity;}
 el('lighting-intensity').min=String(ROOM_LIGHTING_DEFAULTS.minimumIntensity);el('lighting-intensity').max=String(ROOM_LIGHTING_DEFAULTS.maximumIntensity);
 resetLighting();
+function resetCoat(){el('clearcoat').value='off';el('wood-coat').value='off';el('coat-weight').value=ROOM_COAT_DEFAULTS.weight;el('coat-roughness').value=ROOM_COAT_DEFAULTS.roughness;}
+function coatSelection(){return {enabled:el('wood-coat').value==='on',weight:el('coat-weight').valueAsNumber,roughness:el('coat-roughness').valueAsNumber};}
+resetCoat();
 el('central-reference').value=ROOM_DEFAULTS.centralReference;
 el('spp').min='1';el('spp').max=String(RADIAL_MAXIMUM_SPP);el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
 function resetInspection(){el('inspection-camera').value='room';el('sample-distribution').value='radial';el('material-inspection').value='off';
@@ -40,6 +44,7 @@ for(const control of controls){
  control.addEventListener("input",clearCapture);
 }
 reset.addEventListener("click",()=>{
+ resetCoat();
  resetLighting();
  resetInspection();
  el('sheen').value='off';
@@ -92,6 +97,8 @@ run.addEventListener("click",async()=>{
  const splitDepth=Number(el("splitting").value);
  const guidedDenoise=el('denoise').value==='guided';
  const sheen=el('sheen').value==='on';
+ const layeredClearcoat=el('clearcoat').value==='on',woodCoat=coatSelection();
+ if(woodCoat.enabled&&!layeredClearcoat){status.textContent='Enable the layered clearcoat renderer before adding the wood varnish variant.';return;}
  const distribution=el('sample-distribution').value,materialInspection=el('material-inspection').value==='on';
  const closeup=closeupControls();
  if(materialInspection&&!guidedDenoise){status.textContent='Select guided denoising to capture material inspection views.';return;}
@@ -101,9 +108,9 @@ run.addEventListener("click",async()=>{
  cancellation=new AbortController();let runner;
  const receipt={schemaVersion:1,scope:"room-eames-interior-reference",status:"running",settings,splitDepth,view,placement,timestamp:new Date().toISOString(),
   browser:{userAgent:navigator.userAgent,platform:navigator.platform},failures:[],qualification:"visual-reference-only-not-performance-or-convergence"};
- receipt.materialFlags={'renderer.materials.sheen.enabled':sheen};
+ receipt.materialFlags={'renderer.materials.sheen.enabled':sheen,'renderer.materials.layeredClearcoat.enabled':layeredClearcoat};
  receipt.inspection={closeup,distribution,materialViews:materialInspection};
- const lightingIdentity=lightingSelection().style;
+ const lightingIdentity=lightingSelection().style+(layeredClearcoat?'-layered-coat':'')+(woodCoat.enabled?`-varnish${woodCoat.weight}-rough${woodCoat.roughness}`:'');
  const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}${closeup.enabled?'-closeup':''}${distribution==='uniform'?'-uniform':''}-${lightingIdentity}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
  const save=async(name,dataUrl,payload)=>{
   const response=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},signal:AbortSignal.timeout(30000),
@@ -121,13 +128,13 @@ run.addEventListener("click",async()=>{
   const {runSurfaceValidityProbe}=await import('./surface-validity-probe.js');receipt.surfaceProbe=await runSurfaceValidityProbe(cancellation.signal);
   status.textContent='Checking transformed textures, sheen and mapped-normal cloth detail';
   const {runMaterialFidelityProbe}=await import('./material-fidelity-probe.js');receipt.materialProbe=await runMaterialFidelityProbe(cancellation.signal);
-  const source=await loadAssets(receipt,cancellation.signal),composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});receipt.scene=composed.evidence;
+  const source=withRoomWoodCoat(await loadAssets(receipt,cancellation.signal),receipt,woodCoat),composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});receipt.scene=composed.evidence;
   composed.scene.camera=clothCloseupCamera(composed.scene,composed.evidence,closeup);receipt.scene.camera={...composed.scene.camera};
   check(!cancellation.signal.aborted,"Capture cancelled");
   const plan=selectInspectionPlan(distribution,createRadialSamplingPlan(settings.width,settings.height,settings.maximumSpp),settings.maximumSpp);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
-  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
+  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===settings.maxDepth&&runner.sceneSnapshot.samplesPerPixel===settings.maximumSpp&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;
   const frame=await runner.run(distribution,{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,onProgress:p=>{

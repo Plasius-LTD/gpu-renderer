@@ -28,11 +28,11 @@ struct HitRecord {
   materialRefId: u32,
   mediumRefId: u32,
   materialSlot: u32,
-  pad0: u32,
-  pad1: u32,
+  clearcoatNormalXY: vec2<f32>,
   distance: f32,
   occlusion: f32,
-  pad2: vec2<f32>,
+  clearcoatNormalZ: f32,
+  pad2: f32,
   position: vec4<f32>,
   geometricNormal: vec4<f32>,
   shadingNormal: vec4<f32>,
@@ -286,6 +286,7 @@ struct SurfaceMaterialSample {
   specularColor: vec4<f32>,
   shadingNormal: vec3<f32>,
   occlusion: f32,
+  clearcoatNormal: vec3<f32>,
 };
 `;
 import { WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL, WAVEFRONT_SAFE_NORMALIZE_WGSL } from "./wavefront-camera-shared-shader.js";

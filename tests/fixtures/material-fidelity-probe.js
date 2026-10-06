@@ -7,6 +7,7 @@ import {charlieSheenBrdf} from '/src/wavefront-sheen.js';
 import {CORE_UV_TEXTURES,EXTENSION_UV_TEXTURES} from '/src/wavefront-uvs.js';
 import {assertShaderModuleCompiles} from '/src/wavefront-runtime-support.js';
 import {runAuthoredColourProbe} from './authored-colour-probe.js';
+import {runClearcoatProbe} from './clearcoat-probe.js';
 
 // Execute real atlas lookup and the assembled sheen BSDF, not a mock renderer.
 export async function runMaterialFidelityProbe(signal){
@@ -86,6 +87,7 @@ export async function runMaterialFidelityProbe(signal){
   check(off.some((v,i)=>i%80>=76&&Math.abs(v-values[i])>1e-5),'sheen flag had no effect');
   const error=await wait(device.popErrorScope());check(!error,error?.message);
   const authoredColour=await runAuthoredColourProbe(device,wait);
-  return {passed:true,cases:cases.length,slots:17,maxTextureError,maxSheenRelativeError,sheenFlagIndependent:true,authoredColour,scope:'assembled-material-correctness-not-performance'};
+  const clearcoat=await runClearcoatProbe(device,wait);
+  return {passed:true,cases:cases.length,slots:17,maxTextureError,maxSheenRelativeError,sheenFlagIndependent:true,authoredColour,clearcoat,scope:'assembled-material-correctness-not-performance'};
  }finally{owned.forEach(r=>r.destroy());device.destroy();}
 }

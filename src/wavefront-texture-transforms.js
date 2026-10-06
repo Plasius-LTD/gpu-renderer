@@ -34,6 +34,13 @@ export function createMaterialTextureMetadata(meshes, atlases = {}) {
   for (let row = 0; row < height; row++) {
     const mesh = meshes[row] ?? {}, header = row * width * 4;
     data[header + 1] = mesh.materialExtensions?.sheenRoughness ?? 0;
+    const coatNormal = mesh.extensionTextures?.clearcoatNormal;
+    const coatNormalScale = coatNormal?.scale ?? 1;
+    if (!Number.isFinite(coatNormalScale) || coatNormalScale < 0 || !Number.isFinite(Math.fround(coatNormalScale))) {
+      throw new Error('Clearcoat normal scale must be finite, non-negative and representable on the GPU.');
+    }
+    data[header + 2] = coatNormalScale;
+    data[header + 3] = coatNormal ? 1 : 0;
     TEXTURES.forEach((name, slot) => {
       const texture = slot < CORE_UV_TEXTURES.length ? mesh[name + 'Texture'] : mesh.extensionTextures?.[name];
       const transform = texture?.transform ?? {};

@@ -356,10 +356,12 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   fixedPattern: 1 << 10,
   stablePattern: 1 << 11,
   sheen: 1 << 12,
+  layeredClearcoat: 1 << 13,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
   const requested = Object.freeze({
+    layeredClearcoat: readBooleanFeatureFlag(options, "renderer.materials.layeredClearcoat.enabled", flags => flags?.renderer?.materials?.layeredClearcoat?.enabled),
     sheen: readBooleanFeatureFlag(options, "renderer.materials.sheen.enabled", flags => flags?.renderer?.materials?.sheen?.enabled),
     stablePattern: readBooleanFeatureFlag(options, "renderer.sampling.stablePattern.enabled", (flags) => flags?.renderer?.sampling?.stablePattern?.enabled ?? flags?.renderer?.sampling?.stablePattern),
     fixedPattern: readBooleanFeatureFlag(
@@ -419,6 +421,7 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
   });
   const effective = Object.freeze({
     sheen: requested.sheen,
+    layeredClearcoat: requested.layeredClearcoat,
     fixedPattern: requested.fixedPattern,
     stablePattern: requested.stablePattern,
     owenSobol: requested.owenSobol,

@@ -1,5 +1,9 @@
 import { createWavefrontPathTracingComputeConfig, type WavefrontRendererFeatureFlags } from "../src/index.js";
 const snapshots: WavefrontRendererFeatureFlags[] = [
+  { "renderer.materials.layeredClearcoat.enabled": true },
+  { enabled: { "renderer.materials.layeredClearcoat.enabled": true } },
+  { flags: { "renderer.materials.layeredClearcoat.enabled": false } },
+  { renderer: { materials: { layeredClearcoat: { enabled: true } } } },
   { "renderer.sampling.owenSobol.enabled": true },
   { "renderer.sampling.fixedPattern.enabled": true },
   { "renderer.sampling.stablePattern.enabled": true },
@@ -15,3 +19,4 @@ for (const featureFlags of snapshots) {
   void active;
 }
 createWavefrontPathTracingComputeConfig({ "renderer.sampling.owenSobol.enabled": true });
+createWavefrontPathTracingComputeConfig({ "renderer.materials.layeredClearcoat.enabled": true });
