@@ -7,10 +7,15 @@ import {compareDenoisedRadiance} from "/lighting/demo/eames-environments/guided-
 import {CLOTH_INSPECTION_DEFAULTS,clothCloseupCamera,selectInspectionPlan,validateInspectionFrame} from './cloth-inspection-settings.js';
 import {CLOTH_RESPONSE_DEFAULTS} from './cloth-response-settings.js';
 import {auditMaterialMaps} from './material-map-inventory.js';
+import {ROOM_LIGHTING_DEFAULTS,withRoomLighting} from './room-lighting-settings.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
 const controls=[...el("controls").querySelectorAll("input,select"),el("benchmark"),el('cloth-response')];
+function lightingSelection(){return {style:el('lighting-style').value,intensity:el('lighting-intensity').valueAsNumber};}
+function resetLighting(){el('lighting-style').value=ROOM_LIGHTING_DEFAULTS.style;el('lighting-intensity').value=ROOM_LIGHTING_DEFAULTS.intensity;}
+el('lighting-intensity').min=String(ROOM_LIGHTING_DEFAULTS.minimumIntensity);el('lighting-intensity').max=String(ROOM_LIGHTING_DEFAULTS.maximumIntensity);
+resetLighting();
 el('central-reference').value=ROOM_DEFAULTS.centralReference;
 el('spp').min='1';el('spp').max=String(RADIAL_MAXIMUM_SPP);el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
 function resetInspection(){el('inspection-camera').value='room';el('sample-distribution').value='radial';el('material-inspection').value='off';
@@ -35,6 +40,7 @@ for(const control of controls){
  control.addEventListener("input",clearCapture);
 }
 reset.addEventListener("click",()=>{
+ resetLighting();
  resetInspection();
  el('sheen').value='off';
  el('central-reference').value=ROOM_DEFAULTS.centralReference;
@@ -46,7 +52,7 @@ reset.addEventListener("click",()=>{
 cancel.addEventListener("click",()=>cancellation?.abort());
 export async function loadAssets(receipt,signal){
  const sourceKey=JSON.stringify([receipt.provenance.sources,receipt.provenance.assets]);
- if(assets){check(assets.sourceKey===sourceKey,'Server sources changed; reload this page before rendering');receipt.eamesSource=assets.eamesSource;receipt.referenceMaterialMaps=assets.referenceMaterialMaps;return assets;}
+ if(assets){check(assets.sourceKey===sourceKey,'Server sources changed; reload this page before rendering');receipt.eamesSource=assets.eamesSource;receipt.referenceMaterialMaps=assets.referenceMaterialMaps;return withRoomLighting(assets,receipt,lightingSelection());}
  const [{loadGltfModel},{createProductStudioMeshes},{createWavefrontEnvironmentLightingOptions}]=await Promise.all([
   import("/shared/src/gltf-loader.js"),import("/shared/src/product-studio-runtime.js"),import("/lighting/src/index.js")]);
  const manifestResponse=await fetch('/__room-manifest.json',{signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])});
@@ -73,11 +79,10 @@ export async function loadAssets(receipt,signal){
   check(!signal.aborted,'Loading cancelled');referenceModels.push({model,asset});
  }
  const eames=await loadOriginalEames(receipt,signal,{maxDepth:6});receipt.eamesSource=receipt.scene;
- const lightingOptions=createWavefrontEnvironmentLightingOptions({preset:"neutral-studio",sunDirection:[0.18,0.93,0.24],sunColor:[2.4,2.25,2,1],intensity:1});
  el('room-name').textContent=roomAsset.name;document.title=`Eames inside ${roomAsset.name} · GPU reference`;
  el('model-names').textContent=referenceModels.length?`Available: Eames + ${referenceModels.map(m=>m.asset.name).join(' + ')}. Private assets; default material variants.`:'Available: Eames only; no additional local models supplied.';
  receipt.referenceMaterialMaps=referenceMaterialMaps;
- assets={room,roomAsset,eames,referenceModels,referenceMaterialMaps,sourceKey,createProductStudioMeshes,lightingOptions,eamesSource:receipt.eamesSource};return assets;
+ assets={room,roomAsset,eames,referenceModels,referenceMaterialMaps,sourceKey,createProductStudioMeshes,createWavefrontEnvironmentLightingOptions,eamesSource:receipt.eamesSource};return withRoomLighting(assets,receipt,lightingSelection());
 }
 export function roomCompositionControls(source){return {placement:{x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view:el('view').value,fovYDegrees:el('fov').valueAsNumber,centralReference:el('central-reference').value,referenceModels:el('models').value==='all'?source.referenceModels:[]};}
 function closeupControls(){return {enabled:el('inspection-camera').value==='cloth',distance:el('inspection-distance').valueAsNumber,elevation:el('inspection-elevation').valueAsNumber,target:['x','y','z'].map(axis=>el('inspection-target-'+axis).valueAsNumber)};}
@@ -98,7 +103,8 @@ run.addEventListener("click",async()=>{
   browser:{userAgent:navigator.userAgent,platform:navigator.platform},failures:[],qualification:"visual-reference-only-not-performance-or-convergence"};
  receipt.materialFlags={'renderer.materials.sheen.enabled':sheen};
  receipt.inspection={closeup,distribution,materialViews:materialInspection};
- const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}${closeup.enabled?'-closeup':''}${distribution==='uniform'?'-uniform':''}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
+ const lightingIdentity=lightingSelection().style;
+ const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}${closeup.enabled?'-closeup':''}${distribution==='uniform'?'-uniform':''}-${lightingIdentity}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
  const save=async(name,dataUrl,payload)=>{
   const response=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},signal:AbortSignal.timeout(30000),
    body:JSON.stringify({path:`output/playwright/eames-environments/${receipt.provenance.captureId}/${name}.png`,dataUrl,result:payload})});

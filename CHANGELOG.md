@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add selectable original-daylight/cool-evening local room lighting and bounded
+  intensity controls; refresh lighting on cached-model renders and retain the
+  complete lighting snapshot. No runtime or authored-material changes (#226).
+
 - Preserve authored material colour instead of raising dark channels to an
   ambient-dependent floor in BSDF and terminal helpers. Add analytic CPU/GPU
   colour regressions and source/decoded-map capture audits (#226); no added rays,

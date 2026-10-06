@@ -111,6 +111,14 @@ reserved lanes now carry UV1 and slot selectors (ADR0050). The native room page
 adds a 52° vertical-FOV default (62° remains selectable), local reference models,
 and a mandatory physical dual-UV probe before capture. No production flag changes.
 
+The room fixture offers **Room lighting style** (original daylight or a cooler
+evening colour study) and adjustable **Environment intensity**. Changes apply on
+Render without recolouring materials; Reset restores original daylight. Captures
+retain the request and resolved gpu-lighting snapshot, including after cached
+asset reuse. This is not solar-position simulation or a colour-accuracy claim;
+the separate cloth white-light diagnostic is unchanged. See the
+[lighting design and QA](docs/design/room-lighting-styles.md).
+
 The room fixture now defaults to the exchanged Eames/standing-reference positions.
 The comparison camera target stays fixed; Reset uses the same lighting-owned
 defaults. The first local seating model has an explicit **uniform** 1.5 m width
