@@ -1582,9 +1582,34 @@ export interface RendererSnapshot {
   xrActive: boolean;
 }
 
+/** Decoded RGBA8 image, matching gpu-shared glTF material textures. */
+export interface NativeSurfaceImage {
+  width: number;
+  height: number;
+  data: Uint8Array | Uint8ClampedArray;
+}
+export interface NativeSurfaceMaterial {
+  /** sRGB colour; RGB is multiplied by each vertex's linear base-colour factor. */
+  baseColor?: NativeSurfaceImage;
+  /** Linear, OpenGL-style tangent-space normal map. */
+  normal?: NativeSurfaceImage;
+  /** Linear R occlusion, G roughness, B metalness. */
+  orm?: NativeSurfaceImage;
+  normalScale?: number;
+  /** Independent dielectric coating strength, 0–1; defaults to 0 (off). */
+  clearcoat?: number;
+  /** Coating roughness, 0–1; independent of the base map; defaults to 0. */
+  clearcoatRoughness?: number;
+  /** Linear RGBA8: R multiplies clearcoat, G multiplies clearcoatRoughness; B/A ignored. White when omitted. */
+  clearcoatMap?: NativeSurfaceImage;
+}
 /** Interleaved world-space triangles: position, normal, linear colour, roughness/metalness/detail. */
 export interface NativeSceneFrame {
   vertices: Float32Array;
+  /** Two UV components per vertex. Required when surfaces are supplied. */
+  texcoords?: Float32Array;
+  /** Contiguous triangle ranges covering all vertices, using zero-based materials. */
+  surfaces?: { firstVertex: number; vertexCount: number; materialIndex: number }[];
   camera: { eye: [number, number, number]; target: [number, number, number]; fov?: number };
   time?: number;
   water?: boolean;
@@ -1605,6 +1630,8 @@ export function createNativeSceneRenderer(options: {
   canvas: HTMLCanvasElement;
   navigator?: Navigator | { gpu?: GPU };
   maxVertices?: number;
+  /** At most 16 materials, 64 MiB decoded RGBA8 total; maps are power-of-two, up to 2048. */
+  materials?: NativeSurfaceMaterial[];
   onUnavailable?: (message: string) => void;
 }): Promise<{
   render(frame: NativeSceneFrame): NativeSceneSnapshot;

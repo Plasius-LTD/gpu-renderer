@@ -751,3 +751,126 @@ there is no npm write-token fallback. CD remains disabled until the npm trusted
 publisher binding and protected-branch-only production environment are
 independently verified.
 <!-- END PLASIUS RELEASE INTEGRITY -->
+
+### Authored materials in native surfaces
+
+`createNativeSceneRenderer({ canvas, materials })` accepts up to 16 opaque
+materials containing decoded RGBA8 `baseColor`, `normal`, and/or `orm` maps.
+This matches images returned by the `@plasius/gpu-shared` glTF loader. Colour maps
+are sRGB; normals and ORM (occlusion/roughness/metalness) are linear. Optional
+`normalScale` defaults to 1. Maps must be power-of-two, up to 2048 pixels per axis,
+with a 64 MiB combined decoded-source budget. Textures are uploaded once and mip
+filtered; the renderer owns GPU disposal, while callers own image loading.
+
+For textured frames, supply `texcoords` (two floats per vertex) and `surfaces`
+containing `{ firstVertex, vertexCount, materialIndex }`. Ranges must cover the
+whole triangle list in order, refer to the initialization-time materials, and
+contain whole triangles. At most 256 ranges are accepted. Linear vertex colour
+and roughness/metalness factors multiply the maps. Omit both new frame fields to
+retain the existing procedural/untextured path. Main and reflection passes use
+the same authored material; alpha/transmission/skinning are not added here.
+
+See [material design](docs/design/native-textured-surfaces.md) and
+[ADR-0031](docs/adrs/adr-0031-native-authored-materials.md). Rollout inherits
+`gpu-demo.scene-fidelity.enabled`; access remains governed by the site's capability.
+
+For varnished wood, set optional `clearcoat` and `clearcoatRoughness` (both 0–1).
+The coating reflects neutral light using its own smooth geometric normal above
+the coloured, normal-mapped wood; Fresnel layering attenuates the underlying
+material instead of simply adding shine. Strength defaults to zero, preserving
+uncoated callers. Coating roughness defaults to zero and is independent of the
+base roughness map. Optional `clearcoatMap` uses linear RGBA8: red multiplies
+`clearcoat` coverage and green multiplies `clearcoatRoughness`; blue and alpha
+are ignored. Omission uses white, preserving the scalar-only finish. Use a
+nonzero roughness factor (for example 1) to author roughness directly in green.
+The map shares the surface UVs, mip filtering, memory budget and GPU lifetime of
+other maps. Clearcoat normal maps remain unsupported.
+
+For mixed objects, give uncoated parts their own surface ranges with
+`clearcoat: 0`. This keeps rope and hardware uncoated even when they share the
+wood's atlas. The source example [native-crate-finish.js](demo/native-crate-finish.js)
+provides reviewed crate ranges and a deterministic wear preset combining existing
+roughness/scuff detail with broad UV patches. Its 0–1 wear control changes coat
+coverage and roughness without modifying the underlying colour or source asset.
+See [spatial coating decision](docs/adrs/adr-0032-spatial-native-clearcoat.md) and
+the [fixture/provenance record](docs/design/cc0-demo-asset-review.md). The example
+helper is source-only; the published API is the generic material map.
+
+For subtle rope fraying, the source-demo helper
+[native-rope-fibres.js](demo/native-rope-fibres.js) exports `createRopeFibres`.
+Pass the expanded native `vertices`, `texcoords` and explicit rope-only
+`{ firstVertex, vertexCount }` ranges. It returns separate triangles/UVs and a
+`fibreCount`; append them once with their own draw range. Generate in metre-scale
+world coordinates after transforms. Sampling is deterministic and area-weighted,
+with short tapered curves in small aligned tufts. `density` controls roots per
+square metre; `maxFibres` caps them at 4,000 (default 1,600). `length` and `radius`
+are in metres. The 21 triangles per strand use ordinary native multisampling,
+depth and lighting; no animated fur or dedicated hair scattering is claimed.
+
+Optional `fray` (0–1, default 0.08) promotes exactly
+`round(fibreCount * fray)` strands to longer curled loose ends, reported as
+`looseEndCount`. Selection is seeded and nested: raising the level keeps earlier
+loose ends, roots and UVs in place. At 0, short fuzz remains. This is a visual
+proportion of generated fibres, not lost rope strength.
+
+Use `createRopeFibreMaterial(ropeMaterial)` for the added range: it keeps the
+rope's colour map and zero clearcoat while omitting the core's baked occlusion
+and normal creases from exposed fibres. Vertex roughness is 1 and metallic is 0.
+The review fixture offers fibre on/off and both rope-detail views. See
+[ADR-0033](docs/adrs/adr-0033-demo-rope-fibres.md). These helpers remain source-only
+and do not add a renderer API, dependency or network request.
+
+### Material ageing review wrapper
+
+[material-ageing.js](demo/material-ageing.js) validates and freezes a serializable
+version-1 profile. [native-crate-ageing.js](demo/native-crate-ageing.js) applies it
+through the existing coating/fibre helpers:
+
+```js
+import { createCrateAgeing } from './demo/native-crate-ageing.js';
+
+const ageing = createCrateAgeing({ ropeFray: 0.30, varnishWear: 0.90, seed: 7349 });
+const { wood, rope, metal, fibres: fibreMaterial } = ageing.createMaterials(sourceMaps);
+const fibreGeometry = ageing.createFibres({ vertices, texcoords, ranges: ropeRanges, heightOffset: -minY });
+// Append fibreGeometry with fibreMaterial using the existing native draw contract.
+```
+
+Those values are also the review defaults. `varnishWear` is independent visual
+intensity, not coating area removed or elapsed years. Broad scuff patches expose
+wood while sheltered areas retain coating at intermediate wear. Above 70%, the
+remaining islands smoothly erode; at 100%, every coverage texel and the scalar
+coat strength are zero, matching varnish disabled. The original wood maps remain
+unchanged, including their ordinary substrate light response. `seed` controls fibre placement and
+loose-end selection; varnish uses its existing stable UV pattern. The crate adapter
+uses a 4.5 mm fibre length scale and 0.16 mm root radius, with a 4,000-fibre budget;
+loose ends are 1.3–2 times the length scale and taper to a point. Source images and
+geometry remain unchanged; rope, added fibres and metal never acquire clearcoat.
+
+Generate/copy geometry only when the fray channel changes; rebuild finish maps
+only when coating settings change. Camera movement reuses both. The caller still
+owns verified asset ranges, GPU resources and disposal. The local review includes
+fresh/aged presets, fibre/coat toggles and both handle-detail views.
+
+This is a tested source-demo wrapper, not a newly published package or a complete
+damage simulator. [ADR-0034](docs/adrs/adr-0034-material-ageing-profile.md) records
+the proposed `@plasius/material-ageing` boundary after a second asset establishes
+the shared contract. Production adoption retains `gpu-demo.scene-fidelity.enabled`
+and the existing GPU route capability; disabling the feature selects the existing
+site fallback. No package publication or site deployment is implied by this study.
+
+
+For structured nap, `createRopeFibres` accepts optional `guides`: at most eight
+polylines of 2–65 finite 3D points, in the same metre-scale coordinates as the
+input geometry. The nearest guide is projected onto the surface and given a
+consistent helical lay. Without a usable projected guide, a finite tangent
+fallback is used. Four nearby roots form a tuft within 1 mm of its anchor, with
+small angular variation, shallow lift and tapered tips. Sampling remains stable
+when fray changes; changing guides reauthors the groom.
+
+[native-crate-groom.js](demo/native-crate-groom.js) supplies the hash-verified
+fixture's loop/knot paths. Pass the same `heightOffset` used to ground its vertices
+(default 0 means unmodified asset coordinates); other transforms require matching
+transformed guide coordinates. The crate adapter adds 84,000 triangles: 90,578
+triangles / 271,734 vertices total, within the native default budget. Its final
+fibre arrays occupy 14,112,000 bytes. This deliberate denser nap replaces the
+previous 1,600-strand loose-end study. See [ADR-0035](docs/adrs/adr-0035-groomed-rope-and-bare-coat-endpoint.md).

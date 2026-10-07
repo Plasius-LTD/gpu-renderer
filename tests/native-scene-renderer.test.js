@@ -21,8 +21,20 @@ function gpuFixture() {
       loseDevice = resolve;
     }),
     queue: {
+      writeTexture(destination, bytes) {
+        calls.push([
+          "upload-texture",
+          destination.texture.descriptor.label,
+          bytes.length,
+        ]);
+      },
       writeBuffer(...args) {
-        calls.push(["write", args[0].descriptor.label, args[2].length]);
+        calls.push([
+          "write",
+          args[0].descriptor.label,
+          args[2].length,
+          [...args[2]],
+        ]);
       },
       submit() {
         calls.push(["submit"]);
@@ -52,10 +64,12 @@ function gpuFixture() {
           setPipeline(p) {
             calls.push(["use", p.label]);
           },
-          setBindGroup() {},
+          setBindGroup(index, group) {
+            calls.push(["bind", index, group]);
+          },
           setVertexBuffer() {},
-          draw(n) {
-            calls.push(["draw", n]);
+          draw(n, instances, first) {
+            calls.push(["draw", n, instances, first]);
           },
           end() {},
         };
@@ -230,4 +244,119 @@ test("surface-only and empty scenes remain bounded at large display sizes", asyn
     /waterLevel/,
   );
   renderer.destroy();
+});
+
+const solidMap = {
+  width: 1,
+  height: 1,
+  data: new Uint8Array([180, 100, 50, 255]),
+};
+test("textured geometry binds authored materials and UVs in both colour passes", async () => {
+  const f = gpuFixture();
+  const renderer = await createNativeSceneRenderer({
+    ...f,
+    materials: [{ baseColor: solidMap }],
+  });
+  const uploads = f.calls.filter((c) => c[0] === "upload-texture").length;
+  const textured = {
+    ...frame(),
+    texcoords: new Float32Array([0, 0, 1, 0, 0, 1]),
+    surfaces: [{ firstVertex: 0, vertexCount: 3, materialIndex: 0 }],
+  };
+  renderer.render(textured);
+  assert.equal(f.calls.filter((c) => c[0] === "draw" && c[3] === 0).length, 2);
+  assert.ok(
+    f.calls.some(
+      (c) => c[0] === "write" && c[1] === "native.surface-uvs" && c[2] === 6,
+    ),
+  );
+  renderer.render(textured);
+  assert.equal(
+    f.calls.filter((c) => c[0] === "upload-texture").length,
+    uploads,
+  );
+  renderer.destroy();
+});
+test("missing UVs and invalid material ranges reject before frame submission", async () => {
+  const f = gpuFixture();
+  const renderer = await createNativeSceneRenderer({ ...f, materials: [{}] });
+  const uv = new Float32Array(6),
+    range = { firstVertex: 0, vertexCount: 3, materialIndex: 0 };
+  for (const properties of [
+    { texcoords: new Float32Array([NaN, 0, 0, 0, 0, 0]) },
+    { texcoords: new Float32Array(4) },
+    { surfaces: [range] },
+    { texcoords: uv, surfaces: {} },
+    { texcoords: uv, surfaces: [{ ...range, firstVertex: 3 }] },
+    { texcoords: uv, surfaces: [{ ...range, materialIndex: 1 }] },
+    { texcoords: uv, surfaces: [{ ...range, vertexCount: 2 }] },
+    { texcoords: uv, surfaces: [] },
+    { texcoords: uv, surfaces: new Array(257).fill(range) },
+    { texcoords: uv, surfaces: [null] },
+  ])
+    assert.throws(
+      () => renderer.render({ ...frame(), ...properties }),
+      /surface|texcoords/i,
+    );
+  assert.equal(f.calls.filter((c) => c[0] === "submit").length, 0);
+  renderer.destroy();
+});
+test("a material upload failure releases textures and the rendering context", async () => {
+  const f = gpuFixture();
+  f.device.queue.writeTexture = () => {
+    throw new Error("upload failed");
+  };
+  await assert.rejects(createNativeSceneRenderer(f), /upload failed/);
+  assert.equal(
+    f.calls.filter((c) => c[0] === "texture").length,
+    f.calls.filter((c) => c[0] === "destroy" && c[1] === "texture").length,
+  );
+  assert.ok(f.calls.some((c) => c[0] === "unconfigure"));
+});
+
+test("caller material-list mutation cannot change the uploaded material range", async () => {
+  const f = gpuFixture(),
+    materials = [{}];
+  const renderer = await createNativeSceneRenderer({ ...f, materials });
+  materials.push({});
+  assert.throws(
+    () =>
+      renderer.render({
+        ...frame(),
+        texcoords: new Float32Array(6),
+        surfaces: [{ firstVertex: 0, vertexCount: 3, materialIndex: 1 }],
+      }),
+    /valid material/,
+  );
+  renderer.destroy();
+});
+
+test("native materials upload independent clearcoat strength and roughness", async () => {
+  const f = gpuFixture();
+  const renderer = await createNativeSceneRenderer({
+    ...f,
+    materials: [{ clearcoat: 0.5, clearcoatRoughness: 0.25 }],
+  });
+  const parameters = f.calls.filter(
+    (c) => c[0] === "write" && c[1] === "native.material-parameters",
+  );
+  assert.deepEqual(parameters[0][3], [0, 0, 0, 0]);
+  assert.deepEqual(parameters[1][3], [0, 0, 0.5, 0.25]);
+  renderer.destroy();
+});
+
+test("coating maps are bound in main and reflected draws and released on teardown", async () => {
+  const f = gpuFixture();
+  const renderer = await createNativeSceneRenderer({ ...f, materials: [{ clearcoat: 1,
+    clearcoatRoughness: 1, clearcoatMap: { width: 1, height: 1, data: new Uint8Array([0, 128, 255, 255]) } }] });
+  renderer.render({ ...frame(), water: true, texcoords: new Float32Array(6),
+    surfaces: [{ firstVertex: 0, vertexCount: 3, materialIndex: 0 }] });
+  const bindings = f.calls.filter(c => c[0] === "bind" && c[1] === 2);
+  assert.equal(bindings.length, 3);
+  assert.equal(bindings[0][2], bindings[2][2]);
+  assert.ok(bindings[0][2].entries.find(e => e.binding === 5)?.resource);
+  assert.ok(f.calls.some(c => c[0] === "upload-texture" && c[1] === "native.material.1.clearcoatMap"));
+  renderer.destroy();
+  assert.equal(f.calls.filter(c => c[0] === "texture").length,
+    f.calls.filter(c => c[0] === "destroy" && c[1] === "texture").length);
 });
