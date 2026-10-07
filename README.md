@@ -1,5 +1,10 @@
 # @plasius/gpu-renderer
 
+The new local glass/water diagnostic currently fails the complete-sample gate on
+both empty and filled tumblers: physical tests confirmed continuation queue
+overflow. It is not a working/qualified glass renderer yet. See the
+[retained evidence and transport follow-up](docs/glass-water-transport-follow-up.md).
+
 Material colour no longer inherits a brightness floor from ambient illumination
 (Task #226). Authored dark/saturated texture channels remain material properties;
 ambient light remains a radiance source. This affects fixed and adaptive rendering
