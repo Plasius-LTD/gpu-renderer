@@ -15,7 +15,8 @@ All notable changes to this project will be documented in this file.
   corrected texture channels, full-base Fresnel attenuation and matching sampling
   and PDF. Reuse existing hit-record padding and metadata allocation. Add explicit
   adjustable local seat-wood varnish variants without rewriting source assets
-  (#232); experimental, no transmission or performance qualification claimed.
+  (#232); retain physical shader checks and same-camera room evidence.
+  Experimental, no transmission or performance qualification claimed.
 
 - Add selectable original-daylight/cool-evening local room lighting and bounded
   intensity controls; refresh lighting on cached-model renders and retain the

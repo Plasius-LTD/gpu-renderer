@@ -84,6 +84,8 @@ benchmark are separate controls and do not apply this authoring variant.
 See [ADR0054](docs/adrs/adr-0054-layered-clearcoat.md). This thin clear layer does
 not model tinted absorption or change water/glass transport; coated delta-metal
 and transmissive cases are not qualified. No photo-equivalence or speedup claim.
+See the [physical checks and room capture evidence](docs/evidence/layered-clearcoat-2026-10-07.md)
+for retained source/image hashes, unchanged allocations and measurement limits.
 
 Choose **Centre reference → Sofa — upholstery inspection** in the local room
 page to exchange sofa/spacesuit floor positions while keeping their rotations,

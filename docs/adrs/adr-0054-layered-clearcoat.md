@@ -1,6 +1,7 @@
 # ADR 0054: independent, opt-in clearcoat over authored materials
 
-Status: Accepted for experimental implementation; physical/image qualification pending.
+Status: Accepted for experimental implementation; physical material probes passed,
+local wood image references captured. Broader quality/performance qualification pending.
 Story: plasius-ltd-site #2286. Task: gpu-renderer #232. Parent Feature #2114.
 
 ## Context
@@ -39,4 +40,5 @@ transmissive bases are not qualified by this change. Keep production defaults
 off. Rollback disables the flag and local variant; Three.js is never a fallback.
 
 See [design and frozen checks](../design/layered-clearcoat.md) and the
+[retained physical/room evidence](../evidence/layered-clearcoat-2026-10-07.md), plus the
 [Khronos specification](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_clearcoat).
