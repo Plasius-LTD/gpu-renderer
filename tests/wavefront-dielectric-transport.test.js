@@ -62,6 +62,7 @@ test('nested traversal protects occupancy and sample identity without consuming 
  assert.match(nested,/medium_transmittance/);
  assert.match(nested,/recoverable_optical_entry\(ray, hit\)/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/nested_media_enabled\(\) && \(triangle.materialKind == 2u \|\| triangle.materialKind == 3u\)/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/let normal = optical_shading_normal\(ray, hit\)/);
 });
 test('room transport controls reset off and forward independent flag receipts and GPU preflight',()=>{
  const read=f=>readFileSync(new URL('./fixtures/'+f,import.meta.url),'utf8');

@@ -25,6 +25,17 @@ export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+`
  var hit=HitRecord();hit.materialKind=2u;hit.material=vec4<f32>(0,0,1,1.5);hit.materialExtension=vec4<f32>(0,1,1,0);
  hit.color=vec4<f32>(1);hit.specularColor=vec4<f32>(1);hit.geometricNormal=vec4<f32>(0,0,1,0);hit.shadingNormal=hit.geometricNormal;
  hit.mediumRefId=1u;hit.frontFace=1u;
+ if(id.x==15u){
+  ray.mediumStack=vec4<u32>(1,0,0,0);ray.mediumStackDepth=1u;ray.mediumRefId=1u;hit.frontFace=0u;
+  ray.direction=vec4<f32>(normalize(vec3<f32>(-1,0,-0.1)),0);hit.shadingNormal=vec4<f32>(0.8,0,0.6,0);
+  var wrongSide=0u;
+  for(var j=0u;j<1024u;j++){ray.sampleId=j;let s=scatter_dielectric(ray,hit);
+   let height=dot(s.direction.xyz,hit.geometricNormal.xyz);
+   if((s.lobeKind==SCATTER_LOBE_DELTA_REFLECTION && height<=0.0) || (s.lobeKind==SCATTER_LOBE_DELTA_TRANSMISSION && height>=0.0)){wrongSide++;}
+  }
+  accumulation[60]=vec4<f32>(f32(wrongSide),select(0.0,1.0,dielectric_cannot_refract(ray,hit)),0,0);
+  accumulation[61]=vec4<f32>(0);accumulation[62]=vec4<f32>(0);accumulation[63]=vec4<f32>(0);return;
+ }
  if(id.x>=11u){
   ray.bounce=1u;ray.mediumStack=vec4<u32>(1,0,0,0);ray.mediumStackDepth=1u;
   hit.distance=select(0.00000005,0.01,id.x==12u);
@@ -77,7 +88,7 @@ export async function runDielectricTransportProbe(signal){
   device.pushErrorScope('validation');
   const mediums=Array.from({length:6},(_,id)=>({id,ior:id===0?1:id===2?1.333:1.5,priority:id===1?2:1}));
   const medium=createMediumTextureResource(device,{texture:GPUTextureUsage},mediums,true);owned.push(medium.texture);
-  const frame=buffer(320,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),output=buffer(15*64,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),staging=buffer(15*64,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ);
+  const frame=buffer(320,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),output=buffer(16*64,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),staging=buffer(16*64,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ);
   const module=device.createShaderModule({code:dielectricProbeShader()});await wait(assertShaderModuleCompiles(module,'dielectric-transport-probe'));
   const pipeline=await wait(device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'dielectric_probe'}}));
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:3,resource:{buffer:output}},{binding:5,resource:{buffer:frame}},{binding:32,resource:medium.view}]}),runs=[];
@@ -85,7 +96,7 @@ export async function runDielectricTransportProbe(signal){
    const config=createWavefrontPathTracingComputeConfig({width:1,height:1,'renderer.sampling.independentRandom.enabled':true,
     'renderer.transport.boundedDielectricBranching.enabled':bounded,'renderer.transport.nestedMediaRefraction.enabled':nested});
    device.queue.writeBuffer(frame,0,createConfigPayload(config,{x:0,y:0,width:1,height:1},7));
-   const e=device.createCommandEncoder(),p=e.beginComputePass();p.setPipeline(pipeline);p.setBindGroup(0,group);p.dispatchWorkgroups(15);p.end();
+   const e=device.createCommandEncoder(),p=e.beginComputePass();p.setPipeline(pipeline);p.setBindGroup(0,group);p.dispatchWorkgroups(16);p.end();
    e.copyBufferToBuffer(output,0,staging,0,output.size);device.queue.submit([e.finish()]);await wait(staging.mapAsync(GPUMapMode.READ));
    const values=Array.from(new Float32Array(staging.getMappedRange().slice(0)));staging.unmap();
    if(!values.every(Number.isFinite))throw Error('Non-finite dielectric probe');
@@ -96,6 +107,7 @@ export async function runDielectricTransportProbe(signal){
    near(values[176],nested?1:0,0);near(values[192],0,0);near(values[208],0,0);
    near(values[177],nested?2:0,0);near(values[193],nested?2:0,0);near(values[209],nested?4:0,0);
    near(values[224],nested?1:0,0);
+   if(nested){near(values[240],0,0);near(values[241],1,0);}
    if(nested){
     for(const [i,eta,before,after,invalid] of [[0,1/1.5,0,1,0],[1,1.5/water,1,2,0],[2,water,2,0,0],[3,1.5,1,0,0],[4,1,1,1,0],[5,water/1.5,2,1,0],[6,1,1,1,0],[7,1,1,1,1],[8,1,0,0,1],[9,1,1,1,1]]){
      const o=i*16;near(values[o],eta);near(values[o+2],before);near(values[o+3],after);near(values[o+6],invalid);
