@@ -1,6 +1,6 @@
 // Failure-only readback: preserve the original rejection, even if the GPU is lost.
 export async function readFailedPathNodes(device, source, wait) {
- const limit=32, size=4+limit*7*4;
+ const limit=32, size=4+limit*14*4;
  const output=device.createBuffer({size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
  const staging=device.createBuffer({size,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
  try {
@@ -12,10 +12,12 @@ export async function readFailedPathNodes(device, source, wait) {
     let o=id.x*16u;
     if(o+15u>=arrayLength(&nodes) || (nodes[o+3u]&2u)==0u){return;}
     let slot=atomicAdd(&failures.count,1u); if(slot>=32u){return;}
-    let d=slot*7u; failures.records[d]=id.x;
+    let d=slot*14u; failures.records[d]=id.x;
     failures.records[d+1u]=nodes[o+12u]; failures.records[d+2u]=nodes[o+13u];
     failures.records[d+3u]=nodes[o+14u]; failures.records[d+4u]=nodes[o+15u]&15u;
     failures.records[d+5u]=nodes[o+15u]>>4u; failures.records[d+6u]=nodes[o+3u];
+    for(var j=0u;j<3u;j++){failures.records[d+7u+j]=nodes[o+j];failures.records[d+10u+j]=nodes[o+4u+j];}
+    failures.records[d+13u]=nodes[o+7u];
    }`});
   const pipeline=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'gather'}});
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:source}},{binding:1,resource:{buffer:output}}]});
@@ -23,9 +25,9 @@ export async function readFailedPathNodes(device, source, wait) {
   pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(source.size/64/64));pass.end();
   encoder.copyBufferToBuffer(output,0,staging,0,size);device.queue.submit([encoder.finish()]);
   await wait(staging.mapAsync(GPUMapMode.READ));
-  const words=new Uint32Array(staging.getMappedRange().slice(0));staging.unmap();
+  const words=new Uint32Array(staging.getMappedRange().slice(0)),floats=new Float32Array(words.buffer);staging.unmap();
   return Array.from({length:Math.min(limit,words[0])},(_,i)=>{
-   const o=1+i*7;return {node:words[o],pixel:words[o+1],sample:words[o+2],bounce:words[o+3],reason:words[o+4],primitive:words[o+5],flags:words[o+6]};
+   const o=1+i*14;return {node:words[o],pixel:words[o+1],sample:words[o+2],bounce:words[o+3],reason:words[o+4],primitive:words[o+5],flags:words[o+6],origin:Array.from(floats.slice(o+7,o+10)),direction:Array.from(floats.slice(o+10,o+13)),distance:floats[o+13]};
   });
  } finally {output.destroy();staging.destroy();}
 }

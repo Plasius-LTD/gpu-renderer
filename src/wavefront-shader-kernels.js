@@ -112,6 +112,10 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
 export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_transition_invalid(ray, hit)) {
     fail_path_node(ray);
     pathNodes[ray.parentRayId].reserved = (hit.primitiveId << 4u) | max(u32(hit.pad2), medium_transition_failure(ray, hit));
+    // Rejected nodes cannot resolve radiance; retain the optical failure ray.
+    pathNodes[ray.parentRayId].directRadiance = ray.origin.xyz;
+    pathNodes[ray.parentRayId].terminalRadiance = ray.direction.xyz;
+    pathNodes[ray.parentRayId].terminalKind = bitcast<u32>(hit.distance);
     atomicAdd(&counters.termination.invalidSampleCount, 1u);
     atomicAdd(&counters.terminatedCount, 1u);
     return;
