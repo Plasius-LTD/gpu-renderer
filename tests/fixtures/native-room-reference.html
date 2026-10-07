@@ -6,7 +6,7 @@ body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-
 </style>
 <h1>Eames inside your room</h1>
 <p>Original chair and ottoman inside <strong id="room-name">the server-selected room (verified on Render)</strong>. No added studio walls or ceiling panel. External daylight is supplied because the room has no authored lights.</p>
-<p id="warning">Experimental adaptive sampling: known lighting artifacts remain. Six bounces. <span id="sampling-description"></span> Optional rough-surface denoising changes presentation only. Not real-time or quality-qualified.</p>
+<p id="warning">Experimental adaptive sampling: known lighting artifacts remain. Configurable bounce limit (six by default). <span id="sampling-description"></span> Optional rough-surface denoising changes presentation only. Not real-time or quality-qualified.</p>
 <div class="controls" id="controls">
 <div class="field"><label for="lighting-style">Room lighting style</label><select id="lighting-style"><option value="daylight">Original daylight</option><option value="cool-evening">Cool evening — blue-hour colour study</option></select></div>
 <div class="field"><label for="lighting-intensity">Environment intensity</label><input id="lighting-intensity" type="number" step="0.05" required></div>
@@ -15,6 +15,7 @@ body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-
 <div class="field"><label for="fov">Vertical FOV °</label><input id="fov" type="number" min="40" max="80" step="1" value="52" required></div>
 <div class="field"><label for="resolution">Native resolution</label><select id="resolution"><option value="1080p">1920 × 1080</option><option value="4k">3840 × 2160</option></select></div>
 <div class="field"><label for="spp">SPP ceiling</label><input id="spp" type="number" step="1" required aria-describedby="sampling-description"></div>
+<div class="field"><label for="max-depth">Maximum bounces</label><input id="max-depth" type="number" min="1" max="8" step="1" value="6" required></div>
 <div class="field"><label for="sampler">Experimental sampler</label><select id="sampler"><option value="fixed-pattern" selected>Fast fixed pattern</option><option value="stable-pattern">Slower stable comparison</option></select></div>
 <div class="field"><label for="splitting">Rough bounce splitting</label><select id="splitting"><option value="0">Off</option><option value="1">2 / 1 / 1 — first bounce</option><option value="2">2 / 2 / 1 — first two bounces</option></select></div>
 <div class="field"><label for="denoise">Guided denoising</label><select id="denoise"><option value="off">Off — raw reference</option><option value="guided">On — compare same-frame raw / cleaned</option></select></div>

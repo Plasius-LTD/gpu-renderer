@@ -50,6 +50,7 @@ for(const control of controls){
 }
 reset.addEventListener("click",()=>{
  resetGlass();
+ el('max-depth').value='6';
  resetCoat();
  resetLighting();
  resetInspection();
@@ -99,7 +100,7 @@ export function roomCompositionControls(source){return {placement:{x:el('chair-x
 function closeupControls(){return {enabled:el('inspection-camera').value==='cloth',distance:el('inspection-distance').valueAsNumber,elevation:el('inspection-elevation').valueAsNumber,target:['x','y','z'].map(axis=>el('inspection-target-'+axis).valueAsNumber)};}
 run.addEventListener("click",async()=>{
  for(const control of controls)if(!control.checkValidity()){control.reportValidity();status.textContent="Invalid settings. Check the highlighted field.";return;}
- const settings=roomReferenceSettings(el("resolution").value,el("sampler").value,el('spp').valueAsNumber),view=el("view").value;
+ const settings=roomReferenceSettings(el("resolution").value,el("sampler").value,el('spp').valueAsNumber,el('max-depth').valueAsNumber),view=el("view").value;
  const splitDepth=Number(el("splitting").value);
  const guidedDenoise=el('denoise').value==='guided';
  const sheen=el('sheen').value==='on';
@@ -132,6 +133,7 @@ run.addEventListener("click",async()=>{
   const source=withRoomWoodCoat(await loadAssets(receipt,cancellation.signal),receipt,woodCoat);
   let composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});
   composed=withRoomGlass(composed,glass);receipt.scene=composed.evidence;
+  composed.scene.probeDepth=settings.maxDepth;
   composed.scene.camera=clothCloseupCamera(composed.scene,composed.evidence,closeup);receipt.scene.camera={...composed.scene.camera};
   check(!cancellation.signal.aborted,"Capture cancelled");
   if(guidedDenoise){status.textContent='Checking denoiser against analytic HDR/edge/noise probes';const {runGuidedDenoiseProbe}=await import('./guided-denoise-probe.js');receipt.denoiseProbe=await runGuidedDenoiseProbe(cancellation.signal);}
