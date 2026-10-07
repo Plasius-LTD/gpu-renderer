@@ -50,3 +50,4 @@
 - [ADR 0051: Surface sidedness and normal validity](adr-0051-surface-sidedness-and-normal-validity.md)
 - [ADR 0053: Cloth material fidelity](adr-0053-cloth-material-fidelity.md)
 - [ADR 0054: Layered clearcoat](adr-0054-layered-clearcoat.md)
+- [ADR 0055: Bounded dielectric continuations and nested optical occupancy](adr-0055-bounded-nested-dielectrics.md)

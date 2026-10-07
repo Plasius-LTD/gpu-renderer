@@ -25,5 +25,5 @@ test("MIS eligibility remains pinned alongside the Task 232 opt-in coating corre
     .replace(/(fn terminal_surface_environment_source\([\s\S]*?let surfaceColor = )clamp\(hit.color.xyz,/, '$1clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35),')
     .replace('let surfaceColor = max(hit.color.xyz, vec3<f32>(0.0));','let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);');
   assert.equal(createHash("sha256").update(prior).digest("hex"),
-    "a3f05baa03bb5bb35444237dc91d92157c34363a6e2ad0460f4980855caff5e5");
+    "7aafb4ef186c1457de9b4dd44b03cfbd517e79904afd013eb415e45ef9c64c07");
 });

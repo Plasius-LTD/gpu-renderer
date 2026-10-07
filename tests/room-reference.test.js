@@ -26,7 +26,7 @@ test('central reference control forwards layout and preserves default reset and 
 test('room ceiling is configurable, forwarded and verified rather than a hard-coded preset',()=>{
  const fixture=name=>readFileSync(new URL(`./fixtures/${name}.js`,import.meta.url),'utf8');
  const page=fixture('native-room-reference'),native=fixture('native-adaptive-runner'),runner=fixture('adaptive-paired-runner');
- assert.match(page,/roomReferenceSettings\(el\("resolution"\).value,el\("sampler"\).value,el\('spp'\).valueAsNumber\)/);
+ assert.match(page,/roomReferenceSettings\(el\("resolution"\).value,el\("sampler"\).value,el\('spp'\).valueAsNumber,el\('max-depth'\).valueAsNumber\)/);
  assert.match(page,/createRadialSamplingPlan\(settings.width,settings.height,settings.maximumSpp\)/);
  assert.match(page,/maximumSpp:settings.maximumSpp/);
  assert.match(page,/sceneSnapshot.samplesPerPixel===settings.maximumSpp/);
