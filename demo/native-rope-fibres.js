@@ -21,7 +21,7 @@ const fail = () => { throw new Error("Invalid rope fibre input or budget."); };
 
 /** Static metre-scale rope fuzz. Regenerate only when authoring changes, not per frame. */
 export function createRopeFibres({ vertices, texcoords, ranges, seed = 7349,
-  density = 24000, maxFibres = 1600, length = 0.006, radius = 0.00012 } = {}) {
+  density = 24000, maxFibres = 1600, length = 0.006, radius = 0.00012, fray = 0.08 } = {}) {
   if (!(vertices instanceof Float32Array) || vertices.length % (STRIDE * 3) ||
       vertices.length > 600000 * STRIDE || !(texcoords instanceof Float32Array) ||
       texcoords.length !== vertices.length / STRIDE * 2 ||
@@ -29,7 +29,7 @@ export function createRopeFibres({ vertices, texcoords, ranges, seed = 7349,
       !Array.isArray(ranges) || ranges.length > 256 ||
       !bounded(density, 0, 1000000) || !Number.isInteger(maxFibres) || !bounded(maxFibres, 1, 2000) ||
       !bounded(length, 0.0001, 0.02) || !bounded(radius, 0.00001, Math.min(0.001, length / 4)) ||
-      !Number.isInteger(seed) || !bounded(seed, 0, 0xffffffff)) fail();
+      !Number.isInteger(seed) || !bounded(seed, 0, 0xffffffff) || !bounded(fray, 0, 1)) fail();
   let end = 0;
   for (const range of ranges) {
     if (!range || !Number.isInteger(range.firstVertex) || range.firstVertex < end || range.firstVertex % 3 ||
@@ -50,6 +50,16 @@ export function createRopeFibres({ vertices, texcoords, ranges, seed = 7349,
     }
   }
   const fibreCount = Math.min(maxFibres, Math.round(totalArea * density));
+  const looseEndCount = Math.round(fibreCount * fray);
+  // Independent seeded permutation gives exact, nested wear selections without
+  // consuming geometry randomness or moving roots when the fray level changes.
+  const ranks = Uint32Array.from({ length: fibreCount }, (_, i) => i);
+  let rankState = (seed ^ 0x9e3779b9) >>> 0;
+  for (let i = fibreCount - 1; i > 0; i--) {
+    rankState = (rankState * 1664525 + 1013904223) >>> 0;
+    const j = Math.floor(rankState / 4294967296 * (i + 1));
+    [ranks[i], ranks[j]] = [ranks[j], ranks[i]];
+  }
   const output = new Float32Array(fibreCount * VERTICES_PER_FIBRE * STRIDE);
   const outputUv = new Float32Array(fibreCount * VERTICES_PER_FIBRE * 2);
   let state = seed, cursor = 0;
@@ -75,8 +85,9 @@ export function createRopeFibres({ vertices, texcoords, ranges, seed = 7349,
     const side = cross(normal, direction);
     // Dense short fuzz, with only a few longer loose ends. Curves sweep along
     // the surface before lifting, rather than forming a radial brush of spikes.
-    const strandLength = length * (random() < 0.08 ? 1.2 : 0.25 + 0.65 * random() ** 2);
-    const curl = (random() - 0.5) * 0.9;
+    const loose = ranks[fibre] < looseEndCount, variation = random();
+    const strandLength = length * (loose ? 1.3 + variation * 0.7 : 0.25 + 0.65 * variation ** 2);
+    const curl = (random() - 0.5) * (loose ? 1.6 : 0.9);
     const thickness = radius * (0.6 + 0.4 * random());
     const tint = 0.9 + random() * 0.3;
     const colour = interpolate(vertices, STRIDE, 6, 3).map(v => Math.max(0, Math.min(1, v * tint)));
@@ -109,5 +120,5 @@ export function createRopeFibres({ vertices, texcoords, ranges, seed = 7349,
       }
     }
   }
-  return { vertices: output, texcoords: outputUv, fibreCount };
+  return { vertices: output, texcoords: outputUv, fibreCount, looseEndCount };
 }

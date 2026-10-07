@@ -46,7 +46,9 @@ export function createWornVarnishMap(orm, wear = 0.65) {
       const patches = smooth((noise(u * 15, v * 15) - 0.25) / 0.5);
       const rub = noise(u * 73, v * 29);
       const scuff = smooth((orm.data[i + 1] / 255 - 0.48) / 0.43);
-      const damage = clamp(wear * (patches * 0.72 + scuff * 0.7 + rub * 0.10));
+      // Broad worn patches amplify authored scuffs while sheltered islands keep
+      // some intact coat. Rough wood alone must not flatten the whole finish.
+      const damage = clamp(wear * (patches * 0.9 + scuff * (0.22 + patches * 0.55) + rub * 0.10));
       data[i] = Math.round(255 * (1 - damage));
       data[i + 1] = Math.round(255 * (0.24 + damage * 0.46));
       data[i + 2] = 255;

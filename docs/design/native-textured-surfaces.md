@@ -129,6 +129,33 @@ The review UI offers a labelled keyboard-accessible fibre toggle and both rope
 detail views. Keep the
 default subtle and inspect both rope silhouettes and lit fibres at close range.
 
+## Review refinement: controlled material ageing (2026-10-07)
+
+Extend Task #230 under the same Feature, Story and rollout flag. The next review
+uses 30% rope fraying and 90% varnish wear. Fraying means the fraction of generated
+fibres promoted to longer curled loose ends, rounded to the nearest whole fibre;
+it does not measure lost rope strength or elapsed time. Keep short fuzz at 0%.
+Varnish wear is an independent artistic intensity, not percentage area removed.
+
+Introduce a renderer-independent, immutable version-1 ageing profile with bounded
+`ropeFray`, `varnishWear` and uint32 `seed`. A source-demo crate adapter translates
+that profile into the existing finish maps and bounded rope geometry. Keep source
+assets, topology ranges and renderer lifecycle outside the profile. The prototype
+does not justify creating/publishing another package yet (ADR-0034).
+
+Derive requirements-first tests for exact loose-end counts at 0/30/100%, nested
+selection and unchanged roots/UVs as fray increases, deterministic immutable
+profiles, independent channels, invalid-input rejection and geometry budgets.
+Use a fixed random draw count per fibre so moving the fray slider cannot scatter
+the roots. Loose ends must remain tapered, curved, outward-facing and matte.
+
+The local review has labelled fray/wear controls, fresh/aged comparison presets,
+and both rope-detail cameras. Regenerate only the channel edited, never on camera
+movement or every frame. Verify actual WebGPU at the target, endpoints and toggles;
+retain the source asset hashes, no additional dependencies/network requests, and
+the existing renderer resource limits. Update README, Unreleased, provenance,
+changed-source LCOV and exact-head CI before calling the review ready.
+
 Tests first: reject malformed/nonfinite/out-of-bounds inputs and overlapping
 ranges; skip degenerate triangles; area-weighted roots stay on selected ranges;
 determinism/source immutability; bounded output, finite unit normals and root UVs;

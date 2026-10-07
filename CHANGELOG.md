@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add a versioned material-ageing profile and crate adapter with independent 30% rope fraying / 90% varnish-wear review defaults; preserve fibre roots across wear edits and retain coating islands within heavily scuffed wood (#230).
+
 - Add bounded, deterministic curved rope fibres to the chest review fixture, with matte exposed-fibre materials and comparison/detail views (#230).
 
 - Support spatial clearcoat coverage and roughness maps; keep the crate fixture's rope and hardware uncoated and vary its wood varnish with a deterministic wear preset (#230).

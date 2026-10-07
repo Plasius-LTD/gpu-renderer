@@ -121,3 +121,30 @@ rope-detail views and whole-chest camera angles. The preview recorded no browser
 warnings/errors. Fibres remain small and attached to rope, leaving bare fittings
 and varied wood coating intact. This is local evidence, with release and site
 adoption pending through the existing delivery workflow.
+
+## Controlled ageing review (2026-10-07)
+
+The same verified model and images now use the versioned profile/crate adapter
+from ADR-0034. Review defaults are 30% fraying (exactly 480 longer loose ends among
+1,600 generated fibres) and 90% varnish-wear intensity. The adapter uses a 14 mm
+length scale and 0.32 mm root radius; loose ends use 1.3–2 times that length scale.
+An independent seeded permutation keeps loose-end selection nested and root/UV
+sampling unchanged when editing fray. Seed controls the fibres; coating retains
+its stable UV pattern. Broad wear patches amplify scuffs while preserving islands
+of remaining coat. The 40,178-triangle total and additional-array budget are
+unchanged. No source asset or licence has changed.
+
+The local fixture at `output/native-texture-preview` consumes the source adapter
+with separate fray/wear sliders, fresh/aged buttons and comparison toggles. It
+regenerates fibres only on fray/preset edits and rebuilds material resources only
+on finish/preset edits. Detail cameras include the complete handle; the whole
+view leaves room around the chest. Controls remain labelled and keyboard usable.
+
+Actual WebGPU review covered 0/30/100% fray, 0/90/100% wear, both handles, keyboard
+presets/toggles, untextured and uncoated fallback, camera changes during finish
+rebuilds, and whole-view comparisons. No new browser warnings/errors were recorded
+in the final validation session. Local captures `ageing-chest-review.jpg`,
+`ageing-rope-30-review.jpg` and `ageing-fresh-comparison.jpg` live beside the fixture.
+Long fibres are most visible at close range; static triangles remain an artistic
+approximation, not a structural rope or hair simulation. This remains a local
+review with package release/site adoption pending.

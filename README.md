@@ -807,9 +807,50 @@ square metre; `maxFibres` caps them at 2,000 (default 1,600). `length` and `radi
 are in metres. The 21 triangles per strand use ordinary native multisampling,
 depth and lighting; no animated fur or dedicated hair scattering is claimed.
 
+Optional `fray` (0–1, default 0.08) promotes exactly
+`round(fibreCount * fray)` strands to longer curled loose ends, reported as
+`looseEndCount`. Selection is seeded and nested: raising the level keeps earlier
+loose ends, roots and UVs in place. At 0, short fuzz remains. This is a visual
+proportion of generated fibres, not lost rope strength.
+
 Use `createRopeFibreMaterial(ropeMaterial)` for the added range: it keeps the
 rope's colour map and zero clearcoat while omitting the core's baked occlusion
 and normal creases from exposed fibres. Vertex roughness is 1 and metallic is 0.
 The review fixture offers fibre on/off and both rope-detail views. See
 [ADR-0033](docs/adrs/adr-0033-demo-rope-fibres.md). These helpers remain source-only
 and do not add a renderer API, dependency or network request.
+
+### Material ageing review wrapper
+
+[material-ageing.js](demo/material-ageing.js) validates and freezes a serializable
+version-1 profile. [native-crate-ageing.js](demo/native-crate-ageing.js) applies it
+through the existing coating/fibre helpers:
+
+```js
+import { createCrateAgeing } from './demo/native-crate-ageing.js';
+
+const ageing = createCrateAgeing({ ropeFray: 0.30, varnishWear: 0.90, seed: 7349 });
+const { wood, rope, metal, fibres: fibreMaterial } = ageing.createMaterials(sourceMaps);
+const fibreGeometry = ageing.createFibres({ vertices, texcoords, ranges: ropeRanges });
+// Append fibreGeometry with fibreMaterial using the existing native draw contract.
+```
+
+Those values are also the review defaults. `varnishWear` is independent visual
+intensity, not coating area removed or elapsed years. Broad scuff patches expose
+wood while sheltered areas retain coating. `seed` controls fibre placement and
+loose-end selection; varnish uses its existing stable UV pattern. The crate adapter
+uses a 14 mm fibre length scale and 0.32 mm root radius, with a 1,600-fibre budget;
+loose ends are 1.3–2 times the length scale and taper to a point. Source images and
+geometry remain unchanged; rope, added fibres and metal never acquire clearcoat.
+
+Generate/copy geometry only when the fray channel changes; rebuild finish maps
+only when coating settings change. Camera movement reuses both. The caller still
+owns verified asset ranges, GPU resources and disposal. The local review includes
+fresh/aged presets, fibre/coat toggles and both handle-detail views.
+
+This is a tested source-demo wrapper, not a newly published package or a complete
+damage simulator. [ADR-0034](docs/adrs/adr-0034-material-ageing-profile.md) records
+the proposed `@plasius/material-ageing` boundary after a second asset establishes
+the shared contract. Production adoption retains `gpu-demo.scene-fidelity.enabled`
+and the existing GPU route capability; disabling the feature selects the existing
+site fallback. No package publication or site deployment is implied by this study.

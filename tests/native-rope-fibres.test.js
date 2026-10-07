@@ -113,3 +113,38 @@ test("exposed fibres inherit rope colour without core creases, occlusion or varn
   assert.equal(source.clearcoat, 1);
   assert.throws(() => createRopeFibreMaterial({ baseColor: { ...map, width: 3 } }), /texture/);
 });
+
+test("fray levels promote exact nested counts without moving roots, UVs or the remaining fibres", () => {
+  const input = { ...fixture(), length: 0.01, density: 1_000_000, maxFibres: 1600 };
+  const fresh = createRopeFibres({ ...input, fray: 0 });
+  const aged = createRopeFibres({ ...input, fray: 0.3 });
+  const worn = createRopeFibres({ ...input, fray: 1 });
+  assert.equal(fresh.looseEndCount, 0);
+  assert.equal(aged.looseEndCount, 480);
+  assert.equal(worn.looseEndCount, 1600);
+  assert.deepEqual(aged, createRopeFibres({ ...input, fray: 0.3 }));
+  assert.deepEqual(fresh.texcoords, aged.texcoords);
+  assert.deepEqual(aged.texcoords, worn.texcoords);
+  let changed = 0;
+  for (let i = 0; i < fresh.fibreCount; i++) {
+    const start = i * 63 * 12, end = start + 63 * 12;
+    for (const root of [0, 1, 7]) {
+      const offset = start + root * 12;
+      assert.deepEqual(fresh.vertices.slice(offset, offset + 12), aged.vertices.slice(offset, offset + 12));
+      assert.deepEqual(aged.vertices.slice(offset, offset + 12), worn.vertices.slice(offset, offset + 12));
+    }
+    const freshStrand = fresh.vertices.slice(start, end), agedStrand = aged.vertices.slice(start, end);
+    if (!freshStrand.every((v, j) => v === agedStrand[j])) {
+      changed++;
+      assert.deepEqual(agedStrand, worn.vertices.slice(start, end), 'a loose end stays loose as wear increases');
+      const extent = a => Math.hypot(...[0, 1, 2].map(j => a[56 * 12 + j] - a[j]));
+      assert.ok(extent(agedStrand) > extent(freshStrand) * 1.3, 'loose ends visibly extend the silhouette');
+    }
+  }
+  assert.equal(changed, 480);
+  assert.equal(createRopeFibres({ ...input, maxFibres: 7, fray: 0.3 }).looseEndCount, 2);
+  assert.equal(createRopeFibres({ ...input, density: 0, fray: 1 }).looseEndCount, 0);
+  for (const fray of [-0.01, 1.01, NaN, Infinity, '0.3']) {
+    assert.throws(() => createRopeFibres({ ...input, fray }), /fibre/i);
+  }
+});
