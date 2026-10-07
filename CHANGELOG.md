@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add bounded, deterministic curved rope fibres to the chest review fixture, with matte exposed-fibre materials and comparison/detail views (#230).
+
 - Support spatial clearcoat coverage and roughness maps; keep the crate fixture's rope and hardware uncoated and vary its wood varnish with a deterministic wear preset (#230).
 
 - Separate optional neutral varnish/clearcoat reflection from the coloured native surface, with independent roughness and Fresnel attenuation (#230).

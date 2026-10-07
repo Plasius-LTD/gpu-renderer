@@ -97,3 +97,27 @@ Actual WebGPU review passed at camera angles 36° and −40°, including wear 0%
 wood's highlight softens and breaks up with wear. The preview reported 6,578
 triangles at 1440 × 880 with no captured browser warnings or errors. This is
 local visual evidence; production adoption and package publication are pending.
+
+### Rope fibre refinement (2026-10-07)
+
+`demo/native-rope-fibres.js` generates additive static geometry on the two
+reviewed rope ranges. Root UVs inherit the source colour atlas. Exposed fibres
+use a separate matte, zero-coat material without the core's occlusion/normal
+maps, while the original rope and worn wood retain their existing materials.
+No downloaded file is changed and no new external asset is used.
+
+The review preset uses seed 7349, density 24,000 roots/m², a 1,600-fibre cap,
+length 0.010 m and radius 0.00025 m. Most curves are shorter than the length
+setting, with 8% longer ends; radius tapers to zero. This is an authored visual
+preset for small on-screen fibres, not a measured hemp-fibre specification.
+Both handles receive roots (804 left, 796 right in this fixture). The geometry
+adds 33,600 triangles, for 40,178 total with the crate/ground; generation occurs
+once, outside camera/finish updates. Additional vertex/UV arrays total 5,644,800
+bytes; the separate colour-only material adds one 1k decoded colour-map upload
+within the existing 64 MiB budget.
+
+Actual WebGPU review exercised the keyboard-operated fibre toggle, left/right
+rope-detail views and whole-chest camera angles. The preview recorded no browser
+warnings/errors. Fibres remain small and attached to rope, leaving bare fittings
+and varied wood coating intact. This is local evidence, with release and site
+adoption pending through the existing delivery workflow.

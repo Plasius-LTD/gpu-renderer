@@ -795,3 +795,21 @@ coverage and roughness without modifying the underlying colour or source asset.
 See [spatial coating decision](docs/adrs/adr-0032-spatial-native-clearcoat.md) and
 the [fixture/provenance record](docs/design/cc0-demo-asset-review.md). The example
 helper is source-only; the published API is the generic material map.
+
+For subtle rope fraying, the source-demo helper
+[native-rope-fibres.js](demo/native-rope-fibres.js) exports `createRopeFibres`.
+Pass the expanded native `vertices`, `texcoords` and explicit rope-only
+`{ firstVertex, vertexCount }` ranges. It returns separate triangles/UVs and a
+`fibreCount`; append them once with their own draw range. Generate in metre-scale
+world coordinates after transforms. Sampling is deterministic and area-weighted,
+with short tapered curves and a few longer ends. `density` controls roots per
+square metre; `maxFibres` caps them at 2,000 (default 1,600). `length` and `radius`
+are in metres. The 21 triangles per strand use ordinary native multisampling,
+depth and lighting; no animated fur or dedicated hair scattering is claimed.
+
+Use `createRopeFibreMaterial(ropeMaterial)` for the added range: it keeps the
+rope's colour map and zero clearcoat while omitting the core's baked occlusion
+and normal creases from exposed fibres. Vertex roughness is 1 and metallic is 0.
+The review fixture offers fibre on/off and both rope-detail views. See
+[ADR-0033](docs/adrs/adr-0033-demo-rope-fibres.md). These helpers remain source-only
+and do not add a renderer API, dependency or network request.

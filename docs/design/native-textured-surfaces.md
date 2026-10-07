@@ -104,3 +104,35 @@ several angles, wear extremes and coat on/off in the actual WebGPU preview. Reta
 screenshot and browser-error evidence. Update README, Unreleased, ADR and asset
 review. Continue existing Feature #1170 / Story #2272 / flag and capability; this
 is a refinement of the pending package PR, with CI required before release.
+
+## Review refinement: rope fibres (2026-10-07)
+
+Task #230 also covers a subtle frayed silhouette on the chest's rope. Existing
+gpu-renderer native triangles and gpu-shared loading are sufficient; the current
+native renderer and gpu-cloth do not supply a hair/fur primitive. Use a source-demo
+authoring helper to generate short, curved, tapered fibre geometry only on the
+explicit rope ranges. Keep asset interpretation outside renderer/shader APIs.
+This is dry rope fuzz, not animated fur, transparency shells or a full hair BRDF.
+
+Sample roots deterministically in proportion to triangle area, including root UVs
+and normals. The same stable seed retains strands across camera moves and finish
+changes. Most strands should hug the rope, with sparse longer curled ends. Use
+a matte, zero-clearcoat colour-only material; omit core occlusion/normal creases
+from exposed fibres while inheriting atlas colour. Never grow
+fibres on wood, fittings or ground. Native multisampling and existing depth,
+lighting, shadows/reflection paths render the additional triangles normally.
+
+Bound inputs at the existing 600,000-vertex ceiling and additional output at 2,000
+fibres, with four segments and three radial sides per fibre. Generate once at
+load, not per frame; no network dependency, runtime simulation or asset edits.
+The review UI offers a labelled keyboard-accessible fibre toggle and both rope
+detail views. Keep the
+default subtle and inspect both rope silhouettes and lit fibres at close range.
+
+Tests first: reject malformed/nonfinite/out-of-bounds inputs and overlapping
+ranges; skip degenerate triangles; area-weighted roots stay on selected ranges;
+determinism/source immutability; bounded output, finite unit normals and root UVs;
+tapered curved tips; no fibres at zero density. Actual WebGPU on/off and angle
+comparison must show attached fraying without a shaggy halo or errors. Update
+the README, Unreleased and asset review; retain screenshot evidence and the
+existing Feature/Story/flag. Package CI remains required before delivery.
