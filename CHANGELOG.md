@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Retain failing native diagnostic tile, ray telemetry and final-sample termination
+  counters without accepting incomplete captures; readback failures preserve the
+  original error (#233).
+
 - Add local off/empty/filled tumbler controls and glass close-up framing, reusing
   the lighting reference geometry. Retain dimensions, fill, IOR, overlap and
   geometry in receipts; display the known air-relative refraction limitation.

@@ -6,6 +6,8 @@ import { createGpuParallelismCounters } from "/src/wavefront-frame-runtime.js";
 import { createWavefrontCpuProfile } from "/src/wavefront-cpu-profile.js";
 import { packSharedPhase,encodeSharedPhase,encodeSharedSample } from "/src/wavefront-adaptive-shared.js";
 import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
+import { readWavefrontTerminationMetrics } from '/src/wavefront-readbacks.js';
+import { retainNativeFailure } from './native-failure-evidence.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 export async function createNativeAdaptiveRunner(c) {
@@ -68,6 +70,7 @@ export async function createNativeAdaptiveRunner(c) {
         active();const {tile,ranges,expectedPrimaryRays}=item;
         const tilePixels=tile.width*tile.height,groups=Math.ceil(tilePixels/64),samples=adaptive?ranges.at(-1).sampleLimit:maximum;
         const tileStarted=performance.now(),trace={tileIndex,tile,sampleRounds:samples,expectedPrimaryRays};
+        try{
         stage("configPacking",()=>{
           const batch=new Uint8Array(samples*config.memory.configBufferStride);cpu?.recordAllocation(batch.byteLength);
           for(let ordinal=0;ordinal<samples;ordinal++){
@@ -105,8 +108,8 @@ export async function createNativeAdaptiveRunner(c) {
         trace.renderIntervalMs=performance.now()-tileStarted;trace.parallelism=parallelism;
         if(diagnostics){const readStarted=performance.now();
           const measured=await asyncStage("telemetryReadback",()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:samples*config.maxDepth,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())})));
-          check(measured.rayCounts.status==="available",measured.rayCounts.reason);
           trace.telemetry=measured;trace.rawTimestampPair=timestampPairs.at(-1)??null;
+          check(measured.rayCounts.status==="available",measured.rayCounts.reason);
           await asyncStage("outputReadback",async()=>{
             let counts;
             if(adaptive){const gather=device.createCommandEncoder(),pass=gather.beginComputePass();pass.setPipeline(output.gather);pass.setBindGroup(0,gatherGroup,[lastOffset]);pass.dispatchWorkgroups(groups);pass.end();device.queue.submit([gather.finish()]);counts=new Uint32Array(await read(gathered,tilePixels*4));}
@@ -122,6 +125,12 @@ export async function createNativeAdaptiveRunner(c) {
           readbackMs+=performance.now()-readStarted;
         }
         tiles.push(trace);onProgress?.({mode,diagnostics,completedTiles:tileIndex+1,totalTiles:plan.length});
+        }catch(error){
+          throw await retainNativeFailure(error,trace,async()=>({
+            termination:await readWavefrontTerminationMetrics({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},counterBuffer:counters,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}),
+            adaptiveControlWords:Array.from(new Uint32Array(await read(b.primaryControl,16))),
+          }));
+        }
       }
       // Close the tile query interval before encoding the canonical full-frame present.
       c.setMode(false,adaptive&&fused);

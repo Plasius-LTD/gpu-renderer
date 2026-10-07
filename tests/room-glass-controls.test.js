@@ -14,4 +14,7 @@ test('room glass fixture exposes labelled opt-in controls and retains compositio
  assert.match(js,/glass\.closeup\?'Glass and water close-up'/);
  assert.match(js,/'-glass-'\+glass\.mode/);
  assert(js.indexOf('composed=withRoomGlass')<js.indexOf('await runGuidedDenoiseProbe'),'geometry admission must precede GPU probes');
+ assert.match(js,/receipt.captureFailure=error.captureFailure/);
+ const runner=readFileSync(new URL('./fixtures/native-adaptive-runner.js',import.meta.url),'utf8');
+ assert.match(runner,/throw await retainNativeFailure/);assert.match(runner,/readWavefrontTerminationMetrics/);
 });
