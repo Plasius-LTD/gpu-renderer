@@ -389,9 +389,9 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
     if (secondaryIndex < config.tilePixelCount) {
       let secondaryIsReflection = transmissionBranch;
       let secondaryDirection = select(
-        refract_direction(ray.direction.xyz, surface_shading_normal(hit),
+        refract_direction(ray.direction.xyz, optical_shading_normal(ray, hit),
           dielectric_ratio(ray, hit)),
-        reflect(ray.direction.xyz, surface_shading_normal(hit)),
+        reflect(ray.direction.xyz, optical_shading_normal(ray, hit)),
         secondaryIsReflection
       );
       let secondaryStack = select(
@@ -817,7 +817,7 @@ fn dielectric_eta(hit: HitRecord) -> f32 {
 }
 
 fn dielectric_cannot_refract(ray: RayRecord, hit: HitRecord) -> bool {
-  let cosTheta = min(dot(-ray.direction.xyz, surface_shading_normal(hit)), 1.0);
+  let cosTheta = min(dot(-ray.direction.xyz, optical_shading_normal(ray, hit)), 1.0);
   return dielectric_ratio(ray, hit) * sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) > 1.0;
 }
 

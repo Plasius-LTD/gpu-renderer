@@ -45,6 +45,19 @@ fn dielectric_ratio(ray: RayRecord, hit: HitRecord) -> f32 {
   }
   return dielectric_eta(hit);
 }
+fn optical_shading_normal(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
+  let normal = surface_shading_normal(hit);
+  if (!nested_media_enabled() || !medium_valid(hit.mediumRefId)) { return normal; }
+  let geometric = safe_normalize(hit.geometricNormal.xyz, normal);
+  let eta = dielectric_ratio(ray, hit);
+  let cosine = clamp(dot(-ray.direction.xyz, normal), 0.0, 1.0);
+  // Reflection-only normal repair is insufficient for a dielectric. A valid
+  // transmitted branch must cross the actual triangle before occupancy changes.
+  if (dot(reflect(ray.direction.xyz, normal), geometric) <= 0.0) { return geometric; }
+  if (eta * eta * (1.0 - cosine * cosine) < 1.0 &&
+      dot(refract_direction(ray.direction.xyz, normal, eta), geometric) >= 0.0) { return geometric; }
+  return normal;
+}
 // Unpolarised Fresnel with actual eta_i / eta_t, including TIR and equal media.
 fn interface_fresnel(cosine: f32, eta: f32) -> f32 {
   if (eta == 1.0) { return 0.0; }
@@ -58,14 +71,14 @@ fn interface_fresnel(cosine: f32, eta: f32) -> f32 {
 }
 fn dielectric_reflection_weight(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   if (nested_media_enabled() && medium_valid(hit.mediumRefId)) {
-    return vec3<f32>(interface_fresnel(dot(-ray.direction.xyz, surface_shading_normal(hit)), dielectric_ratio(ray, hit)));
+    return vec3<f32>(interface_fresnel(dot(-ray.direction.xyz, optical_shading_normal(ray, hit)), dielectric_ratio(ray, hit)));
   }
   return surface_delta_reflection_throughput(hit, -ray.direction.xyz);
 }
 fn dielectric_transmission_weight(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   if (nested_media_enabled() && medium_valid(hit.mediumRefId)) {
     let eta = dielectric_ratio(ray, hit);
-    let fresnel = interface_fresnel(dot(-ray.direction.xyz, surface_shading_normal(hit)), eta);
+    let fresnel = interface_fresnel(dot(-ray.direction.xyz, optical_shading_normal(ray, hit)), eta);
     let tint = mix(vec3<f32>(1.0), clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0)), clamp(hit.materialExtension.z, 0.0, 1.0));
     return (1.0 - fresnel) * tint * eta * eta;
   }
@@ -79,7 +92,7 @@ fn dielectric_reflection_probability(ray: RayRecord, hit: HitRecord) -> f32 {
   return r / (r + t);
 }
 fn scatter_dielectric(ray: RayRecord, hit: HitRecord) -> ScatterResult {
-  let normal = surface_shading_normal(hit);
+  let normal = optical_shading_normal(ray, hit);
   let etaRatio = dielectric_ratio(ray, hit);
   let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
   let cannotRefract = dielectric_cannot_refract(ray, hit);
