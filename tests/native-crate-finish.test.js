@@ -25,8 +25,8 @@ const source = (roughness) => ({ width: 32, height: 32,
 test('wear is deterministic and varies coverage and roughness independently of base colour', () => {
   const orm = source(160), original = orm.data.slice();
   const pristine = createWornVarnishMap(orm, 0);
-  const worn = createWornVarnishMap(orm, 0.75);
-  assert.deepEqual(worn, createWornVarnishMap(orm, 0.75));
+  const worn = createWornVarnishMap(orm, 0.5);
+  assert.deepEqual(worn, createWornVarnishMap(orm, 0.5));
   assert.deepEqual(orm.data, original);
   const red = [], green = [];
   for (let i = 0; i < worn.data.length; i += 4) {
@@ -38,8 +38,8 @@ test('wear is deterministic and varies coverage and roughness independently of b
   }
   assert.ok(Math.max(...red) - Math.min(...red) > 40);
   assert.ok(Math.max(...green) - Math.min(...green) > 20);
-  const scuffed = createWornVarnishMap(source(245), 1);
-  const smooth = createWornVarnishMap(source(90), 1);
+  const scuffed = createWornVarnishMap(source(245), 0.75);
+  const smooth = createWornVarnishMap(source(90), 0.75);
   assert.ok(scuffed.data[0] < smooth.data[0]);
   assert.ok(scuffed.data[1] > smooth.data[1]);
 });
@@ -52,11 +52,32 @@ test('finish authoring rejects invalid input without changing the source', () =>
 test('rope and hardware stay uncoated at both wear extremes and when toggling the coat', () => {
   for (const wear of [0, 1]) for (const coated of [false, true]) {
     const materials = createCrateFinishMaterials({ orm: source(160), clearcoat: 1 }, wear, coated);
-    assert.equal(materials.wood.clearcoat, coated ? 0.75 : 0);
+    assert.equal(materials.wood.clearcoat, coated && wear < 1 ? 0.75 : 0);
     for (const name of ['rope', 'metal']) {
       assert.equal(materials[name].clearcoat, 0);
       assert.equal(materials[name].clearcoatMap, undefined);
     }
   }
   assert.throws(() => createWornVarnishMap(), /required/);
+});
+
+
+test('100% wear is bare at every texel and exactly matches coating disabled', () => {
+  for (const roughness of [0, 90, 160, 220, 255]) {
+    const orm = source(roughness);
+    let previous = createWornVarnishMap(orm, 0);
+    for (const wear of [0.25, 0.5, 0.75, 0.9, 0.99, 1]) {
+      const map = createWornVarnishMap(orm, wear);
+      for (let i = 0; i < map.data.length; i += 4) {
+        assert.ok(map.data[i] <= previous.data[i], 'coverage never grows with wear');
+        if (wear === 1) assert.equal(map.data[i], 0, 'no surviving varnish');
+      }
+      previous = map;
+    }
+    const on = createCrateFinishMaterials({ orm }, 1, true);
+    const off = createCrateFinishMaterials({ orm }, 1, false);
+    assert.equal(on.wood.clearcoat, 0);
+    assert.deepEqual(on, off);
+    assert.equal(on.wood.orm, orm, 'underlying wood is preserved');
+  }
 });

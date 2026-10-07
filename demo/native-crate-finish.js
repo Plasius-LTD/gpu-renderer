@@ -32,7 +32,7 @@ function noise(x, y) {
     mix(hash(ix, iy + 1), hash(ix + 1, iy + 1), smooth(x - ix)), smooth(y - iy));
 }
 
-/** Review preset: immutable source ARM image, wear 0 (fresh) to 1 (rubbed/scuffed). */
+/** Immutable source ARM image, wear 0 (fresh) to 1 (completely uncoated). */
 export function createWornVarnishMap(orm, wear = 0.65) {
   if (!Number.isFinite(wear) || wear < 0 || wear > 1) throw new Error('wear must be between 0 and 1.');
   validateNativeMaterials([{ orm }]);
@@ -49,7 +49,9 @@ export function createWornVarnishMap(orm, wear = 0.65) {
       // Broad worn patches amplify authored scuffs while sheltered islands keep
       // some intact coat. Rough wood alone must not flatten the whole finish.
       const damage = clamp(wear * (patches * 0.9 + scuff * (0.22 + patches * 0.55) + rub * 0.10));
-      data[i] = Math.round(255 * (1 - damage));
+      // Finish eroding even the sheltered islands. The smooth tail preserves
+      // patchiness below 70%, but reaches exactly bare wood at full wear.
+      data[i] = Math.round(255 * (1 - damage) * (1 - smooth((wear - 0.7) / 0.3)));
       data[i + 1] = Math.round(255 * (0.24 + damage * 0.46));
       data[i + 2] = 255;
       data[i + 3] = 255;
@@ -60,7 +62,7 @@ export function createWornVarnishMap(orm, wear = 0.65) {
 
 export function createCrateFinishMaterials(source, wear = 0.65, coated = true) {
   return {
-    wood: { ...source, clearcoat: coated ? 0.75 : 0, clearcoatRoughness: 1,
+    wood: { ...source, clearcoat: coated && wear < 1 ? 0.75 : 0, clearcoatRoughness: 1,
       clearcoatMap: createWornVarnishMap(source.orm, wear) },
     rope: { ...source, clearcoat: 0, clearcoatRoughness: 0, clearcoatMap: undefined },
     metal: { ...source, clearcoat: 0, clearcoatRoughness: 0, clearcoatMap: undefined },

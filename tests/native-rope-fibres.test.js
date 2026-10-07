@@ -84,7 +84,7 @@ test("invalid fibre inputs fail before allocation", () => {
     { ranges: [{ firstVertex: 0, vertexCount: 9 }] },
     { ranges: [{ firstVertex: 0, vertexCount: 3 }, { firstVertex: 0, vertexCount: 3 }] },
     { density: -1 }, { density: Infinity }, { density: 1_000_001 },
-    { maxFibres: 0 }, { maxFibres: 2001 }, { maxFibres: 1.5 },
+    { maxFibres: 0 }, { maxFibres: 4001 }, { maxFibres: 1.5 },
     { length: 0 }, { length: 0.1 }, { radius: 0 }, { radius: 0.01 },
     { seed: NaN }, { seed: -1 }, { seed: 1.5 },
   ]) assert.throws(() => createRopeFibres({ ...fixture(), ...changes }), /fibre/i);
@@ -146,5 +146,26 @@ test("fray levels promote exact nested counts without moving roots, UVs or the r
   assert.equal(createRopeFibres({ ...input, density: 0, fray: 1 }).looseEndCount, 0);
   for (const fray of [-0.01, 1.01, NaN, Infinity, '0.3']) {
     assert.throws(() => createRopeFibres({ ...input, fray }), /fibre/i);
+  }
+});
+
+
+test('groomed nap follows a guide with low lift and coherent clustered roots', () => {
+  const input = { ...fixture(), ranges: [{ firstVertex: 0, vertexCount: 3 }],
+    guides: [[[0, 0, 0], [1, 0, 0]]], fray: 1, length: 0.0045, radius: 0.00016 };
+  const out = createRopeFibres(input), p = points(out);
+  const root = fibre => [0,1,2].map(j => [0,1,7].reduce((s,k) => s+p[fibre*63+k][j],0)/3);
+  for (let i=0; i<out.fibreCount; i++) {
+    const r=root(i), tip=p[i*63+56], d=tip.map((v,j)=>v-r[j]);
+    assert.ok(d[0]/Math.hypot(d[0],d[2]) > 0.8, 'fibre follows positive guide direction');
+    assert.ok(d[1] < Math.hypot(d[0],d[2]) * 0.5, 'nap hugs the rope');
+    assert.ok(Math.hypot(...d) < 0.009, 'no long straw-like ends');
+    assert.ok(Math.hypot(...r.map((v,j)=>v-root(i-i%4)[j])) < 0.0011, 'four roots form one small tuft');
+  }
+  assert.deepEqual(out, createRopeFibres(input));
+  assert.ok([...createRopeFibres({ ...input, guides: [[[0,0,0],[0,1,0]]] }).vertices].every(Number.isFinite), 'parallel normal has a finite tangent fallback');
+  for (const guides of [null, [1], [[[0,0,0]]], [[[0,0,0],[0,0,0]]], [[[0,0,0],[Infinity,0,0]]],
+    new Array(9).fill([[0,0,0],[1,0,0]]), [new Array(66).fill([0,0,0])]]) {
+    assert.throws(() => createRopeFibres({ ...input, guides }), /guide/i);
   }
 });

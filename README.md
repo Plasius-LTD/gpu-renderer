@@ -802,8 +802,8 @@ Pass the expanded native `vertices`, `texcoords` and explicit rope-only
 `{ firstVertex, vertexCount }` ranges. It returns separate triangles/UVs and a
 `fibreCount`; append them once with their own draw range. Generate in metre-scale
 world coordinates after transforms. Sampling is deterministic and area-weighted,
-with short tapered curves and a few longer ends. `density` controls roots per
-square metre; `maxFibres` caps them at 2,000 (default 1,600). `length` and `radius`
+with short tapered curves in small aligned tufts. `density` controls roots per
+square metre; `maxFibres` caps them at 4,000 (default 1,600). `length` and `radius`
 are in metres. The 21 triangles per strand use ordinary native multisampling,
 depth and lighting; no animated fur or dedicated hair scattering is claimed.
 
@@ -831,15 +831,18 @@ import { createCrateAgeing } from './demo/native-crate-ageing.js';
 
 const ageing = createCrateAgeing({ ropeFray: 0.30, varnishWear: 0.90, seed: 7349 });
 const { wood, rope, metal, fibres: fibreMaterial } = ageing.createMaterials(sourceMaps);
-const fibreGeometry = ageing.createFibres({ vertices, texcoords, ranges: ropeRanges });
+const fibreGeometry = ageing.createFibres({ vertices, texcoords, ranges: ropeRanges, heightOffset: -minY });
 // Append fibreGeometry with fibreMaterial using the existing native draw contract.
 ```
 
 Those values are also the review defaults. `varnishWear` is independent visual
 intensity, not coating area removed or elapsed years. Broad scuff patches expose
-wood while sheltered areas retain coating. `seed` controls fibre placement and
+wood while sheltered areas retain coating at intermediate wear. Above 70%, the
+remaining islands smoothly erode; at 100%, every coverage texel and the scalar
+coat strength are zero, matching varnish disabled. The original wood maps remain
+unchanged, including their ordinary substrate light response. `seed` controls fibre placement and
 loose-end selection; varnish uses its existing stable UV pattern. The crate adapter
-uses a 14 mm fibre length scale and 0.32 mm root radius, with a 1,600-fibre budget;
+uses a 4.5 mm fibre length scale and 0.16 mm root radius, with a 4,000-fibre budget;
 loose ends are 1.3–2 times the length scale and taper to a point. Source images and
 geometry remain unchanged; rope, added fibres and metal never acquire clearcoat.
 
@@ -854,3 +857,20 @@ the proposed `@plasius/material-ageing` boundary after a second asset establishe
 the shared contract. Production adoption retains `gpu-demo.scene-fidelity.enabled`
 and the existing GPU route capability; disabling the feature selects the existing
 site fallback. No package publication or site deployment is implied by this study.
+
+
+For structured nap, `createRopeFibres` accepts optional `guides`: at most eight
+polylines of 2–65 finite 3D points, in the same metre-scale coordinates as the
+input geometry. The nearest guide is projected onto the surface and given a
+consistent helical lay. Without a usable projected guide, a finite tangent
+fallback is used. Four nearby roots form a tuft within 1 mm of its anchor, with
+small angular variation, shallow lift and tapered tips. Sampling remains stable
+when fray changes; changing guides reauthors the groom.
+
+[native-crate-groom.js](demo/native-crate-groom.js) supplies the hash-verified
+fixture's loop/knot paths. Pass the same `heightOffset` used to ground its vertices
+(default 0 means unmodified asset coordinates); other transforms require matching
+transformed guide coordinates. The crate adapter adds 84,000 triangles: 90,578
+triangles / 271,734 vertices total, within the native default budget. Its final
+fibre arrays occupy 14,112,000 bytes. This deliberate denser nap replaces the
+previous 1,600-strand loose-end study. See [ADR-0035](docs/adrs/adr-0035-groomed-rope-and-bare-coat-endpoint.md).

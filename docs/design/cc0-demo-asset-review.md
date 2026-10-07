@@ -148,3 +148,29 @@ in the final validation session. Local captures `ageing-chest-review.jpg`,
 Long fibres are most visible at close range; static triangles remain an artistic
 approximation, not a structural rope or hair simulation. This remains a local
 review with package release/site adoption pending.
+
+
+## Review correction: bare endpoint and structured nap (2026-10-07)
+
+User feedback supersedes the earlier random 14 mm strand preset. The current
+fixture uses explicit mirrored loop/knot centreline guides, with the same `-minY`
+grounding offset as source vertices. Four nearby roots share a tuft direction;
+small jitter, helical lay, 4.5 mm length scale, 0.16 mm root radius and shallow lift
+replace the hay-like long random strands. The 4,000-fibre cap gives 1,200 loose ends
+at 30% fray, 84,000 added triangles, 90,578 total triangles and 271,734 vertices.
+Final additional vertex/UV arrays use 14,112,000 bytes. No asset images, topology
+or licence changed; no new renderer pass or public package API was added.
+
+Coating coverage now smoothly removes surviving islands over the last 30% of
+wear. At 100%, coverage and scalar coat strength are exactly zero. Requirements-
+first regressions verify monotonic erosion, all-texel zero, off equivalence and
+unchanged substrate maps. Actual WebGPU screenshots of the 100%-wear and
+coating-disabled states produced identical visible canvas pixels in an isolated
+comparison (1,178 by 357 pixels, including the entire chest). Earlier captures
+made during viewport changes were discarded as unsuitable comparisons.
+
+The local preview adds labelled close-up views of each rope's fibres, as well as
+whole-handle views and the existing controls. Full wear is explicitly described
+as unvarnished. This is static groomed geometry; it does not claim a complete hair
+scattering, wind or structural-damage simulation. Approved release/site adoption
+remains pending under the same feature flag and capability.

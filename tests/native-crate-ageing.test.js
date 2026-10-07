@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMaterialAgeingProfile } from '../demo/material-ageing.js';
 import { createCrateAgeing } from '../demo/native-crate-ageing.js';
+import { createCrateRopeGuides } from '../demo/native-crate-groom.js';
 
 const texture = { width: 32, height: 32,
   data: new Uint8Array(Array.from({ length: 1024 }, () => [255, 220, 0, 255]).flat()) };
@@ -35,8 +36,8 @@ test('crate adapter applies 30% fraying and heavy wood-only wear without mutatin
   assert.ok(Object.isFrozen(ageing));
   assert.deepEqual(ageing.profile, createMaterialAgeingProfile());
   const materials = ageing.createMaterials(source), fibres = ageing.createFibres(geometry);
-  assert.equal(fibres.fibreCount, 1600);
-  assert.equal(fibres.looseEndCount, 480);
+  assert.equal(fibres.fibreCount, 4000);
+  assert.equal(fibres.looseEndCount, 1200);
   assert.equal(materials.wood.clearcoat, 0.75);
   for (const key of ['rope', 'metal', 'fibres']) assert.equal(materials[key].clearcoat, 0);
   assert.equal(materials.fibres.orm, undefined);
@@ -46,7 +47,7 @@ test('crate adapter applies 30% fraying and heavy wood-only wear without mutatin
   const coat = materials.wood.clearcoatMap.data;
   const strengths = Array.from({ length: coat.length / 4 }, (_, i) => coat[i * 4]);
   assert.ok(strengths.filter(v => v < 32).length > strengths.length * 0.1, 'heavy scuffing exposes wood');
-  assert.ok(Math.max(...strengths) > 100, 'patches of coating survive');
+  assert.ok(Math.max(...strengths) > 8, 'patches of coating survive');
 });
 
 test('varnish and rope channels are independent, deterministic and preserve rollback paths', () => {
@@ -62,4 +63,21 @@ test('varnish and rope channels are independent, deterministic and preserve roll
   assert.throws(() => createCrateAgeing({ ropeFray: 10 }), /ageing/);
   assert.throws(() => aged.createFibres({ ...geometry, ranges: [{ firstVertex: 0, vertexCount: 6 }] }), /fibre/);
   assert.throws(() => aged.createMaterials({ orm: {} }), /texture/);
+});
+
+test('fixture groom guides mirror both handles and follow grounding without mutating paths', () => {
+  const original = createCrateRopeGuides(), moved = createCrateRopeGuides(0.008);
+  assert.equal(original.length, 4);
+  for (let guide = 0; guide < original.length; guide++) for (let i = 0; i < original[guide].length; i++) {
+    const p = original[guide][i], q = moved[guide][i];
+    assert.ok(p.every(Number.isFinite));
+    assert.equal(q[0], p[0]); assert.equal(q[2], p[2]); assert.equal(q[1], p[1] + 0.008);
+    assert.ok(p[0] * (guide < 2 ? -1 : 1) > 0.34, 'guides stay on their handle side');
+    if (guide < 2) assert.deepEqual(original[guide + 2][i], [-p[0], p[1], p[2]]);
+  }
+  assert.deepEqual(createCrateRopeGuides(), original);
+  assert.throws(() => createCrateRopeGuides(Infinity), /offset/);
+  const out = createCrateAgeing().createFibres(geometry);
+  assert.equal(out.vertices.length / 12, 252000);
+  assert.ok(out.vertices.length / 12 + 19734 < 300000, 'fixture fits unchanged native budget');
 });

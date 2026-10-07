@@ -156,6 +156,31 @@ retain the source asset hashes, no additional dependencies/network requests, and
 the existing renderer resource limits. Update README, Unreleased, provenance,
 changed-source LCOV and exact-head CI before calling the review ready.
 
+## Review correction: bare endpoint and groomed nap (2026-10-07)
+
+User review rejected remaining coat at 100% wear and random hay-like rope strands.
+Task #230 now requires 100% wear to match varnish disabled, including at grazing
+angles. Make coverage monotonically vanish everywhere by that endpoint, retaining
+spatially staggered wear between endpoints. Do not alter the wood's source maps
+or remove its ordinary substrate response to disguise a coating bug.
+
+Replace random azimuths with coherent guide-driven rope nap and clustered roots.
+The fixture supplies explicit loop/knot centreline guides outside the renderer;
+the generic helper projects the closest guide direction into the surface tangent
+plane and adds a consistent helical lay. Use four nearby roots per tuft, fine
+tapered fibres, limited angular jitter and low lift. Keep exact nested fray counts
+and stable roots when wear changes. Shorten the fixture length scale to 4.5 mm
+and root radius to 0.16 mm. Raise the explicit fibre ceiling to 4,000: 252,000 added
+vertices, 90,578 total triangles with this crate, below the unchanged native
+300,000-vertex default. This is a deliberate denser nap, not an unbounded fur pass.
+
+Tests first: all coating texels/scalar are zero at 1, exact off equivalence,
+monotonic coverage, intermediate variation; guide validation, aligned directions,
+cluster radius, shorter low-lift curves, finite fallback, bounds, outward winding,
+determinism and preserved channel independence. Verify actual WebGPU endpoint/off
+comparison, both handles at 30/100% fray, keyboard controls and browser errors.
+Update README, Unreleased, provenance and changed-source LCOV; push and verify CI.
+
 Tests first: reject malformed/nonfinite/out-of-bounds inputs and overlapping
 ranges; skip degenerate triangles; area-weighted roots stay on selected ranges;
 determinism/source immutability; bounded output, finite unit normals and root UVs;
