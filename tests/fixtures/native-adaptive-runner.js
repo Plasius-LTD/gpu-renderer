@@ -126,11 +126,16 @@ export async function createNativeAdaptiveRunner(c) {
         }
         tiles.push(trace);onProgress?.({mode,diagnostics,completedTiles:tileIndex+1,totalTiles:plan.length});
         }catch(error){
-          throw await retainNativeFailure(error,trace,async()=>({
+          throw await retainNativeFailure(error,trace,async()=>{const details={
             termination:await readWavefrontTerminationMetrics({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},counterBuffer:counters,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}),
             adaptiveControlWords:Array.from(new Uint32Array(await read(b.primaryControl,16))),
             failedNodes:await readFailedPathNodes(device,traceEntries.find(e=>e.binding===22).resource.buffer,wait),
-          }));
+          };
+          if(details.failedNodes.length){try{
+            const {replayOpticalFailure}=await import('./optical-failure-replay.js');
+            details.opticalReplay=await replayOpticalFailure({device,config,tile,seed,sampler,failure:details.failedNodes[0],frame,layout:c.tracePipelineLayout,entries:traceEntries,read,wait});
+          }catch(replayError){details.replayError=replayError.message;}}
+          return details;});
         }
       }
       // Close the tile query interval before encoding the canonical full-frame present.

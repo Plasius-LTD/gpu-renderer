@@ -46,6 +46,14 @@ same 32-crossing safety budget. More distant duplicate entries and every
 unmatched exit still reject. This explicitly bounded finite-precision rule is
 not permission for overlapping copies of the same medium or invalid geometry.
 
+Nested optics also validates both outgoing hemispheres against the geometric
+normal. A shading normal that sends reflection below the triangle, or a possible
+transmission above it, falls back to the oriented geometric normal. Reflection,
+refraction, Fresnel, TIR and both branch weights share that normal. This is
+independent of the earlier reflection-only normal-map repair; the off path keeps
+its previous shading normal. A physical grazing-dielectric probe reproduced
+970 wrong-side directions out of 1,024 before this correction.
+
 ## Consequences and validation
 
 One branch introduces sampling variance in exchange for bounded work. Null
