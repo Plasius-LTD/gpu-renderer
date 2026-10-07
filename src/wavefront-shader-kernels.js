@@ -441,7 +441,10 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
 
 const localIntersection = WAVEFRONT_INTERSECTION_BODY_WGSL
   .replace("hits[index] = make_miss(ray);\n    return;", "return make_miss(ray);")
-  .replace("hits[index] = HitRecord(", "return HitRecord(");
+  .replace("hits[index] = HitRecord(", "return HitRecord(")
+  .replace("let position = ray.origin.xyz + ray.direction.xyz * candidate.distance;",
+    `var position = ray.origin.xyz + ray.direction.xyz * candidate.distance;
+  if (candidate.triangleIndex != 0xffffffffu) { position = optical_triangle_position(hitTriangle, candidate.barycentric); }`);
 
 export const WAVEFRONT_SHADER_KERNELS_WGSL = `
 fn trace_material_hit(ray: RayRecord) -> HitRecord {

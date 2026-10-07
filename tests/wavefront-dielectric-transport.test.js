@@ -53,6 +53,8 @@ test('physical probe executes canonical dielectric sampling with frozen error to
  assert.match(dielectricProbeShader(),/let scatter=scatter_dielectric\(ray,hit\)/);
 });
 test('nested traversal protects occupancy and sample identity without consuming bounces',()=>{
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/position = optical_triangle_position\(hitTriangle, candidate.barycentric\)/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/fn optical_triangle_position/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/if \(medium_transition_invalid\(ray, hit\)\) \{ return ray.mediumStack; \}/);
  const nested=WAVEFRONT_COMPUTE_WGSL.split('fn intersect_nested_ray')[1].split('fn emission_power')[0];
  assert.match(nested,/crossing < 32u/);assert.match(nested,/hit.hitType = 5u/);
@@ -67,4 +69,7 @@ test('room transport controls reset off and forward independent flag receipts an
  }
  assert.match(js,/receipt.transportFlags=/);assert.match(js,/runDielectricTransportProbe\(cancellation.signal\)/);
  assert.match(js,/createPairedProbeRunner[\s\S]*boundedDielectricBranching,nestedMediaRefraction/);
+ assert.match(html,/label for="max-depth">Maximum bounces/);
+ assert.match(js,/el\('max-depth'\)\.value='6'/);
+ assert.match(js,/composed.scene.probeDepth=settings.maxDepth/);
 });

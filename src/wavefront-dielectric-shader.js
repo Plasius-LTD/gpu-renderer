@@ -106,4 +106,12 @@ fn optical_offset(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>) 
   let epsilon = max(0.000001, scale * 0.00000047683716);
   return position + normal * select(-epsilon, epsilon, dot(normal, direction) >= 0.0);
 }
+fn optical_triangle_position(triangle: TriangleRecord, barycentric: vec3<f32>) -> vec3<f32> {
+  // Reconstruct on the triangle, not along a distant ray. At the glass rim,
+  // cancellation in origin + t*direction placed an admitted hit above its edge.
+  let p = triangle.v0.xyz + (triangle.v1.xyz - triangle.v0.xyz) * barycentric.y +
+    (triangle.v2.xyz - triangle.v0.xyz) * barycentric.z;
+  return clamp(p, min(triangle.v0.xyz, min(triangle.v1.xyz, triangle.v2.xyz)),
+    max(triangle.v0.xyz, max(triangle.v1.xyz, triangle.v2.xyz)));
+}
 `;
