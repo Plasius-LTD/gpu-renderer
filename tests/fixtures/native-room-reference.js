@@ -22,7 +22,7 @@ function resetCoat(){el('clearcoat').value='off';el('wood-coat').value='off';el(
 function coatSelection(){return {enabled:el('wood-coat').value==='on',weight:el('coat-weight').valueAsNumber,roughness:el('coat-roughness').valueAsNumber};}
 resetCoat();
 const glassFields={'glass-fill':'fill','glass-x':'x','glass-z':'z','glass-radius':'radius','glass-height':'height','glass-ior':'glassIor','water-ior':'waterIor'};
-function resetGlass(){el('glass-mode').value=GLASS_WATER_DEFAULTS.mode;for(const [id,key] of Object.entries(glassFields))el(id).value=GLASS_WATER_DEFAULTS[key];}
+function resetGlass(){el('bounded-dielectric').value='off';el('nested-media').value='off';el('glass-mode').value=GLASS_WATER_DEFAULTS.mode;for(const [id,key] of Object.entries(glassFields))el(id).value=GLASS_WATER_DEFAULTS[key];}
 function glassSelection(){const closeup=el('inspection-camera').value==='glass';return glassWaterSettings({mode:el('glass-mode').value,...Object.fromEntries(Object.entries(glassFields).map(([id,key])=>[key,el(id).valueAsNumber])),closeup,...(closeup?{distance:el('inspection-distance').valueAsNumber,elevation:el('inspection-elevation').valueAsNumber}:{})});}
 resetGlass();
 el('central-reference').value=ROOM_DEFAULTS.centralReference;
@@ -104,6 +104,7 @@ run.addEventListener("click",async()=>{
  const guidedDenoise=el('denoise').value==='guided';
  const sheen=el('sheen').value==='on';
  const layeredClearcoat=el('clearcoat').value==='on',woodCoat=coatSelection();
+ const boundedDielectricBranching=el('bounded-dielectric').value==='on',nestedMediaRefraction=el('nested-media').value==='on';
  let glass;try{glass=glassSelection();}catch(error){status.textContent=error.message;return;}
  if(woodCoat.enabled&&!layeredClearcoat){status.textContent='Enable the layered clearcoat renderer before adding the wood varnish variant.';return;}
  const distribution=el('sample-distribution').value,materialInspection=el('material-inspection').value==='on';
@@ -116,6 +117,7 @@ run.addEventListener("click",async()=>{
  const receipt={schemaVersion:1,scope:"room-eames-interior-reference",status:"running",settings,splitDepth,view,placement,timestamp:new Date().toISOString(),
   browser:{userAgent:navigator.userAgent,platform:navigator.platform},failures:[],qualification:"visual-reference-only-not-performance-or-convergence"};
  receipt.materialFlags={'renderer.materials.sheen.enabled':sheen,'renderer.materials.layeredClearcoat.enabled':layeredClearcoat};
+ receipt.transportFlags={'renderer.transport.boundedDielectricBranching.enabled':boundedDielectricBranching,'renderer.transport.nestedMediaRefraction.enabled':nestedMediaRefraction};
  receipt.inspection={closeup,distribution,materialViews:materialInspection};
  const lightingIdentity=lightingSelection().style+(layeredClearcoat?'-layered-coat':'')+(woodCoat.enabled?`-varnish${woodCoat.weight}-rough${woodCoat.roughness}`:'')+(glass.mode==='off'?'':'-glass-'+glass.mode+'-fill'+glass.fill+(glass.closeup?'-glass-closeup':''));
  const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}${closeup.enabled?'-closeup':''}${distribution==='uniform'?'-uniform':''}-${lightingIdentity}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
@@ -135,6 +137,7 @@ run.addEventListener("click",async()=>{
   if(guidedDenoise){status.textContent='Checking denoiser against analytic HDR/edge/noise probes';const {runGuidedDenoiseProbe}=await import('./guided-denoise-probe.js');receipt.denoiseProbe=await runGuidedDenoiseProbe(cancellation.signal);}
   if(materialInspection){const {runClothInspectionProbe}=await import('./cloth-inspection-probe.js');receipt.inspection.probe=await runClothInspectionProbe(cancellation.signal);}
   status.textContent='Checking UV0/UV1 texture sampling and CPU/GPU geometry parity';
+  if(boundedDielectricBranching||nestedMediaRefraction){const {runDielectricTransportProbe}=await import('./dielectric-transport-probe.js');receipt.dielectricProbe=await runDielectricTransportProbe(cancellation.signal);}
   const {runDualUvProbe}=await import('./dual-uv-probe.js');receipt.uvProbe=await runDualUvProbe(cancellation.signal);
   status.textContent='Checking sidedness, medium exits and normal-map validity';
   const {runSurfaceValidityProbe}=await import('./surface-validity-probe.js');receipt.surfaceProbe=await runSurfaceValidityProbe(cancellation.signal);
@@ -144,7 +147,7 @@ run.addEventListener("click",async()=>{
   const plan=selectInspectionPlan(distribution,createRadialSamplingPlan(settings.width,settings.height,settings.maximumSpp),settings.maximumSpp);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
-  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
+  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,boundedDielectricBranching,nestedMediaRefraction,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===settings.maxDepth&&runner.sceneSnapshot.samplesPerPixel===settings.maximumSpp&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;
   const frame=await runner.run(distribution,{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,onProgress:p=>{

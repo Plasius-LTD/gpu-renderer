@@ -173,6 +173,7 @@ export function deriveWavefrontTransportMedium(input, fallbackId = 1) {
     return normalizeWavefrontMedium(
       {
         ...input.medium,
+        ior: input.medium.ior ?? input.ior ?? input.material?.ior,
       id: input.medium.id ?? input.medium.mediumId ?? resolvedId,
       },
       fallbackId
@@ -185,6 +186,7 @@ export function deriveWavefrontTransportMedium(input, fallbackId = 1) {
   return normalizeWavefrontMedium(
     {
       id: resolvedId,
+      ior: input.ior ?? input.material?.ior,
       phaseModel: volume.phaseModel,
       density: volume.density,
       attenuationColor: volume.attenuationColor,
@@ -198,6 +200,10 @@ export function deriveWavefrontTransportMedium(input, fallbackId = 1) {
 
 function normalizeWavefrontMedium(input = {}, index = 0) {
   const id = readNonNegativeInteger("medium id", input.id ?? input.mediumId, index);
+  const ior = readFiniteNumber("medium ior", input.ior, id === 0 ? 1 : 1.5);
+  const priority = readNonNegativeInteger("medium priority", input.priority, 0);
+  if (ior < 1 || ior > 4) throw new Error("medium ior must be between 1 and 4.");
+  if (priority > 2048) throw new Error("medium priority must be between 0 and 2048.");
   const density = Math.max(0, readFiniteNumber("medium density", input.density, 1));
   const attenuationColor = asColor(
     input.attenuationColor ?? input.color ?? input.medium?.attenuationColor,
@@ -224,6 +230,8 @@ function normalizeWavefrontMedium(input = {}, index = 0) {
   ).map((value) => Math.max(0, Number(value) || 0));
   return Object.freeze({
     id,
+    ior,
+    priority,
     phaseModel: readMediumPhaseModel(input.phaseModel ?? input.medium?.phaseModel),
     density,
     attenuationColor: Object.freeze(attenuationColor),
@@ -239,6 +247,8 @@ export function collectWavefrontMediums(options, meshes, sceneObjects = []) {
     0,
     Object.freeze({
       id: 0,
+      ior: 1,
+      priority: 0,
       phaseModel: DEFAULT_MEDIUM_PHASE_MODEL,
       density: 0,
       attenuationColor: Object.freeze([1, 1, 1, 1]),

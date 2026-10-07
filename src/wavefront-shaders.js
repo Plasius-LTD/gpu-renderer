@@ -7,6 +7,7 @@ import { WAVEFRONT_SHADER_MATERIALS_WGSL } from "./wavefront-shader-materials.js
 import { PATH_TREE_WGSL } from "./wavefront-path-tree-shader.js";
 import { withProgressiveSampling } from "./wavefront-sampling-dimensions.js";
 import { withRoughBounceSplitting } from './wavefront-rough-bounce-splitting.js';
+import { DIELECTRIC_TRANSPORT_WGSL } from './wavefront-dielectric-shader.js';
 export { PRESENT_WGSL } from "./wavefront-present-shader.js";
 
 function readPositiveInteger(name, value, fallback) {
@@ -26,6 +27,7 @@ export const WAVEFRONT_COMPUTE_WGSL = [
   WAVEFRONT_SHADER_LIGHTING_WGSL,
   WAVEFRONT_SHADER_BVH_WGSL,
   PATH_TREE_WGSL,
+  DIELECTRIC_TRANSPORT_WGSL,
   WAVEFRONT_SHADER_KERNELS_WGSL,
 ].join("\n");
 

@@ -1,6 +1,6 @@
 import {createWavefrontPathTracingComputeShaderSource} from '../../src/wavefront-shaders.js';
 import {WAVEFRONT_MAKE_CAMERA_RAY_WGSL} from '../../src/wavefront-camera-shared-shader.js';
-export const CLOTH_RESPONSE_BINDINGS=Object.freeze([3,5,8,9,...Array.from({length:8},(_,i)=>23+i),...Array.from({length:13},(_,i)=>33+i),46]);
+export const CLOTH_RESPONSE_BINDINGS=Object.freeze([3,5,8,9,...Array.from({length:8},(_,i)=>23+i),32,...Array.from({length:13},(_,i)=>33+i),46]);
 export const CLOTH_RESPONSE_VECTORS=6;
 
 export function createClothResponseShader(){

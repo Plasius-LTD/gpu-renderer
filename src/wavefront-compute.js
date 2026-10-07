@@ -413,7 +413,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   let mediumTextureResource = createMediumTextureResource(
     device,
     constants,
-    config.mediums
+    config.mediums,
+    config.transportExperiments.effective.nestedMediaRefraction
   );
   config = Object.freeze({
     ...config,
@@ -1070,7 +1071,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
 
   function rebuildMediumResources(nextConfig) {
     const previousMediumTextureResource = mediumTextureResource;
-    mediumTextureResource = createMediumTextureResource(device, constants, nextConfig.mediums);
+    mediumTextureResource = createMediumTextureResource(device, constants, nextConfig.mediums,
+      nextConfig.transportExperiments.effective.nestedMediaRefraction);
     bindGroups = createTraceBindGroups();
     if (previousMediumTextureResource?.ownsTexture) {
       previousMediumTextureResource.texture?.destroy?.();
@@ -1081,7 +1083,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     const nextPackedScene = packWavefrontSceneObjects(sceneObjects, config.sceneObjectCapacity);
     packedScene = nextPackedScene;
     const nextConfig = rebuildLiveConfig();
-    if (!mediumTablesEqual(config.mediums, nextConfig.mediums)) {
+    if (!mediumTablesEqual(config.mediums, nextConfig.mediums) ||
+        config.transportExperiments.effective.nestedMediaRefraction !== nextConfig.transportExperiments.effective.nestedMediaRefraction) {
       rebuildMediumResources(nextConfig);
     }
     config = nextConfig;

@@ -4,7 +4,7 @@ Parent Epic: Plasius-LTD/plasius-ltd-site#2113.
 Parent Feature: Plasius-LTD/plasius-ltd-site#2114.
 Parent Story: Plasius-LTD/plasius-ltd-site#2291.
 Diagnostic integration: gpu-lighting#105 and gpu-renderer#233.
-Proposed transport follow-up: gpu-renderer#234 (not started; approval pending).
+Active transport follow-up: gpu-renderer#234 (user approved; assigned and In Progress).
 
 ## Problem and immutable evidence
 
@@ -59,15 +59,39 @@ not a worst-case bound for additional dielectric branching. `dielectric_eta(hit)
 also assumes air on one side; medium records do not include IOR. These are runtime
 transport limitations, not material alpha, missing water geometry or denoising.
 
-## Proposed scope, not implementation authority
+## Approved implementation design
 
-The user was asked whether to expand this scene addition into transport fixes.
-No runtime transport correction is included in the diagnostic commits. Before
-implementation, refine the design, acceptance and remotely controllable flags,
-assign the active Task and move it to In Progress. Candidate independent controls
-are `renderer.transport.boundedDielectricBranching.enabled` and
-`renderer.transport.nestedMediaRefraction.enabled`, both default off. These are
-proposed names, not implemented flags. Existing failure checks remain unconditional.
+The user approved both transport fixes on 2026-10-07. Task 234 is assigned to
+zephod111r and In Progress. Independent remotely supplied controls are
+`renderer.transport.boundedDielectricBranching.enabled` and
+`renderer.transport.nestedMediaRefraction.enabled`, both default off.
+Existing failure checks remain unconditional.
+
+Bounded branching selects one dielectric continuation with the existing dedicated
+sample dimension and divides its throughput by the selected discrete probability.
+This preserves the expected sum of the two branches, camera sample identity and
+the existing queue capacity; it trades deterministic splitting for variance.
+TIR has probability one. It does not drop an already weighted sibling.
+
+Nested refraction extends the existing four-entry occupancy stack, not ray size.
+An optional third medium-texture row stores IOR and integer priority (larger wins;
+equal priorities use latest entry). Glass has higher priority than overlapping
+water. Entering/exiting a hidden lower-priority volume updates occupancy in a
+bounded traversal loop without a bounce, roulette event or surface contribution.
+Exits may target any occupied medium. Stack overflow, duplicate entry, unmatched
+exit and exhausted null-crossing bounds reject the sample; no stack eviction.
+The ray starts in air; camera-inside-volume initialization remains unsupported.
+
+Actual incident/outgoing IOR determines exact dielectric Fresnel, Snell/TIR and
+radiance-mode transmission scaling by the squared IOR ratio. Reflection retains
+occupancy. Untracked surfaces retain their existing thin-surface contract.
+Position-scaled offsets and traversal minima in this mode must resolve the
+0.2 mm contact overlap; their numerical limit is tested, not a general guarantee
+for arbitrarily thin/large-coordinate geometry. The third texture row is allocated
+only when nested transport is enabled; queues and path-tree allocation do not grow.
+
+The estimator follows the dielectric sampling and radiance convention in
+[PBRT 4e](https://pbr-book.org/4ed/Reflection_Models/Dielectric_BSDF).
 
 - Choose and prove an unbiased bounded dielectric branching/scheduling policy;
   do not discard weighted siblings or simply remove the overflow/count gates.
@@ -100,3 +124,14 @@ proposed names, not implemented flags. Existing failure checks remain unconditio
 
 Private scene assets and screenshots stay local; retain public hashes and
 metadata only. The existing white paper must not claim glass/water qualification.
+
+## Current QA inventory
+
+Before signoff, exercise each new flag off/on/reset, individual and combined;
+empty/filled and room/close-up; completed counts/queue integrity; the analytic
+GPU probe's IOR/Fresnel/TIR/estimator/occupancy checks. Inspect initial controls,
+rendering progress, completed image and receipts, including a smaller viewport.
+Exploratory checks: glass-off close-up rejection and an invalid optical priority;
+legacy-overflow rejection must remain intact. Capture raw HDR and PNG evidence.
+Any unexecuted lane stays explicitly pending; a functional pass is not visual
+quality or performance signoff.

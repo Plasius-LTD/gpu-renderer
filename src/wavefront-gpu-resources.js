@@ -561,16 +561,17 @@ export function createBrdfLutResource(device, constants, size = DEFAULT_BRDF_LUT
   });
 }
 
-export function createMediumTextureResource(device, constants, mediums) {
+export function createMediumTextureResource(device, constants, mediums, nestedMedia = false) {
   const normalized = Array.isArray(mediums) && mediums.length > 0 ? mediums : [{ id: 0 }];
   const width = Math.max(
     1,
     normalized.reduce((maximum, medium) => Math.max(maximum, medium.id ?? 0), 0) + 1
   );
+  const height = MEDIUM_TABLE_ROWS + Number(nestedMedia);
   const level = {
     width,
-    height: MEDIUM_TABLE_ROWS,
-    data: new Float32Array(width * MEDIUM_TABLE_ROWS * 4),
+    height,
+    data: new Float32Array(width * height * 4),
   };
 
   for (const medium of normalized) {
@@ -586,12 +587,17 @@ export function createMediumTextureResource(device, constants, mediums) {
     level.data[scatteringOffset + 1] = Math.max(0, medium.scattering?.[1] ?? 0);
     level.data[scatteringOffset + 2] = Math.max(0, medium.scattering?.[2] ?? 0);
     level.data[scatteringOffset + 3] = Math.max(0, medium.density ?? 0);
+    if (nestedMedia) {
+      const opticalOffset = (2 * width + mediumId) * 4;
+      level.data[opticalOffset] = medium.ior ?? (mediumId === 0 ? 1 : 1.5);
+      level.data[opticalOffset + 1] = medium.priority ?? 0;
+    }
   }
 
   const upload = createFloat16RgbaUploadFromLevels([level])[0];
   const texture = device.createTexture({
     label: "plasius.wavefront.mediumTable",
-    size: { width, height: MEDIUM_TABLE_ROWS },
+    size: { width, height },
     format: "rgba16float",
     usage: constants.texture.TEXTURE_BINDING | constants.texture.COPY_DST,
   });
@@ -599,7 +605,7 @@ export function createMediumTextureResource(device, constants, mediums) {
     { texture },
     upload.bytes,
     { bytesPerRow: upload.bytesPerRow, rowsPerImage: upload.height },
-    { width, height: MEDIUM_TABLE_ROWS, depthOrArrayLayers: 1 }
+    { width, height, depthOrArrayLayers: 1 }
   );
   return Object.freeze({
     texture,
@@ -607,6 +613,8 @@ export function createMediumTextureResource(device, constants, mediums) {
     ownsTexture: true,
     count: normalized.length,
     width,
+    height,
+    allocatedBytes: width * height * 8,
   });
 }
 
@@ -626,6 +634,9 @@ export function mediumTablesEqual(left, right) {
       return false;
     }
     if ((leftMedium?.density ?? 0) !== (rightMedium?.density ?? 0)) {
+      return false;
+    }
+    if (leftMedium?.ior !== rightMedium?.ior || leftMedium?.priority !== rightMedium?.priority) {
       return false;
     }
     for (let component = 0; component < 3; component += 1) {

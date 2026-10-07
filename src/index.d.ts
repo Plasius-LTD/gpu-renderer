@@ -341,6 +341,10 @@ export interface WavefrontTextureSampleInput {
 }
 
 export interface WavefrontMediumInput {
+  /** Interior IOR, 1..4. Inherited from the surface when omitted. */
+  readonly ior?: number;
+  /** Optical overlap priority, integer 0..2048; higher wins. Default 0. */
+  readonly priority?: number;
   readonly id?: number;
   readonly mediumId?: number;
   readonly phaseModel?: number | "isotropic";
@@ -876,6 +880,8 @@ export interface WavefrontPathTracingComputeConfig {
   readonly sceneObjectCapacity: number;
   readonly mediums: readonly Readonly<{
     readonly id: number;
+    readonly ior: number;
+    readonly priority: number;
     readonly phaseModel: number;
     readonly density: number;
     readonly attenuationColor: readonly [number, number, number, number] | readonly number[];
@@ -935,6 +941,8 @@ export interface WavefrontRoughBounceSplittingConfig {
 }
 
 export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
+  readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
   readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
   readonly "renderer.materials.sheen.enabled"?: boolean;
   readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
@@ -952,6 +960,8 @@ export interface WavefrontRendererFeatureFlags {
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly enabled?: {
+    readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
+    readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
     readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
     readonly "renderer.materials.sheen.enabled"?: boolean;
     readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
@@ -970,6 +980,8 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly flags?: {
+    readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
+    readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
     readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
     readonly "renderer.materials.sheen.enabled"?: boolean;
     readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
@@ -997,6 +1009,8 @@ export interface WavefrontRendererFeatureFlags {
       readonly roughBounceSplitting?: { readonly enabled?: boolean };
     };
     readonly transport?: {
+      readonly boundedDielectricBranching?: { readonly enabled?: boolean };
+      readonly nestedMediaRefraction?: { readonly enabled?: boolean };
       readonly strictPhysicalLowSppLighting?: boolean;
       readonly stableSampleRouting?: boolean;
       readonly strictZeroOverflow?: boolean;
@@ -1015,6 +1029,8 @@ export interface WavefrontRendererFeatureFlags {
 }
 
 export interface WavefrontTransportExperimentFlags {
+  readonly boundedDielectricBranching?: boolean;
+  readonly nestedMediaRefraction?: boolean;
   readonly layeredClearcoat?: boolean;
   readonly sheen?: boolean;
   /** Default off; optional for structural compatibility with older snapshots. */
@@ -1134,6 +1150,8 @@ export interface WavefrontGpuParallelismDiagnostics {
 }
 
 export interface CreateWavefrontPathTracingComputeRendererOptions {
+  readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
+  readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
   readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
   readonly "renderer.materials.sheen.enabled"?: boolean;
   readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;

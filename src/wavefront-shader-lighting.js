@@ -549,6 +549,7 @@ fn medium_transmittance(mediumRefId: u32, distance: f32) -> vec3<f32> {
 const MAX_MEDIUM_STACK_DEPTH: u32 = 4u;
 
 fn medium_stack_current_id(ray: RayRecord) -> u32 {
+  if (nested_media_enabled()) { return occupied_medium(ray.mediumStack); }
   if (ray.mediumStackDepth == 0u) {
     return ray.mediumRefId;
   }
@@ -565,6 +566,7 @@ fn medium_stack_current_id(ray: RayRecord) -> u32 {
 }
 
 fn transitioned_medium_stack(ray: RayRecord, hit: HitRecord) -> vec4<u32> {
+  if (medium_transition_invalid(ray, hit)) { return ray.mediumStack; }
   var stack = ray.mediumStack;
   var depth = min(ray.mediumStackDepth, MAX_MEDIUM_STACK_DEPTH);
   let mediumId = hit.mediumRefId;
@@ -622,6 +624,7 @@ fn transmitted_medium_ref_id(ray: RayRecord, hit: HitRecord) -> u32 {
     return medium_stack_current_id(ray);
   }
   let stack = transitioned_medium_stack(ray, hit);
+  if (nested_media_enabled()) { return occupied_medium(stack); }
   if (stack.w != 0u) {
     return stack.w;
   }

@@ -105,8 +105,8 @@ test("missing integrity readback is unknown; a sticky failure rejects the frame"
 
 test("dielectric siblings share refraction convention and roulette compensation; metals never split", () => {
   assert.match(WAVEFRONT_COMPUTE_WGSL, /sanitize_linear_radiance\(rawTerminal\) \* sample_weight\(\)/);
-  assert.match(WAVEFRONT_COMPUTE_WGSL, /let etaRatio = dielectric_eta\(hit\);/);
-  assert.match(WAVEFRONT_COMPUTE_WGSL, /refract_direction\(ray.direction.xyz, surface_shading_normal\(hit\),\s+dielectric_eta\(hit\)\)/);
+  assert.match(WAVEFRONT_COMPUTE_WGSL, /let etaRatio = dielectric_ratio\(ray, hit\);/);
+  assert.match(WAVEFRONT_COMPUTE_WGSL, /refract_direction\(ray.direction.xyz, surface_shading_normal\(hit\),\s+dielectric_ratio\(ray, hit\)\)/);
   assert.match(WAVEFRONT_COMPUTE_WGSL, /if \(totalInternalReflection\) \{\s+continuationThroughput = segmentTransmittance;/);
   assert.match(WAVEFRONT_COMPUTE_WGSL, /secondaryThroughput = secondaryThroughput \/ survivalProbability;/);
   assert.match(WAVEFRONT_COMPUTE_WGSL, /if \(splitDielectric\) \{\s+let secondaryIndex/);

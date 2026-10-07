@@ -1283,3 +1283,16 @@ there is no npm write-token fallback. CD remains disabled until the npm trusted
 publisher binding and protected-branch-only production environment are
 independently verified.
 <!-- END PLASIUS RELEASE INTEGRITY -->
+## Experimental glass/water transport
+
+Two independent, default-off renderer options / remote feature flags are available:
+`renderer.transport.boundedDielectricBranching.enabled` and
+`renderer.transport.nestedMediaRefraction.enabled`. Enable both for bounded
+glass/water experiments. Medium inputs accept `ior` (1..4, inherited from the
+surface) and `priority` (integer 0..2048, higher wins). Glass should outrank water
+where the meshes overlap. Camera-inside-volume initialization is not supported.
+The local room reference exposes both switches; Reset disables them. Captures
+retain their flag values and run the analytic GPU optics probe before rendering.
+These are not a claim of photographic quality or real-time performance. See
+[ADR 0055](docs/adrs/adr-0055-bounded-nested-dielectrics.md) and
+[qualification status](docs/glass-water-transport-follow-up.md).

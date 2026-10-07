@@ -357,10 +357,14 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   stablePattern: 1 << 11,
   sheen: 1 << 12,
   layeredClearcoat: 1 << 13,
+  boundedDielectricBranching: 1 << 14,
+  nestedMediaRefraction: 1 << 15,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
   const requested = Object.freeze({
+    boundedDielectricBranching: readBooleanFeatureFlag(options, "renderer.transport.boundedDielectricBranching.enabled", flags => flags?.renderer?.transport?.boundedDielectricBranching?.enabled),
+    nestedMediaRefraction: readBooleanFeatureFlag(options, "renderer.transport.nestedMediaRefraction.enabled", flags => flags?.renderer?.transport?.nestedMediaRefraction?.enabled),
     layeredClearcoat: readBooleanFeatureFlag(options, "renderer.materials.layeredClearcoat.enabled", flags => flags?.renderer?.materials?.layeredClearcoat?.enabled),
     sheen: readBooleanFeatureFlag(options, "renderer.materials.sheen.enabled", flags => flags?.renderer?.materials?.sheen?.enabled),
     stablePattern: readBooleanFeatureFlag(options, "renderer.sampling.stablePattern.enabled", (flags) => flags?.renderer?.sampling?.stablePattern?.enabled ?? flags?.renderer?.sampling?.stablePattern),
@@ -420,6 +424,8 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
     ),
   });
   const effective = Object.freeze({
+    boundedDielectricBranching: requested.boundedDielectricBranching,
+    nestedMediaRefraction: requested.nestedMediaRefraction,
     sheen: requested.sheen,
     layeredClearcoat: requested.layeredClearcoat,
     fixedPattern: requested.fixedPattern,

@@ -109,7 +109,13 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
     hitSpecularColor
   );`;
 
-export const WAVEFRONT_SURFACE_BODY_WGSL = `  let segmentTransmittance = medium_transmittance(medium_stack_current_id(ray), hit.distance);
+export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_transition_invalid(ray, hit)) {
+    fail_path_node(ray);
+    atomicAdd(&counters.termination.invalidSampleCount, 1u);
+    atomicAdd(&counters.terminatedCount, 1u);
+    return;
+  }
+  let segmentTransmittance = medium_transmittance(medium_stack_current_id(ray), hit.distance);
   let arrivingThroughput = ray.throughput.xyz * segmentTransmittance;
 
   if (hit.hitType == 1u) {
@@ -245,8 +251,13 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  let segmentTransmittance = medium_
   ) * segmentTransmittance;
   let transmissionBranch = scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION;
   let totalInternalReflection = dielectric_event(hit) && dielectric_cannot_refract(ray, hit);
-  let splitDielectric = dielectric_event(hit) && !totalInternalReflection;
+  let splitDielectric = dielectric_event(hit) && !totalInternalReflection && !bounded_dielectric_enabled();
   var secondaryThroughput = vec3<f32>(0.0);
+  if (dielectric_event(hit) && (nested_media_enabled() || bounded_dielectric_enabled())) {
+    continuationThroughput = select(dielectric_reflection_weight(ray, hit),
+      dielectric_transmission_weight(ray, hit), transmissionBranch) * segmentTransmittance;
+    if (bounded_dielectric_enabled()) { continuationThroughput /= scatter.pdf; }
+  }
   if (totalInternalReflection) {
     continuationThroughput = segmentTransmittance;
   }
@@ -256,6 +267,10 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  let segmentTransmittance = medium_
       surface_delta_reflection_throughput(hit, continuationViewDirection),
       transmissionBranch
     ) * segmentTransmittance;
+    if (nested_media_enabled()) {
+      secondaryThroughput = select(dielectric_transmission_weight(ray, hit),
+        dielectric_reflection_weight(ray, hit), transmissionBranch) * segmentTransmittance;
+    }
   }
   if (max(max_component(continuationThroughput), max_component(secondaryThroughput)) <= 0.000001) {
     if (deferred_path_resolve_enabled()) {
@@ -370,7 +385,7 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  let segmentTransmittance = medium_
       let secondaryIsReflection = transmissionBranch;
       let secondaryDirection = select(
         refract_direction(ray.direction.xyz, surface_shading_normal(hit),
-          dielectric_eta(hit)),
+          dielectric_ratio(ray, hit)),
         reflect(ray.direction.xyz, surface_shading_normal(hit)),
         secondaryIsReflection
       );
@@ -419,7 +434,42 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  let segmentTransmittance = medium_
     }
   }`;
 
+const localIntersection = WAVEFRONT_INTERSECTION_BODY_WGSL
+  .replace("hits[index] = make_miss(ray);\n    return;", "return make_miss(ray);")
+  .replace("hits[index] = HitRecord(", "return HitRecord(");
+
 export const WAVEFRONT_SHADER_KERNELS_WGSL = `
+fn trace_material_hit(ray: RayRecord) -> HitRecord {
+${localIntersection}
+}
+struct NestedIntersection { ray: RayRecord, hit: HitRecord, };
+fn intersect_nested_ray(input: RayRecord) -> NestedIntersection {
+  var ray = input;
+  var hit = HitRecord();
+  // Numerical safety bound; exhausted traversal is rejected, never shaded.
+  for (var crossing = 0u; crossing < 32u; crossing++) {
+    hit = trace_material_hit(ray);
+    if (hit.hitType == 2u || !dielectric_event(hit) || !medium_valid(hit.mediumRefId)) {
+      return NestedIntersection(ray, hit);
+    }
+    if (medium_transition_invalid(ray, hit)) { hit.hitType = 5u; return NestedIntersection(ray, hit); }
+    if (medium_stack_current_id(ray) != transmitted_medium_ref_id(ray, hit)) {
+      return NestedIntersection(ray, hit);
+    }
+    // Hidden overlap boundary: account for distance, update occupancy, keep
+    // sample ordinal/depth/direction/parent and all previous BSDF state intact.
+    ray.throughput = vec4<f32>(ray.throughput.xyz * medium_transmittance(medium_stack_current_id(ray), hit.distance), ray.throughput.w);
+    let nextId = transmitted_medium_ref_id(ray, hit);
+    let nextDepth = transitioned_medium_stack_depth(ray, hit);
+    ray.mediumStack = transitioned_medium_stack(ray, hit);
+    ray.mediumStackDepth = nextDepth;
+    ray.mediumRefId = nextId;
+    ray.origin = vec4<f32>(optical_offset(hit.position.xyz, hit.geometricNormal.xyz, ray.direction.xyz), 1.0);
+  }
+  hit.hitType = 5u;
+  return NestedIntersection(ray, hit);
+}
+
 fn emission_power(emission: vec4<f32>) -> f32 {
   return emission.x + emission.y + emission.z;
 }
@@ -626,6 +676,12 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
   let ray = activeQueue[index];
+  if (nested_media_enabled()) {
+    let result = intersect_nested_ray(ray);
+    activeQueue[index] = result.ray;
+    hits[index] = result.hit;
+    return;
+  }
 ${WAVEFRONT_INTERSECTION_BODY_WGSL}
 }
 
@@ -641,6 +697,7 @@ fn offset_origin(
   rayDirection: vec3<f32>
 ) -> vec3<f32> {
   let geometric = safe_normalize(geometricNormal, vec3<f32>(0.0, 1.0, 0.0));
+  if (nested_media_enabled()) { return optical_offset(position, geometric, rayDirection); }
   let shading = repair_shading_normal(geometric, shadingNormal);
   let raySide = select(-1.0, 1.0, dot(rayDirection, geometric) >= 0.0);
   let orientedGeometric = geometric * raySide;
@@ -745,7 +802,7 @@ fn dielectric_eta(hit: HitRecord) -> f32 {
 
 fn dielectric_cannot_refract(ray: RayRecord, hit: HitRecord) -> bool {
   let cosTheta = min(dot(-ray.direction.xyz, surface_shading_normal(hit)), 1.0);
-  return dielectric_eta(hit) * sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) > 1.0;
+  return dielectric_ratio(ray, hit) * sqrt(max(0.0, 1.0 - cosTheta * cosTheta)) > 1.0;
 }
 
 fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
@@ -764,38 +821,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
   }
 
   if (dielectric_event(hit)) {
-    let etaRatio = dielectric_eta(hit);
-    let cosTheta = min(dot(-ray.direction.xyz, normal), 1.0);
-    let cannotRefract = dielectric_cannot_refract(ray, hit);
-    let reflectChance = schlick(cosTheta, etaRatio);
-    let transmissionReflectChance = select(
-      reflectChance,
-      max(reflectChance, 1.0 - transmission),
-      transmission > 0.001
-    );
-    let transmissionSelector = sample_dimension_1d(
-      ray.sourcePixelId,
-      ray.sampleId,
-      ray.bounce,
-      config.frameIndex,
-      SAMPLE_DIM_TRANSMISSION_SELECTOR
-    );
-    if (cannotRefract || transmissionSelector < transmissionReflectChance) {
-      return ScatterResult(
-        vec4<f32>(reflect(ray.direction.xyz, normal), 0.0),
-        1.0,
-        ray.mediumRefId,
-        RAY_FLAG_DELTA_SAMPLE,
-        SCATTER_LOBE_DELTA_REFLECTION,
-      );
-    }
-    return ScatterResult(
-      vec4<f32>(refract_direction(ray.direction.xyz, normal, etaRatio), 0.0),
-      1.0,
-      transmitted_medium_ref_id(ray, hit),
-      RAY_FLAG_DELTA_SAMPLE,
-      SCATTER_LOBE_DELTA_TRANSMISSION,
-    );
+    return scatter_dielectric(ray, hit);
   }
 
   let guidedEmissiveAvailable = config.emissiveTriangleCount > 0u;

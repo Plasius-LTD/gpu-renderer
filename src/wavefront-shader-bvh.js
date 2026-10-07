@@ -310,10 +310,10 @@ fn intersect_sphere(ray: RayRecord, object: SceneObject) -> Candidate {
   }
   let sqrtD = sqrt(discriminant);
   var distance = -halfB - sqrtD;
-  if (distance <= 0.001) {
+  if (distance <= transport_ray_minimum()) {
     distance = -halfB + sqrtD;
   }
-  if (distance <= 0.001) {
+  if (distance <= transport_ray_minimum()) {
     return no_candidate();
   }
   let position = ray.origin.xyz + ray.direction.xyz * distance;
@@ -355,10 +355,11 @@ fn intersect_box(ray: RayRecord, object: SceneObject) -> Candidate {
   let tFar = max(t0, t1);
   let entry = max(max(tNear.x, tNear.y), tNear.z);
   let exit = min(min(tFar.x, tFar.y), tFar.z);
-  if (exit < max(entry, 0.001)) {
+  if (exit < max(entry, transport_ray_minimum())) {
     return no_candidate();
   }
-  let distance = max(entry, 0.001);
+  var distance = max(entry, 0.001);
+  if (nested_media_enabled()) { distance = select(exit, entry, entry > transport_ray_minimum()); }
   let position = ray.origin.xyz + ray.direction.xyz * distance;
   let rel = (position - object.center.xyz) / max(object.halfExtent.xyz, vec3<f32>(0.001));
   let absRel = abs(rel);
@@ -398,7 +399,7 @@ fn intersect_bounds(ray: RayRecord, boundsMin: vec3<f32>, boundsMax: vec3<f32>, 
   let tFar = max(t0, t1);
   let entry = max(max(tNear.x, tNear.y), tNear.z);
   let exit = min(min(tFar.x, tFar.y), tFar.z);
-  return exit >= max(entry, 0.001) && entry <= nearest;
+  return exit >= max(entry, transport_ray_minimum()) && entry <= nearest;
 }
 
 fn repair_shading_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>) -> vec3<f32> {
@@ -473,7 +474,8 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
     return no_candidate();
   }
   let mediumExit = triangle.mediumRefId != 0u &&
-    triangle.mediumRefId == medium_stack_current_id(ray) &&
+    (triangle.mediumRefId == medium_stack_current_id(ray) ||
+      (nested_media_enabled() && medium_stack_contains(ray, triangle.mediumRefId))) &&
     (triangle.materialExtension.z > 0.001 || triangle.material.z < 0.999);
   if (det < 0.0 && (triangle.flags & 0x40000000u) == 0u && !mediumExit) {
     return no_candidate();
@@ -493,7 +495,7 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
   }
 
   let distance = dot(edge2, qvec) * invDet;
-  if (distance <= 0.001) {
+  if (distance <= transport_ray_minimum()) {
     return no_candidate();
   }
 

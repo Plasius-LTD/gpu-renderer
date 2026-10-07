@@ -572,7 +572,7 @@ test("assembled wavefront WGSL avoids field-count-sensitive triangle constructor
   const constructors = shaderSource.match(/TriangleRecord\(/g) ?? [];
   const zeroInitializers = shaderSource.match(/TriangleRecord\(\)/g) ?? [];
 
-  assert.equal(constructors.length, 2);
+  assert.equal(constructors.length, 3); // Staged plus nested local-hit helper.
   assert.equal(zeroInitializers.length, constructors.length);
   assert.match(shaderSource, /preparedTriangle\.materialExtension2 = vec4<f32>\(0\.0, 0\.0, 1\.3, 0\.0\)/);
   assert.match(shaderSource, /preparedTriangle\.materialExtension3 = vec4<f32>\(100\.0, 400\.0, 0\.0, 0\.0\)/);
@@ -1331,7 +1331,7 @@ test("wavefront compute samples all-material direct light with MIS before random
   assert.match(source, /let bsdfPdf = evaluate_surface_bsdf_pdf\(hit, viewDirection, lightDirection\);/);
   assert.match(source, /let misWeight = power_heuristic\(lightSample\.pdf, bsdfPdf\);/);
   assert.match(source, /nDotL \* misWeight \/ max\(lightSample\.pdf, 0\.000001\)/);
-  assert.match(source, /let transmissionReflectChance = select\(/);
+  assert.match(source, /var transmissionReflectChance = select\(/);
   assert.doesNotMatch(source, /mix\(reflectChance, max\(reflectChance, 1\.0 - transmission\), transmission > 0\.001\)/);
   assert.match(source, /let segmentTransmittance = medium_transmittance\(medium_stack_current_id\(ray\), hit\.distance\);/);
   assert.match(source, /let arrivingThroughput = ray\.throughput\.xyz \* segmentTransmittance;/);

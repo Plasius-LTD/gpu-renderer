@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add independent default-off bounded dielectric sampling and actual-media
+  refraction flags, optical medium metadata, guarded overlap traversal, and
+  glass/water diagnostic controls with analytic GPU qualification probes (#234).
+
 - Retain failing native diagnostic tile, ray telemetry and final-sample termination
   counters without accepting incomplete captures; readback failures preserve the
   original error (#233).

@@ -16,8 +16,13 @@ ${localIntersection}
 fn intersectAndResolveActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
   let index = globalId.x;
   if (index >= atomicLoad(&counters.activeCount)) { return; }
-  let input = activeQueue[index];
-  let hit = intersect_local_ray(input);
+  var input = activeQueue[index];
+  var hit: HitRecord;
+  if (nested_media_enabled()) {
+    let result = intersect_nested_ray(input);
+    input = result.ray;
+    hit = result.hit;
+  } else { hit = intersect_local_ray(input); }
   let ray = begin_path_node(input, index);
 ${WAVEFRONT_SURFACE_BODY_WGSL}
 }
