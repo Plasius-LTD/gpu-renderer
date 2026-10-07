@@ -30,7 +30,7 @@ export const EMISSIVE_TRIANGLE_INDEX_BYTES = 4;
 export const ENVIRONMENT_PORTAL_RECORD_BYTES = 96;
 export const MEDIUM_TABLE_ROWS = 2;
 export const ACCUMULATION_RECORD_BYTES = 16;
-export const PATH_VERTEX_RECORD_BYTES = 16;
+export const PATH_VERTEX_RECORD_BYTES = 64;
 export const GPU_SUBMITTED_WORK_TIMEOUT_MS = 5_000;
 export const GPU_READBACK_COMPLETION_TIMEOUT_MS = 60_000;
 export const GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS = 60_000;
@@ -57,8 +57,9 @@ export const COUNTER_TRANSPORT_CACHED_INDIRECT_LUMINANCE_OFFSET = 21;
 export const COUNTER_TRANSPORT_RESIDUAL_LUMINANCE_OFFSET = 22;
 export const COUNTER_TRANSPORT_ZERO_TERMINATION_OFFSET = 23;
 export const COUNTER_TRANSPORT_CHECKSUM_OFFSET = 24;
+export const COUNTER_PATH_FAILURE_OFFSET = 26;
 export const TRACE_STORAGE_BUFFER_BINDINGS = 10;
-export const TRACE_SAMPLED_TEXTURE_BINDINGS = 21;
+export const TRACE_SAMPLED_TEXTURE_BINDINGS = 22;
 export const BRDF_LUT_UPLOAD_CACHE = new Map();
 export const HIT_TYPE_SURFACE = 0;
 export const HIT_TYPE_EMISSIVE = 1;
@@ -99,6 +100,7 @@ export const DEFAULT_ENVIRONMENT_LIGHTING = Object.freeze({
 });
 
 export const EMPTY_TERMINATION_METRICS = Object.freeze({
+  pathCompletionValid: null,
   termination: Object.freeze({
     emissive: 0,
     environment: 0,
@@ -349,10 +351,31 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   productTransportTelemetry: 1 << 5,
   sourceStableDirectLighting: 1 << 6,
   deterministicLowSppIndirect: 1 << 7,
+  owenSobol: 1 << 8,
+  independentRandom: 1 << 9,
+  fixedPattern: 1 << 10,
+  stablePattern: 1 << 11,
+  sheen: 1 << 12,
+  layeredClearcoat: 1 << 13,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
   const requested = Object.freeze({
+    layeredClearcoat: readBooleanFeatureFlag(options, "renderer.materials.layeredClearcoat.enabled", flags => flags?.renderer?.materials?.layeredClearcoat?.enabled),
+    sheen: readBooleanFeatureFlag(options, "renderer.materials.sheen.enabled", flags => flags?.renderer?.materials?.sheen?.enabled),
+    stablePattern: readBooleanFeatureFlag(options, "renderer.sampling.stablePattern.enabled", (flags) => flags?.renderer?.sampling?.stablePattern?.enabled ?? flags?.renderer?.sampling?.stablePattern),
+    fixedPattern: readBooleanFeatureFlag(
+      options, "renderer.sampling.fixedPattern.enabled",
+      (flags) => flags?.renderer?.sampling?.fixedPattern?.enabled ?? flags?.renderer?.sampling?.fixedPattern
+    ),
+    owenSobol: readBooleanFeatureFlag(
+      options, "renderer.sampling.owenSobol.enabled",
+      (flags) => flags?.renderer?.sampling?.owenSobol?.enabled ?? flags?.renderer?.sampling?.owenSobol
+    ),
+    independentRandom: readBooleanFeatureFlag(
+      options, "renderer.sampling.independentRandom.enabled",
+      (flags) => flags?.renderer?.sampling?.independentRandom?.enabled ?? flags?.renderer?.sampling?.independentRandom
+    ),
     stableSampleRouting: readBooleanFeatureFlag(
       options,
       "renderer.transport.stableSampleRouting.enabled",
@@ -397,6 +420,12 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
     ),
   });
   const effective = Object.freeze({
+    sheen: requested.sheen,
+    layeredClearcoat: requested.layeredClearcoat,
+    fixedPattern: requested.fixedPattern,
+    stablePattern: requested.stablePattern,
+    owenSobol: requested.owenSobol,
+    independentRandom: requested.independentRandom,
     stableSampleRouting: requested.stableSampleRouting,
     strictZeroOverflow: requested.strictZeroOverflow && strictPhysicalLowSppLighting,
     deferLowSppRussianRoulette:
@@ -416,6 +445,9 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
       requested.deterministicLowSppIndirect && strictPhysicalLowSppLighting,
   });
   let bitmask = 0;
+  if ([requested.owenSobol, requested.independentRandom, requested.fixedPattern, requested.stablePattern].filter(Boolean).length > 1) {
+    throw new Error("Owen Sobol, independent random, fixed and stable pattern sampler flags are mutually exclusive.");
+  }
   for (const [key, bit] of Object.entries(WAVEFRONT_TRANSPORT_EXPERIMENT_BITS)) {
     if (effective[key]) {
       bitmask |= bit;

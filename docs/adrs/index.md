@@ -1,5 +1,7 @@
 # ADR Index
 
+- [ADR0050: Dual-UV material coordinates](adr-0050-dual-uv-material-coordinates.md)
+
 - [ADR 0001: WebGPU Runtime Baseline for Renderer](./adr-0001-webgpu-runtime-baseline.md)
 - [ADR 0002: XR Binding Via @plasius/gpu-xr](./adr-0002-xr-binding-via-gpu-xr.md)
 - [ADR 0003: Frame Lifecycle Hooks for Adaptive Integration](./adr-0003-frame-lifecycle-hooks-for-adaptive-integration.md)
@@ -33,3 +35,18 @@
 - [ADR 0034: Shared compacted camera rays](adr-0034-shared-compacted-camera-rays.md)
 - [ADR 0037: Compacted sample bootstrap](adr-0037-compacted-sample-bootstrap.md)
 - [ADR 0038: Prepared-sample command coordinator](adr-0038-prepared-sample-command-coordinator.md)
+- [ADR 0031: Branch-owned complete camera samples](./adr-0031-branch-owned-complete-camera-samples.md)
+- [ADR 0032: Primary visibility MIS eligibility](./adr-0032-primary-visibility-mis-eligibility.md)
+- [ADR 0039: Adaptive complete-camera-sample integration](./adr-0039-adaptive-complete-camera-sample-integration.md)
+- [ADR 0040: Shared adaptive sampling rounds](./adr-0040-shared-adaptive-sampling-rounds.md)
+- [ADR 0041: Immediate hit consumption and empty-queue pruning](./adr-0041-immediate-hit-consumption-and-empty-queue-pruning.md)
+- [ADR 0042: Opt-in host elapsed attribution](./adr-0042-opt-in-host-attribution.md)
+- [ADR 0043: Completion-driven frame ownership and observational progress](./adr-0043-completion-driven-frame-loop.md)
+- [ADR 0044: Native prescribed adaptive tracing](./adr-0044-native-prescribed-adaptive-tracing.md)
+# Sampling experiment
+
+- [ADR 0045: Progressive sampling experiment](adr-0045-progressive-sampling-experiment.md)
+- [ADR 0049: Guided spatial denoising](adr-0049-guided-spatial-denoise.md)
+- [ADR 0051: Surface sidedness and normal validity](adr-0051-surface-sidedness-and-normal-validity.md)
+- [ADR 0053: Cloth material fidelity](adr-0053-cloth-material-fidelity.md)
+- [ADR 0054: Layered clearcoat](adr-0054-layered-clearcoat.md)

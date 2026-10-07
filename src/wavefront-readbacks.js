@@ -1,5 +1,6 @@
 import {
   COUNTER_BUFFER_BYTES,
+  COUNTER_PATH_FAILURE_OFFSET,
   COUNTER_TERMINATION_ABSORPTION_NULL_OFFSET,
   COUNTER_TERMINATION_AMBIENT_LUMINANCE_OFFSET,
   COUNTER_TERMINATION_AMBIENT_MAX_DEPTH_OFFSET,
@@ -39,23 +40,27 @@ export async function readWavefrontTerminationMetrics({
     size: COUNTER_BUFFER_BYTES,
     usage: constants.buffer.COPY_DST | constants.buffer.MAP_READ,
   });
-  await waitForSubmittedGpuWork({
-    timeoutMs: GPU_READBACK_COMPLETION_TIMEOUT_MS,
-    allowTimeout: false,
-  });
-  const encoder = device.createCommandEncoder({
-    label: "plasius.wavefront.terminationMetrics.copy",
-  });
-  encoder.copyBufferToBuffer(counterBuffer, 0, readback, 0, COUNTER_BUFFER_BYTES);
-  device.queue.submit([encoder.finish()]);
-  await waitForSubmittedGpuWork({
-    timeoutMs: GPU_READBACK_COMPLETION_TIMEOUT_MS,
-    allowTimeout: false,
-  });
-  await readback.mapAsync(mapMode.READ);
-  const countersView = new Uint32Array(readback.getMappedRange().slice(0));
-  readback.unmap();
-  readback.destroy?.();
+  let countersView;
+  try {
+    await waitForSubmittedGpuWork({
+      timeoutMs: GPU_READBACK_COMPLETION_TIMEOUT_MS,
+      allowTimeout: false,
+    });
+    const encoder = device.createCommandEncoder({
+      label: "plasius.wavefront.terminationMetrics.copy",
+    });
+    encoder.copyBufferToBuffer(counterBuffer, 0, readback, 0, COUNTER_BUFFER_BYTES);
+    device.queue.submit([encoder.finish()]);
+    await waitForSubmittedGpuWork({
+      timeoutMs: GPU_READBACK_COMPLETION_TIMEOUT_MS,
+      allowTimeout: false,
+    });
+    await readback.mapAsync(mapMode.READ);
+    countersView = new Uint32Array(readback.getMappedRange().slice(0));
+  } finally {
+    readback.unmap();
+    readback.destroy?.();
+  }
   const emissive = countersView[COUNTER_TERMINATION_EMISSIVE_OFFSET] ?? 0;
   const environment = countersView[COUNTER_TERMINATION_ENVIRONMENT_OFFSET] ?? 0;
   const maxDepth = countersView[COUNTER_TERMINATION_AMBIENT_MAX_DEPTH_OFFSET] ?? 0;
@@ -88,6 +93,7 @@ export async function readWavefrontTerminationMetrics({
   const ambientResidualShare =
     totalLuminance > 0 ? ambientResidualLuminance / totalLuminance : 0;
   return Object.freeze({
+    pathCompletionValid: countersView[COUNTER_PATH_FAILURE_OFFSET] === 0,
     termination: Object.freeze({
       emissive,
       environment,

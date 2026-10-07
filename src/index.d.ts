@@ -325,6 +325,14 @@ export interface CreateWavefrontAdaptiveSamplingLevelsResult {
 
 export interface WavefrontTextureSampleInput {
   readonly texCoord?: number;
+  /** UV transform applied at sampling time, without resampling source pixels. */
+  readonly transform?: {
+    readonly offset?: readonly [number, number];
+    readonly scale?: readonly [number, number];
+    readonly rotation?: number;
+  };
+  readonly wrapS?: 10497 | 33071 | 33648;
+  readonly wrapT?: 10497 | 33071 | 33648;
   readonly scale?: number;
   readonly strength?: number;
   readonly width: number;
@@ -498,10 +506,14 @@ export interface WavefrontSceneObject {
 
 export interface WavefrontMeshInput {
   readonly id?: number;
+  /** Default false. Back faces require explicit opt-in, except occupied-medium exits. */
+  readonly doubleSided?: boolean;
   readonly positions: readonly number[] | Float32Array;
   readonly indices?: readonly number[] | Uint16Array | Uint32Array;
   readonly normals?: readonly number[] | Float32Array | null;
   readonly uvs?: readonly number[] | Float32Array | null;
+  /** TEXCOORD_1. Each material texture independently selects set 0 or 1. */
+  readonly uvs1?: readonly number[] | Float32Array | null;
   readonly texcoords?: readonly number[] | Float32Array | null;
   readonly uv?: readonly number[] | Float32Array | null;
   readonly materialKind?: WavefrontMaterialKind;
@@ -532,6 +544,7 @@ export interface WavefrontMeshInput {
   readonly extensions?: Record<string, Record<string, unknown>>;
   readonly material?: {
     readonly kind?: WavefrontMaterialKind;
+    readonly doubleSided?: boolean;
     readonly color?: RendererColor | readonly number[];
     readonly baseColor?: RendererColor | readonly number[];
     readonly emission?: readonly [number, number, number, number?] | readonly number[];
@@ -585,6 +598,8 @@ export interface WavefrontTriangleRecord {
   readonly uv0: readonly number[];
   readonly uv1: readonly number[];
   readonly uv2: readonly number[];
+  /** UV1 pairs for the triangle's three vertices; uv0/uv1/uv2 above are UV0 corners. */
+  readonly uvs1?: readonly number[];
   readonly color: readonly number[];
   readonly emission: readonly number[];
   readonly material: readonly number[];
@@ -714,6 +729,8 @@ export interface WavefrontGpuMeshSource {
       readonly indices: readonly number[];
       readonly normals: readonly number[] | null;
       readonly uvs: readonly number[] | null;
+      readonly uvs1: readonly number[] | null;
+      readonly textureUvMask: number;
       readonly materialKind: number;
       readonly flags: number;
       readonly materialRefId: number;
@@ -755,6 +772,7 @@ export interface WavefrontGpuTextureAtlasSource {
 }
 
 export interface WavefrontGpuMaterialSource {
+  readonly textureMetadata: Readonly<{width: number; height: number; data: Float32Array}>;
   readonly buffer: ArrayBuffer;
   readonly count: number;
   readonly recordBytes: number;
@@ -844,6 +862,7 @@ export interface WavefrontEnvironmentMapSnapshot {
 }
 
 export interface WavefrontPathTracingComputeConfig {
+  readonly roughBounceSplitting: WavefrontRoughBounceSplittingConfig;
   readonly mode: typeof rendererWavefrontComputeMode;
   readonly width: number;
   readonly height: number;
@@ -908,7 +927,21 @@ export interface WavefrontPathTracingComputeConfig {
   readonly memory: WavefrontPathTracingMemoryEstimate;
 }
 
+export interface WavefrontRoughBounceSplittingConfig {
+  readonly enabled: boolean;
+  readonly splitDepth: 0 | 1 | 2;
+  readonly queueFactor: 1 | 2 | 4;
+  readonly maximumAdditionalBytes: number;
+}
+
 export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
+  readonly "renderer.materials.sheen.enabled"?: boolean;
+  readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
+  readonly "renderer.sampling.owenSobol.enabled"?: boolean;
+  readonly "renderer.sampling.independentRandom.enabled"?: boolean;
+  readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
+  readonly "renderer.sampling.stablePattern.enabled"?: boolean;
   readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
   readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
   readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -919,6 +952,13 @@ export interface WavefrontRendererFeatureFlags {
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly enabled?: {
+    readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
+    readonly "renderer.materials.sheen.enabled"?: boolean;
+    readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
+    readonly "renderer.sampling.owenSobol.enabled"?: boolean;
+    readonly "renderer.sampling.independentRandom.enabled"?: boolean;
+    readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
+  readonly "renderer.sampling.stablePattern.enabled"?: boolean;
     readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
     readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
     readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -930,6 +970,13 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly flags?: {
+    readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
+    readonly "renderer.materials.sheen.enabled"?: boolean;
+    readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
+    readonly "renderer.sampling.owenSobol.enabled"?: boolean;
+    readonly "renderer.sampling.independentRandom.enabled"?: boolean;
+    readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
+  readonly "renderer.sampling.stablePattern.enabled"?: boolean;
     readonly "renderer.transport.strictPhysicalLowSppLighting"?: boolean;
     readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
     readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -941,6 +988,14 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly renderer?: {
+    readonly materials?: { readonly sheen?: { readonly enabled?: boolean }; readonly layeredClearcoat?: { readonly enabled?: boolean } };
+    readonly sampling?: {
+      readonly owenSobol?: boolean | { readonly enabled?: boolean };
+      readonly independentRandom?: boolean | { readonly enabled?: boolean };
+      readonly fixedPattern?: boolean | { readonly enabled?: boolean };
+      readonly stablePattern?: boolean | { readonly enabled?: boolean };
+      readonly roughBounceSplitting?: { readonly enabled?: boolean };
+    };
     readonly transport?: {
       readonly strictPhysicalLowSppLighting?: boolean;
       readonly stableSampleRouting?: boolean;
@@ -960,6 +1015,13 @@ export interface WavefrontRendererFeatureFlags {
 }
 
 export interface WavefrontTransportExperimentFlags {
+  readonly layeredClearcoat?: boolean;
+  readonly sheen?: boolean;
+  /** Default off; optional for structural compatibility with older snapshots. */
+  readonly owenSobol?: boolean;
+  readonly independentRandom?: boolean;
+  readonly fixedPattern?: boolean;
+  readonly stablePattern?: boolean;
   readonly stableSampleRouting: boolean;
   readonly strictZeroOverflow: boolean;
   readonly deferLowSppRussianRoulette: boolean;
@@ -1072,6 +1134,10 @@ export interface WavefrontGpuParallelismDiagnostics {
 }
 
 export interface CreateWavefrontPathTracingComputeRendererOptions {
+  readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
+  readonly "renderer.materials.sheen.enabled"?: boolean;
+  readonly "renderer.sampling.roughBounceSplitting.enabled"?: boolean;
+  readonly roughBounceSplitting?: {readonly splitDepth?: 1 | 2; readonly maximumAdditionalBytes?: number};
   readonly canvas?: HTMLCanvasElement | string;
   readonly navigator?: Navigator | { gpu?: GPU };
   readonly document?: Document;
@@ -1116,6 +1182,10 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly displayQuality?: boolean;
   readonly denoise?: boolean;
   readonly presentationOutput?: "tone-mapped" | "linear";
+  readonly "renderer.sampling.owenSobol.enabled"?: boolean;
+  readonly "renderer.sampling.independentRandom.enabled"?: boolean;
+  readonly "renderer.sampling.fixedPattern.enabled"?: boolean;
+  readonly "renderer.sampling.stablePattern.enabled"?: boolean;
   readonly strictPhysicalLowSppLighting?: boolean;
   readonly "renderer.transport.stableSampleRouting.enabled"?: boolean;
   readonly "renderer.transport.strictZeroOverflow.enabled"?: boolean;
@@ -1129,6 +1199,62 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly frameIndex?: number;
 }
 
+export interface WavefrontFrameProgress {
+  readonly stage: "encoding" | "waiting-acceleration" | "waiting-gpu" | "gpu-complete" | "readback" | "complete" | "submitted" | "failed";
+  /** Queue-confirmed render tiles; not a GPU-time fraction. */
+  readonly completedTiles: number;
+  readonly totalTiles: number;
+}
+
+export interface WavefrontRenderFrameOptions {
+  cpuProfiling?: { enabled?: boolean; userTiming?: boolean };
+  /** Observer errors reject only after the frame has drained. */
+  onProgress?: (progress: WavefrontFrameProgress) => void;
+  readStats?: boolean;
+  readOutputProbe?: boolean;
+  awaitGPUCompletion?: boolean;
+  submittedWorkTimeoutMs?: number;
+  samplesPerPixel?: number;
+  minimumSamplesPerPixel?: number;
+  frameTimeBudgetMs?: number;
+  probe?: { x?: number; y?: number };
+}
+
+export interface WavefrontFrameLoopProgress {
+  readonly status: "disabled" | "idle" | "running" | "stopping" | "stopped" | "failed";
+  readonly frame: number;
+  readonly completedFrames: number;
+  readonly stage: WavefrontFrameProgress["stage"] | "preparing" | null;
+  readonly elapsedMs: number;
+  readonly targetFrameTimeMs: number | null;
+  readonly budgetRatio: number | null;
+  readonly overBudgetMs: number | null;
+  readonly completedTiles: number;
+  readonly totalTiles: number | null;
+  readonly completedTileFraction: number | null;
+  readonly gpuCompletionFraction: null;
+  readonly lastError: string | null;
+}
+
+export interface WavefrontFrameLoop {
+  /** Resolves when stopped and drained, rejects on failure. Concurrent starts join. */
+  start(): Promise<WavefrontFrameLoopProgress>;
+  /** Stops future frames, not already submitted GPU work. Do not await from a loop callback. */
+  stop(): Promise<WavefrontFrameLoopProgress>;
+  getProgress(): WavefrontFrameLoopProgress;
+}
+
+export function createWavefrontFrameLoop<Result = WavefrontPathTracingComputeFrameStats>(options: {
+  /** Explicit opt-in; defaults false. Integrations forward their remote flag decision. */
+  enabled?: boolean;
+  /** Must exclusively own its renderer and await GPU completion with a bounded timeout. */
+  renderFrame: (options: WavefrontRenderFrameOptions) => Promise<Result>;
+  /** Observational target only, NOT an implicit SPP budget. Omitted/zero disables comparison. */
+  targetFrameTimeMs?: number;
+  getRenderOptions?: (context: Readonly<{frame: number; previousResult: Result | undefined}>) => WavefrontRenderFrameOptions | Promise<WavefrontRenderFrameOptions>;
+  onFrameComplete?: (result: Result, progress: WavefrontFrameLoopProgress) => void | Promise<void>;
+}): WavefrontFrameLoop;
+
 export interface WavefrontPathTracingComputeRenderer {
   readonly canvas: HTMLCanvasElement;
   readonly context: GPUCanvasContext;
@@ -1136,16 +1262,7 @@ export interface WavefrontPathTracingComputeRenderer {
   readonly format: GPUTextureFormat | string;
   readonly config: WavefrontPathTracingComputeConfig;
   renderOnce(): WavefrontPathTracingComputeFrameStats;
-  renderFrame(options?: {
-    readStats?: boolean;
-    readOutputProbe?: boolean;
-    awaitGPUCompletion?: boolean;
-    submittedWorkTimeoutMs?: number;
-    samplesPerPixel?: number;
-    minimumSamplesPerPixel?: number;
-    frameTimeBudgetMs?: number;
-    probe?: { x?: number; y?: number };
-  }): Promise<WavefrontPathTracingComputeFrameStats>;
+  renderFrame(options?: WavefrontRenderFrameOptions): Promise<WavefrontPathTracingComputeFrameStats>;
   readOutputProbe(options?: { x?: number; y?: number }): Promise<
     Readonly<{
       x: number;
@@ -1183,6 +1300,7 @@ export interface WavefrontPathTracingComputeRenderer {
     accelerationBuilt: boolean;
     accelerationBuildCount: number;
     frameConfigSlots: number;
+    materialTextureMetadataBytes: number;
     gpuParallelism: WavefrontGpuParallelismDiagnostics;
     memory: WavefrontPathTracingMemoryEstimate;
   }>;
@@ -1214,7 +1332,32 @@ export interface WavefrontFrameTimingTelemetry {
   readonly reason: string | null;
 }
 
+/** Opt-in host elapsed diagnostics; not CPU utilization, heap size or GPU work. */
+export interface WavefrontCpuProfile {
+  readonly schemaVersion: 1;
+  readonly timingBasis: "host-elapsed-not-cpu-utilization";
+  readonly stages: Readonly<Partial<Record<
+    "budgetCalculation" | "budgetPacking" | "configPacking" | "commandEncoding" |
+    "accelerationEncoding" | "uploads" | "finish" | "submit" | "gpuWait" |
+    "telemetryReadback" | "outputReadback",
+    Readonly<{ calls: number; failures: number; elapsedMs: number; exclusiveMs: number;
+      kind: "synchronous-host" | "asynchronous-wait" }>
+  >>>;
+  /** Render-job API calls only; post-job readback commands are excluded. */
+  readonly commands: Readonly<{
+    commandEncoders: number; computePasses: number; renderPasses: number;
+    pipelineChanges: number; bindGroupChanges: number; directDispatches: number;
+    indirectDispatches: number; bufferCopies: number; bufferCopyBytes: number;
+    clears: number; clearBytes: number; uploadCalls: number; uploadBytes: number;
+    submissions: number; commandBuffers: number;
+  }>;
+  /** Explicitly recorded temporary ArrayBuffer backing stores, not total JS allocations. */
+  readonly knownTemporaryBuffers: Readonly<{ count: number; bytes: number }>;
+  readonly timeline: Readonly<{ enabled: boolean; emitted: number; dropped: number; errors: number }>;
+}
+
 export interface WavefrontPathTracingComputeFrameStats {
+  readonly cpuProfile?: WavefrontCpuProfile;
   readonly frame: number;
   readonly width: number;
   readonly height: number;
@@ -1333,6 +1476,8 @@ export interface WavefrontPathTracingComputeFrameStats {
     deterministicChecksum: number;
   }>;
   readonly queueOverflow?: number;
+  /** Null when completion integrity was not read back; false rejects the frame. */
+  readonly pathCompletionValid?: boolean | null;
 }
 
 export function normalizeWavefrontSceneObject(
@@ -1344,6 +1489,7 @@ export function createWavefrontGpuMaterialSource(
 ): WavefrontGpuMaterialSource;
 export function createDefaultWavefrontSceneObjects(): readonly WavefrontSceneObject[];
 export function estimateWavefrontPathTracingMemory(options?: {
+  roughBounceSplitting?: WavefrontRoughBounceSplittingConfig;
   width?: number;
   height?: number;
   tileSize?: number;
@@ -1375,6 +1521,8 @@ export function normalizeWavefrontMesh(
   indices: readonly number[];
   normals: readonly number[] | null;
   uvs: readonly number[] | null;
+  uvs1: readonly number[] | null;
+  textureUvMask: number;
   materialKind: number;
   flags: number;
   materialRefId: number;
@@ -1514,12 +1662,12 @@ export function createWavefrontPathTracingComputeRenderer(
   options?: CreateWavefrontPathTracingComputeRendererOptions
 ): Promise<WavefrontPathTracingComputeRenderer>;
 export function renderWavefrontPathTracingComputeFrame(
-  options?: CreateWavefrontPathTracingComputeRendererOptions & {
-    readStats?: boolean;
-    readOutputProbe?: boolean;
-  }
+  options?: CreateWavefrontPathTracingComputeRendererOptions & WavefrontRenderFrameOptions
 ): Promise<WavefrontPathTracingComputeFrameStats>;
 export function createWavefrontPathTracingComputeShaderSource(options?: {
+  /** Internal source selection; public renderer flags select this automatically. */
+  progressiveSampling?: boolean | "fixed-pattern" | "stable-pattern" | "stable-camera-random";
+  roughBounceSplitting?: WavefrontRoughBounceSplittingConfig;
   workgroupSize?: number;
   outputTextureFormat?: GPUTextureFormat | "rgba8unorm";
 }): string;

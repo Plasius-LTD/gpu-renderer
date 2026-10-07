@@ -1,0 +1,61 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+test("room reference exposes original-scene placement, native resolutions and explicit render controls",()=>{
+ const html=readFileSync(new URL("./fixtures/native-room-reference.html",import.meta.url),"utf8");
+ for(const id of ["resolution","spp","sampler","view","chair-x","chair-z","chair-yaw","fov","models","central-reference","sheen"])assert.match(html,new RegExp(`<label for="${id}">`));
+ for(const text of ["1920 × 1080","3840 × 2160","Render room","Reset view","Stop after pending GPU work","No added studio walls","External daylight"])assert(html.includes(text));
+ assert.match(html,/<option value="fixed-pattern" selected>/);
+ assert.match(html,/img:not\(\[hidden\]\)/);
+ assert.match(html,/<img id="preview" hidden/);
+ assert.match(html,/<input id="chair-x"[^>]*value="2.3"/);
+ assert.match(html,/<input id="chair-z"[^>]*value="-2.5"/);
+ assert.match(html,/uniformly scaled to 1\.5 m wide/);
+ assert.match(html,/preserving its proportions/);
+});
+test('central reference control forwards layout and preserves default reset and capture identity',()=>{
+ const html=readFileSync(new URL('./fixtures/native-room-reference.html',import.meta.url),'utf8');
+ const js=readFileSync(new URL('./fixtures/native-room-reference.js',import.meta.url),'utf8');
+ assert.match(html,/<option value="seating">Sofa/);
+ assert.match(html,/<option value="standing">Spacesuit/);
+ assert.match(js,/centralReference:el\('central-reference'\).value/);
+ assert.match(js,/el\('central-reference'\).value=ROOM_DEFAULTS.centralReference/);
+ assert.match(js,/'-seating-centre'/);
+ assert.match(js,/controls.forEach\(c=>c.disabled=true\)/);
+});
+test('room ceiling is configurable, forwarded and verified rather than a hard-coded preset',()=>{
+ const fixture=name=>readFileSync(new URL(`./fixtures/${name}.js`,import.meta.url),'utf8');
+ const page=fixture('native-room-reference'),native=fixture('native-adaptive-runner'),runner=fixture('adaptive-paired-runner');
+ assert.match(page,/roomReferenceSettings\(el\("resolution"\).value,el\("sampler"\).value,el\('spp'\).valueAsNumber\)/);
+ assert.match(page,/createRadialSamplingPlan\(settings.width,settings.height,settings.maximumSpp\)/);
+ assert.match(page,/maximumSpp:settings.maximumSpp/);
+ assert.match(page,/sceneSnapshot.samplesPerPixel===settings.maximumSpp/);
+ assert.match(page,/radialSamplingTiers\(el\('spp'\).valueAsNumber\)/);
+ assert.match(page,/'-spp'\+settings.maximumSpp/);
+ assert.match(page,/el\('spp'\).value=String\(RADIAL_SAMPLING_DEFAULTS.maximumSpp\)/);
+ assert.match(runner,/maximum=native\?\.maximumSpp\?\?sceneConfig.probeMaximum/);
+ assert.match(runner,/samplesPerPixel:native\?maximum:ADAPTIVE_MAX_SAMPLES/);
+ assert.match(native,/maximum=renderer.config.samplesPerPixel/);
+ assert.match(native,/sampleWeight:adaptive\?1:1\/maximum/);
+ assert.match(native,/maximumSpp:maximum/);
+ assert.doesNotMatch(native,/samplesPerPixel:32|sampleLimit:32|ordinal<32|fill\(32\)/);
+ const benchmark=fixture('native-room-splitting');
+ assert(benchmark.indexOf('const settings=roomReferenceSettings')<benchmark.indexOf("el('spp').value=String(settings.maximumSpp)"));
+});
+test("room capture reuses real transport, hashes input, validates counts and clears stale results",()=>{
+ const js=readFileSync(new URL("./fixtures/native-room-reference.js",import.meta.url),"utf8");
+ for(const name of ["createPairedProbeRunner","loadOriginalEames","composeRoomEamesScene","validateRoomFrame","hashBytes","encodeLinearImageChunks","roomAsset.sha256","runner.destroy()","clearCapture","AbortController"])
+  assert(js.includes(name),name);
+ assert.match(js,/diagnostics:true/);assert.match(js,/sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount/);
+ assert.match(js,/__room-manifest.json/);assert.match(js,/__room-model.glb/);
+ for(const text of ['__reference-models.json','asset.sha256','runDualUvProbe','runSurfaceValidityProbe','fovYDegrees','referenceModels'])assert(js.includes(text),text);
+ assert.match(js,/room-eames-interior-reference/);assert.match(js,/failed/);
+ assert.match(js,/addEventListener\("change",clearCapture\)/);
+ assert.match(js,/addEventListener\("input",clearCapture\)/);
+ assert.match(js,/sampler:settings.sampler/);
+ assert.match(js,/ROOM_DEFAULTS.x/);assert.match(js,/ROOM_DEFAULTS.z/);
+ assert.match(js,/runMaterialFidelityProbe/);
+ assert.match(js,/materialFlags=.*renderer.materials.sheen.enabled/);
+ assert.match(js,/'-sheen'/);
+ assert.match(js,/el\('sheen'\).value='off'/);
+});

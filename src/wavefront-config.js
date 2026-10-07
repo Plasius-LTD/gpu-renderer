@@ -343,10 +343,12 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   );
   const denoise = options.denoise !== false;
   const deferredPathResolve = options.deferredPathResolve !== false;
-  const queueBytes = tilePixelCapacity * RAY_RECORD_BYTES;
-  const hitBytes = tilePixelCapacity * HIT_RECORD_BYTES;
+  roughSplitAdditionalBytes(tilePixelCapacity,maxDepth,options.roughBounceSplitting);
+  const queueFactor = options.roughBounceSplitting?.enabled ? 2**options.roughBounceSplitting.splitDepth : 1;
+  const queueBytes = tilePixelCapacity * queueFactor * RAY_RECORD_BYTES;
+  const hitBytes = tilePixelCapacity * queueFactor * HIT_RECORD_BYTES;
   const accumulationBytes = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
-  const pathVertexBytes = tilePixelCapacity * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
+  const pathVertexBytes = tilePixelCapacity * queueFactor * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
   const sceneObjectBytes = sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES;
   const triangleBytes = allocatedRecordBytes(triangleCapacity, TRIANGLE_RECORD_BYTES);
   const materialTableBytes = 0;
@@ -441,6 +443,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
 
 export function estimateWavefrontPathTracingMemoryForConfig(config, limits = {}) {
   return estimateWavefrontPathTracingMemory({
+    roughBounceSplitting: config.roughBounceSplitting,
     width: config.width,
     height: config.height,
     tileSize: config.tileSize,
@@ -588,6 +591,11 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   const deferredPathResolve = resolveDeferredPathResolve(options);
   const strictPhysicalLowSppLighting = resolveStrictPhysicalLowSppLighting(options);
   const transportExperiments = resolveTransportExperiments(options, strictPhysicalLowSppLighting);
+  const roughBounceSplitting=resolveRoughBounceSplitting(options);
+  if(roughBounceSplitting.enabled && (!transportExperiments.effective.stablePattern || !deferredPathResolve || !strictPhysicalLowSppLighting)) {
+    throw new Error('Rough splitting requires stable sampling, deferred resolve and strict physical lighting.');
+  }
+  roughSplitAdditionalBytes(tilePixelCapacity,maxDepth,roughBounceSplitting);
 
   return Object.freeze({
     mode: rendererWavefrontComputeMode,
@@ -630,6 +638,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     deferredPathResolve,
     strictPhysicalLowSppLighting,
     transportExperiments,
+    roughBounceSplitting,
     transportExperimentFlags: transportExperiments.bitmask,
     presentationOutput: resolveWavefrontPresentationOutput(options.presentationOutput),
     displayQuality: options.displayQuality === true,
@@ -637,6 +646,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     denoise: options.denoise !== false,
     frameIndex: readNonNegativeInteger("frameIndex", options.frameIndex, 0),
     memory: estimateWavefrontPathTracingMemory({
+      roughBounceSplitting,
       width,
       height,
       tileSize,
@@ -664,3 +674,4 @@ export function supportsWavefrontPathTracingCompute(options = {}) {
   const navigatorRef = options.navigator ?? globalThis.navigator;
   return typeof navigatorRef?.gpu?.requestAdapter === "function";
 }
+import {resolveRoughBounceSplitting,roughSplitAdditionalBytes} from './wavefront-rough-bounce-splitting.js';

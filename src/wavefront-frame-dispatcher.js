@@ -34,16 +34,7 @@ export function dispatchWavefrontFrame({
         configOffset,
         parallelism
       );
-      if (config.deferredPathResolve) {
-        frameEncoder.encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
-      }
-    }
-    if (!config.deferredPathResolve) {
-      const outputConfigOffset = writeFrameConfig(tile, {
-        sampleIndex: 0,
-        sampleWeight: 1 / renderedSamplesPerPixel,
-      });
-      frameEncoder.encodeTileOutput(batch.reserve(1), tile, outputConfigOffset, parallelism);
+      frameEncoder.encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
     }
   }
   if (config.denoise) {
@@ -74,7 +65,7 @@ export function dispatchWavefrontFrameAwaitingGpu({
   writeFrameConfigSlot,
   optionsForFrame = {},
 }) {
-  const samplePassesPerSample = config.maxDepth + 1 + (config.deferredPathResolve ? 1 : 0);
+  const samplePassesPerSample = config.maxDepth + 2;
   const denoisePassCount = config.denoise ? (renderedSamplesPerPixel < 4 ? 2 : 1) : 0;
   const tailPassCount = denoisePassCount + 1;
   const sampleBatchSize = Math.max(
@@ -137,17 +128,7 @@ export function dispatchWavefrontFrameAwaitingGpu({
           configOffset,
           parallelism
         );
-        if (config.deferredPathResolve) {
-          frameEncoder.encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
-        }
-      }
-      if (!config.deferredPathResolve && sampleRangeEnd >= renderedSamplesPerPixel) {
-        const outputConfigOffset = writeFrameConfigSlot(slot, tile, frameIndex, {
-          sampleIndex: 0,
-          sampleWeight: 1 / renderedSamplesPerPixel,
-        });
-        slot += 1;
-        frameEncoder.encodeTileOutput(batch.reserve(1), tile, outputConfigOffset, parallelism);
+        frameEncoder.encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
       }
       batch.flush();
       submissionCount += batch.getSubmissionCount();

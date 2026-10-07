@@ -396,13 +396,16 @@ fn surface_bsdf_sampling_weights(hit: HitRecord) -> vec3<f32> {
   let metallic = clamp(hit.material.y, 0.0, 1.0);
   let clearcoat = clamp(hit.materialResponse.w, 0.0, 1.0);
   let specularWeight = clamp(hit.materialExtension.y, 0.0, 1.0);
-  let diffuseWeight = clamp(
+  var diffuseWeight = clamp(
     (1.0 - metallic) * max(1.0 - specularWeight * 0.5 - clearcoat * 0.25, 0.15),
     0.0,
     1.0
   );
   let specWeight = clamp(max(metallic, specularWeight * 0.75) * (1.0 - clearcoat * 0.5), 0.0, 1.0);
   let clearcoatWeight = clamp(clearcoat, 0.0, 1.0);
+  // A cosine proposal covers the complete hemisphere for the added sheen,
+  // including metallic bases. Sampling and PDF evaluation share these weights.
+  if (sheen_enabled()) { diffuseWeight = max(diffuseWeight, clamp(max_component(hit.materialResponse.xyz), 0.0, 1.0)); }
   let totalWeight = max(diffuseWeight + specWeight + clearcoatWeight, 0.000001);
   return vec3<f32>(
     diffuseWeight / totalWeight,
@@ -413,7 +416,7 @@ fn surface_bsdf_sampling_weights(hit: HitRecord) -> vec3<f32> {
 
 fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirection: vec3<f32>) -> vec3<f32> {
   let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
-  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
+  let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let metallic = clamp(hit.material.y, 0.0, 1.0);
   let clearcoat = clamp(hit.materialResponse.w, 0.0, 1.0);
@@ -431,7 +434,8 @@ fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirectio
   let distribution = distribution_ggx(normal, halfVector, roughness);
   let geometry = geometry_smith(normal, viewDirection, lightDirection, roughness);
   let specular = (distribution * geometry * fresnel) / max(4.0 * nDotV * nDotL, 0.000001);
-  let diffuseWeight = (1.0 - metallic) * (1.0 - clearcoat * 0.24) * (1.0 - clamp(max_component(fresnel), 0.0, 0.98));
+  let layeredCoat = layered_clearcoat_active(hit);
+  let diffuseWeight = (1.0 - metallic) * select(1.0 - clearcoat * 0.24, 1.0, layeredCoat) * (1.0 - clamp(max_component(fresnel), 0.0, 0.98));
   let diffuse = surfaceColor * diffuseWeight / 3.14159265359;
   let clearcoatHalf = safe_normalize(viewDirection + lightDirection, normal);
   let clearcoatDistribution = distribution_ggx(normal, clearcoatHalf, max(clearcoatRoughness, 0.02));
@@ -441,7 +445,30 @@ fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirectio
     (clearcoatDistribution * clearcoatGeometry * clearcoatFresnel) /
     max(4.0 * nDotV * nDotL, 0.000001) *
     clearcoat;
-  return (diffuse + specular + clearcoatTerm) * mix(0.42, 1.0, occlusion);
+  var base = diffuse + specular;
+  if (sheen_enabled() && max_component(hit.materialResponse.xyz) > 0.0) {
+    let color = clamp(hit.materialResponse.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
+    let sheenRoughness = clamp(hit.specularColor.w, 0.0, 1.0);
+    let energy = max(sheen_directional_albedo(nDotV, sheenRoughness), sheen_directional_albedo(nDotL, sheenRoughness));
+    let scale = max(0.0, 1.0 - max_component(color) * energy);
+    // Clearcoat remains the top layer and attenuates the added sheen.
+    base = base * scale + color * charlie_sheen(nDotV, nDotL, saturate(dot(normal, halfVector)), sheenRoughness)
+      * select(1.0 - clearcoat * max_component(clearcoatFresnel), 1.0, layeredCoat);
+  }
+  if (layeredCoat) {
+    let coatNormal = surface_clearcoat_normal(hit);
+    let coatNv = saturate(dot(coatNormal, viewDirection));
+    let coatNl = saturate(dot(coatNormal, lightDirection));
+    let coatFresnel = coating_fresnel(clearcoat, coatNormal, viewDirection);
+    var coatTerm = vec3<f32>(0.0);
+    if (coatNv > 0.0 && coatNl > 0.0) {
+      coatTerm = vec3<f32>(coatFresnel * distribution_ggx(coatNormal, halfVector, max(clearcoatRoughness, 0.02)) *
+        geometry_smith(coatNormal, viewDirection, lightDirection, max(clearcoatRoughness, 0.02)) /
+        max(4.0 * coatNv * coatNl, 0.000001));
+    }
+    return (base * (1.0 - coatFresnel) + coatTerm) * mix(0.42, 1.0, occlusion);
+  }
+  return (base + clearcoatTerm) * mix(0.42, 1.0, occlusion);
 }
 
 fn diffuse_pdf(normal: vec3<f32>, lightDirection: vec3<f32>) -> f32 {
@@ -462,7 +489,7 @@ fn evaluate_surface_bsdf_pdf(hit: HitRecord, viewDirection: vec3<f32>, lightDire
   let weights = surface_bsdf_sampling_weights(hit);
   let diffuseTerm = diffuse_pdf(normal, lightDirection);
   let specTerm = ggx_pdf(normal, viewDirection, lightDirection, max(roughness, 0.02));
-  let clearcoatTerm = ggx_pdf(normal, viewDirection, lightDirection, max(clamp(hit.materialExtension.x, 0.0, 1.0), 0.02));
+  let clearcoatTerm = ggx_pdf(surface_clearcoat_normal(hit), viewDirection, lightDirection, max(clamp(hit.materialExtension.x, 0.0, 1.0), 0.02));
   return weights.x * diffuseTerm + weights.y * specTerm + weights.z * clearcoatTerm;
 }
 
@@ -677,7 +704,7 @@ fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f
     mix(0.88, 0.38, glossiness)
   );
   let reflectionEnvironment = prefiltered_environment_radiance(reflectionDirection, roughness);
-  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
+  let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let f0 = surface_specular_f0(hit, surfaceColor);
   let brdfTerm = sample_brdf_lut(saturate(dot(normal, viewDirection)), roughness);
   let specularEnvironment = reflectionEnvironment * (f0 * brdfTerm.x + vec3<f32>(brdfTerm.y));
@@ -706,7 +733,7 @@ fn terminal_surface_environment_contribution(
   throughput: vec3<f32>,
   hit: HitRecord
 ) -> vec3<f32> {
-  let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);
+  let surfaceColor = max(hit.color.xyz, vec3<f32>(0.0));
   let occlusion = mix(0.75, 1.0, clamp(hit.occlusion, 0.0, 1.0));
   return sanitize_linear_radiance(
     throughput *
@@ -871,7 +898,17 @@ fn sample_emissive_triangle_light(
   if (lightPdf <= 0.000001) {
     return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
   }
-  let radiance = max(lightTriangle.emission.xyz, lightTriangle.color.xyz);
+  var radiance = max(lightTriangle.emission.xyz, lightTriangle.color.xyz);
+  if (layered_clearcoat_enabled() && lightTriangle.materialResponse.w > 0.0) {
+    let facing = select(-1.0, 1.0, dot(lightNormal, -lightDirection) >= 0.0);
+    let authoredNormal = safe_normalize(lightTriangle.n0.xyz * b0 + lightTriangle.n1.xyz * b1 + lightTriangle.n2.xyz * b2, lightNormal) * facing;
+    let lightSurface = sample_surface_material(lightTriangle,
+      lightTriangle.uv0uv1.xy * b0 + lightTriangle.uv0uv1.zw * b1 + lightTriangle.uv2Pad.xy * b2,
+      vec3<f32>(b0, b1, b2), lightNormal * facing, authoredNormal);
+    let coatNormal = valid_surface_normal(lightNormal * facing, lightSurface.clearcoatNormal, -lightDirection);
+    radiance = max(lightSurface.emission.xyz, lightSurface.color.xyz) *
+      (1.0 - coating_fresnel(lightSurface.materialResponse.w, coatNormal, -lightDirection));
+  }
   if (max_component(radiance) <= 0.000001) {
     return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
   }

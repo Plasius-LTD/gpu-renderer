@@ -1,9 +1,6 @@
 import { GPU_READBACK_COMPLETION_TIMEOUT_MS } from "./wavefront-core.js";
 import { createBuffer } from "./wavefront-gpu-resources.js";
 
-const TIMESTAMP_QUERY_COUNT = 2;
-const TIMESTAMP_BUFFER_BYTES = TIMESTAMP_QUERY_COUNT * BigUint64Array.BYTES_PER_ELEMENT;
-
 function hasGpuFeature(features, name) {
   if (typeof features?.has === "function") {
     return features.has(name);
@@ -53,11 +50,11 @@ function safeErrorReason(error) {
     : "unknown-telemetry-readback-failure";
 }
 
-function timestampDurationMs(values) {
-  if (values.length < TIMESTAMP_QUERY_COUNT || values[1] < values[0]) {
+function timestampDurationMs(values, finalIndex) {
+  if (values.length <= finalIndex || values[finalIndex] < values[0]) {
     return null;
   }
-  const durationNanoseconds = values[1] - values[0];
+  const durationNanoseconds = values[finalIndex] - values[0];
   const durationMs = Number(durationNanoseconds) / 1_000_000;
   return Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : null;
 }
@@ -66,7 +63,11 @@ export function createWavefrontFrameTelemetryResources({
   device,
   constants,
   maxRayCountRecords,
+  // Internal diagnostic option. Default public-renderer descriptors stay unchanged.
+  timestampPassPairs = false,
 }) {
+  const timestampQueryCount = timestampPassPairs ? 4 : 2;
+  const timestampBufferBytes = timestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT;
   const rayRecordCapacity = Math.max(1, Math.trunc(Number(maxRayCountRecords) || 1));
   const rayBufferBytes = rayRecordCapacity * Uint32Array.BYTES_PER_ELEMENT;
   const mapMode = constants.map;
@@ -129,18 +130,18 @@ export function createWavefrontFrameTelemetryResources({
       timestampQuerySet = device.createQuerySet({
         label: "plasius.wavefront.timestamps",
         type: "timestamp",
-        count: TIMESTAMP_QUERY_COUNT,
+        count: timestampQueryCount,
       });
       timestampResolveBuffer = createBuffer(
         device,
         constants.buffer.QUERY_RESOLVE | constants.buffer.COPY_SRC,
-        TIMESTAMP_BUFFER_BYTES,
+        timestampBufferBytes,
         "plasius.wavefront.timestamps.resolve"
       );
       timestampReadbackBuffer = createBuffer(
         device,
         constants.buffer.COPY_DST | constants.buffer.MAP_READ,
-        TIMESTAMP_BUFFER_BYTES,
+        timestampBufferBytes,
         "plasius.wavefront.timestamps.readback"
       );
       timestampSetupReason = null;
@@ -171,7 +172,7 @@ export function createWavefrontFrameTelemetryResources({
 
   const memoryBytes =
     rayBufferBytes * 2 +
-    (timestampQuerySet ? TIMESTAMP_BUFFER_BYTES * 2 : 0);
+    (timestampQuerySet ? timestampBufferBytes * 2 : 0);
 
   function beginFrame() {
     active = true;
@@ -211,6 +212,7 @@ export function createWavefrontFrameTelemetryResources({
       timestampWrites: {
         querySet: timestampQuerySet,
         beginningOfPassWriteIndex: 0,
+        ...(timestampPassPairs ? { endOfPassWriteIndex: 1 } : {}),
       },
     };
   }
@@ -224,7 +226,8 @@ export function createWavefrontFrameTelemetryResources({
       ...descriptor,
       timestampWrites: {
         querySet: timestampQuerySet,
-        endOfPassWriteIndex: 1,
+        ...(timestampPassPairs ? { beginningOfPassWriteIndex: 2 } : {}),
+        endOfPassWriteIndex: timestampQueryCount - 1,
       },
     };
   }
@@ -269,7 +272,7 @@ export function createWavefrontFrameTelemetryResources({
       encoder.resolveQuerySet(
         timestampQuerySet,
         0,
-        TIMESTAMP_QUERY_COUNT,
+        timestampQueryCount,
         timestampResolveBuffer,
         0
       );
@@ -278,7 +281,7 @@ export function createWavefrontFrameTelemetryResources({
         0,
         timestampReadbackBuffer,
         0,
-        TIMESTAMP_BUFFER_BYTES
+        timestampBufferBytes
       );
     }
     device.queue.submit([encoder.finish()]);
@@ -341,11 +344,11 @@ export function createWavefrontFrameTelemetryResources({
           timestampReadbackMapped = true;
           const timestampCopy = timestampReadbackBuffer
             .getMappedRange()
-            .slice(0, TIMESTAMP_BUFFER_BYTES);
+            .slice(0, timestampBufferBytes);
           const timestamps = new BigUint64Array(timestampCopy);
           timestampReadbackBuffer.unmap();
           timestampReadbackMapped = false;
-          totalGpuTimeMs = timestampDurationMs(timestamps);
+          totalGpuTimeMs = timestampDurationMs(timestamps, timestampQueryCount - 1);
           timestampQueryStatus = totalGpuTimeMs === null ? "failed" : "available";
           timestampReason =
             totalGpuTimeMs === null ? "timestamp-query-returned-invalid-range" : null;

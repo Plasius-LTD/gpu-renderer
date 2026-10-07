@@ -109,9 +109,9 @@ fn prepareMeshTrianglesAndLeaves(@builtin(global_invocation_id) globalId: vec3<u
   let n0 = select(faceNormal, safe_normalize(vertex0.normal.xyz, faceNormal), vertex0.normal.w > 0.5);
   let n1 = select(faceNormal, safe_normalize(vertex1.normal.xyz, faceNormal), vertex1.normal.w > 0.5);
   let n2 = select(faceNormal, safe_normalize(vertex2.normal.xyz, faceNormal), vertex2.normal.w > 0.5);
-  let uv0 = select(vec2<f32>(0.0), vertex0.uv.xy, vertex0.uv.z > 0.5);
-  let uv1 = select(vec2<f32>(0.0), vertex1.uv.xy, vertex1.uv.z > 0.5);
-  let uv2 = select(vec2<f32>(0.0), vertex2.uv.xy, vertex2.uv.z > 0.5);
+  let uv0 = vertex0.uv.xy;
+  let uv1 = vertex1.uv.xy;
+  let uv2 = vertex2.uv.xy;
 
   var preparedTriangle = TriangleRecord();
   preparedTriangle.triangleId = triangleIndex;
@@ -121,12 +121,12 @@ fn prepareMeshTrianglesAndLeaves(@builtin(global_invocation_id) globalId: vec3<u
   preparedTriangle.materialRefId = mesh.materialRefId;
   preparedTriangle.mediumRefId = mesh.mediumRefId;
   preparedTriangle.materialSlot = mesh.materialSlot;
-  preparedTriangle.v0 = vec4<f32>(vertex0.position.xyz, 0.0);
-  preparedTriangle.v1 = vec4<f32>(vertex1.position.xyz, 0.0);
-  preparedTriangle.v2 = vec4<f32>(vertex2.position.xyz, 0.0);
-  preparedTriangle.n0 = vec4<f32>(n0, 0.0);
-  preparedTriangle.n1 = vec4<f32>(n1, 0.0);
-  preparedTriangle.n2 = vec4<f32>(n2, 0.0);
+  preparedTriangle.v0 = vec4<f32>(vertex0.position.xyz, vertex0.uv.z);
+  preparedTriangle.v1 = vec4<f32>(vertex1.position.xyz, vertex1.uv.z);
+  preparedTriangle.v2 = vec4<f32>(vertex2.position.xyz, vertex2.uv.z);
+  preparedTriangle.n0 = vec4<f32>(n0, vertex0.uv.w);
+  preparedTriangle.n1 = vec4<f32>(n1, vertex1.uv.w);
+  preparedTriangle.n2 = vec4<f32>(n2, vertex2.uv.w);
   preparedTriangle.uv0uv1 = vec4<f32>(uv0, uv1);
   preparedTriangle.uv2Pad = vec4<f32>(uv2, 0.0, 0.0);
   preparedTriangle.color = mesh.color;
@@ -280,11 +280,11 @@ fn make_miss(ray: RayRecord) -> HitRecord {
     0u,
     0u,
     0u,
-    0u,
-    0u,
+    vec2<f32>(0.0),
     -1.0,
     1.0,
-    vec2<f32>(0.0),
+    0.0,
+    0.0,
     vec4<f32>(ray.origin.xyz + ray.direction.xyz * 1000.0, 1.0),
     vec4<f32>(-ray.direction.xyz, 0.0),
     vec4<f32>(-ray.direction.xyz, 0.0),
@@ -409,6 +409,18 @@ fn repair_shading_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>) -
   return normal;
 }
 
+fn valid_surface_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>, view: vec3<f32>) -> vec3<f32> {
+  let normal = repair_shading_normal(geometricNormal, shadingNormal);
+  let reflected = 2.0 * dot(normal, view) * normal - view;
+  let height = dot(reflected, geometricNormal);
+  let threshold = min(0.01, 0.9 * max(0.0, dot(view, geometricNormal)));
+  if (height >= threshold && dot(normal, view) > 0.0) { return normal; }
+  // Project the invalid reflection above geometry, then use its view bisector.
+  // Store this once; evaluation, sampling and PDFs must share the same normal.
+  let safeReflection = safe_normalize(reflected + (threshold - height) * geometricNormal, geometricNormal);
+  return safe_normalize(view + safeReflection, geometricNormal);
+}
+
 fn no_candidate() -> Candidate {
   return Candidate(
     0u,
@@ -458,6 +470,12 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
   let pvec = cross(ray.direction.xyz, edge2);
   let det = dot(edge1, pvec);
   if (abs(det) < 0.0000001) {
+    return no_candidate();
+  }
+  let mediumExit = triangle.mediumRefId != 0u &&
+    triangle.mediumRefId == medium_stack_current_id(ray) &&
+    (triangle.materialExtension.z > 0.001 || triangle.material.z < 0.999);
+  if (det < 0.0 && (triangle.flags & 0x40000000u) == 0u && !mediumExit) {
     return no_candidate();
   }
 
