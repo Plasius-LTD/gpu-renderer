@@ -9,6 +9,7 @@ import {CLOTH_RESPONSE_DEFAULTS} from './cloth-response-settings.js';
 import {auditMaterialMaps} from './material-map-inventory.js';
 import {ROOM_LIGHTING_DEFAULTS,withRoomLighting} from './room-lighting-settings.js';
 import {ROOM_COAT_DEFAULTS,withRoomWoodCoat} from './room-clearcoat-settings.js';
+import {GLASS_WATER_DEFAULTS,glassWaterSettings,withRoomGlass} from '/lighting/demo/eames-environments/glass-water-reference.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
@@ -20,6 +21,10 @@ resetLighting();
 function resetCoat(){el('clearcoat').value='off';el('wood-coat').value='off';el('coat-weight').value=ROOM_COAT_DEFAULTS.weight;el('coat-roughness').value=ROOM_COAT_DEFAULTS.roughness;}
 function coatSelection(){return {enabled:el('wood-coat').value==='on',weight:el('coat-weight').valueAsNumber,roughness:el('coat-roughness').valueAsNumber};}
 resetCoat();
+const glassFields={'glass-fill':'fill','glass-x':'x','glass-z':'z','glass-radius':'radius','glass-height':'height','glass-ior':'glassIor','water-ior':'waterIor'};
+function resetGlass(){el('glass-mode').value=GLASS_WATER_DEFAULTS.mode;for(const [id,key] of Object.entries(glassFields))el(id).value=GLASS_WATER_DEFAULTS[key];}
+function glassSelection(){const closeup=el('inspection-camera').value==='glass';return glassWaterSettings({mode:el('glass-mode').value,...Object.fromEntries(Object.entries(glassFields).map(([id,key])=>[key,el(id).valueAsNumber])),closeup,...(closeup?{distance:el('inspection-distance').valueAsNumber,elevation:el('inspection-elevation').valueAsNumber}:{})});}
+resetGlass();
 el('central-reference').value=ROOM_DEFAULTS.centralReference;
 el('spp').min='1';el('spp').max=String(RADIAL_MAXIMUM_SPP);el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
 function resetInspection(){el('inspection-camera').value='room';el('sample-distribution').value='radial';el('material-inspection').value='off';
@@ -44,6 +49,7 @@ for(const control of controls){
  control.addEventListener("input",clearCapture);
 }
 reset.addEventListener("click",()=>{
+ resetGlass();
  resetCoat();
  resetLighting();
  resetInspection();
@@ -98,6 +104,7 @@ run.addEventListener("click",async()=>{
  const guidedDenoise=el('denoise').value==='guided';
  const sheen=el('sheen').value==='on';
  const layeredClearcoat=el('clearcoat').value==='on',woodCoat=coatSelection();
+ let glass;try{glass=glassSelection();}catch(error){status.textContent=error.message;return;}
  if(woodCoat.enabled&&!layeredClearcoat){status.textContent='Enable the layered clearcoat renderer before adding the wood varnish variant.';return;}
  const distribution=el('sample-distribution').value,materialInspection=el('material-inspection').value==='on';
  const closeup=closeupControls();
@@ -110,7 +117,7 @@ run.addEventListener("click",async()=>{
   browser:{userAgent:navigator.userAgent,platform:navigator.platform},failures:[],qualification:"visual-reference-only-not-performance-or-convergence"};
  receipt.materialFlags={'renderer.materials.sheen.enabled':sheen,'renderer.materials.layeredClearcoat.enabled':layeredClearcoat};
  receipt.inspection={closeup,distribution,materialViews:materialInspection};
- const lightingIdentity=lightingSelection().style+(layeredClearcoat?'-layered-coat':'')+(woodCoat.enabled?`-varnish${woodCoat.weight}-rough${woodCoat.roughness}`:'');
+ const lightingIdentity=lightingSelection().style+(layeredClearcoat?'-layered-coat':'')+(woodCoat.enabled?`-varnish${woodCoat.weight}-rough${woodCoat.roughness}`:'')+(glass.mode==='off'?'':'-glass-'+glass.mode+'-fill'+glass.fill+(glass.closeup?'-glass-closeup':''));
  const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}${closeup.enabled?'-closeup':''}${distribution==='uniform'?'-uniform':''}-${lightingIdentity}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
  const save=async(name,dataUrl,payload)=>{
   const response=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},signal:AbortSignal.timeout(30000),
@@ -120,6 +127,11 @@ run.addEventListener("click",async()=>{
  try{
   status.textContent="Loading original room and Eames assets";
   const response=await fetch("/__provenance",{signal:AbortSignal.timeout(10000)});check(response.ok,"Missing provenance");receipt.provenance=await response.json();
+  const source=withRoomWoodCoat(await loadAssets(receipt,cancellation.signal),receipt,woodCoat);
+  let composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});
+  composed=withRoomGlass(composed,glass);receipt.scene=composed.evidence;
+  composed.scene.camera=clothCloseupCamera(composed.scene,composed.evidence,closeup);receipt.scene.camera={...composed.scene.camera};
+  check(!cancellation.signal.aborted,"Capture cancelled");
   if(guidedDenoise){status.textContent='Checking denoiser against analytic HDR/edge/noise probes';const {runGuidedDenoiseProbe}=await import('./guided-denoise-probe.js');receipt.denoiseProbe=await runGuidedDenoiseProbe(cancellation.signal);}
   if(materialInspection){const {runClothInspectionProbe}=await import('./cloth-inspection-probe.js');receipt.inspection.probe=await runClothInspectionProbe(cancellation.signal);}
   status.textContent='Checking UV0/UV1 texture sampling and CPU/GPU geometry parity';
@@ -128,8 +140,6 @@ run.addEventListener("click",async()=>{
   const {runSurfaceValidityProbe}=await import('./surface-validity-probe.js');receipt.surfaceProbe=await runSurfaceValidityProbe(cancellation.signal);
   status.textContent='Checking transformed textures, sheen and mapped-normal cloth detail';
   const {runMaterialFidelityProbe}=await import('./material-fidelity-probe.js');receipt.materialProbe=await runMaterialFidelityProbe(cancellation.signal);
-  const source=withRoomWoodCoat(await loadAssets(receipt,cancellation.signal),receipt,woodCoat),composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});receipt.scene=composed.evidence;
-  composed.scene.camera=clothCloseupCamera(composed.scene,composed.evidence,closeup);receipt.scene.camera={...composed.scene.camera};
   check(!cancellation.signal.aborted,"Capture cancelled");
   const plan=selectInspectionPlan(distribution,createRadialSamplingPlan(settings.width,settings.height,settings.maximumSpp),settings.maximumSpp);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
@@ -183,7 +193,7 @@ run.addEventListener("click",async()=>{
   }
   runner.destroy();runner=null;receipt.cleanupPassed=true;receipt.status="captured-reference-not-qualified";
   await save(stem+(guidedDenoise?'-guided':''),snapshot,receipt);
-  preview.alt=`${closeup.enabled?'Sofa cloth close-up':'Eames room view'} inside ${source.roomAsset.name}, ${settings.width} by ${settings.height}, ${distribution}, ${settings.sampler}`;preview.src=snapshot;preview.hidden=false;
+  preview.alt=`${glass.closeup?'Glass and water close-up':closeup.enabled?'Sofa cloth close-up':'Eames room view'} inside ${source.roomAsset.name}, ${settings.width} by ${settings.height}, ${distribution}, ${settings.sampler}`;preview.src=snapshot;preview.hidden=false;
   download.download=stem+".png";download.href=snapshot;download.hidden=false;
   if(guidedDenoise){el('comparison').hidden=false;showComparison(true);}
  }catch(error){
@@ -194,7 +204,7 @@ run.addEventListener("click",async()=>{
   cancellation.abort();run.disabled=false;reset.disabled=false;controls.forEach(c=>c.disabled=false);cancel.disabled=true;
   status.textContent=receipt.status==="failed"?`Failed: ${receipt.failures.join("; ")}`:`Captured room + Eames · ${settings.width} × ${settings.height} · ${settings.maximumSpp} SPP ceiling · ${receipt.frame.actualSamples.toLocaleString()} camera samples · ${guidedDenoise?'guided denoise comparison':'raw'} · not quality-qualified`;
   result.textContent=JSON.stringify({status:receipt.status,settings,splitDepth,scene:receipt.scene,admission:receipt.admission,actualSamples:receipt.frame?.actualSamples,
-   inspection:receipt.inspection,materialFlags:receipt.materialFlags,materialProbe:receipt.materialProbe,guidedDenoise:receipt.guidedDenoise,denoiseProbe:receipt.denoiseProbe,uvProbe:receipt.uvProbe,surfaceProbe:receipt.surfaceProbe,linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
+   glassWater:receipt.scene?.glassWater,inspection:receipt.inspection,materialFlags:receipt.materialFlags,materialProbe:receipt.materialProbe,guidedDenoise:receipt.guidedDenoise,denoiseProbe:receipt.denoiseProbe,uvProbe:receipt.uvProbe,surfaceProbe:receipt.surfaceProbe,linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
  }
 });
 

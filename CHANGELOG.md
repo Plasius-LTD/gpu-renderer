@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add local off/empty/filled tumbler controls and glass close-up framing, reusing
+  the lighting reference geometry. Retain dimensions, fill, IOR, overlap and
+  geometry in receipts; display the known air-relative refraction limitation.
+  This is a diagnostic scene, not qualified nested-water transport (#233).
+
 - Add independently flagged layered clearcoat with separate normal/scale,
   corrected texture channels, full-base Fresnel attenuation and matching sampling
   and PDF. Reuse existing hit-record padding and metadata allocation. Add explicit

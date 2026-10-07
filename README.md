@@ -87,6 +87,18 @@ and transmissive cases are not qualified. No photo-equivalence or speedup claim.
 See the [physical checks and room capture evidence](docs/evidence/layered-clearcoat-2026-10-07.md)
 for retained source/image hashes, unchanged allocations and measurement limits.
 
+Glass/water diagnostic (#233): in the local room choose **Glass of water reference
+→ Empty tumbler / Tumbler with water**. Fill fraction, dimensions, placement and
+both refractive indices are adjustable. **Camera framing → Glass and water
+close-up** uses the existing distance/elevation and FOV controls. A neutral
+pedestal is added explicitly; no room or seating assets are rewritten. Reset/off
+restores the original scene. Other diagnostic buttons do not apply this object.
+The geometry comes from `gpu-lighting/demo/eames-environments/glass-water-reference.js`.
+Its small recorded contact overlap is not an air gap. The current renderer's
+refraction still assumes air on one side: glass/water contact, rough transmission,
+caustics and long-path convergence are **not qualified**. Six bounces may cut off
+longer paths. This addition changes no runtime shader or production flag.
+
 Choose **Centre reference → Sofa — upholstery inspection** in the local room
 page to exchange sofa/spacesuit floor positions while keeping their rotations,
 materials, 1.5 m seating scale and camera unchanged. Reset restores the previous
