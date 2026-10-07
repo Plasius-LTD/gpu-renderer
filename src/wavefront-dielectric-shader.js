@@ -26,12 +26,17 @@ fn occupied_medium(stack: vec4<u32>) -> u32 {
 fn medium_stack_contains(ray: RayRecord, id: u32) -> bool {
   return id != 0u && any(ray.mediumStack == vec4<u32>(id));
 }
-fn medium_transition_invalid(ray: RayRecord, hit: HitRecord) -> bool {
-  if (!nested_media_enabled() || !dielectric_event(hit) || hit.mediumRefId == 0u) { return false; }
+fn medium_transition_failure(ray: RayRecord, hit: HitRecord) -> u32 {
+  if (!nested_media_enabled() || !dielectric_event(hit) || hit.mediumRefId == 0u) { return 0u; }
   let present = medium_stack_contains(ray, hit.mediumRefId);
-  return !medium_valid(hit.mediumRefId) ||
-    (hit.frontFace == 1u && (present || ray.mediumStackDepth >= MAX_MEDIUM_STACK_DEPTH)) ||
-    (hit.frontFace == 0u && !present);
+  if (!medium_valid(hit.mediumRefId)) { return 1u; }
+  if (hit.frontFace == 1u && present) { return 2u; }
+  if (hit.frontFace == 1u && ray.mediumStackDepth >= MAX_MEDIUM_STACK_DEPTH) { return 3u; }
+  if (hit.frontFace == 0u && !present) { return 4u; }
+  return 0u;
+}
+fn medium_transition_invalid(ray: RayRecord, hit: HitRecord) -> bool {
+  return medium_transition_failure(ray, hit) != 0u;
 }
 fn dielectric_ratio(ray: RayRecord, hit: HitRecord) -> f32 {
   if (nested_media_enabled() && medium_valid(hit.mediumRefId)) {

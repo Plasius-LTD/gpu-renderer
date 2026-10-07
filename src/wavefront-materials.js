@@ -281,7 +281,7 @@ export function collectWavefrontMediums(options, meshes, sceneObjects = []) {
   }
   for (const mesh of meshes) {
     if ((mesh.mediumRefId ?? 0) > 0 && !mediumsById.has(mesh.mediumRefId)) {
-      register({ id: mesh.mediumRefId });
+      register({ id: mesh.mediumRefId, ior: mesh.ior });
     }
   }
   for (const object of sceneObjects) {
@@ -289,7 +289,7 @@ export function collectWavefrontMediums(options, meshes, sceneObjects = []) {
   }
   for (const object of sceneObjects) {
     if ((object.mediumRefId ?? 0) > 0 && !mediumsById.has(object.mediumRefId)) {
-      register({ id: object.mediumRefId });
+      register({ id: object.mediumRefId, ior: object.ior });
     }
   }
 

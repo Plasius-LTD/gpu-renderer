@@ -7,7 +7,7 @@ import { createWavefrontCpuProfile } from "/src/wavefront-cpu-profile.js";
 import { packSharedPhase,encodeSharedPhase,encodeSharedSample } from "/src/wavefront-adaptive-shared.js";
 import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 import { readWavefrontTerminationMetrics } from '/src/wavefront-readbacks.js';
-import { retainNativeFailure } from './native-failure-evidence.js';
+import { retainNativeFailure,failedPathNodes } from './native-failure-evidence.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 export async function createNativeAdaptiveRunner(c) {
@@ -129,6 +129,7 @@ export async function createNativeAdaptiveRunner(c) {
           throw await retainNativeFailure(error,trace,async()=>({
             termination:await readWavefrontTerminationMetrics({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},counterBuffer:counters,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}),
             adaptiveControlWords:Array.from(new Uint32Array(await read(b.primaryControl,16))),
+            failedNodes:failedPathNodes(await read(traceEntries.find(e=>e.binding===22).resource.buffer,renderer.config.memory.pathVertexBytes)),
           }));
         }
       }

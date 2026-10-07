@@ -22,6 +22,8 @@ test('medium optical metadata is validated, inherited and independently updateab
  const mesh={positions:[0,0,0,1,0,0,0,1,0],indices:[0,1,2],ior:1.5,mediumRefId:1,medium:{id:1,priority:2}};
  const config=createWavefrontPathTracingComputeConfig({meshes:[mesh]});
  assert.equal(config.mediums[1].ior,1.5);assert.equal(config.mediums[1].priority,2);
+ const referenced=createWavefrontPathTracingComputeConfig({meshes:[{...mesh,medium:undefined,ior:1.333}]});
+ assert.equal(referenced.mediums[1].ior,1.333);
  assert.equal(mediumTablesEqual(config.mediums,config.mediums.map(m=>({...m,ior:1.333}))),false);
  assert.equal(mediumTablesEqual(config.mediums,config.mediums.map(m=>({...m,priority:3}))),false);
  for(const medium of [{ior:0},{ior:Infinity},{priority:-1},{priority:1.5},{priority:2049}]){
