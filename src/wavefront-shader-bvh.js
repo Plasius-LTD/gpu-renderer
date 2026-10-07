@@ -476,7 +476,8 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
   let mediumExit = triangle.mediumRefId != 0u &&
     (triangle.mediumRefId == medium_stack_current_id(ray) ||
       (nested_media_enabled() && medium_stack_contains(ray, triangle.mediumRefId))) &&
-    (triangle.materialExtension.z > 0.001 || triangle.material.z < 0.999);
+    (triangle.materialExtension.z > 0.001 || triangle.material.z < 0.999 ||
+      (nested_media_enabled() && (triangle.materialKind == 2u || triangle.materialKind == 3u)));
   if (det < 0.0 && (triangle.flags & 0x40000000u) == 0u && !mediumExit) {
     return no_candidate();
   }
