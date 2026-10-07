@@ -96,10 +96,10 @@ fn scatter_dielectric(ray: RayRecord, hit: HitRecord) -> ScatterResult {
     select(1.0, 1.0 - transmissionReflectChance, bounded_dielectric_enabled()),
     transmitted_medium_ref_id(ray, hit), RAY_FLAG_DELTA_SAMPLE, SCATTER_LOBE_DELTA_TRANSMISSION);
 }
-// In optical mode a 1 mm t-min would erase the authored 0.2 mm overlap.
-// This is a local-scale numerical policy, not arbitrary-precision geometry.
+// Optical origins are offset from their source face. A positive t-min can
+// erase a distinct adjacent rim exit even when the authored wall is thick.
 fn transport_ray_minimum() -> f32 {
-  return select(0.001, 0.0000001, nested_media_enabled());
+  return select(0.001, 0.0, nested_media_enabled());
 }
 fn optical_offset(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
   let scale = max(max(abs(position.x), abs(position.y)), abs(position.z));

@@ -30,10 +30,13 @@ media, dropping rays or accepting black. The camera starts in air. Untracked
 surfaces retain their prior thin-surface convention. The staged and fused paths
 share the same material intersection and nested-boundary helper.
 
-Nested mode uses a position-aware geometric-normal offset (minimum 1 micrometre,
-four f32 ULPs at the position scale) and 0.1 micrometre traversal minimum. This
-supports the reference's 0.2 mm overlap at room coordinates; it is not a universal
-precision guarantee. Bounds below numerical resolution remain unsupported.
+Nested mode reconstructs mesh hits from barycentric coordinates and clamps
+rounding overshoot to the triangle bounds. It uses a position-aware geometric
+offset (minimum 1 micrometre, position scale times four f32 epsilons), without
+a positive traversal cutoff: a distinct inner-rim exit may be closer than even
+0.1 micrometre. Only non-positive intersections are rejected. This is not a
+universal precision guarantee; bounds below numerical resolution remain
+unsupported. The disabled path keeps its original positions and cutoff.
 
 ## Consequences and validation
 
