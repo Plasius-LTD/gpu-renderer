@@ -60,6 +60,7 @@ test('nested traversal protects occupancy and sample identity without consuming 
  assert.match(nested,/crossing < 32u/);assert.match(nested,/hit.hitType = 5u/);
  assert.doesNotMatch(nested,/ray\.(bounce|sampleId|sourcePixelId|parentRayId)\s*=/);
  assert.match(nested,/medium_transmittance/);
+ assert.match(nested,/recoverable_optical_entry\(ray, hit\)/);
 });
 test('room transport controls reset off and forward independent flag receipts and GPU preflight',()=>{
  const read=f=>readFileSync(new URL('./fixtures/'+f,import.meta.url),'utf8');

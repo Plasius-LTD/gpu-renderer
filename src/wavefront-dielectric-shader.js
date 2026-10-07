@@ -101,9 +101,20 @@ fn scatter_dielectric(ray: RayRecord, hit: HitRecord) -> ScatterResult {
 fn transport_ray_minimum() -> f32 {
   return select(0.001, 0.0, nested_media_enabled());
 }
-fn optical_offset(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+fn optical_origin_epsilon(position: vec3<f32>) -> f32 {
   let scale = max(max(abs(position.x), abs(position.y)), abs(position.z));
-  let epsilon = max(0.000001, scale * 0.00000047683716);
+  return max(0.000001, scale * 0.00000047683716);
+}
+fn recoverable_optical_entry(ray: RayRecord, hit: HitRecord) -> bool {
+  // A rounded cap hit can lie just beyond the adjoining wall. The already
+  // occupied volume proves this is not a new optical interface. Never repair
+  // distant duplicate entries, unmatched exits or camera-inside initialization.
+  return nested_media_enabled() && ray.bounce > 0u &&
+    medium_transition_failure(ray, hit) == 2u && hit.distance > 0.0 &&
+    hit.distance <= optical_origin_epsilon(ray.origin.xyz);
+}
+fn optical_offset(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
+  let epsilon = optical_origin_epsilon(position);
   return position + normal * select(-epsilon, epsilon, dot(normal, direction) >= 0.0);
 }
 fn optical_triangle_position(triangle: TriangleRecord, barycentric: vec3<f32>) -> vec3<f32> {

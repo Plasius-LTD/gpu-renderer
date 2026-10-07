@@ -460,6 +460,13 @@ fn intersect_nested_ray(input: RayRecord) -> NestedIntersection {
     if (hit.hitType == 2u || !dielectric_event(hit) || !medium_valid(hit.mediumRefId)) {
       return NestedIntersection(ray, hit);
     }
+    if (recoverable_optical_entry(ray, hit)) {
+      // Retry a numerically repeated adjacent entry without changing occupancy
+      // or drawing another BSDF event. The shared crossing bound still applies.
+      ray.throughput = vec4<f32>(ray.throughput.xyz * medium_transmittance(medium_stack_current_id(ray), hit.distance), ray.throughput.w);
+      ray.origin = vec4<f32>(optical_offset(hit.position.xyz, hit.geometricNormal.xyz, ray.direction.xyz), 1.0);
+      continue;
+    }
     if (medium_transition_invalid(ray, hit)) { hit.pad2 = f32(medium_transition_failure(ray, hit)); hit.hitType = 5u; return NestedIntersection(ray, hit); }
     if (medium_stack_current_id(ray) != transmitted_medium_ref_id(ray, hit)) {
       return NestedIntersection(ray, hit);
