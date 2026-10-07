@@ -38,6 +38,14 @@ a positive traversal cutoff: a distinct inner-rim exit may be closer than even
 universal precision guarantee; bounds below numerical resolution remain
 unsupported. The disabled path keeps its original positions and cutoff.
 
+An immediate repeated entry at an adjacent corner is retried only on secondary
+rays within that origin-error envelope, into an already occupied volume. It
+does not change occupancy, sample identity or draw another scattering event;
+Beer attenuation for the short traversed segment is retained. It consumes the
+same 32-crossing safety budget. More distant duplicate entries and every
+unmatched exit still reject. This explicitly bounded finite-precision rule is
+not permission for overlapping copies of the same medium or invalid geometry.
+
 ## Consequences and validation
 
 One branch introduces sampling variance in exchange for bounded work. Null

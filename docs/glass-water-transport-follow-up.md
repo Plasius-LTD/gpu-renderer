@@ -127,6 +127,40 @@ metadata only. The existing white paper must not claim glass/water qualification
 
 ## Current QA inventory
 
+### Retained numerical regressions during implementation
+
+The first combined one-SPP 1080p filled close-up completed at renderer
+`0cf5d65b379942981a4114a70eab7a9ca498bf89`, lighting
+`94c43f78c1f340bdb01a2dc01cf17e2485ec99fb`. All 2,073,600 camera samples completed,
+with no validation error. This was fault isolation, not a quality baseline.
+
+Higher-SPP empty-glass captures then exposed two distinct rim failures:
+
+- Renderer `ae92a55e1f5792f23a44e3e368be8c9e72ba7f57`, pixel 692199,
+  ordinal 14, bounce 1: the new ray origin lay approximately 0.3 micrometres
+  above the top face after an outer-wall hit. Reconstructing the optical hit
+  from the triangle's barycentrics removes ray-distance cancellation at the rim.
+  Rejected receipt SHA-256:
+  `56f4c9fc17556100e02f6f97fffda6d16ba6dd9dd065b8a319c23c565947485c`.
+- Renderer `a6bb07432dc4a2e12051c5a82b31c84b60f2f0b6`, pixel 1734496,
+  ordinal 29, bounce 3: an immediately adjacent inner-wall exit was closer
+  than the positive 0.1 micrometre traversal cutoff. A dedicated assembled
+  GPU test of a 0.06 micrometre triangle hit failed before the correction.
+  Nested mode now accepts every positive intersection distance; it still
+  offsets origins from their source face and validates occupancy.
+  Rejected receipt SHA-256:
+  `afc8b85e92ae78dc80a2f1c277989ff509a3723245f850cd08d5012766399ffb`.
+
+Both failures retained a duplicate-entry reason, with no queue overflow in
+the final counter snapshot. Later skipped samples reset ordinary counters,
+so that snapshot alone is not an all-samples overflow measurement. The sticky
+completed-sample failure still rejects the entire capture. Failure-only GPU
+gathering retains up to 32 records using 3,592 bytes of temporary storage plus
+staging, destroyed on success or error; ordinary rendering allocates none.
+Numerical context: [PBRT's rounding-error treatment](https://pbr-book.org/4ed/Shapes/Managing_Rounding_Error).
+
+### Remaining acceptance lanes
+
 Before signoff, exercise each new flag off/on/reset, individual and combined;
 empty/filled and room/close-up; completed counts/queue integrity; the analytic
 GPU probe's IOR/Fresnel/TIR/estimator/occupancy checks. Inspect initial controls,

@@ -1,8 +1,10 @@
 # @plasius/gpu-renderer
 
-The new local glass/water diagnostic currently fails the complete-sample gate on
-both empty and filled tumblers: physical tests confirmed continuation queue
-overflow. It is not a working/qualified glass renderer yet. See the
+The local glass/water diagnostic has two independent default-off transport
+experiments: bounded dielectric branching and nested-media refraction. The
+legacy split control still overflows; the combined corrected empty-glass capture
+now completes at 1080p/uniform 32 SPP. Full image/performance qualification remains
+open. See the
 [retained evidence and transport follow-up](docs/glass-water-transport-follow-up.md).
 
 Material colour no longer inherits a brightness floor from ambient illumination
@@ -99,10 +101,12 @@ close-up** uses the existing distance/elevation and FOV controls. A neutral
 pedestal is added explicitly; no room or seating assets are rewritten. Reset/off
 restores the original scene. Other diagnostic buttons do not apply this object.
 The geometry comes from `gpu-lighting/demo/eames-environments/glass-water-reference.js`.
-Its small recorded contact overlap is not an air gap. The current renderer's
-refraction still assumes air on one side: glass/water contact, rough transmission,
-caustics and long-path convergence are **not qualified**. Six bounces may cut off
-longer paths. This addition changes no runtime shader or production flag.
+Its small recorded contact overlap is not an air gap. Enable **Bounded glass
+branching** and **Nested glass / water refraction** to test actual incident and
+outgoing media; the disabled refraction control still assumes air on one side.
+Image quality, rough transmission, caustics and long-path convergence remain
+**not qualified**. **Maximum bounces** is configurable from one to eight, default
+six; a finite limit may cut off longer paths. Both transport flags default off.
 
 Choose **Centre reference → Sofa — upholstery inspection** in the local room
 page to exchange sofa/spacesuit floor positions while keeping their rotations,

@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
 - Add independent default-off bounded dielectric sampling and actual-media
   refraction flags, optical medium metadata, guarded overlap traversal, and
   glass/water diagnostic controls with analytic GPU qualification probes (#234).
+- Reconstruct nested optical mesh hits on the triangle and retain immediately
+  adjacent positive-distance exits; add bounded failure-ray evidence and a
+  configurable room bounce limit for rim/long-path regression capture (#234).
 
 - Retain failing native diagnostic tile, ray telemetry and final-sample termination
   counters without accepting incomplete captures; readback failures preserve the
