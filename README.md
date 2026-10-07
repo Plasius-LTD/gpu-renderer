@@ -779,4 +779,19 @@ The coating reflects neutral light using its own smooth geometric normal above
 the coloured, normal-mapped wood; Fresnel layering attenuates the underlying
 material instead of simply adding shine. Strength defaults to zero, preserving
 uncoated callers. Coating roughness defaults to zero and is independent of the
-base roughness map. This slice does not implement clearcoat texture/normal maps.
+base roughness map. Optional `clearcoatMap` uses linear RGBA8: red multiplies
+`clearcoat` coverage and green multiplies `clearcoatRoughness`; blue and alpha
+are ignored. Omission uses white, preserving the scalar-only finish. Use a
+nonzero roughness factor (for example 1) to author roughness directly in green.
+The map shares the surface UVs, mip filtering, memory budget and GPU lifetime of
+other maps. Clearcoat normal maps remain unsupported.
+
+For mixed objects, give uncoated parts their own surface ranges with
+`clearcoat: 0`. This keeps rope and hardware uncoated even when they share the
+wood's atlas. The source example [native-crate-finish.js](demo/native-crate-finish.js)
+provides reviewed crate ranges and a deterministic wear preset combining existing
+roughness/scuff detail with broad UV patches. Its 0–1 wear control changes coat
+coverage and roughness without modifying the underlying colour or source asset.
+See [spatial coating decision](docs/adrs/adr-0032-spatial-native-clearcoat.md) and
+the [fixture/provenance record](docs/design/cc0-demo-asset-review.md). The example
+helper is source-only; the published API is the generic material map.

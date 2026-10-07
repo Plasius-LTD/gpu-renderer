@@ -1600,6 +1600,8 @@ export interface NativeSurfaceMaterial {
   clearcoat?: number;
   /** Coating roughness, 0–1; independent of the base map; defaults to 0. */
   clearcoatRoughness?: number;
+  /** Linear RGBA8: R multiplies clearcoat, G multiplies clearcoatRoughness; B/A ignored. White when omitted. */
+  clearcoatMap?: NativeSurfaceImage;
 }
 /** Interleaved world-space triangles: position, normal, linear colour, roughness/metalness/detail. */
 export interface NativeSceneFrame {

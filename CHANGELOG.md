@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Support spatial clearcoat coverage and roughness maps; keep the crate fixture's rope and hardware uncoated and vary its wood varnish with a deterministic wear preset (#230).
+
 - Separate optional neutral varnish/clearcoat reflection from the coloured native surface, with independent roughness and Fresnel attenuation (#230).
 
 - Add bounded, mip-filtered authored colour, normal and ORM materials to native surfaces, with optional UVs and draw ranges shared by the main and reflection passes (#230).

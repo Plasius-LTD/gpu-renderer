@@ -63,8 +63,26 @@ test("fallback maps are opaque white, neutral normal and neutral ORM", () => {
       [255, 255, 255, 255],
       [128, 128, 255, 255],
       [255, 255, 255, 255],
+      [255, 255, 255, 255],
     ],
   );
+});
+
+test("coating coverage and roughness maps validate, count toward the budget and mip in linear space", () => {
+  assert.throws(() => validateNativeMaterials([{ clearcoatMap: image([1]) }]), /clearcoatMap/);
+  const large = { width: 2048, height: 2048, data: new Uint8Array(2048 * 2048 * 4) };
+  assert.throws(() => validateNativeMaterials(new Array(5).fill({ clearcoatMap: large })), /64 MiB/);
+  const f = fixture();
+  const clearcoatMap = image([0, 64, 255, 255, 255, 192, 255, 255]);
+  validateNativeMaterials([{ clearcoat: 0.7, clearcoatMap }]);
+  const groups = createNativeMaterialTextures(f.device, [{ clearcoat: 0.7, clearcoatMap }], (x) => x);
+  assert.ok(groups[1].clearcoatMap);
+  // A finish-only map must not suppress the legacy procedural substrate detail.
+  assert.equal(groups[1].authored, false);
+  const levels = f.uploads.filter(x => x.destination.texture.descriptor.label === "native.material.1.clearcoatMap");
+  assert.equal(levels[0].destination.texture.descriptor.format, "rgba8unorm");
+  assert.deepEqual(levels[0].bytes, [...clearcoatMap.data]);
+  assert.deepEqual(levels[1].bytes, [128, 128, 255, 255]);
 });
 test("invalid materials fail bounded validation", () => {
   for (const input of [

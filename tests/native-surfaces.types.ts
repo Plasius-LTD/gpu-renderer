@@ -13,6 +13,7 @@ const material: NativeSurfaceMaterial = {
   normalScale: 0.5,
   clearcoat: 0.7,
   clearcoatRoughness: 0.24,
+  clearcoatMap: { width: 1, height: 1, data: new Uint8Array([180, 128, 255, 255]) },
 };
 const renderer = await createNativeSceneRenderer({
   canvas,

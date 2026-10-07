@@ -344,3 +344,19 @@ test("native materials upload independent clearcoat strength and roughness", asy
   assert.deepEqual(parameters[1][3], [0, 0, 0.5, 0.25]);
   renderer.destroy();
 });
+
+test("coating maps are bound in main and reflected draws and released on teardown", async () => {
+  const f = gpuFixture();
+  const renderer = await createNativeSceneRenderer({ ...f, materials: [{ clearcoat: 1,
+    clearcoatRoughness: 1, clearcoatMap: { width: 1, height: 1, data: new Uint8Array([0, 128, 255, 255]) } }] });
+  renderer.render({ ...frame(), water: true, texcoords: new Float32Array(6),
+    surfaces: [{ firstVertex: 0, vertexCount: 3, materialIndex: 0 }] });
+  const bindings = f.calls.filter(c => c[0] === "bind" && c[1] === 2);
+  assert.equal(bindings.length, 3);
+  assert.equal(bindings[0][2], bindings[2][2]);
+  assert.ok(bindings[0][2].entries.find(e => e.binding === 5)?.resource);
+  assert.ok(f.calls.some(c => c[0] === "upload-texture" && c[1] === "native.material.1.clearcoatMap"));
+  renderer.destroy();
+  assert.equal(f.calls.filter(c => c[0] === "texture").length,
+    f.calls.filter(c => c[0] === "destroy" && c[1] === "texture").length);
+});

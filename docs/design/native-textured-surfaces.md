@@ -77,3 +77,30 @@ angles with coat enabled/disabled, without errors. The preview also needs the
 already tracked glTF omission fix in gpu-shared#131; read its existing local source
 for visual qualification, but require its published release for site consumption.
 Do not duplicate or modify that separately owned loader fix.
+
+## Review refinement: selective worn varnish (2026-10-07)
+
+The coat currently blankets the crate body's ropes and stays uniform across worn
+wood. Extend Task #230 with optional `clearcoatMap`: linear RGBA8, R multiplies
+coat coverage and G multiplies coat roughness. A white fallback preserves existing
+scalar callers. Reuse material validation, mip generation, lifetime and source-byte
+budgets. Both main and reflected surfaces sample the same UV-bound map; no moving
+world-space noise, base-colour tint or shader guesses about material identity.
+
+For the Wooden Crate 01 review fixture, use explicitly authored triangle ranges
+verified against the downloaded model topology to split wood, rope and hardware.
+Rope and hardware receive a material with zero coat, even when sampling distant
+mips. Generate only the wood finish map from the source roughness detail plus
+stable, broad UV variation: rubbed/scuffed areas lose coverage and gain roughness.
+Expose a wear control with pristine and worn endpoints, keeping strength and wear
+independent. Preserve source assets and record the selection/provenance; keep
+asset-specific authoring out of the renderer runtime.
+
+Acceptance defined before implementation: test map validation/budget/linear mips,
+white fallback, actual binding in both passes, resource cleanup, and old callers;
+test explicit uncoated rope/hardware ranges, fail closed on different topology,
+bounded deterministic wood masks and meaningful wear variation. Visually inspect
+several angles, wear extremes and coat on/off in the actual WebGPU preview. Retain
+screenshot and browser-error evidence. Update README, Unreleased, ADR and asset
+review. Continue existing Feature #1170 / Story #2272 / flag and capability; this
+is a refinement of the pending package PR, with CI required before release.

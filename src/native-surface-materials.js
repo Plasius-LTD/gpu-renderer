@@ -1,10 +1,11 @@
 // Decoded RGBA contract matches gpu-shared's glTF loader. No network or DOM work.
 const MAX_BYTES = 64 * 1024 * 1024;
-const MAPS = ["baseColor", "normal", "orm"];
+const MAPS = ["baseColor", "normal", "orm", "clearcoatMap"];
 const defaults = {
   baseColor: [255, 255, 255, 255],
   normal: [128, 128, 255, 255],
   orm: [255, 255, 255, 255],
+  clearcoatMap: [255, 255, 255, 255],
 };
 const dimension = (n) =>
   Number.isInteger(n) && n >= 1 && n <= 2048 && (n & (n - 1)) === 0;
@@ -86,7 +87,7 @@ export function createNativeMaterialTextures(device, materials, own) {
   return [{}, ...materials].map((material, index) => {
     const result = {
       normalScale: material.normal ? (material.normalScale ?? 1) : 0,
-      authored: MAPS.some((key) => material[key]),
+      authored: ["baseColor", "normal", "orm"].some((key) => material[key]),
       clearcoat: material.clearcoat ?? 0,
       clearcoatRoughness: material.clearcoatRoughness ?? 0,
     };

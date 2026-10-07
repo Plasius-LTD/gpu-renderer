@@ -238,7 +238,7 @@ export async function createNativeSceneRenderer(options = {}) {
     });
     const materialLayout = device.createBindGroupLayout({
       entries: [
-        ...[0, 1, 2].map((binding) => ({
+        ...[0, 1, 2, 5].map((binding) => ({
           binding,
           visibility: 2,
           texture: { sampleType: "float" },
@@ -289,6 +289,7 @@ export async function createNativeSceneRenderer(options = {}) {
           { binding: 2, resource: material.orm },
           { binding: 3, resource: materialSampler },
           { binding: 4, resource: { buffer: params } },
+          { binding: 5, resource: material.clearcoatMap },
         ],
       });
     });

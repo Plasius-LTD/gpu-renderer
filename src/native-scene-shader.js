@@ -18,6 +18,7 @@ struct Frame {
 @group(2) @binding(2) var ormMap: texture_2d<f32>;
 @group(2) @binding(3) var materialSampler: sampler;
 @group(2) @binding(4) var<uniform> materialParameters: vec4f;
+@group(2) @binding(5) var clearcoatMap: texture_2d<f32>;
 struct Surface {
   @builtin(position) clip: vec4f,
   @location(0) world: vec3f, @location(1) normal: vec3f,
@@ -127,6 +128,7 @@ fn surfaceRadiance(s: Surface, front: bool) -> vec3f {
   let sampledNormal = textureSample(normalMap, materialSampler, s.uv).xyz * 2.0 - 1.0;
   var c = s.colour * textureSample(baseColourMap, materialSampler, s.uv).rgb;
   let orm = textureSample(ormMap, materialSampler, s.uv).rgb;
+  let coatSample = textureSample(clearcoatMap, materialSampler, s.uv).rg;
   let roughness = clamp(s.material.x * orm.g, 0.04, 1.0);
   let metalness = clamp(s.material.y * orm.b, 0.0, 1.0);
   let orthogonalTangent = tangent - n * dot(n,tangent);
@@ -150,12 +152,13 @@ fn surfaceRadiance(s: Surface, front: bool) -> vec3f {
   let ambient = c * hemi * (1.0 - metalness * 0.7) * orm.r;
   let env = sky(reflect(-v,n)) * mix(vec3f(0.04), c, metalness) * (1.0-roughness) * orm.r * 0.30;
   let baseRadiance = direct + ambient + env;
-  if (materialParameters.z <= 0.0) { return fog(baseRadiance,s.world); }
+  let coatCoverage = materialParameters.z * coatSample.r;
+  if (coatCoverage <= 0.0) { return fog(baseRadiance,s.world); }
   // KHR_materials_clearcoat's simple Fresnel layering: varnish has its own
   // smooth normal and roughness. Its reflection never inherits the wood colour.
   let coatFresnel = 0.04 + 0.96 * pow(1.0-clamp(abs(dot(coatNormal,v)),0.0,1.0),5.0);
-  let coatWeight = materialParameters.z * coatFresnel;
-  let coatRoughness = clamp(materialParameters.w,0.04,1.0);
+  let coatWeight = coatCoverage * coatFresnel;
+  let coatRoughness = clamp(materialParameters.w * coatSample.g,0.04,1.0);
   let coatDirect = vec3f(3.0,2.65,2.15) * specularLobe(coatNormal,v,coatRoughness) * visibility(s.world,coatNormal);
   let coatEnvironment = sky(reflect(-v,coatNormal)) * (1.0-coatRoughness) * orm.r * 0.30;
   return fog(baseRadiance * (1.0-coatWeight) + (coatDirect+coatEnvironment) * coatWeight, s.world);

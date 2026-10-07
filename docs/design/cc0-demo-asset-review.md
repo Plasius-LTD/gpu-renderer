@@ -65,3 +65,35 @@ in gpu-shared#131 and an explicit satin-coating preset on the crate body/lid.
 The original downloaded files remain unchanged. The preset is Plasius-authored
 shading for review, not a claim that the source asset includes a clearcoat extension.
 Source loader correction must publish before downstream site adoption.
+
+### Worn coating refinement (2026-10-07)
+
+The source helper `demo/native-crate-finish.js` explicitly separates wood, rope
+and fittings using the following half-open triangle ranges in loader primitives:
+
+| Primitive | Wood | Metal | Rope |
+| --- | --- | --- | --- |
+| `wooden_crate_01_lid-0` | 0–620 | 620–692 | — |
+| `wooden_crate_01-0` | 0–600, 672–1268 | 600–672, 1268–1980 | 1980–5508 |
+| `wooden_crate_01_latch-0` | — | 0–376 | — |
+
+These offsets were checked against welded connected components in the unchanged
+source mesh, including both rope handles. Do not apply them to re-exported models
+solely because names/counts match. The local preview verifies these SHA-256 hashes
+before loading the fixture:
+
+- glTF: `fd9c6073acfc671e12b64666053f2805ae33aff5d3dbbcfe5c97c08c06644927`
+- binary: `85f381f8035f7a6f2f3b848640894c6d3333b261946dd8a338c0fe19e0bea21e`
+
+The wood preset uses strength 0.75, a roughness factor of 1 and a generated
+linear coating map. Red reduces coverage over rubbed patches; green increases
+coating roughness using stable UV variation and the source roughness detail.
+Default wear is 0.65, with a preview slider from fresh (0) to scuffed (1).
+Rope and metal remain explicitly uncoated at every setting. This is authored
+demo shading, not measured material data or an edit to the downloaded asset.
+
+Actual WebGPU review passed at camera angles 36° and −40°, including wear 0%,
+65% and 100%, and coating off/on. The lit-side rope remains bare while the
+wood's highlight softens and breaks up with wear. The preview reported 6,578
+triangles at 1440 × 880 with no captured browser warnings or errors. This is
+local visual evidence; production adoption and package publication are pending.
