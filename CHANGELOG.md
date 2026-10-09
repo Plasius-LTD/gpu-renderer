@@ -12,7 +12,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Added `createCanonicalWavefrontMeshInputs` to adapt decoded canonical model
+    geometry, material factors, and texture samples to Wavefront renderer inputs.
 
 - **Changed**
   - (placeholder)

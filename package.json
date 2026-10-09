@@ -53,6 +53,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@plasius/gpu-camera": "^0.1.18",
+    "@plasius/gpu-model-core": "^0.4.4",
     "@plasius/gpu-shared": "^1.1.1",
     "@plasius/gpu-xr": "^0.1.17",
     "@types/webxr": "^0.5.24"

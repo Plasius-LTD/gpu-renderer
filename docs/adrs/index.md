@@ -28,3 +28,4 @@
 - [ADR 0026: Exact-main OIDC package publishing](./adr-0026-exact-main-oidc-package-publishing.md)
 - [ADR 0027: Lazy fixed-SPP ray and timing telemetry](./adr-0027-lazy-fixed-spp-ray-and-timing-telemetry.md)
 - [ADR 0029: Reflected adaptive metadata and allocation admission](./adr-0029-reflected-adaptive-metadata-admission.md)
+- [ADR 0031: Canonical Model Ingestion Boundary](./adr-0031-canonical-model-ingestion-boundary.md)
