@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.47] - 2026-10-09
+
+- **Added**
   - Added `createCanonicalWavefrontMeshInputs` to adapt decoded canonical model
     geometry, material factors, and texture samples to Wavefront renderer inputs.
 
@@ -1150,3 +1164,4 @@ All notable changes to this project will be documented in this file.
 [0.2.44]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.44
 [0.2.45]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.45
 [0.2.46]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.46
+[0.2.47]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.47
