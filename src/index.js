@@ -1,4 +1,5 @@
 export { createNativeSceneRenderer } from "./native-scene-renderer.js";
+export { createCanonicalWavefrontMeshInputs } from "./canonical-wavefront-meshes.js";
 export {
   createAnimatedSceneRenderer,
 } from "./animated-scene-renderer.js";
