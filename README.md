@@ -874,3 +874,48 @@ transformed guide coordinates. The crate adapter adds 84,000 triangles: 90,578
 triangles / 271,734 vertices total, within the native default budget. Its final
 fibre arrays occupy 14,112,000 bytes. This deliberate denser nap replaces the
 previous 1,600-strand loose-end study. See [ADR-0035](docs/adrs/adr-0035-groomed-rope-and-bare-coat-endpoint.md).
+
+
+### In-scene material inspection camera
+
+The source-only [native-demo-camera.js](demo/native-demo-camera.js) adapter uses
+released `@plasius/gpu-camera` state/control/projection APIs and the separate
+`@plasius/gpu-camera-controls` pointer gesture runtime/browser normalizer. It maps DOM input to
+orbit, camera-plane truck/pedestal, pan/tilt, dolly and optical zoom; camera math
+is not duplicated in the renderer. The camera-controls package is a demo-only development dependency; it adds no
+renderer runtime dependency or public export.
+
+```js
+import { createNativeDemoCamera } from './demo/native-demo-camera.js';
+
+// Supply a focusable canvas with an accessible name and linked control help.
+const cameraControls = createNativeDemoCamera({
+  canvas,
+  camera: { eye: [-0.7, 0.5, 0.8], target: [0, 0.16, 0], fov: 42 },
+  onChange: () => draw(),
+});
+// Each draw uses camera: cameraControls.read(). Keep the controls alive across
+// renderer/material rebuilds; defer drawing while the renderer is unavailable.
+cameraControls.setMode('truck'); // orbit | truck | pan | dolly | zoom
+cameraControls.move(0, -24);      // also suitable for accessible arrow buttons
+// At teardown:
+cameraControls.destroy();
+```
+
+Use labelled mode buttons (`aria-pressed` reflects `getMode()`), movement buttons
+and reset (`reset()`). Drag applies the selected tool. Right/middle/Shift-drag
+trucks; two pointers truck/pinch. A focused canvas accepts wheel dolly (Shift for
+lens zoom), arrows, Shift-arrows to truck, +/−, 1–5 to select a mode, and Home to
+reset. Browser Ctrl/Meta/Alt shortcuts and keys outside the canvas are left alone.
+Disable horizontal arrow buttons for the vertical-only dolly/zoom modes. Wheel
+input only belongs to a focused canvas; the surrounding page remains scrollable.
+No inertia or animation loop is introduced. Distances, lens and travel are bounded;
+pointer cancellation/blur/disposal release captures and listeners. This is an
+inspection camera without scene collision detection or object picking.
+
+Native material normal-map degeneracy checks now use normalized screen-space
+position/UV gradients. Valid tiny derivatives in rope macro views no longer disable
+normal maps. Mirrored UV handedness and geometric-normal fallback for degenerate
+UVs are retained in the common direct/reflection shader. The shader contract tests
+require browser rendering evidence as well; Node mocks do not execute WGSL.
+See [ADR-0036](docs/adrs/adr-0036-in-scene-material-inspection.md).

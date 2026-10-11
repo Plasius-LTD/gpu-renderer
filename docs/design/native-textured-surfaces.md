@@ -188,3 +188,50 @@ tapered curved tips; no fibres at zero density. Actual WebGPU on/off and angle
 comparison must show attached fraying without a shaggy halo or errors. Update
 the README, Unreleased and asset review; retain screenshot evidence and the
 existing Feature/Story/flag. Package CI remains required before delivery.
+
+## Review correction: in-scene camera and visible rope (2026-10-11)
+
+Continue Task #230 / Feature #1170 / Story #2272 and its existing rollout flag.
+Replace the local angle slider and fixed-view selector with a canvas-bound camera
+adapter using the released `@plasius/gpu-camera` controls and manager. The adapter
+owns input mapping only: orbit, camera-plane truck/pedestal, pan/tilt, dolly and
+optical zoom. Provide explicit in-scene modes, keyboard equivalents, touch drag,
+two-finger truck/pinch, and a reset. Keep browser/page shortcuts outside the
+focused scene, release pointer capture on cancellation/disposal, clamp movement,
+and preserve the camera across material rebuilds. Render on changes only.
+
+Tests first cover camera-space translation, distinct optical zoom versus dolly,
+shared-runtime bounds, focus/modifier handling, touch transitions, cancellation,
+listener cleanup and no stale callbacks after disposal. Browser validation covers
+pointer, keyboard, reset and material changes without resetting the view. The rope
+review additionally compares visible attached fibres at 0/30/100% from multiple
+angles, with a regression for any diagnosed geometry/material failure. Do not
+claim visual acceptance simply from passing numerical fibre tests.
+
+### Diagnosed normal-map failure
+
+The shader compared squared tangent derivatives with an absolute `1e-8` cutoff.
+At a rope close-up, a valid 0.1 mm position derivative times a 0.001 UV derivative
+has squared length `1e-14` and is rejected. Thus enlarging the asset suppresses
+normal-map detail. Normalize position and UV gradients independently before
+checking the relative determinant/basis lengths. Preserve mirrored UV handedness,
+neutral-map behavior and a geometric-normal fallback for truly degenerate UVs.
+Validate a small-scale numeric fixture against the former cutoff and render the
+same rope/lens with and without the fix; apply to the common main/reflection
+shader. Shader coverage remains the documented exception; import it in regression
+tests so the changed source is still present in LCOV.
+
+The separate released `@plasius/gpu-camera-controls` 0.1.1 also provides gesture
+recognition. Reuse it for pointer orbit and multi-pointer truck/pinch, with damping
+zero for a static demand-rendered inspector. The browser subpath's generic bindings
+are designed for continuous game controls, lack focus/modifier filtering and do not
+expose inspection tool selection. Keep a small canvas-scoped DOM adapter for those
+host requirements, using the browser event normalizer and shared gesture runtime;
+do not duplicate centroid/pinch logic. Add the package as a demo-only development
+dependency so the published renderer runtime/bundle is unchanged.
+
+The demo dependency installation exposed existing development-tool audit findings
+in brace-expansion 5.0.9 (GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7 and
+GHSA-6j4f-fj2g-mc7p). As required scoped dependency hygiene, update the existing
+exact override to patched 5.0.12 and regenerate only its lock entry. Verify full
+and runtime audits and rerun test/build/package gates; do not bypass audits.

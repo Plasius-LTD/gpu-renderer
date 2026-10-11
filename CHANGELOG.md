@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Update the existing brace-expansion development override to 5.0.12 for patched denial-of-service advisories (#230).
+
+- Fix native normal maps losing detail at close range; add a source-demo camera adapter using shared orbit, truck, pan, dolly and zoom controls with keyboard/touch support (#230).
+
 - Fix full varnish wear to exactly match the uncoated endpoint; replace random rope strands with shorter, finer guide-aligned tufts and bounded denser nap (#230).
 
 - Add a versioned material-ageing profile and crate adapter with independent 30% rope fraying / 90% varnish-wear review defaults; preserve fibre roots across wear edits and retain coating islands within heavily scuffed wood (#230).

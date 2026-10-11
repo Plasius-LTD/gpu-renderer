@@ -120,8 +120,14 @@ fn surfaceRadiance(s: Surface, front: bool) -> vec3f {
   var n = coatNormal;
   let v = normalize(frame.eye.xyz - s.world);
   // Derivatives and samples must be uniform across each fragment quad.
-  let dx = dpdx(s.world); let dy = dpdy(s.world);
-  let ux = dpdx(s.uv); let uy = dpdy(s.uv);
+  // Relative degeneracy: raw derivative magnitudes shrink with model scale and
+  // zoom. An absolute tangent cutoff silently disabled normal maps in close-ups.
+  let dpScale = max(length(dpdx(s.world)), length(dpdy(s.world)));
+  let uvScale = max(length(dpdx(s.uv)), length(dpdy(s.uv)));
+  let dx = dpdx(s.world) / max(dpScale, 1e-20);
+  let dy = dpdy(s.world) / max(dpScale, 1e-20);
+  let ux = dpdx(s.uv) / max(uvScale, 1e-20);
+  let uy = dpdy(s.uv) / max(uvScale, 1e-20);
   let determinant = ux.x * uy.y - ux.y * uy.x;
   let tangent = dx * uy.y - dy * ux.y;
   let bitangent = dy * ux.x - dx * uy.x;
@@ -133,7 +139,7 @@ fn surfaceRadiance(s: Surface, front: bool) -> vec3f {
   let metalness = clamp(s.material.y * orm.b, 0.0, 1.0);
   let orthogonalTangent = tangent - n * dot(n,tangent);
   let orthogonalBitangent = bitangent - n * dot(n,bitangent);
-  if (abs(determinant) > 0.00000001 && dot(orthogonalTangent,orthogonalTangent) > 0.00000001 && dot(orthogonalBitangent,orthogonalBitangent) > 0.00000001) {
+  if (dpScale > 1e-20 && uvScale > 1e-20 && abs(determinant) > 1e-6 && dot(orthogonalTangent,orthogonalTangent) > 1e-12 && dot(orthogonalBitangent,orthogonalBitangent) > 1e-12) {
     let t = normalize(orthogonalTangent) * sign(determinant);
     let b = normalize(orthogonalBitangent) * sign(determinant);
     n = normalize(t * sampledNormal.x * materialParameters.x + b * sampledNormal.y * materialParameters.x + n * max(0.001,sampledNormal.z));

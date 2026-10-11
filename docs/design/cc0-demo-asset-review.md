@@ -174,3 +174,32 @@ whole-handle views and the existing controls. Full wear is explicitly described
 as unvarnished. This is static groomed geometry; it does not claim a complete hair
 scattering, wind or structural-damage simulation. Approved release/site adoption
 remains pending under the same feature flag and capability.
+
+### In-scene camera and normal-map correction (2026-10-11)
+
+The same hash-verified CC0 fixture remains unchanged. The local inspector now
+uses gpu-camera and released gpu-camera-controls, with in-scene orbit, truck /
+pedestal, pan / tilt, dolly, optical zoom, reset and keyboard/button alternatives.
+Its camera survives material rebuilds. No new art, asset license or production
+publication is introduced.
+
+Matched 1280x720 screenshots of the left handle before/after the normal-map
+correction showed changed pixels within the chest only (bounds 319,111–1009,513).
+Relative derivative checks restore the authored twist detail at close range.
+This fixes surface detail; the existing static tube groom remains a limited
+approximation, not a complete fur-scattering implementation. No claim of final
+user acceptance is made for the rope's appearance.
+
+Actual WebGPU checks covered pointer orbit through the released gesture runtime,
+in-scene buttons, pan/truck/dolly/zoom keys, camera retention during finish changes,
+0/30/100% fray and material toggles. Full-wear/on versus coating off had zero pixel
+differences over the compared canvas region (50,116–1228,488), after the shader fix.
+A 320px viewport had no horizontal overflow and all camera buttons were >=44x44px.
+Browser warnings/errors were empty. No inertia or automatic camera motion is used.
+Two-pointer gesture/cancellation tests pass in Node; browser permission review
+denied raw-CDP touch simulation, so real touch-device interaction remains unverified.
+
+Local evidence: `rope-normal-before.jpg`, `rope-normal-after.jpg`,
+`coat100-camera.jpg`, `coatoff-camera.jpg`, `rope-camera-zero.jpg`,
+`rope-camera-full.jpg` and `chest-in-scene-camera-review.jpg`. Screenshots are local
+review artifacts, not published game assets. The review retains 30% fray / 90% wear.
