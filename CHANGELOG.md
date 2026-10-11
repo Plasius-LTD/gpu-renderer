@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Correct vertical grab direction in the material-review camera for mouse, touch and keyboard orbit; preserve horizontal, pan and zoom directions (#230).
+
 - Replace the material review camera toolbar with a five-second focus gesture guide; keep direct mouse/touch movement independent of keyboard modes, with replay and dismissal (#230).
 
 - Update the existing brace-expansion development override to 5.0.12 for patched denial-of-service advisories (#230).

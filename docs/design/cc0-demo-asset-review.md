@@ -224,3 +224,15 @@ mouse/touch orbit independent of keyboard mode, and wheel lens/dolly isolation
 are covered by regression tests. Shared two-pointer tests remain passing; no
 physical touch-device test is claimed. No source assets or renderer shaders were
 changed for this UI refinement. Production/site adoption remains pending.
+
+### Vertical grab direction correction (2026-10-11)
+
+Vertical orbit now follows the grabbed front surface for mouse, one-finger touch
+and keyboard arrows. Single-pointer movement reuses the existing gpu-camera
+primitive; the shared recognizer still owns multi-pointer truck/pinch with original
+coordinates. Projected-front-point regressions failed before the correction and
+pass afterward, including both axes, both pointer types and one/two/one-pointer
+transitions. Actual WebGPU downward drag moved the front latch downward, without
+altering material settings or introducing a toolbar. Local before/after evidence:
+`chest-grab-before.jpg` and `chest-grab-down.jpg`. Physical touch testing remains
+outstanding; this is a local-preview/package-PR correction, not a production release.

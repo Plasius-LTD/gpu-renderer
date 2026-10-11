@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { buildViewMatrix } from '@plasius/gpu-camera';
 import { createNativeDemoCamera } from '../demo/native-demo-camera.js';
 
 function fixture(options = {}) {
@@ -195,4 +196,50 @@ test('wheel dolly and Shift-wheel lens zoom are independent of keyboard mode', (
   const zoomed=f.controls.read();
   assert.deepEqual(zoomed.eye,closer.eye); assert.deepEqual(zoomed.target,closer.target);
   assert.ok(zoomed.fov<closer.fov); f.controls.destroy();
+});
+
+
+// Screen Y grows downward, as pointer clientY does. Project a point on the
+// front of the object, not its stationary orbit pivot.
+function frontPointOnScreen(camera) {
+  const view=buildViewMatrix({transform:{position:camera.eye,target:camera.target,up:[0,1,0]}});
+  const point=[0,1,1,1];
+  const xyz=[0,1,2].map(row=>point.reduce((sum,v,column)=>sum+v*view[column*4+row],0));
+  return [xyz[0]/-xyz[2],xyz[1]/xyz[2]];
+}
+
+test('mouse and touch grabs move the visible front surface with both drag axes', () => {
+  for(const pointerType of ['mouse','touch']) for(const [dx,dy] of [[0,24],[0,-24],[24,0],[-24,0]]) {
+    const f=fixture(), before=frontPointOnScreen(f.camera);
+    f.send('pointerdown',{pointerType,clientX:100,clientY:100});
+    f.send('pointermove',{pointerType,clientX:100+dx,clientY:100+dy});
+    const after=frontPointOnScreen(f.controls.read());
+    if(dy) assert.equal(Math.sign(after[1]-before[1]),Math.sign(dy),`${pointerType} vertical grab ${dy}`);
+    if(dx) assert.equal(Math.sign(after[0]-before[0]),Math.sign(dx),`${pointerType} horizontal grab ${dx}`);
+    assert.deepEqual(f.controls.read().target,f.camera.target); near(distance(f.controls.read()),2);
+    f.controls.destroy();
+  }
+});
+
+test('orbit grab direction survives one/two/one touch transitions and preserves truck and pinch', () => {
+  const f=fixture(), touch={pointerType:'touch'};
+  f.send('pointerdown',{...touch,clientX:100,clientY:100});
+  f.send('pointermove',{...touch,clientX:100,clientY:124});
+  f.send('pointerdown',{...touch,pointerId:2,clientX:200,clientY:124});
+  const before=f.controls.read(), pointBefore=frontPointOnScreen(before);
+  f.send('pointermove',{...touch,clientX:100,clientY:148});
+  f.send('pointermove',{...touch,pointerId:2,clientX:200,clientY:148});
+  const truck=f.controls.read();
+  assert.ok(frontPointOnScreen(truck)[1]>pointBefore[1],'two-finger downward drag still moves the object down');
+  near(distance(truck),distance(before));
+  f.send('pointermove',{...touch,pointerId:2,clientX:230,clientY:148});
+  assert.ok(distance(f.controls.read())<distance(truck),'spread still moves closer');
+  f.send('pointerup',{...touch,pointerId:2});
+  const afterPinch=f.controls.read(), pointAfterPinch=frontPointOnScreen(afterPinch);
+  f.send('pointermove',{...touch,clientX:100,clientY:148});
+  assert.deepEqual(f.controls.read(),afterPinch,'stationary remaining finger cannot jump');
+  f.send('pointermove',{...touch,clientX:100,clientY:172});
+  assert.ok(frontPointOnScreen(f.controls.read())[1]>pointAfterPinch[1],'remaining finger resumes downward orbit grab');
+  assert.deepEqual(f.controls.read().target,afterPinch.target);
+  f.controls.destroy();
 });

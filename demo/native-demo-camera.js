@@ -37,7 +37,7 @@ export function createNativeDemoCamera({ canvas, camera, onChange, onHintChange 
     const c=state(), height=Math.max(1,canvas.clientHeight);
     const distance=Math.hypot(...c.transform.position.map((v,i)=>v-c.transform.target[i]));
     const apply = control => manager.applyControl(initial.id,control,bounds);
-    if (operation === 'orbit') apply({type:'orbit',deltaAzimuth:-dx*.008,deltaPolar:dy*.008});
+    if (operation === 'orbit') apply({type:'orbit',deltaAzimuth:-dx*.008,deltaPolar:-dy*.008});
     if (operation === 'pan') apply({type:'look',deltaYaw:-dx*.004,deltaPitch:-dy*.004});
     if (operation === 'truck') {
       const view=buildViewMatrix(c), scale=2*distance*Math.tan(c.projection.fovY*Math.PI/360)/height;
@@ -77,11 +77,11 @@ export function createNativeDemoCamera({ canvas, camera, onChange, onHintChange 
     if (!previous || !Number.isFinite(e.clientX) || !Number.isFinite(e.clientY) ||
         (e.clientX===previous.x && e.clientY===previous.y)) return;
     points.set(e.pointerId,{...previous,x:e.clientX,y:e.clientY});
-    // The shared gesture runtime owns pointer orbit, centroid truck and pinch.
-    // Explicit inspection modes use shared camera primitives in move().
+    // Keep original coordinates in the shared multi-pointer recognizer.
+    // Single-pointer orbit uses move() for the inspector's vertical grab direction.
     gestures.setCamera(state());
     gestures.handlePointerMove(normalizePointerEvent(e));
-    if(points.size===2 || previous.operation==='orbit') {
+    if(points.size===2) {
       const next=gestures.update(0).camera;
       const shift=next.transform.target.map((v,i)=>clamp(v,
         initial.transform.target[i]-radius*4,initial.transform.target[i]+radius*4)-v);

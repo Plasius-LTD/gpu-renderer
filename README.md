@@ -913,7 +913,7 @@ gesture or let the example intercept input. Keep material controls below the sce
 
 | Input | Camera action |
 | --- | --- |
-| Left-drag / one finger | Orbit |
+| Left-drag / one finger | Orbit, with the grabbed surface following the drag on both axes |
 | Right/middle/Shift-drag | Truck / pedestal across the current view |
 | Alt-drag | Pan / tilt in place |
 | Scroll / touch pinch | Move closer or farther (dolly) |
@@ -925,7 +925,10 @@ gesture or let the example intercept input. Keep material controls below the sce
 | Home | Reset view |
 | ? / Escape | Replay / dismiss the brief guide |
 
-Keyboard mode selection does not change mouse or touch gestures. The source-only
+Vertical orbit follows the grab direction for mouse, one-finger touch and keyboard
+arrows. The adapter maps single-pointer orbit through gpu-camera; the shared
+gesture runtime retains original pointer coordinates for multi-pointer truck/pinch
+and stable transitions. Keyboard mode selection does not change mouse or touch gestures. The source-only
 `setMode`, `getMode`, `move` and `reset` methods remain available to host code.
 Browser Ctrl/Meta/Alt key shortcuts and keys outside the canvas are left alone.
 Wheel input only belongs to a focused canvas; the surrounding page remains

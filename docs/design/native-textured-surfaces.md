@@ -257,3 +257,21 @@ Tests first cover five-second expiry, focus replay, Escape/blur/disposal cleanup
 no unsolicited initial hint, stable pointer mapping after keyboard-mode selection,
 modifier movement and shared touch transitions. Verify the actual WebGPU preview,
 320px layout and accessible instructions, then docs, coverage and exact-head CI.
+
+## Vertical grab direction correction (2026-10-11)
+
+User review finds vertical orbit opposite to the grabbing gesture. Reverse only
+orbit's vertical input so the visible front surface follows an upward/downward
+mouse or one-finger drag. Keep horizontal orbit, truck, pan/tilt, wheel, pinch and
+lens direction unchanged. Apply the same orbit convention to keyboard arrows.
+The adapter already maps explicit movement through gpu-camera's orbit primitive;
+use that path for single-pointer orbit too, while gpu-camera-controls continues
+to own multi-pointer centroid truck/pinch and pointer lifecycle. Forward original
+coordinates to that recognizer so one/two/one-pointer transitions never rebase
+against mirrored coordinates. No new camera math, package API or dependency.
+
+Tests first project a front-surface point into the camera view to assert its
+screen movement follows both drag axes for mouse and touch. Assert keyboard
+parity and unchanged two-finger truck/pinch through pointer-count transitions.
+Validate the actual preview, relevant checks, changed-source LCOV and exact-head
+CI on existing Task #230 / Feature #1170 / Story #2272 with the inherited flag.
