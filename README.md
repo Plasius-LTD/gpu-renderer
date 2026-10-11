@@ -129,6 +129,41 @@ renderer.resize(window.innerWidth, window.innerHeight);
 renderer.start();
 ```
 
+## Canonical model ingestion
+
+`createCanonicalWavefrontMeshInputs` adapts decoded primitive geometry and image
+samples from the canonical model pipeline to the renderer's existing
+`WavefrontMeshInput` shape. It maps canonical material factors and standard
+texture bindings, preserves supported material extension data, and rejects
+missing primitive, material, or decoded texture references. It accepts triangle
+primitives; parsing, resource fetching, image decoding, and other topologies stay
+in the upstream conversion layer. Metallic-roughness and unlit workflows are
+supported; workflows without an existing Wavefront mapping fail explicitly.
+
+```js
+import { createCanonicalWavefrontMeshInputs } from "@plasius/gpu-renderer";
+
+const meshes = createCanonicalWavefrontMeshInputs({
+  document: canonicalDocument,
+  geometry: decodedPrimitives.map(({ primitiveId, positions, indices, normals, texcoords }) => ({
+    primitiveId,
+    positions,
+    indices,
+    normals,
+    texcoords,
+  })),
+  // ReadonlyMap<canonical texture id, decoded RGBA sample>
+  textures: decodedTextureSamples,
+});
+```
+
+The canonical document uses types from `@plasius/gpu-model-core`. Geometry is
+already renderer-ready, normals may be omitted to retain the renderer's existing
+fallback, and texture samples are keyed by canonical texture ID. The consuming
+surface remains responsible for evaluating the remote
+`gpu.model.conversion.enabled` flag: when disabled or rolled back, keep the
+existing rendering path active.
+
 ## Adaptive Frame Hooks
 
 `@plasius/gpu-renderer` now exposes frame lifecycle hooks so the app can pass

@@ -13,6 +13,7 @@ import type {
   FeedbackGameDiagnosticViewportBucket,
 } from "@plasius/gpu-shared/feedback-diagnostics";
 import type { XrStoreState } from "@plasius/gpu-xr";
+import type { GpuModelDocument } from "@plasius/gpu-model-core";
 
 export interface CreateFeedbackGameDiagnosticSnapshotInput {
   readonly featureEnabled: boolean;
@@ -331,6 +332,30 @@ export interface WavefrontTextureSampleInput {
   readonly height: number;
   readonly data: Uint8ClampedArray | Uint8Array | readonly number[];
 }
+
+export interface CanonicalRendererGeometryInput {
+  /** Canonical primitive id whose geometry has already been decoded and validated. */
+  readonly primitiveId: string;
+  readonly positions: readonly number[] | Float32Array;
+  readonly indices?: readonly number[] | Uint16Array | Uint32Array;
+  readonly normals?: readonly number[] | Float32Array | null;
+  readonly texcoords?: readonly number[] | Float32Array | null;
+  readonly uvs?: readonly number[] | Float32Array | null;
+}
+
+export interface CreateCanonicalWavefrontMeshInputsOptions {
+  /** Canonical model metadata. Parsing, resource resolution, and image decoding are upstream responsibilities. */
+  readonly document: Pick<GpuModelDocument, "meshes" | "materials">;
+  /** Renderer-ready, decoded geometry indexed by canonical primitive id. */
+  readonly geometry: readonly CanonicalRendererGeometryInput[];
+  /** Decoded image samples indexed by canonical texture id. */
+  readonly textures?: ReadonlyMap<string, WavefrontTextureSampleInput>;
+}
+
+/** Maps canonical primitives and materials to the renderer's existing Wavefront input shape. */
+export function createCanonicalWavefrontMeshInputs(
+  options: CreateCanonicalWavefrontMeshInputsOptions,
+): readonly WavefrontMeshInput[];
 
 export interface WavefrontMediumInput {
   readonly id?: number;
