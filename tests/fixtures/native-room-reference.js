@@ -10,10 +10,11 @@ import {auditMaterialMaps} from './material-map-inventory.js';
 import {ROOM_LIGHTING_DEFAULTS,withRoomLighting} from './room-lighting-settings.js';
 import {ROOM_COAT_DEFAULTS,withRoomWoodCoat} from './room-clearcoat-settings.js';
 import {GLASS_WATER_DEFAULTS,glassWaterSettings,withRoomGlass} from '/lighting/demo/eames-environments/glass-water-reference.js';
+import {createRoomDemoPresets,installRoomDemoUi,revealInvalidControl,setRoomPreviewState,invalidateRoomCaptureUi} from './room-demo-ui.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
-const controls=[...el("controls").querySelectorAll("input,select"),el("benchmark"),el('cloth-response')];
+const controls=[...el("controls").querySelectorAll("input,select:not(#response-view)"),el("benchmark"),el('cloth-response')];
 function lightingSelection(){return {style:el('lighting-style').value,intensity:el('lighting-intensity').valueAsNumber};}
 function resetLighting(){el('lighting-style').value=ROOM_LIGHTING_DEFAULTS.style;el('lighting-intensity').value=ROOM_LIGHTING_DEFAULTS.intensity;}
 el('lighting-intensity').min=String(ROOM_LIGHTING_DEFAULTS.minimumIntensity);el('lighting-intensity').max=String(ROOM_LIGHTING_DEFAULTS.maximumIntensity);
@@ -43,10 +44,13 @@ let cancellation,assets,comparison;
 function showComparison(clean){if(!comparison)return;const image=clean?comparison.clean:comparison.raw;preview.src=image;download.href=image;download.download=comparison.stem+(clean?'-guided':'-raw')+'.png';el('comparison-label').textContent=clean?'Cleaned · same camera samples':'Raw · same camera samples';}
 el('show-raw').addEventListener('click',()=>showComparison(false));el('show-clean').addEventListener('click',()=>showComparison(true));
 for(const mode of ['albedo','normal'])el('show-'+mode).addEventListener('click',()=>{if(!comparison?.[mode])return;preview.src=comparison[mode];download.href=comparison[mode];download.download=comparison.stem+'-'+mode+'.png';el('comparison-label').textContent=mode==='albedo'?'Base colour · no lighting / tone mapping · single first sample':'Mapped world normals · magenta = unavailable · single first sample';});
-function clearCapture(){describeSampling();comparison=null;el('response-comparison').hidden=true;el('response-view').onchange=null;el('comparison').hidden=true;el('show-albedo').hidden=true;el('show-normal').hidden=true;preview.hidden=true;preview.removeAttribute("src");download.hidden=true;download.removeAttribute("href");result.textContent="";status.textContent="Settings changed. Render to update the room view.";}
+function invalidateCapture(){describeSampling();comparison=null;invalidateRoomCaptureUi(document);demoUi.refresh();}
+function clearCapture(){invalidateCapture();preview.hidden=true;preview.removeAttribute('src');setRoomPreviewState(document,'rendering');}
+const demoUi=installRoomDemoUi(document,createRoomDemoPresets({maximumSpp:RADIAL_SAMPLING_DEFAULTS.maximumSpp,limit:RADIAL_MAXIMUM_SPP,cloth:CLOTH_INSPECTION_DEFAULTS,glass:GLASS_WATER_DEFAULTS,centralReference:ROOM_DEFAULTS.centralReference}),invalidateCapture);
 for(const control of controls){
- control.addEventListener("change",clearCapture);
- control.addEventListener("input",clearCapture);
+ if(['scene-preset','quality-preset'].includes(control.id))continue;
+ control.addEventListener("change",invalidateCapture);
+ control.addEventListener("input",invalidateCapture);
 }
 reset.addEventListener("click",()=>{
  resetGlass();
@@ -59,7 +63,7 @@ reset.addEventListener("click",()=>{
  el('fov').value=ROOM_DEFAULTS.fovYDegrees;el('models').value='all';
  el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
  el("chair-x").value=ROOM_DEFAULTS.x;el("chair-z").value=ROOM_DEFAULTS.z;el("chair-yaw").value=ROOM_DEFAULTS.yaw;
- el("view").value=ROOM_DEFAULTS.view;el("resolution").value="1080p";el("sampler").value="fixed-pattern";el("splitting").value="0";el('denoise').value='off';clearCapture();
+ el("view").value=ROOM_DEFAULTS.view;el("resolution").value="1080p";el("sampler").value="fixed-pattern";el("splitting").value="0";el('denoise').value='off';invalidateCapture();
 });
 cancel.addEventListener("click",()=>cancellation?.abort());
 export async function loadAssets(receipt,signal){
@@ -99,7 +103,7 @@ export async function loadAssets(receipt,signal){
 export function roomCompositionControls(source){return {placement:{x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view:el('view').value,fovYDegrees:el('fov').valueAsNumber,centralReference:el('central-reference').value,referenceModels:el('models').value==='all'?source.referenceModels:[]};}
 function closeupControls(){return {enabled:el('inspection-camera').value==='cloth',distance:el('inspection-distance').valueAsNumber,elevation:el('inspection-elevation').valueAsNumber,target:['x','y','z'].map(axis=>el('inspection-target-'+axis).valueAsNumber)};}
 run.addEventListener("click",async()=>{
- for(const control of controls)if(!control.checkValidity()){control.reportValidity();status.textContent="Invalid settings. Check the highlighted field.";return;}
+ for(const control of controls)if(!control.checkValidity()){revealInvalidControl(control);status.textContent="Invalid settings. Check the highlighted field.";return;}
  const settings=roomReferenceSettings(el("resolution").value,el("sampler").value,el('spp').valueAsNumber,el('max-depth').valueAsNumber),view=el("view").value;
  const splitDepth=Number(el("splitting").value);
  const guidedDenoise=el('denoise').value==='guided';
@@ -212,6 +216,7 @@ run.addEventListener("click",async()=>{
   try{runner?.destroy();}catch(error){receipt.status="failed";receipt.failures.push(error.message);clearCapture();}
   cancellation.abort();run.disabled=false;reset.disabled=false;controls.forEach(c=>c.disabled=false);cancel.disabled=true;
   status.textContent=receipt.status==="failed"?`Failed: ${receipt.failures.join("; ")}`:`Captured room + Eames · ${settings.width} × ${settings.height} · ${settings.maximumSpp} SPP ceiling · ${receipt.frame.actualSamples.toLocaleString()} camera samples · ${guidedDenoise?'guided denoise comparison':'raw'} · not quality-qualified`;
+  setRoomPreviewState(document,receipt.status==='failed'?'failed':'complete');demoUi.refresh();
   result.textContent=JSON.stringify({status:receipt.status,settings,splitDepth,scene:receipt.scene,admission:receipt.admission,actualSamples:receipt.frame?.actualSamples,captureFailure:receipt.captureFailure,
    glassWater:receipt.scene?.glassWater,inspection:receipt.inspection,materialFlags:receipt.materialFlags,materialProbe:receipt.materialProbe,guidedDenoise:receipt.guidedDenoise,denoiseProbe:receipt.denoiseProbe,uvProbe:receipt.uvProbe,surfaceProbe:receipt.surfaceProbe,linearSha256:receipt.linearImage?.sha256,cleanupPassed:receipt.cleanupPassed,provenance:receipt.provenance,failures:receipt.failures},null,2);
  }
@@ -219,9 +224,11 @@ run.addEventListener("click",async()=>{
 
 el('benchmark').addEventListener('click',async()=>{
  const {runRoomSplittingBenchmark}=await import('./native-room-splitting.js');
- await runRoomSplittingBenchmark({loadAssets,clearCapture,roomCompositionControls});
+ const report=await runRoomSplittingBenchmark({loadAssets,clearCapture,roomCompositionControls});
+ demoUi.refresh();if(report)setRoomPreviewState(document,report.status==='failed'?'failed':'complete');
 });
 el('cloth-response').addEventListener('click',async()=>{
  const {runRoomClothResponse}=await import('./native-room-cloth-response.js');
- await runRoomClothResponse({loadAssets,clearCapture,roomCompositionControls,closeupControls});
+ const report=await runRoomClothResponse({loadAssets,clearCapture,roomCompositionControls,closeupControls});
+ demoUi.refresh();if(report)setRoomPreviewState(document,report.status==='failed'?'failed':'complete');
 });

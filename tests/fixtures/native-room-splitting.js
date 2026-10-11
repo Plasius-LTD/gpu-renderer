@@ -4,6 +4,7 @@ import {composeRoomEamesScene,roomReferenceSettings,validateRoomFrame} from '/li
 import {createRadialSamplingPlan} from '/lighting/demo/eames-environments/radial-sampling-plan.js';
 import {encodeLinearImageChunks} from '/lighting/demo/eames-environments/linear-image-chunks.js';
 import {createRoughSplittingScene,validateRoughSplittingProbe} from '/lighting/demo/eames-environments/rough-splitting-scenes.js';
+import {revealInvalidControl} from './room-demo-ui.js';
 const check=(v,m)=>{if(!v)throw Error(m);},el=id=>document.getElementById(id);
 let busy=false;
 export async function runRoomSplittingBenchmark({loadAssets,clearCapture,roomCompositionControls}){
@@ -19,7 +20,7 @@ export async function runRoomSplittingBenchmark({loadAssets,clearCapture,roomCom
   check(response.ok,'Cannot retain splitting evidence');return response.json();
  };
  try{
-  for(const control of locked)if(!control.checkValidity()){control.reportValidity();throw Error('Invalid placement');}
+  for(const control of locked)if(!control.checkValidity()){revealInvalidControl(control);throw Error('Invalid placement');}
   clearCapture();locked.forEach(c=>c.disabled=true);el('cancel').disabled=false;el('cancel').addEventListener('click',stop);
   el('sampler').value='stable-pattern';
   el('denoise').value='off';
@@ -93,4 +94,5 @@ export async function runRoomSplittingBenchmark({loadAssets,clearCapture,roomCom
   el('status').textContent=report.status==='failed'?`Failed: ${report.failures.join('; ')}`:'Splitting comparison retained — not quality-qualified';
   el('result').textContent=JSON.stringify({status:report.status,settings:report.settings,summary:report.summary,comparisons:report.diagnostics.map(d=>({splitDepth:d.splitDepth,...d.comparison})),failures:report.failures,provenance:report.provenance},null,2);
  }
+ return report;
 }

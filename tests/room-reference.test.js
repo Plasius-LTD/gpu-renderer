@@ -50,8 +50,11 @@ test("room capture reuses real transport, hashes input, validates counts and cle
  assert.match(js,/__room-manifest.json/);assert.match(js,/__room-model.glb/);
  for(const text of ['__reference-models.json','asset.sha256','runDualUvProbe','runSurfaceValidityProbe','fovYDegrees','referenceModels'])assert(js.includes(text),text);
  assert.match(js,/room-eames-interior-reference/);assert.match(js,/failed/);
- assert.match(js,/addEventListener\("change",clearCapture\)/);
- assert.match(js,/addEventListener\("input",clearCapture\)/);
+ assert.match(js,/addEventListener\("change",invalidateCapture\)/);
+ assert.match(js,/addEventListener\("input",invalidateCapture\)/);
+ const invalidation=js.slice(js.indexOf('function invalidateCapture'),js.indexOf('function clearCapture'));
+ assert.doesNotMatch(invalidation,/preview.hidden=true|preview.removeAttribute/,'setting changes retain the last image, explicitly marked stale');
+ assert.match(invalidation,/invalidateRoomCaptureUi\(document\)/);
  assert.match(js,/sampler:settings.sampler/);
  assert.match(js,/ROOM_DEFAULTS.x/);assert.match(js,/ROOM_DEFAULTS.z/);
  assert.match(js,/runMaterialFidelityProbe/);

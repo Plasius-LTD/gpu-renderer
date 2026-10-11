@@ -228,7 +228,16 @@ It is not a production setting, a converged-quality result or a speedup claim.
 `tests/fixtures/native-room-reference.html` composes the original Eames inside
 the user-approved room GLB owned by gpu-lighting. The companion lighting
 `room-reference-server.mjs` serves the commit-pinned scene and source dependencies.
-Choose native 1080p/4K, an interior view and chair/ottoman X/Z/yaw, then Render.
+Choose a **Room overview**, **Upholstery study** or **Glass and water** setup,
+an adaptive/uniform/high-detail sampling preset and native 1080p/4K, then Render.
+Camera framing and FOV sit beside the scene; changes apply on the next render,
+not live orbit. The last image remains visible but is marked out of date after
+edits, with stale downloads disabled. Advanced settings retain individual material,
+optical, sampling and placement controls; laboratory diagnostics are separate.
+Glass/water explicitly enables bounded/nested transport, not rough transmission;
+upholstery enables sheen and guided denoise. Reset restores the original raw room
+and turns experiments off. Presets are local recipes, not qualification claims.
+See [scene-first controls and QA](docs/design/room-demo-controls.md).
 Controls apply between renders, not as live moving-mesh transport. Six bounces,
 5.95-average-SPP radial budgets, count/HDR evidence and original material transport
 are retained. No old studio enclosure/panel is added; external daylight is explicit.

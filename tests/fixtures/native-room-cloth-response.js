@@ -2,6 +2,7 @@ import {createPairedProbeRunner} from './adaptive-paired-runner.js';
 import {hashBytes} from './original-eames-scene.js';
 import {clothCloseupCamera} from './cloth-inspection-settings.js';
 import {clothResponseSettings} from './cloth-response-settings.js';
+import {revealInvalidControl} from './room-demo-ui.js';
 import {composeRoomEamesScene,roomReferenceSettings} from '/lighting/demo/eames-environments/room-eames.js';
 import {encodeLinearImageChunks} from '/lighting/demo/eames-environments/linear-image-chunks.js';
 const el=id=>document.getElementById(id),check=(v,m)=>{if(!v)throw Error(m);};
@@ -17,7 +18,7 @@ export async function runRoomClothResponse({loadAssets,clearCapture,roomComposit
   check(response.ok,'Cannot retain cloth diagnostic');return response.json();
  };
  try{
-  for(const control of locked)if(!control.checkValidity()){control.reportValidity();throw Error('Invalid diagnostic settings');}
+  for(const control of locked)if(!control.checkValidity()){revealInvalidControl(control);throw Error('Invalid diagnostic settings');}
   check(el('models').value==='all','Cloth diagnostic requires the supplied seating model');
   clearCapture();locked.forEach(c=>c.disabled=true);el('cancel').disabled=false;el('cancel').addEventListener('click',stop);
   const settings=roomReferenceSettings(el('resolution').value,'stable-pattern',el('spp').valueAsNumber);report.settings=settings;
@@ -66,4 +67,5 @@ export async function runRoomClothResponse({loadAssets,clearCapture,roomComposit
   el('status').textContent=report.status==='failed'?`Failed: ${report.failures.join('; ')}`:'Cloth diagnostic retained · compare all four views · no shadows, indirect lighting or denoising';
   el('result').textContent=JSON.stringify(report,null,2);
  }
+ return report;
 }

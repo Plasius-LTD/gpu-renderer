@@ -1,74 +1,125 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Eames inside your room · GPU reference</title>
 <style>
-body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}h1{margin-bottom:8px}p{max-width:90ch}button,a,select,input{font:inherit;padding:8px}input{width:7em}button{margin:6px 6px 6px 0}a{color:#9bd3ff}.controls{display:flex;gap:14px;flex-wrap:wrap;align-items:end}.field{display:grid;gap:5px}select{max-width:100%}img:not([hidden]){display:block;max-width:100%;height:auto;margin:16px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere}#status{min-height:2em}canvas{position:absolute;width:1px;height:1px;left:-2px;top:0}summary{cursor:pointer}#warning{color:#ffd69b}
+:root{color-scheme:dark;--bg:#10151b;--panel:#1a222c;--line:#394654;--muted:#b5c1cd;--accent:#b9e4d1}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{background:var(--bg);color:#eef3f7;font:15px/1.5 system-ui;margin:0;padding:24px}
+main{max-width:1600px;margin:auto}h1{font-size:clamp(24px,3vw,34px);letter-spacing:-.035em;margin:0}h2{font-size:17px;margin:0 0 16px}p{margin:8px 0 16px}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 6px}
+.muted,small{color:var(--muted)}small{font-size:12px;line-height:1.5}a{color:#b9ddff}
+.page-header{display:flex;justify-content:space-between;gap:24px;align-items:start;margin-bottom:24px}
+.badge{border:1px solid var(--line);padding:5px 10px;border-radius:20px;font-size:12px;white-space:nowrap}
+.workspace{display:grid;grid-template-columns:minmax(235px,280px) minmax(0,1fr);gap:20px;align-items:start}
+.panel{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:20px;min-width:0}
+.setup{display:grid;gap:16px}.field{display:grid;gap:6px;min-width:0}label{font-size:13px;font-weight:600}
+button,a,select,input{font:inherit}select,input{width:100%;min-width:0;min-height:44px;border:1px solid #657484;background:#111921;color:#f4f7fa;padding:9px;border-radius:7px}
+button{min-height:44px;padding:9px 14px;border:1px solid #718091;background:#253342;color:#f4f7fa;border-radius:7px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#12291f;font-weight:700}
+button:disabled{opacity:.5;cursor:default}button:not(:disabled):hover{filter:brightness(1.12)}
+:focus-visible{outline:3px solid #a9d5ff;outline-offset:3px}
+.field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:16px}
+.actions,.viewer-heading,.comparison{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.viewer-heading{justify-content:space-between;margin-bottom:14px}.viewer-heading h2{margin:0}
+#preview-state{font-size:12px;color:var(--accent)}[data-state="stale"] #preview-state,[data-state="failed"] #preview-state{color:#ffcc94}
+.stage{position:relative;display:grid;place-items:center;height:clamp(230px,calc(100dvh - 390px),620px);background:#0b1016;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+img:not([hidden]){display:block;width:100%;height:100%;min-height:0;object-fit:contain;margin:0}.stage:has(img:not([hidden])) #empty-state{display:none}
+#empty-state{text-align:center;padding:30px;max-width:48ch}#empty-state strong{font-size:21px;font-weight:500}#empty-state p{color:var(--muted)}
+#status{font-size:13px;min-height:3em;margin:12px 0;overflow-wrap:anywhere}
+#canvas{position:absolute;width:1px;height:1px;left:-2px;top:0}
+.camera{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}.camera h2{margin-bottom:4px}
+details{border-top:1px solid var(--line);padding:14px 0}details>summary{cursor:pointer;min-height:32px;font-weight:600;list-style-position:outside;margin-left:18px}
+details[open]>summary{margin-bottom:16px}details p{color:var(--muted);font-size:13px;max-width:95ch}
+#advanced,#laboratory,#evidence{margin-top:20px}.advanced-groups{display:grid;gap:18px}fieldset{border:1px solid var(--line);border-radius:9px;padding:16px;min-width:0;margin:0}legend{padding:0 8px;font-weight:600;font-size:14px}
+#warning{color:#e9c499;font-size:13px;margin-top:16px}#sampling-description{font-size:13px;color:var(--muted)}
+pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:32rem;overflow:auto}
+#download{padding:9px 0;display:inline-block}footer{margin-top:20px;font-size:13px;color:var(--muted)}
+@media(max-width:850px){body{padding:16px}.workspace{grid-template-columns:1fr}.setup{grid-template-columns:repeat(2,minmax(0,1fr))}.setup h2,.setup .setup-note{grid-column:1/-1}.page-header{gap:12px}.stage{height:auto;aspect-ratio:16/9;min-height:200px}img:not([hidden]){height:auto}}
+@media(max-width:480px){body{padding:12px}.panel{padding:14px}.setup{grid-template-columns:1fr}.page-header{display:block}.badge{display:inline-block;margin-top:10px}.field-grid{grid-template-columns:1fr}.stage{min-height:200px}}
 </style>
-<h1>Eames inside your room</h1>
-<p>Original chair and ottoman inside <strong id="room-name">the server-selected room (verified on Render)</strong>. No added studio walls or ceiling panel. External daylight is supplied because the room has no authored lights.</p>
-<p id="warning">Experimental adaptive sampling: known lighting artifacts remain. Configurable bounce limit (six by default). <span id="sampling-description"></span> Optional rough-surface denoising changes presentation only. Not real-time or quality-qualified.</p>
-<div class="controls" id="controls">
-<div class="field"><label for="lighting-style">Room lighting style</label><select id="lighting-style"><option value="daylight">Original daylight</option><option value="cool-evening">Cool evening — blue-hour colour study</option></select></div>
-<div class="field"><label for="lighting-intensity">Environment intensity</label><input id="lighting-intensity" type="number" step="0.05" required></div>
-<div class="field"><label for="models">Reference models</label><select id="models"><option value="all">Eames + supplied material models</option><option value="eames">Eames only</option></select></div>
-<div class="field"><label for="central-reference">Centre reference</label><select id="central-reference"><option value="standing">Spacesuit — previous layout</option><option value="seating">Sofa — upholstery inspection</option></select></div>
-<div class="field"><label for="fov">Vertical FOV °</label><input id="fov" type="number" min="40" max="80" step="1" value="52" required></div>
+</head>
+<body>
+<main>
+<header class="page-header"><div><p class="eyebrow">Plasius · GPU scene lab</p><h1>Eames inside your room</h1><p class="muted">Choose a setup. Frame the scene. Render when you’re ready.</p></div><span class="badge">Experimental reference</span></header>
+<div id="controls">
+<div class="workspace">
+<aside class="panel setup" aria-labelledby="setup-heading">
+<h2 id="setup-heading">Scene setup</h2>
+<div class="field"><label for="scene-preset">What to inspect</label><select id="scene-preset" aria-describedby="scene-description"><option id="scene-room" value="room">Room overview</option><option id="scene-cloth" value="cloth">Upholstery study</option><option id="scene-glass" value="glass">Glass and water</option><option value="custom" disabled>Custom setup</option></select><small id="scene-description"></small></div>
+<div class="field"><label for="quality-preset">Sampling preset</label><select id="quality-preset" aria-describedby="quality-description"><option id="quality-adaptive" value="adaptive">Adaptive</option><option id="quality-reference" value="reference">Uniform reference</option><option id="quality-detail" value="detail">High detail</option><option value="custom" disabled>Custom sampling</option></select><small id="quality-description"></small></div>
 <div class="field"><label for="resolution">Native resolution</label><select id="resolution"><option value="1080p">1920 × 1080</option><option value="4k">3840 × 2160</option></select></div>
-<div class="field"><label for="spp">SPP ceiling</label><input id="spp" type="number" step="1" required aria-describedby="sampling-description"></div>
+<div class="field"><label for="lighting-style">Room lighting style</label><select id="lighting-style"><option value="daylight">Original daylight</option><option value="cool-evening">Cool evening — blue-hour colour study</option></select></div>
+<p class="setup-note muted"><small>Presets configure the controls below. No render starts automatically. Reset view restores the original room and turns experiments off.</small></p>
+</aside>
+<section id="scene-panel" class="panel" data-state="ready" aria-labelledby="scene-heading">
+<div class="viewer-heading"><h2 id="scene-heading">Scene view</h2><span id="preview-state" role="status">No render yet</span></div>
+<div class="stage">
+<div id="empty-state"><strong>Your room, in focus.</strong><p>Render the scene to inspect the materials and lighting. Camera and setup changes apply to the next render.</p></div>
+<img id="preview" hidden alt="Eames chair and ottoman inside the supplied room">
+</div>
+<canvas id="canvas" width="1920" height="1080" aria-hidden="true"></canvas>
+<p id="status" role="status" aria-live="polite">Ready. Render to view the Eames inside the room.</p>
+<div class="actions"><button id="run" class="primary">Render room</button><button id="cancel" disabled>Stop after pending GPU work</button><button id="reset">Reset view</button><a id="download" hidden>Save native PNG</a></div>
+<div id="comparison" class="comparison" hidden><button id="show-raw">Show raw input</button><button id="show-clean">Show cleaned result</button><button id="show-albedo" hidden>Show base colour</button><button id="show-normal" hidden>Show mapped normals</button><span id="comparison-label" role="status"></span></div>
+<div id="response-comparison" hidden><label for="response-view">Cloth diagnostic view</label><select id="response-view"><option value="0">Pixel centre · normal map on</option><option value="1">Pixel centre · normal map off</option><option value="2">Multi-sample · normal map on</option><option value="3">Multi-sample · normal map off</option></select></div>
+<section class="camera" aria-labelledby="camera-heading">
+<h2 id="camera-heading">Camera</h2><p class="muted"><small>Changes apply on Render. These are composed camera views, not live orbit controls.</small></p>
+<div class="field-grid"><div class="field"><label for="view">Interior viewpoint</label><select id="view"><option value="entry">Room entrance</option><option value="front">Front comparison view</option><option value="corner">Opposite corner</option></select></div>
+<div class="field"><label for="inspection-camera">Camera framing</label><select id="inspection-camera"><option value="room">Room view</option><option value="cloth">Sofa cloth close-up</option><option value="glass">Glass and water close-up</option></select></div>
+<div class="field"><label for="fov">Vertical FOV °</label><input id="fov" type="number" min="40" max="80" step="1" value="52" required></div></div>
+<details id="camera-fine"><summary>Fine-tune close-up</summary><div class="field-grid"><div class="field"><label for="inspection-distance">Close-up distance m</label><input id="inspection-distance" type="number" min="0.3" max="3" step="0.05" required></div>
+<div class="field"><label for="inspection-elevation">Close-up elevation °</label><input id="inspection-elevation" type="number" min="5" max="85" step="1" required></div>
+<div class="field"><label for="inspection-target-x">Cloth target width 0–1</label><input id="inspection-target-x" type="number" min="0" max="1" step="0.05" required></div>
+<div class="field"><label for="inspection-target-y">Cloth target height 0–1</label><input id="inspection-target-y" type="number" min="0" max="1" step="0.05" required></div>
+<div class="field"><label for="inspection-target-z">Cloth target depth 0–1</label><input id="inspection-target-z" type="number" min="0" max="1" step="0.05" required></div></div><p>Distance and elevation affect close-ups only; normalized targets affect cloth only. Framing moves the camera, never stretches the model or its textures.</p></details>
+</section>
+</section>
+</div>
+<p id="warning">Experimental sampling and optical transport. Not real-time or quality-qualified. Captures retain source provenance, actual sample counts and linear HDR.</p>
+<details id="advanced"><summary>Advanced settings <span class="muted">· sampling, materials and placement</span></summary>
+<div class="advanced-groups">
+<fieldset><legend>Sampling and presentation</legend><div class="field-grid"><div class="field"><label for="spp">SPP ceiling</label><input id="spp" type="number" step="1" required aria-describedby="sampling-description"></div>
+<div class="field"><label for="sample-distribution">Sample distribution</label><select id="sample-distribution"><option value="radial">Adaptive rings</option><option value="uniform">Uniform — every pixel at ceiling</option></select></div>
 <div class="field"><label for="max-depth">Maximum bounces</label><input id="max-depth" type="number" min="1" max="8" step="1" value="6" required></div>
 <div class="field"><label for="sampler">Experimental sampler</label><select id="sampler"><option value="fixed-pattern" selected>Fast fixed pattern</option><option value="stable-pattern">Slower stable comparison</option></select></div>
 <div class="field"><label for="splitting">Rough bounce splitting</label><select id="splitting"><option value="0">Off</option><option value="1">2 / 1 / 1 — first bounce</option><option value="2">2 / 2 / 1 — first two bounces</option></select></div>
 <div class="field"><label for="denoise">Guided denoising</label><select id="denoise"><option value="off">Off — raw reference</option><option value="guided">On — compare same-frame raw / cleaned</option></select></div>
+<div class="field"><label for="material-inspection">Material inspection</label><select id="material-inspection"><option value="off">Off</option><option value="on">Capture colour and normals</option></select></div></div><p id="sampling-description"></p><p>Splitting requires the stable sampler and adds secondary rays, not camera SPP. Material inspection requires guided denoising; its first-sample colour and normal guides are diagnostic, not photographic output. Uniform sampling removes the radial budget bands.</p></fieldset>
+<fieldset><legend>Lighting and surface materials</legend><div class="field-grid"><div class="field"><label for="lighting-intensity">Environment intensity</label><input id="lighting-intensity" type="number" step="0.05" required></div>
 <div class="field"><label for="sheen">Cloth sheen model</label><select id="sheen"><option value="off">Off — comparison control</option><option value="on">On — layered Charlie sheen</option></select></div>
 <div class="field"><label for="clearcoat">Layered clearcoat renderer</label><select id="clearcoat"><option value="off">Off — original comparison</option><option value="on">On — separate coating layer</option></select></div>
 <div class="field"><label for="wood-coat">Seat wood material variant</label><select id="wood-coat"><option value="off">Authored materials unchanged</option><option value="on">Add adjustable clear varnish</option></select></div>
 <div class="field"><label for="coat-weight">Varnish coating strength</label><input id="coat-weight" type="number" min="0" max="1" step="0.01"></div>
-<div class="field"><label for="coat-roughness">Varnish roughness</label><input id="coat-roughness" type="number" min="0" max="1" step="0.01"></div>
-<div class="field"><label for="glass-mode">Glass of water reference</label><select id="glass-mode"><option value="off">Off — original room</option><option value="empty">Empty tumbler</option><option value="filled">Tumbler with water</option></select></div>
+<div class="field"><label for="coat-roughness">Varnish roughness</label><input id="coat-roughness" type="number" min="0" max="1" step="0.01"></div></div><p>External daylight is supplied because the room has no authored lights. Cool evening is a colour study, not a solar-position simulation. Varnish requires layered clearcoat; it adds a coating to verified seat wood without rewriting source assets. These switches remain independent.</p></fieldset>
+<fieldset><legend>Glass and water experiment</legend><div class="field-grid"><div class="field"><label for="glass-mode">Glass of water reference</label><select id="glass-mode"><option value="off">Off — original room</option><option value="empty">Empty tumbler</option><option value="filled">Tumbler with water</option></select></div>
 <div class="field"><label for="bounded-dielectric">Bounded glass branching</label><select id="bounded-dielectric"><option value="off">Off — legacy split control</option><option value="on">On — weighted single continuation</option></select></div>
 <div class="field"><label for="nested-media">Nested glass / water refraction</label><select id="nested-media"><option value="off">Off — air-relative control</option><option value="on">On — actual media and contact</option></select></div>
 <div class="field"><label for="rough-dielectric">Rough / partial optical transmission</label><select id="rough-dielectric" aria-describedby="rough-optics-help"><option value="off">Off — existing dielectric control</option><option value="on">On — experimental optical materials</option></select><small id="rough-optics-help">Requires nested refraction and volume metadata. Uses authored roughness/transmission; not alpha holes or subsurface scattering.</small></div>
 <div class="field"><label for="glass-fill">Water fill fraction</label><input id="glass-fill" type="number" min="0" max="1" step="0.05" required></div>
-<div class="field"><label for="glass-x">Glass X</label><input id="glass-x" type="number" min="-6" max="6" step="0.05" required></div>
-<div class="field"><label for="glass-z">Glass Z</label><input id="glass-z" type="number" min="-4" max="4" step="0.05" required></div>
 <div class="field"><label for="glass-radius">Glass radius m</label><input id="glass-radius" type="number" min="0.025" max="0.12" step="0.005" required></div>
 <div class="field"><label for="glass-height">Glass height m</label><input id="glass-height" type="number" min="0.06" max="0.4" step="0.01" required></div>
 <div class="field"><label for="glass-ior">Glass refractive index</label><input id="glass-ior" type="number" min="1" max="2.5" step="0.01" required></div>
 <div class="field"><label for="water-ior">Water refractive index</label><input id="water-ior" type="number" min="1" max="2.5" step="0.001" required></div>
-<div class="field"><label for="view">Interior viewpoint</label><select id="view"><option value="entry">Room entrance</option><option value="front">Front comparison view</option><option value="corner">Opposite corner</option></select></div>
-<div class="field"><label for="inspection-camera">Camera framing</label><select id="inspection-camera"><option value="room">Room view</option><option value="cloth">Sofa cloth close-up</option><option value="glass">Glass and water close-up</option></select></div>
-<div class="field"><label for="inspection-distance">Close-up distance m</label><input id="inspection-distance" type="number" min="0.3" max="3" step="0.05" required></div>
-<div class="field"><label for="inspection-elevation">Close-up elevation °</label><input id="inspection-elevation" type="number" min="5" max="85" step="1" required></div>
-<div class="field"><label for="inspection-target-x">Cloth target width 0–1</label><input id="inspection-target-x" type="number" min="0" max="1" step="0.05" required></div>
-<div class="field"><label for="inspection-target-y">Cloth target height 0–1</label><input id="inspection-target-y" type="number" min="0" max="1" step="0.05" required></div>
-<div class="field"><label for="inspection-target-z">Cloth target depth 0–1</label><input id="inspection-target-z" type="number" min="0" max="1" step="0.05" required></div>
-<div class="field"><label for="sample-distribution">Sample distribution</label><select id="sample-distribution"><option value="radial">Adaptive rings</option><option value="uniform">Uniform — every pixel at ceiling</option></select></div>
-<div class="field"><label for="material-inspection">Material inspection</label><select id="material-inspection"><option value="off">Off</option><option value="on">Capture colour and normals</option></select></div>
-<div class="field"><label for="response-elevation">Diagnostic light elevation °</label><input id="response-elevation" type="number" min="1" max="90" step="1" required></div>
-<div class="field"><label for="response-intensity">Diagnostic white-light intensity</label><input id="response-intensity" type="number" min="0.01" max="100" step="0.01" required></div>
+<div class="field"><label for="glass-x">Glass X</label><input id="glass-x" type="number" min="-6" max="6" step="0.05" required></div>
+<div class="field"><label for="glass-z">Glass Z</label><input id="glass-z" type="number" min="-4" max="4" step="0.05" required></div></div><p>Glass-to-water image quality and performance are not yet fully qualified. The glass preset enables bounded branching and nested refraction. Rough optical transport stays off unless selected explicitly. Legacy splitting can overflow and reject a capture. Water overlaps the thick glass slightly, without a fake air gap; a neutral pedestal supports it. Six bounces may terminate longer paths. Off restores the original room.</p></fieldset>
+<fieldset><legend>Models and placement</legend><div class="field-grid"><div class="field"><label for="models">Reference models</label><select id="models"><option value="all">Eames + supplied material models</option><option value="eames">Eames only</option></select></div>
+<div class="field"><label for="central-reference">Centre reference</label><select id="central-reference"><option value="standing">Spacesuit — previous layout</option><option value="seating">Sofa — upholstery inspection</option></select></div>
 <div class="field"><label for="chair-x">Eames X</label><input id="chair-x" type="number" min="-5" max="5" step="0.1" value="2.3" required></div>
 <div class="field"><label for="chair-z">Eames Z</label><input id="chair-z" type="number" min="-4" max="4" step="0.1" value="-2.5" required></div>
-<div class="field"><label for="chair-yaw">Rotation °</label><input id="chair-yaw" type="number" min="-180" max="180" step="5" value="-25" required></div>
+<div class="field"><label for="chair-yaw">Rotation °</label><input id="chair-yaw" type="number" min="-180" max="180" step="5" value="-25" required></div></div><p>Original chair and ottoman inside <strong id="room-name">the server-selected room (verified on Render)</strong>. No added studio walls or ceiling panel. Placement moves the Eames pair; the camera target stays fixed. Centre reference exchanges sofa and spacesuit positions only. The sofa is uniformly scaled to 1.5 m wide, preserving its proportions; the standing model keeps its source scale. Wall collisions are not checked.</p><p id="model-names" role="status">Additional assets are loaded only from the local server and verified on Render.</p></fieldset>
 </div>
-<p>Placement moves the Eames chair and ottoman together; the comparison camera target stays fixed. Centre reference exchanges the sofa and spacesuit floor positions without changing their rotation; it has no effect in Eames-only mode. The first additional seating model is uniformly scaled to 1.5 m wide, preserving its proportions; the standing model keeps its source scale. Authored materials are unchanged unless the explicit seat-wood varnish variant is enabled. Changes apply on Render; wall collisions are not checked. FOV defaults to 52° (previously 62°); this remains a single-camera, not stereo, view.</p>
-<p>Clearcoat is a separate transparent surface finish, not a tint or a second mesh. The optional varnish variant coats only verified seat wood; strength and roughness are adjustable. It requires the layered-clearcoat switch. Original model files are never rewritten. Both switches reset off. These controls apply to Render room only, not the cloth diagnostic or splitting benchmark.</p>
-<p id="model-names" role="status">Additional assets are loaded only from the local server and verified on Render.</p>
-<p>Glass-to-water image quality and performance are not yet fully qualified. The optical switches are experimental.</p>
-<p>Glass reference adds a thick-walled tumbler, optional water and a neutral pedestal. Choose the glass close-up and adjust Close-up distance/elevation to inspect it. Enable both transport experiments for bounded glass/water rendering; each can be tested independently. Legacy splitting can overflow and reject a capture. Water overlaps the glass slightly, without a fake air gap. This is a diagnostic, not a finished water simulation or convergence claim. Six bounces may terminate longer paths. Glass controls apply only to Render room, not the separate cloth or splitting diagnostics; Off restores the original room. Reset turns both experiments off.</p>
-<p>Room lighting is selectable and intensity is adjustable. Cool evening is an artistic colour study, not a solar-position simulation. Models, light direction and exposure are unchanged. Reset restores original daylight. Lighting applies to Render room and the splitting comparison; the separate white-light diagnostic below keeps its own illumination.</p>
-<button id="run">Render room</button><button id="reset">Reset view</button><button id="cancel" disabled>Stop after pending GPU work</button>
-<button id="cloth-response">Diagnose cloth normal detail</button>
-<p>The cloth diagnostic uses the selected camera and SPP ceiling, uniform stable camera samples and the selected sheen model. It compares normal maps on/off and pixel-centre/multi-sample camera rays under one unoccluded white light. It omits shadows, indirect bounces, splitting and denoising. Not a full render or performance benchmark; no authored texture changes.</p>
-<div id="response-comparison" hidden><label for="response-view">Cloth diagnostic view</label><select id="response-view"><option value="0">Pixel centre · normal map on</option><option value="1">Pixel centre · normal map off</option><option value="2">Multi-sample · normal map on</option><option value="3">Multi-sample · normal map off</option></select></div>
-<p>Splitting requires the stable sampler. It adds secondary rays, not camera SPP. No split after the selected depth.</p>
-<p>Close-up moves the camera, not the model or its texture scale. Uniform sampling removes radial quality bands. Material inspection requires guided denoising: it displays the same frame's first-sample base colour and mapped world normals, not another renderer. Colour includes the authored tint; magenta normals mean unavailable/protected. These single-sample guides are not antialiased or photographic output.</p>
-<button id="benchmark">Measure splitting: off vs first vs first two</button>
-<p>Splitting benchmark uses room-view framing, radial budgets at the default ceiling, denoising off and the stable sampler for every variant. Close-up and material-inspection controls do not apply. One warmup, three rotated timing rounds, then diagnostic images. Keep this tab visible; it may take several minutes.</p>
-<p id="status" role="status" aria-live="polite">Ready. Render to view the Eames inside the room.</p>
-<canvas id="canvas" width="1920" height="1080" aria-hidden="true"></canvas>
-<a id="download" hidden>Save native PNG</a>
-<div id="comparison" hidden><button id="show-raw">Show raw input</button><button id="show-clean">Show cleaned result</button><button id="show-albedo" hidden>Show base colour</button><button id="show-normal" hidden>Show mapped normals</button><span id="comparison-label" role="status"></span></div>
-<img id="preview" hidden alt="Eames chair and ottoman inside the supplied room">
-<details><summary>Scene and capture evidence</summary><pre id="result" aria-label="Capture settings and verification"></pre></details>
-<p><a href="./native-stable-reference.html">Previous studio comparison</a></p>
-<script type="module" src="./native-room-reference.js"></script></html>
+</details>
+<details id="laboratory"><summary>Laboratory diagnostics <span class="muted">· separate tests, not scene presets</span></summary>
+<div class="field-grid"><div class="field"><label for="response-elevation">Diagnostic light elevation °</label><input id="response-elevation" type="number" min="1" max="90" step="1" required></div>
+<div class="field"><label for="response-intensity">Diagnostic white-light intensity</label><input id="response-intensity" type="number" min="0.01" max="100" step="0.01" required></div></div>
+<p>The white-light diagnostic compares normal maps on/off and pixel-centre/multi-sample camera rays, using the selected camera, SPP ceiling and sheen. No shadows, indirect bounces, splitting or denoising. Not a full render or performance benchmark.</p><button id="cloth-response">Diagnose cloth normal detail</button>
+<p>Splitting comparison uses room framing, radial default-ceiling budgets and the stable sampler; denoising, glass, varnish and close-up settings do not apply. One warmup, three rotated timing rounds, then diagnostic images. Keep the tab visible; this may take several minutes.</p><button id="benchmark">Measure splitting: off vs first vs first two</button>
+</details>
+</div>
+<details id="evidence"><summary>Scene and capture evidence</summary><pre id="result" aria-label="Capture settings and verification"></pre></details>
+<footer>Local reference only · <a href="./native-stable-reference.html">Previous studio comparison</a></footer>
+</main>
+<script type="module" src="./native-room-reference.js"></script>
+</body></html>

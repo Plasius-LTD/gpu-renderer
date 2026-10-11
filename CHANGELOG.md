@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Simplify the local room demo into scene and sampling presets, an image-first
+  layout with adjacent camera controls, and collapsed advanced/laboratory tools.
+  Preserve prior images with an explicit stale state after edits; retain all
+  diagnostic switches, validation and provenance without changing transport (#239).
+
 - Add default-off rough optical transmission with matched GGX BSDF/PDF,
   partial-transmission energy and diffuse response, bounded continuation and
   medium-aware shadow collision checks. Reject untracked/alpha-covered volume
