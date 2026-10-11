@@ -203,3 +203,24 @@ Local evidence: `rope-normal-before.jpg`, `rope-normal-after.jpg`,
 `coat100-camera.jpg`, `coatoff-camera.jpg`, `rope-camera-zero.jpg`,
 `rope-camera-full.jpg` and `chest-in-scene-camera-review.jpg`. Screenshots are local
 review artifacts, not published game assets. The review retains 30% fray / 90% wear.
+
+### Focus gesture guide refinement (2026-10-11)
+
+The local preview removes the persistent camera toolbar. A pointer-transparent
+five-second example shows orbit, truck and dolly gestures for mouse/touch, with
+keyboard equivalents, lens/look modifiers, reset and help replay. Focus triggers
+the example; blur, Escape and disposal dismiss it. Its persistent screen-reader
+description is not time limited, and reduced-motion styling disables transitions.
+The material ageing controls and reviewed fixture remain available.
+
+Actual WebGPU browser verification: the guide appeared on focus, was absent on
+later inspection after expiry, replayed with `?`, dismissed with Escape/blur, and
+Tab exited to the material controls. Mouse drag changed the view with no toolbar.
+At 320x800 the guide was contained within the scene and document scroll width was
+320px. The preview had no warning/error console entries. Screenshot evidence is
+`chest-gesture-guide.jpg` in local output; the view contains real renderer output.
+The 5,000ms boundary, timer replacement/cleanup, modifier mappings, default
+mouse/touch orbit independent of keyboard mode, and wheel lens/dolly isolation
+are covered by regression tests. Shared two-pointer tests remain passing; no
+physical touch-device test is claimed. No source assets or renderer shaders were
+changed for this UI refinement. Production/site adoption remains pending.

@@ -48,3 +48,13 @@ source-only and is not a new published package or a production entitlement.
 Site adoption follows released dependencies and its existing capability/flag;
 rollback disables the scene-fidelity rollout or restores the prior package
 through approved CD. Never publish or deploy directly from the local preview.
+
+## UI refinement (2026-10-11)
+
+Subsequent user review replaces the persistent mode/movement buttons with direct
+mouse/touch gestures and a five-second focus example. Keep keyboard modes and a
+persistent accessible description, with `?` replay and Escape dismissal. The
+adapter owns one cancellable visibility timer through an optional callback; the
+host owns non-interactive, reduced-motion-safe markup. Mouse and touch mappings
+are independent of keyboard mode. This supersedes only the button presentation
+above; shared runtime ownership, bounded input and lifecycle remain unchanged.

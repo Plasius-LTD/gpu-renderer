@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Replace the material review camera toolbar with a five-second focus gesture guide; keep direct mouse/touch movement independent of keyboard modes, with replay and dismissal (#230).
+
 - Update the existing brace-expansion development override to 5.0.12 for patched denial-of-service advisories (#230).
 
 - Fix native normal maps losing detail at close range; add a source-demo camera adapter using shared orbit, truck, pan, dolly and zoom controls with keyboard/touch support (#230).

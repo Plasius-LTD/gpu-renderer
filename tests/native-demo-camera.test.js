@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createNativeDemoCamera } from '../demo/native-demo-camera.js';
 
-function fixture() {
+function fixture(options = {}) {
   const events = new Map(), captures = new Set();
   const canvas = {
     clientHeight: 600, ownerDocument: { activeElement: null },
@@ -16,7 +16,7 @@ function fixture() {
   };
   let changes = 0;
   const camera = { eye: [0, 1, 2], target: [0, 1, 0], fov: 42 };
-  const controls = createNativeDemoCamera({ canvas, camera, onChange: () => changes++ });
+  const controls = createNativeDemoCamera({ canvas, camera, onChange: () => changes++, ...options });
   const send = (type, extra = {}) => {
     const e = { target: canvas, pointerId: 1, pointerType: 'mouse', button: 0,
       clientX: 0, clientY: 0, preventDefault() { this.prevented = true; }, ...extra };
@@ -126,4 +126,73 @@ test('pointer orbit and keyboard/button orbit use the same shared camera convent
   assert.deepEqual(a.target,b.target); near(distance(a),distance(b));
   drag.send('pointerup');
   assert.ok(drag.changes()>0);
+});
+
+
+test('focus guide expires after five seconds and replays without moving the camera', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const visibility=[];
+  const f=fixture({onHintChange: visible=>visibility.push(visible)});
+  assert.deepEqual(visibility,[]);
+  f.canvas.focus(); f.send('focus');
+  assert.deepEqual(visibility,[true]);
+  t.mock.timers.tick(4999); assert.deepEqual(visibility,[true]);
+  t.mock.timers.tick(1); assert.deepEqual(visibility,[true,false]);
+  assert.deepEqual(f.controls.read(),f.camera); assert.equal(f.changes(),0);
+  f.send('blur'); f.send('focus');
+  t.mock.timers.tick(4000);
+  assert.ok(f.send('keydown',{key:'?'}).prevented);
+  t.mock.timers.tick(1000); assert.equal(visibility.at(-1),true,'replay resets expiry');
+  t.mock.timers.tick(4000); assert.equal(visibility.at(-1),false);
+  f.controls.destroy();
+});
+
+test('guide cancellation on Escape, blur and disposal clears pending expiry', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const visibility=[];
+  const f=fixture({onHintChange: visible=>visibility.push(visible)});
+  f.canvas.focus(); f.send('focus');
+  assert.ok(f.send('keydown',{key:'Escape'}).prevented);
+  assert.equal(visibility.at(-1),false);
+  let n=visibility.length; t.mock.timers.tick(5000); assert.equal(visibility.length,n);
+  f.send('focus'); f.send('blur'); assert.equal(visibility.at(-1),false);
+  n=visibility.length; t.mock.timers.tick(5000); assert.equal(visibility.length,n);
+  f.send('focus'); f.controls.destroy(); f.controls.destroy();
+  assert.equal(visibility.at(-1),false);
+  n=visibility.length; t.mock.timers.tick(5000); assert.equal(visibility.length,n);
+  assert.equal(f.events.size,0);
+  assert.throws(()=>fixture({onHintChange:null}),/camera/i);
+});
+
+test('mouse and one-touch orbit need no tool selection; Alt mouse drag pans in place', () => {
+  for(const pointerType of ['mouse','touch']) {
+    const f=fixture(); f.controls.setMode('zoom');
+    f.send('pointerdown',{pointerType,clientX:100,clientY:100});
+    f.send('pointermove',{pointerType,clientX:130,clientY:120});
+    const c=f.controls.read();
+    assert.notDeepEqual(c.eye,f.camera.eye); assert.deepEqual(c.target,f.camera.target);
+    assert.equal(c.fov,f.camera.fov); near(distance(c),2);
+    f.controls.destroy();
+  }
+  const f=fixture();
+  f.send('pointerdown',{altKey:true});
+  f.send('pointermove',{clientX:30,clientY:20});
+  assert.deepEqual(f.controls.read().eye,f.camera.eye);
+  assert.notDeepEqual(f.controls.read().target,f.camera.target);
+  f.send('pointerup'); f.controls.reset();
+  f.send('pointerdown',{shiftKey:true}); f.send('pointermove',{clientX:30});
+  assert.notDeepEqual(f.controls.read().eye,f.camera.eye);
+  assert.notDeepEqual(f.controls.read().target,f.camera.target);
+  f.controls.destroy();
+});
+
+test('wheel dolly and Shift-wheel lens zoom are independent of keyboard mode', () => {
+  const f=fixture(); f.canvas.focus(); f.controls.setMode('zoom');
+  f.send('wheel',{deltaY:-100,deltaMode:0});
+  const closer=f.controls.read();
+  assert.equal(closer.fov,f.camera.fov); assert.ok(distance(closer)<distance(f.camera));
+  f.send('wheel',{deltaY:-100,deltaMode:0,shiftKey:true});
+  const zoomed=f.controls.read();
+  assert.deepEqual(zoomed.eye,closer.eye); assert.deepEqual(zoomed.target,closer.target);
+  assert.ok(zoomed.fov<closer.fov); f.controls.destroy();
 });

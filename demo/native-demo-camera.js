@@ -7,8 +7,8 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const vector = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
 
 /** DOM input adapter only. Camera state, transforms and lens belong to gpu-camera. */
-export function createNativeDemoCamera({ canvas, camera, onChange } = {}) {
-  if (!canvas?.addEventListener || typeof onChange !== 'function' || !camera ||
+export function createNativeDemoCamera({ canvas, camera, onChange, onHintChange = () => {} } = {}) {
+  if (!canvas?.addEventListener || typeof onChange !== 'function' || typeof onHintChange !== 'function' || !camera ||
       !vector(camera.eye) || !vector(camera.target) || !Number.isFinite(camera.fov) ||
       camera.fov < 12 || camera.fov > 90 ||
       !Number.isFinite(Math.hypot(...camera.eye.map((v,i) => v-camera.target[i]))) ||
@@ -23,7 +23,7 @@ export function createNativeDemoCamera({ canvas, camera, onChange } = {}) {
   const bounds = { minDistance: .03, maxDistance: Math.max(2,radius*10), minPolarAngle: .02, maxPolarAngle: Math.PI-.02 };
   const gestures = createCameraControls({ camera: initial, viewMode: 'editor', ...bounds,
     smoothTime: 0, draggingSmoothTime: 0, rotateSensitivity: .008, dollySensitivity: .004 });
-  let mode = 'orbit', disposed = false;
+  let mode = 'orbit', disposed = false, hintVisible = false, hintTimer;
   const points = new Map(), listeners = [];
   const originalTouchAction = canvas.style.touchAction;
   canvas.style.touchAction = 'none';
@@ -55,10 +55,20 @@ export function createNativeDemoCamera({ canvas, camera, onChange } = {}) {
   const listen = (type,fn,options) => { canvas.addEventListener(type,fn,options); listeners.push([type,fn,options]); };
   const release = id => { gestures.handlePointerCancel({pointerId:id}); points.delete(id); if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id); };
   const cancel = () => { for (const id of [...points.keys()]) release(id); };
+  const hideHint = () => {
+    clearTimeout(hintTimer);
+    if (hintVisible) { hintVisible=false; onHintChange(false); }
+  };
+  const showHint = () => {
+    clearTimeout(hintTimer);
+    hintVisible=true; onHintChange(true);
+    hintTimer=setTimeout(hideHint,5000);
+  };
+  listen('focus',showHint);
   listen('pointerdown', e => {
     if (e.button>2 || points.size>=2 || !Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return;
     canvas.focus({preventScroll:true});
-    points.set(e.pointerId,{x:e.clientX,y:e.clientY,operation:e.button===1||e.button===2||e.shiftKey?'truck':mode});
+    points.set(e.pointerId,{x:e.clientX,y:e.clientY,operation:e.pointerType==='touch'?'orbit':e.button===1||e.button===2||e.shiftKey?'truck':e.altKey?'pan':'orbit'});
     gestures.setCamera(state()); gestures.handlePointerDown(normalizePointerEvent(e));
     canvas.setPointerCapture(e.pointerId); e.preventDefault();
   });
@@ -84,12 +94,12 @@ export function createNativeDemoCamera({ canvas, camera, onChange } = {}) {
     e.preventDefault();
   });
   for(const event of ['pointerup','pointercancel','lostpointercapture'])listen(event,e=>release(e.pointerId));
-  listen('blur',cancel);
+  listen('blur',()=>{cancel();hideHint();});
   listen('contextmenu',e=>e.preventDefault());
   listen('wheel',e=>{
     if(!focused(e) || e.ctrlKey || e.metaKey || !Number.isFinite(e.deltaY))return;
     const pixels=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?canvas.clientHeight:1);
-    move(0,pixels*.25,e.shiftKey||mode==='zoom'?'zoom':'dolly'); e.preventDefault();
+    move(0,pixels*.25,e.shiftKey?'zoom':'dolly'); e.preventDefault();
   },{passive:false});
   listen('keydown',e=>{
     if(!focused(e) || e.ctrlKey || e.metaKey || e.altKey)return;
@@ -97,13 +107,15 @@ export function createNativeDemoCamera({ canvas, camera, onChange } = {}) {
     if(arrows[e.key])move(...arrows[e.key],e.shiftKey?'truck':mode);
     else if(['+','=','-','_'].includes(e.key))move(0,e.key==='+'||e.key==='='?-24:24,mode==='zoom'?'zoom':'dolly');
     else if(e.key==='Home')reset();
+    else if(e.key==='?')showHint();
+    else if(e.key==='Escape')hideHint();
     else if(/^[1-5]$/.test(e.key)) { setMode(modes[Number(e.key)-1]); onChange(read()); }
     else return;
     e.preventDefault();
   });
   return {read,move,reset,setMode,getMode:()=>mode,destroy(){
     if(disposed)return;
-    disposed=true; cancel();
+    disposed=true; cancel(); hideHint();
     for(const args of listeners)canvas.removeEventListener(...args);
     canvas.style.touchAction=originalTouchAction;
   }};

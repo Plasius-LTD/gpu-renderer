@@ -888,30 +888,50 @@ renderer runtime dependency or public export.
 ```js
 import { createNativeDemoCamera } from './demo/native-demo-camera.js';
 
-// Supply a focusable canvas with an accessible name and linked control help.
+// Supply a focusable canvas with an accessible name and persistent
+// aria-describedby instructions. The visual example is initially hidden,
+// aria-hidden, pointer-events:none and contains no interactive controls.
 const cameraControls = createNativeDemoCamera({
   canvas,
   camera: { eye: [-0.7, 0.5, 0.8], target: [0, 0.16, 0], fov: 42 },
   onChange: () => draw(),
+  onHintChange: visible => { gestureExample.hidden = !visible; },
 });
 // Each draw uses camera: cameraControls.read(). Keep the controls alive across
 // renderer/material rebuilds; defer drawing while the renderer is unavailable.
-cameraControls.setMode('truck'); // orbit | truck | pan | dolly | zoom
-cameraControls.move(0, -24);      // also suitable for accessible arrow buttons
-// At teardown:
+// At teardown (also cancels the hint timer):
 cameraControls.destroy();
 ```
 
-Use labelled mode buttons (`aria-pressed` reflects `getMode()`), movement buttons
-and reset (`reset()`). Drag applies the selected tool. Right/middle/Shift-drag
-trucks; two pointers truck/pinch. A focused canvas accepts wheel dolly (Shift for
-lens zoom), arrows, Shift-arrows to truck, +/−, 1–5 to select a mode, and Home to
-reset. Browser Ctrl/Meta/Alt shortcuts and keys outside the canvas are left alone.
-Disable horizontal arrow buttons for the vertical-only dolly/zoom modes. Wheel
-input only belongs to a focused canvas; the surrounding page remains scrollable.
-No inertia or animation loop is introduced. Distances, lens and travel are bounded;
-pointer cancellation/blur/disposal release captures and listeners. This is an
-inspection camera without scene collision detection or object picking.
+The material review uses direct manipulation with no persistent camera toolbar.
+The optional `onHintChange` callback shows a brief example on canvas focus and
+hides it after five seconds, on blur, Escape or disposal. Refocus or `?` replays
+it; replay replaces the prior timer. The host owns visual presentation: show
+mouse/touch or keyboard examples, preserve a screen-reader description without a
+time limit, and respect reduced motion. Do not move the camera to demonstrate a
+gesture or let the example intercept input. Keep material controls below the scene.
+
+| Input | Camera action |
+| --- | --- |
+| Left-drag / one finger | Orbit |
+| Right/middle/Shift-drag | Truck / pedestal across the current view |
+| Alt-drag | Pan / tilt in place |
+| Scroll / touch pinch | Move closer or farther (dolly) |
+| Shift-scroll | Change the lens (optical zoom) |
+| Two fingers moving together | Truck / pedestal |
+| Arrows / Shift-arrows | Selected keyboard mode / truck |
+| 1–5 | Select orbit, truck, pan, dolly or lens zoom for keyboard arrows |
+| +/− | Dolly (lens zoom in keyboard zoom mode) |
+| Home | Reset view |
+| ? / Escape | Replay / dismiss the brief guide |
+
+Keyboard mode selection does not change mouse or touch gestures. The source-only
+`setMode`, `getMode`, `move` and `reset` methods remain available to host code.
+Browser Ctrl/Meta/Alt key shortcuts and keys outside the canvas are left alone.
+Wheel input only belongs to a focused canvas; the surrounding page remains
+scrollable. No inertia or animation loop is introduced. Distances, lens and travel
+are bounded; pointer cancellation/blur/disposal release captures and listeners.
+This is an inspection camera without scene collision detection or object picking.
 
 Native material normal-map degeneracy checks now use normalized screen-space
 position/UV gradients. Valid tiny derivatives in rope macro views no longer disable

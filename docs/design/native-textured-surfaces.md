@@ -235,3 +235,25 @@ in brace-expansion 5.0.9 (GHSA-q2hr-2g5m-vwhr, GHSA-qhr7-859c-m2p7 and
 GHSA-6j4f-fj2g-mc7p). As required scoped dependency hygiene, update the existing
 exact override to patched 5.0.12 and regenerate only its lock entry. Verify full
 and runtime audits and rerun test/build/package gates; do not bypass audits.
+
+## Focus gesture guide refinement (2026-10-11)
+
+The user requests direct manipulation with no persistent camera toolbar. Keep
+material-ageing controls separate. On canvas focus show a non-interactive gesture
+example for five seconds; hide on blur, Escape or disposal, replay on refocus or
+`?`. A permanent screen-reader description supplies the same instructions without
+a reading-time limit. No automatic camera movement, looping illustration or
+motion-dependent information; respect reduced-motion preferences.
+
+Mouse left-drag and one-finger touch always orbit, independent of keyboard mode.
+Right/middle/Shift-drag trucks, Alt-drag pans/tilts; focused wheel dollies and
+Shift-wheel changes the lens. Shared two-pointer truck/pinch stays unchanged.
+Keep keyboard modes/arrows, Shift-arrows, +/− and Home reset. The source-only input
+adapter owns the optional hint visibility callback and one cancellable timer;
+the host owns accessible markup and presentation. This refines ADR-0036's host UI
+without changing the shared camera/runtime boundary or published package API.
+
+Tests first cover five-second expiry, focus replay, Escape/blur/disposal cleanup,
+no unsolicited initial hint, stable pointer mapping after keyboard-mode selection,
+modifier movement and shared touch transitions. Verify the actual WebGPU preview,
+320px layout and accessible instructions, then docs, coverage and exact-head CI.
