@@ -18,6 +18,11 @@ target are configurable; validate finite ranges and room containment. Preserve
 the room camera when inspection is off. Add uniform camera-sample budgets as an
 independent alternative to existing radial tiers; record the actual histogram.
 
+UI refinement (renderer #239): the room demo exposes only Focus plus brief
+navigation help. Numeric close-up parameters remain in the configurable helper
+defaults, not visible or hidden form fields. Existing camera validation and
+retained camera evidence still apply; see [room controls](room-demo-controls.md).
+
 Opt-in material views reuse the same completed render's first-camera-sample
 guides: linear base colour (including the authored factor, displayed with sRGB
 encoding and no lighting/tone mapping), and world-space mapped normals encoded

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createRoomDemoPresets,installRoomDemoUi,revealInvalidControl,setRoomPreviewState,invalidateRoomCaptureUi} from './fixtures/room-demo-ui.js';
 
-const defaults={maximumSpp:32,limit:256,cloth:{distance:.85,elevation:50},glass:{distance:.45,elevation:25},centralReference:'seating'};
+const defaults={maximumSpp:32,limit:256,centralReference:'seating',view:'entry'};
 const html=readFileSync(new URL('./fixtures/native-room-reference.html',import.meta.url),'utf8');
 function fixture(){
  const nodes=new Map();
@@ -18,7 +18,7 @@ test('scene recipes reuse configured camera defaults and independently restore t
  assert.equal(p.scene.glass.values['nested-media'],'on');
  assert.equal(p.scene.glass.values['bounded-dielectric'],'on');
  assert.equal(p.scene.glass.values['rough-dielectric'],'off');
- assert.equal(p.scene.glass.values['inspection-distance'],defaults.glass.distance);
+ assert.equal(p.scene.glass.values['focus-view'],'glass');
  assert.equal(p.scene.cloth.values.sheen,'on');
  assert.equal(p.scene.cloth.values.denoise,'guided');
  assert.equal(p.scene.room.values['glass-mode'],'off');
@@ -40,7 +40,7 @@ test('recipe controls apply, mark manual changes Custom, and never start a rende
  assert.equal(nodes.get('sample-distribution').value,'uniform');
  nodes.get('spp').value='64';ui.refresh();assert.equal(nodes.get('quality-preset').value,'custom');
  nodes.get('scene-preset').value='room';nodes.get('scene-preset').listeners.change();
- assert.equal(nodes.get('inspection-camera').value,'room');assert.equal(nodes.get('nested-media').value,'off');
+ assert.equal(nodes.get('focus-view').value,defaults.view);assert.equal(nodes.get('nested-media').value,'off');
  assert.equal(nodes.get('spp').value,'64','scene recipe must not silently change quality');
  const count=changes;nodes.get('scene-preset').disabled=true;nodes.get('scene-preset').value='glass';nodes.get('scene-preset').listeners.change();assert.equal(changes,count);
  nodes.get('scene-preset').disabled=false;nodes.get('scene-preset').value='missing';assert.throws(()=>nodes.get('scene-preset').listeners.change(),/Unknown/);
@@ -60,17 +60,17 @@ test('editing keeps the old image explicitly stale but removes old exports and e
  nodes.get('preview').hidden=true;invalidateRoomCaptureUi(document);assert.equal(nodes.get('scene-panel').dataset.state,'ready');
  for(const state of ['rendering','complete','failed']){setRoomPreviewState(document,state);assert.equal(nodes.get('scene-panel').dataset.state,state);assert(nodes.get('preview-state').textContent);}
 });
-test('scene-first markup retains all controls with labels and closed advanced sections',()=>{
+test('scene-first markup retains non-camera controls with labels and closed advanced sections',()=>{
  const ids=[...html.matchAll(/id="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);
  for(const [,id] of html.matchAll(/<(?:input|select) id="([^"]+)"/g))assert(html.includes(`for="${id}"`),id);
- for(const id of ['advanced','laboratory','camera-fine'])assert.match(html,new RegExp(`<details id="${id}">`));
+ for(const id of ['advanced','laboratory'])assert.match(html,new RegExp(`<details id="${id}">`));
  assert(html.indexOf('id="preview"')<html.indexOf('id="advanced"'));
  const scene=html.slice(html.indexOf('id="scene-panel"'),html.indexOf('id="advanced"'));
- for(const id of ['view','inspection-camera','fov','inspection-distance'])assert(scene.includes(`id="${id}"`),id);
+ assert(scene.includes('id="focus-view"'));
  assert.match(html,/id="preview-state"[^>]*role="status"/);
  assert.match(html,/Changes apply on Render/);
  assert.match(html,/@media/);
- const original=['lighting-style','lighting-intensity','models','central-reference','fov','resolution','spp','max-depth','sampler','splitting','denoise','sheen','clearcoat','wood-coat','coat-weight','coat-roughness','glass-mode','bounded-dielectric','nested-media','rough-dielectric','glass-fill','glass-x','glass-z','glass-radius','glass-height','glass-ior','water-ior','view','inspection-camera','inspection-distance','inspection-elevation','inspection-target-x','inspection-target-y','inspection-target-z','sample-distribution','material-inspection','response-elevation','response-intensity','chair-x','chair-z','chair-yaw'];
+ const original=['lighting-style','lighting-intensity','models','central-reference','resolution','spp','max-depth','sampler','splitting','denoise','sheen','clearcoat','wood-coat','coat-weight','coat-roughness','glass-mode','bounded-dielectric','nested-media','rough-dielectric','glass-fill','glass-x','glass-z','glass-radius','glass-height','glass-ior','water-ior','sample-distribution','material-inspection','response-elevation','response-intensity','chair-x','chair-z','chair-yaw'];
  for(const id of original)assert(ids.includes(id),`lost existing control ${id}`);
 });
 test('all capture entry points reveal invalid collapsed fields and diagnostics report their actual outcome',()=>{

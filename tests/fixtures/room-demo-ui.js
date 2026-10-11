@@ -1,22 +1,31 @@
 // Local demo recipes only. Renderer policy and camera construction stay in the
 // existing GPU packages; pass their defaults instead of duplicating them here.
-export function createRoomDemoPresets({maximumSpp,limit,cloth,glass,centralReference}){
- const room={models:'all','central-reference':centralReference,'inspection-camera':'room',
-  'inspection-distance':cloth.distance,'inspection-elevation':cloth.elevation,
+export function createRoomDemoPresets({maximumSpp,limit,centralReference,view}){
+ const room={models:'all','central-reference':centralReference,'focus-view':view,
   'glass-mode':'off','bounded-dielectric':'off','nested-media':'off','rough-dielectric':'off',
   sheen:'off',denoise:'off','material-inspection':'off',clearcoat:'off','wood-coat':'off'};
  const quality=(spp,distribution)=>({spp,'sample-distribution':distribution,sampler:'fixed-pattern',splitting:'0'});
  return {
   scene:{
    room:{label:'Room overview',description:'Original room composition. Raw output; material and optical experiments off.',values:room},
-   cloth:{label:'Upholstery study',description:'Sofa close-up with cloth sheen and guided denoise. Compare raw and cleaned output after rendering.',values:{...room,'central-reference':'seating','inspection-camera':'cloth',sheen:'on',denoise:'guided'}},
-   glass:{label:'Glass and water',description:'Filled tumbler close-up with bounded branching and nested refraction. Experimental; optical quality is not yet qualified.',values:{...room,'glass-mode':'filled','inspection-camera':'glass','inspection-distance':glass.distance,'inspection-elevation':glass.elevation,'bounded-dielectric':'on','nested-media':'on'}},
+   cloth:{label:'Upholstery study',description:'Sofa close-up with cloth sheen and guided denoise. Compare raw and cleaned output after rendering.',values:{...room,'central-reference':'seating','focus-view':'cloth',sheen:'on',denoise:'guided'}},
+   glass:{label:'Glass and water',description:'Filled tumbler close-up with bounded branching and nested refraction. Experimental; optical quality is not yet qualified.',values:{...room,'glass-mode':'filled','focus-view':'glass','bounded-dielectric':'on','nested-media':'on'}},
   },
   quality:{
    adaptive:{label:`Adaptive · ${maximumSpp} SPP ceiling`,description:'Higher sampling in the centre, lower toward the edges.',values:quality(maximumSpp,'radial')},
    reference:{label:`Uniform · ${maximumSpp} SPP`,description:'Same camera-sample count at every pixel. More costly than adaptive.',values:quality(maximumSpp,'uniform')},
    detail:{label:`Detail · ${limit} SPP ceiling`,description:'High-detail adaptive screenshot. Can take several minutes; not a real-time mode.',values:quality(limit,'radial')},
   },
+ };
+}
+
+export function roomFocusSettings(focus,{room,cloth,glass}){
+ if(!['entry','front','corner','cloth','glass'].includes(focus))throw Error('Unknown room focus');
+ return {
+  view:['cloth','glass'].includes(focus)?room.view:focus,
+  fovYDegrees:room.fovYDegrees,
+  cloth:{...cloth,target:[...cloth.target],enabled:focus==='cloth'},
+  glass:{closeup:focus==='glass',distance:glass.distance,elevation:glass.elevation},
  };
 }
 
@@ -36,7 +45,7 @@ export function installRoomDemoUi(document,presets,onChange){
   for(const group of ['scene','quality']){
    const match=Object.entries(presets[group]).find(([,p])=>Object.entries(p.values).every(([id,v])=>el(id).value===String(v)));
    el(`${group}-preset`).value=match?.[0]??'custom';
-   el(`${group}-description`).textContent=match?.[1].description??'Custom settings. Review the camera and advanced controls before rendering.';
+   el(`${group}-description`).textContent=match?.[1].description??'Custom settings. Review Focus and advanced settings before rendering.';
   }
  }
  refresh();return {refresh};

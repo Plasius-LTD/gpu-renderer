@@ -29,7 +29,7 @@ img:not([hidden]){display:block;width:100%;height:100%;min-height:0;object-fit:c
 #empty-state{text-align:center;padding:30px;max-width:48ch}#empty-state strong{font-size:21px;font-weight:500}#empty-state p{color:var(--muted)}
 #status{font-size:13px;min-height:3em;margin:12px 0;overflow-wrap:anywhere}
 #canvas{position:absolute;width:1px;height:1px;left:-2px;top:0}
-.camera{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}.camera h2{margin-bottom:4px}
+.focus-panel{display:flex;flex-wrap:wrap;align-items:center;gap:16px;border-top:1px solid var(--line);padding-top:16px;margin-top:16px}.focus-panel .field{flex:0 1 260px}.focus-help{flex:1 1 240px}.focus-help h2{font-size:13px;margin:0 0 4px}.focus-help p{font-size:13px;color:var(--muted);margin:0}
 details{border-top:1px solid var(--line);padding:14px 0}details>summary{cursor:pointer;min-height:32px;font-weight:600;list-style-position:outside;margin-left:18px}
 details[open]>summary{margin-bottom:16px}details p{color:var(--muted);font-size:13px;max-width:95ch}
 #advanced,#laboratory,#evidence{margin-top:20px}.advanced-groups{display:grid;gap:18px}fieldset{border:1px solid var(--line);border-radius:9px;padding:16px;min-width:0;margin:0}legend{padding:0 8px;font-weight:600;font-size:14px}
@@ -64,16 +64,9 @@ pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:32rem;
 <div class="actions"><button id="run" class="primary">Render room</button><button id="cancel" disabled>Stop after pending GPU work</button><button id="reset">Reset view</button><a id="download" hidden>Save native PNG</a></div>
 <div id="comparison" class="comparison" hidden><button id="show-raw">Show raw input</button><button id="show-clean">Show cleaned result</button><button id="show-albedo" hidden>Show base colour</button><button id="show-normal" hidden>Show mapped normals</button><span id="comparison-label" role="status"></span></div>
 <div id="response-comparison" hidden><label for="response-view">Cloth diagnostic view</label><select id="response-view"><option value="0">Pixel centre · normal map on</option><option value="1">Pixel centre · normal map off</option><option value="2">Multi-sample · normal map on</option><option value="3">Multi-sample · normal map off</option></select></div>
-<section class="camera" aria-labelledby="camera-heading">
-<h2 id="camera-heading">Camera</h2><p class="muted"><small>Changes apply on Render. These are composed camera views, not live orbit controls.</small></p>
-<div class="field-grid"><div class="field"><label for="view">Interior viewpoint</label><select id="view"><option value="entry">Room entrance</option><option value="front">Front comparison view</option><option value="corner">Opposite corner</option></select></div>
-<div class="field"><label for="inspection-camera">Camera framing</label><select id="inspection-camera"><option value="room">Room view</option><option value="cloth">Sofa cloth close-up</option><option value="glass">Glass and water close-up</option></select></div>
-<div class="field"><label for="fov">Vertical FOV °</label><input id="fov" type="number" min="40" max="80" step="1" value="52" required></div></div>
-<details id="camera-fine"><summary>Fine-tune close-up</summary><div class="field-grid"><div class="field"><label for="inspection-distance">Close-up distance m</label><input id="inspection-distance" type="number" min="0.3" max="3" step="0.05" required></div>
-<div class="field"><label for="inspection-elevation">Close-up elevation °</label><input id="inspection-elevation" type="number" min="5" max="85" step="1" required></div>
-<div class="field"><label for="inspection-target-x">Cloth target width 0–1</label><input id="inspection-target-x" type="number" min="0" max="1" step="0.05" required></div>
-<div class="field"><label for="inspection-target-y">Cloth target height 0–1</label><input id="inspection-target-y" type="number" min="0" max="1" step="0.05" required></div>
-<div class="field"><label for="inspection-target-z">Cloth target depth 0–1</label><input id="inspection-target-z" type="number" min="0" max="1" step="0.05" required></div></div><p>Distance and elevation affect close-ups only; normalized targets affect cloth only. Framing moves the camera, never stretches the model or its textures.</p></details>
+<section id="focus-panel" class="focus-panel" aria-label="Focus and navigation">
+<div class="field"><label for="focus-view">Focus</label><select id="focus-view" aria-describedby="navigation-help"><option value="entry">Room entrance</option><option value="front">Front comparison view</option><option value="corner">Opposite corner</option><option value="cloth">Sofa cloth close-up</option><option value="glass">Glass and water close-up</option></select></div>
+<div class="focus-help"><h2>How to navigate</h2><p id="navigation-help">Choose a focus, then Render room. Changes apply on Render; this is a still capture, not live orbit. For close-ups, choose the matching scene setup first.</p></div>
 </section>
 </section>
 </div>

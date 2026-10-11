@@ -24,11 +24,12 @@ show a modest change, not a complete solution for the remaining fine-cloth detai
 
 ### Local cloth close-up diagnostics
 
-The native room fixture now offers a configurable sofa close-up, uniform camera
+The native room fixture offers a sofa close-up, uniform camera
 SPP, and opt-in same-frame base-colour/mapped-normal views (#225). Select all
 reference models, **Sofa cloth close-up**, **Uniform**, guided denoising and
-**Capture colour and normals**. Distance, elevation and normalized target remain
-adjustable; the model's proportions and authored texture scales are unchanged.
+**Capture colour and normals**. The compact Focus panel uses configured close-up
+defaults; distance, elevation and target are not UI fields. The model's proportions
+and authored texture scales are unchanged.
 Inspect **Show base colour**, **Show mapped normals**, **Show raw input** and
 **Show cleaned result** after capture. Colour includes the authored tint without
 lighting or tone mapping; normals are world-space, with magenta marking missing
@@ -96,8 +97,8 @@ for retained source/image hashes, unchanged allocations and measurement limits.
 
 Glass/water diagnostic (#233): in the local room choose **Glass of water reference
 → Empty tumbler / Tumbler with water**. Fill fraction, dimensions, placement and
-both refractive indices are adjustable. **Camera framing → Glass and water
-close-up** uses the existing distance/elevation and FOV controls. A neutral
+both refractive indices are adjustable. **Focus → Glass and water
+close-up** uses the configured glass camera defaults. A neutral
 pedestal is added explicitly; no room or seating assets are rewritten. Reset/off
 restores the original scene. Other diagnostic buttons do not apply this object.
 The geometry comes from `gpu-lighting/demo/eames-environments/glass-water-reference.js`.
@@ -149,7 +150,7 @@ Meshes accept optional `uvs1` (TEXCOORD_1). Existing textures select `texCoord: 
 or `1` independently, including normal-map tangent construction. Invalid UV1
 references reject. CPU/GPU geometry records keep their existing byte sizes;
 reserved lanes now carry UV1 and slot selectors (ADR0050). The native room page
-adds a 52° vertical-FOV default (62° remains selectable), local reference models,
+uses the configured 52° vertical-FOV default, local reference models,
 and a mandatory physical dual-UV probe before capture. No production flag changes.
 
 The room fixture offers **Room lighting style** (original daylight or a cooler
@@ -230,8 +231,10 @@ the user-approved room GLB owned by gpu-lighting. The companion lighting
 `room-reference-server.mjs` serves the commit-pinned scene and source dependencies.
 Choose a **Room overview**, **Upholstery study** or **Glass and water** setup,
 an adaptive/uniform/high-detail sampling preset and native 1080p/4K, then Render.
-Camera framing and FOV sit beside the scene; changes apply on the next render,
-not live orbit. The last image remains visible but is marked out of date after
+Only a compact **Focus / How to navigate** panel sits beside the scene. Focus
+selects room viewpoints or sofa/glass close-ups; changes apply on the next render,
+not live orbit. FOV, close-up distance/elevation and target coordinates use package
+defaults and are not exposed as camera fields. The last image remains visible but is marked out of date after
 edits, with stale downloads disabled. Advanced settings retain individual material,
 optical, sampling and placement controls; laboratory diagnostics are separate.
 Glass/water explicitly enables bounded/nested transport, not rough transmission;

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 test("room reference exposes original-scene placement, native resolutions and explicit render controls",()=>{
  const html=readFileSync(new URL("./fixtures/native-room-reference.html",import.meta.url),"utf8");
- for(const id of ["resolution","spp","sampler","view","chair-x","chair-z","chair-yaw","fov","models","central-reference","sheen"])assert.match(html,new RegExp(`<label for="${id}">`));
+ for(const id of ["resolution","spp","sampler","focus-view","chair-x","chair-z","chair-yaw","models","central-reference","sheen"])assert.match(html,new RegExp(`<label for="${id}">`));
  for(const text of ["1920 × 1080","3840 × 2160","Render room","Reset view","Stop after pending GPU work","No added studio walls","External daylight"])assert(html.includes(text));
  assert.match(html,/<option value="fixed-pattern" selected>/);
  assert.match(html,/img:not\(\[hidden\]\)/);

@@ -12,7 +12,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - Simplify the local room demo into scene and sampling presets, an image-first
-  layout with adjacent camera controls, and collapsed advanced/laboratory tools.
+  layout with a compact Focus / How to navigate panel, and collapsed
+  advanced/laboratory tools. Remove numeric camera fields; reuse configurable
+  package defaults for the existing viewpoints and close-ups.
   Preserve prior images with an explicit stale state after edits; retain all
   diagnostic switches, validation and provenance without changing transport (#239).
 

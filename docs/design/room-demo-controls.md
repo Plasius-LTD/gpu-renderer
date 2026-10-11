@@ -14,7 +14,7 @@ fallbacks. No new packages, model edits, GPU buffers, passes or sampling formula
 ## Interaction design
 
 - Scene first: a large image stage with a useful empty state, persistent status,
-  Render/Stop actions and camera framing immediately below the image.
+  Render/Stop actions and one compact Focus / How to navigate panel.
 - Small setup panel: scene recipe (room / upholstery / glass-water), quality
   recipe (adaptive / uniform reference / high-detail adaptive), native resolution
   and lighting. Defaults remain room, 1080p, adaptive 32, six bounces, raw output.
@@ -22,10 +22,14 @@ fallbacks. No new packages, model edits, GPU buffers, passes or sampling formula
   opts into bounded/nested transport, not rough transmission. Upholstery opts into
   sheen and guided denoise. Returning to room clears those recipe experiments.
   Neither recipe certifies optical quality or changes source models.
-- Camera controls stay in the scene panel: room view, framing, FOV and a collapsed
-  close-up adjustment panel. Camera changes apply on Render, not live orbit.
+- User refinement: remove the camera form entirely. One Focus selector chooses
+  the existing room entrance/front/corner and sofa/glass close-ups. FOV, distance,
+  elevation and normalized target remain configurable package defaults, not DOM
+  fields or hidden form controls. Brief navigation help explicitly describes
+  focus-then-Render; no live orbit/walk interaction exists in this still fixture.
+  Focus changes only camera framing, never silently enables optical/material flags.
 - Advanced sampling, materials, glass geometry, model placement and laboratory
-  diagnostics are collapsed and grouped. Keep every existing diagnostic control.
+  diagnostics are collapsed and grouped. Keep non-camera diagnostic controls.
 - Any manual recipe change marks the corresponding recipe Custom. Every change
   retains the previous image with an explicit out-of-date label, hides obsolete
   downloads/comparison actions, and requires Render; no automatic expensive job.
@@ -37,12 +41,13 @@ fallbacks. No new packages, model edits, GPU buffers, passes or sampling formula
 ## QA inventory (before implementation)
 
 Unit/integration: recipe transitions and rollback, maximum from canonical config,
-unknown preset rejection, custom detection, camera placement, every legacy control
-retained exactly once, closed advanced panels, keyboard labels, stale-preview state,
+unknown preset/focus rejection, custom detection, default-based camera placement,
+removed numeric camera fields, retained non-camera controls, closed advanced panels,
+keyboard labels, stale-preview state,
 busy guard, hidden-invalid-field reveal, reset, and receipt/probe preservation.
 
 Browser functional + visual (separate): initial room at desktop and narrow width;
-recipe/quality changes then Custom/reset; camera framing changes; advanced expand/
+recipe/quality changes then Custom/reset; Focus choices and navigation help; advanced expand/
 collapse; invalid SPP inside a closed panel; rough optics without nested mode;
 Render/Stop without overlapping work; prior image marked stale after edits;
 download only current successful output. Inspect image/control fit, focus, contrast,
@@ -56,12 +61,14 @@ release or main/CD changes. Rollback is the previous GPU-native fixture commit.
 ## Implementation validation
 
 Task: https://github.com/Plasius-LTD/gpu-renderer/issues/239.
-All 41 legacy fields remain, with separate scene/quality recipes and a Custom
-state. Configuration edits retain the previous image, but invalidate evidence,
+The initial implementation retained all 41 legacy fields. The user then requested
+removing camera controls except a brief Focus / How to navigate panel. The eight
+camera fields are replaced by one Focus selector; the other 33 fields remain.
+Separate scene/quality recipes retain their Custom state. Edits retain the previous image, but invalidate evidence,
 downloads and comparison controls. All three capture entry points reveal invalid
 fields inside closed panels. Diagnostic failure is never labelled a new capture.
 
-Local checks: 413 tests pass; runtime line coverage 96.38%, branch 83.12%.
+Current focus-only revision: 415 tests pass; runtime line coverage 96.38%, branch 83.12%.
 The separately executed fixture UI controller has 100% line/branch/function
 coverage. Lint, type checks, clean packed consumer, build, package and Zero-Three
 checks pass. No runtime source or public API changed; no dependency added.
