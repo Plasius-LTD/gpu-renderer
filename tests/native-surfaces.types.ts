@@ -32,3 +32,6 @@ renderer.render({ vertices: frame.vertices, camera: frame.camera });
 material.baseColor = { width: 1, height: 1, data: new Float32Array(4) };
 // @ts-expect-error every textured range requires a material reference.
 frame.surfaces = [{ firstVertex: 0, vertexCount: 3 }];
+
+import { validateNativeSurfaceMaterials } from '../src/index.js';
+validateNativeSurfaceMaterials([material]);

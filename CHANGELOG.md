@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Expose native material preflight validation and transfer the reviewed demo adapters plus their tests to the shared material-study runtime for production reuse (#230).
+
 - Correct vertical grab direction in the material-review camera for mouse, touch and keyboard orbit; preserve horizontal, pan and zoom directions (#230).
 
 - Replace the material review camera toolbar with a five-second focus gesture guide; keep direct mouse/touch movement independent of keyboard modes, with replay and dismissal (#230).

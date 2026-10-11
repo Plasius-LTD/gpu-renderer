@@ -823,7 +823,7 @@ other maps. Clearcoat normal maps remain unsupported.
 
 For mixed objects, give uncoated parts their own surface ranges with
 `clearcoat: 0`. This keeps rope and hardware uncoated even when they share the
-wood's atlas. The source example [native-crate-finish.js](demo/native-crate-finish.js)
+wood's atlas. The source example [native-crate-finish.js](https://github.com/Plasius-LTD/gpu-shared/tree/main/src/material-study-helpers/native-crate-finish.js)
 provides reviewed crate ranges and a deterministic wear preset combining existing
 roughness/scuff detail with broad UV patches. Its 0–1 wear control changes coat
 coverage and roughness without modifying the underlying colour or source asset.
@@ -832,7 +832,7 @@ the [fixture/provenance record](docs/design/cc0-demo-asset-review.md). The examp
 helper is source-only; the published API is the generic material map.
 
 For subtle rope fraying, the source-demo helper
-[native-rope-fibres.js](demo/native-rope-fibres.js) exports `createRopeFibres`.
+[native-rope-fibres.js](https://github.com/Plasius-LTD/gpu-shared/tree/main/src/material-study-helpers/native-rope-fibres.js) exports `createRopeFibres`.
 Pass the expanded native `vertices`, `texcoords` and explicit rope-only
 `{ firstVertex, vertexCount }` ranges. It returns separate triangles/UVs and a
 `fibreCount`; append them once with their own draw range. Generate in metre-scale
@@ -857,12 +857,12 @@ and do not add a renderer API, dependency or network request.
 
 ### Material ageing review wrapper
 
-[material-ageing.js](demo/material-ageing.js) validates and freezes a serializable
-version-1 profile. [native-crate-ageing.js](demo/native-crate-ageing.js) applies it
+[material-ageing.js](https://github.com/Plasius-LTD/gpu-shared/tree/main/src/material-study-helpers/material-ageing.js) validates and freezes a serializable
+version-1 profile. [native-crate-ageing.js](https://github.com/Plasius-LTD/gpu-shared/tree/main/src/material-study-helpers/native-crate-ageing.js) applies it
 through the existing coating/fibre helpers:
 
 ```js
-import { createCrateAgeing } from './demo/native-crate-ageing.js';
+import { createCrateAgeing } from '@plasius/gpu-shared/material-study';
 
 const ageing = createCrateAgeing({ ropeFray: 0.30, varnishWear: 0.90, seed: 7349 });
 const { wood, rope, metal, fibres: fibreMaterial } = ageing.createMaterials(sourceMaps);
@@ -902,7 +902,7 @@ fallback is used. Four nearby roots form a tuft within 1 mm of its anchor, with
 small angular variation, shallow lift and tapered tips. Sampling remains stable
 when fray changes; changing guides reauthors the groom.
 
-[native-crate-groom.js](demo/native-crate-groom.js) supplies the hash-verified
+[native-crate-groom.js](https://github.com/Plasius-LTD/gpu-shared/tree/main/src/material-study-helpers/native-crate-groom.js) supplies the hash-verified
 fixture's loop/knot paths. Pass the same `heightOffset` used to ground its vertices
 (default 0 means unmodified asset coordinates); other transforms require matching
 transformed guide coordinates. The crate adapter adds 84,000 triangles: 90,578
@@ -913,15 +913,15 @@ previous 1,600-strand loose-end study. See [ADR-0035](docs/adrs/adr-0035-groomed
 
 ### In-scene material inspection camera
 
-The source-only [native-demo-camera.js](demo/native-demo-camera.js) adapter uses
+The shared [native-demo-camera.js](https://github.com/Plasius-LTD/gpu-shared/tree/main/src/material-study-helpers/native-demo-camera.js) adapter uses
 released `@plasius/gpu-camera` state/control/projection APIs and the separate
 `@plasius/gpu-camera-controls` pointer gesture runtime/browser normalizer. It maps DOM input to
 orbit, camera-plane truck/pedestal, pan/tilt, dolly and optical zoom; camera math
-is not duplicated in the renderer. The camera-controls package is a demo-only development dependency; it adds no
-renderer runtime dependency or public export.
+is not duplicated in the renderer. The camera and fixture adapters now belong to the isolated gpu-shared material-study
+entry; the renderer root does not load them.
 
 ```js
-import { createNativeDemoCamera } from './demo/native-demo-camera.js';
+import { createNativeDemoCamera } from '@plasius/gpu-shared/material-study';
 
 // Supply a focusable canvas with an accessible name and persistent
 // aria-describedby instructions. The visual example is initially hidden,
@@ -977,3 +977,7 @@ normal maps. Mirrored UV handedness and geometric-normal fallback for degenerate
 UVs are retained in the common direct/reflection shader. The shader contract tests
 require browser rendering evidence as well; Node mocks do not execute WGSL.
 See [ADR-0036](docs/adrs/adr-0036-in-scene-material-inspection.md).
+
+### Shared material-study runtime
+
+Production demo helpers and their regression tests now live in `@plasius/gpu-shared/material-study`. The renderer exposes `validateNativeSurfaceMaterials(materials)` so authoring and GPU creation use identical validation without allocation. See [ADR-0037](docs/adrs/adr-0037-shared-material-study-runtime.md).

@@ -2080,3 +2080,6 @@ export const rendererWorkerProfiles: Readonly<
 export const rendererWorkerManifests: Readonly<
   Record<RendererWorkerProfileName, RendererWorkerManifest>
 >;
+
+/** Validate native materials and bounded decoded maps without GPU allocation. */
+export declare function validateNativeSurfaceMaterials(materials: NativeSurfaceMaterial[]): void;
