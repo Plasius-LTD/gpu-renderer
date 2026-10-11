@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.48] - 2026-10-11
+
 - Expose native material preflight validation and transfer the reviewed demo adapters plus their tests to the shared material-study runtime for production reuse (#230).
 
 - Correct vertical grab direction in the material-review camera for mouse, touch and keyboard orbit; preserve horizontal, pan and zoom directions (#230).
@@ -1187,3 +1201,4 @@ All notable changes to this project will be documented in this file.
 [0.2.45]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.45
 [0.2.46]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.46
 [0.2.47]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.47
+[0.2.48]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.48
