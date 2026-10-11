@@ -35,7 +35,7 @@ Retained local receipt SHA-256 values (private images/assets not published):
 | 15:43:54.427, uniform 1, filled | 267 overflows | `7535e5ea6769c9bbe759527ab009d211125f4e8697c283c50612e77fb51bac31` |
 | 15:45:02.126, uniform 1, empty | 290 overflows | `70a4257e27701182a9138f1e54d40a5e0f4d21cfbeb5bb6d11f17b396f7750cf` |
 
-## Diagnostic delivery validation
+## Historical diagnostic delivery validation (before transport fixes)
 
 Local renderer tests: 391 passing, 96.23% line coverage. Lighting tests: 171
 passing, 81.17% line coverage; added geometry module 100% lines and 96.15% branches.
@@ -158,6 +158,24 @@ completed-sample failure still rejects the entire capture. Failure-only GPU
 gathering retains up to 32 records using 3,592 bytes of temporary storage plus
 staging, destroyed on success or error; ordinary rendering allocates none.
 Numerical context: [PBRT's rounding-error treatment](https://pbr-book.org/4ed/Shapes/Managing_Rounding_Error).
+
+### Hidden-boundary cursor correction (2026-10-11)
+
+The retained 4K, eight-bounce, first-two-bounce rough-split failure at pixel
+6779635 / sample 0 / bounce 2 was reproduced with a one-SPP ceiling at renderer
+`ca77552`. Failure-only GPU replay traced a hidden water entry and exit that
+spatially offset the ray past an adjacent glass exit; a later glass entry then
+failed occupancy validation. The one-SPP reproduction is fault isolation, not
+image-quality or performance evidence. The normal-validity correction alone did
+not resolve this failure.
+
+The correction preserves the original ray origin/direction and advances a
+next-representable-distance cursor through hidden boundaries. Occupancy and
+incremental absorption still update; actual scattering still uses an offset.
+Every query resets the cursor before returning. A new assembled GPU probe
+checks repeated-hit exclusion, adjacent-hit retention and reset, and the
+failure-only replay uses the same cursor. No count, overflow or rejection
+threshold is relaxed. Physical recapture of this correction is pending.
 
 ### Remaining acceptance lanes
 

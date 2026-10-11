@@ -61,6 +61,12 @@ test('nested traversal protects occupancy and sample identity without consuming 
  assert.doesNotMatch(nested,/ray\.(bounce|sampleId|sourcePixelId|parentRayId)\s*=/);
  assert.match(nested,/medium_transmittance/);
  assert.match(nested,/recoverable_optical_entry\(ray, hit\)/);
+ assert.match(nested,/trace_material_after\(ray, minimumDistance\)/);
+ assert.doesNotMatch(nested,/ray.origin\s*=/);
+ assert.match(nested,/hit.distance - travelled/);
+ assert.match(nested,/hit.distance -= travelled/);
+ const query=WAVEFRONT_COMPUTE_WGSL.split('fn trace_material_after')[1].split('fn trace_material_hit(')[0];
+ assert.match(query,/optical_query_minimum = minimumDistance;[\s\S]*trace_material_hit_raw\(ray\);[\s\S]*optical_query_minimum = 0.0;[\s\S]*return hit;/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/nested_media_enabled\(\) && \(triangle.materialKind == 2u \|\| triangle.materialKind == 3u\)/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/let normal = optical_shading_normal\(ray, hit\)/);
 });

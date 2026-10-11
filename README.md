@@ -1297,6 +1297,9 @@ surface) and `priority` (integer 0..2048, higher wins). Glass should outrank wat
 where the meshes overlap. Camera-inside-volume initialization is not supported.
 The local room reference exposes both switches; Reset disables them. Captures
 retain their flag values and run the analytic GPU optics probe before rendering.
+Hidden overlap crossings retain the original ray line; a bounded distance cursor
+advances traversal without extra bounces or spatial offsets. The 4K failure
+regression and image-quality qualification remain open until physical recapture.
 These are not a claim of photographic quality or real-time performance. See
 [ADR 0055](docs/adrs/adr-0055-bounded-nested-dielectrics.md) and
 [qualification status](docs/glass-water-transport-follow-up.md).

@@ -111,8 +111,12 @@ fn scatter_dielectric(ray: RayRecord, hit: HitRecord) -> ScatterResult {
 }
 // Optical origins are offset from their source face. A positive t-min can
 // erase a distinct adjacent rim exit even when the authored wall is thick.
+var<private> optical_query_minimum: f32;
 fn transport_ray_minimum() -> f32 {
-  return select(0.001, 0.0, nested_media_enabled());
+  return select(0.001, optical_query_minimum, nested_media_enabled());
+}
+fn next_optical_distance(distance: f32) -> f32 {
+  return bitcast<f32>(bitcast<u32>(max(0.0, distance)) + 1u);
 }
 fn optical_origin_epsilon(position: vec3<f32>) -> f32 {
   let scale = max(max(abs(position.x), abs(position.y)), abs(position.z));

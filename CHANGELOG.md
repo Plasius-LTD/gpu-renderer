@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Keep nested bookkeeping crossings on the original ray line with a bounded
+  distance cursor; preserve adjacent glass exits and incremental absorption.
+  Add cursor/reset GPU probes and matching failure-only replay (#234).
 - Add independent default-off bounded dielectric sampling and actual-media
   refraction flags, optical medium metadata, guarded overlap traversal, and
   glass/water diagnostic controls with analytic GPU qualification probes (#234).

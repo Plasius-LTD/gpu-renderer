@@ -23,7 +23,12 @@ texture bytes (plus upload staging), not claimed physical VRAM residency.
 IOR is limited to 1..4; priority to exactly representable integers 0..2048.
 
 Hidden overlap boundaries update occupancy and Beer absorption while preserving
-direction, sample identity and bounce depth. Thirty-two consecutive hidden
+origin, direction, sample identity and bounce depth. A distance cursor advances
+to the next representable f32 along the original ray; these bookkeeping-only
+boundaries never re-launch or spatially offset the ray. The cursor is local to
+the invocation and reset after every query, including misses, so it cannot
+affect lighting/shadow queries. Segment absorption uses the incremental distance,
+not the distance from the original origin a second time. Thirty-two consecutive hidden
 crossings is the bounded safety limit. Occupancy overflow, duplicate entry,
 unmatched exit or exhausted traversal fails sample integrity instead of evicting
 media, dropping rays or accepting black. The camera starts in air. Untracked
@@ -32,7 +37,7 @@ share the same material intersection and nested-boundary helper.
 
 Nested mode reconstructs mesh hits from barycentric coordinates and clamps
 rounding overshoot to the triangle bounds. It uses a position-aware geometric
-offset (minimum 1 micrometre, position scale times four f32 epsilons), without
+offset after actual scattering (minimum 1 micrometre, position scale times four f32 epsilons), without
 a positive traversal cutoff: a distinct inner-rim exit may be closer than even
 0.1 micrometre. Only non-positive intersections are rejected. This is not a
 universal precision guarantee; bounds below numerical resolution remain

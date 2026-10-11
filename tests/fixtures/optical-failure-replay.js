@@ -9,11 +9,11 @@ export function opticalReplayShader({root,sampler,splitting}) {
  const split=splitting.enabled;
  return createWavefrontPathTracingComputeShaderSource({progressiveSampling:sampler,roughBounceSplitting:splitting})+`
  @compute @workgroup_size(1) fn replay_optics(@builtin(global_invocation_id) id:vec3<u32>){
-  var ray=make_ray(${root}u);var key=0u;var splitLevel=0u;
+  var ray=make_ray(${root}u);var key=0u;var splitLevel=0u;var minimumDistance=0.0;
   for(var step=0u;step<64u;step++){
    accumulation[1536u+id.x]=vec4<f32>(f32(step+1u),0,0,0);
    ${split?'rough_branch_key=key;':''}
-   let hit=trace_material_hit(ray);let o=(id.x*64u+step)*6u;
+   let hit=trace_material_after(ray,minimumDistance);let o=(id.x*64u+step)*6u;
    accumulation[o]=vec4<f32>(f32(hit.hitType),f32(ray.bounce),f32(hit.primitiveId),f32(hit.frontFace));
    accumulation[o+1u]=vec4<f32>(ray.origin.xyz,hit.distance);
    accumulation[o+2u]=vec4<f32>(ray.direction.xyz,f32(medium_stack_current_id(ray)));
@@ -22,13 +22,13 @@ export function opticalReplayShader({root,sampler,splitting}) {
    accumulation[o+5u]=vec4<f32>(hit.geometricNormal.xyz,-1.0);
    if(hit.hitType==2u||ray.bounce>=config.maxDepth){return;}
    if(recoverable_optical_entry(ray,hit)){
-    ray.origin=vec4<f32>(optical_offset(hit.position.xyz,hit.geometricNormal.xyz,ray.direction.xyz),1);continue;
+    minimumDistance=next_optical_distance(hit.distance);continue;
    }
    if(medium_transition_invalid(ray,hit)){return;}
    if(dielectric_event(hit)&&medium_valid(hit.mediumRefId)&&medium_stack_current_id(ray)==transmitted_medium_ref_id(ray,hit)){
     let depth=transitioned_medium_stack_depth(ray,hit);let medium=transmitted_medium_ref_id(ray,hit);
     ray.mediumStack=transitioned_medium_stack(ray,hit);ray.mediumStackDepth=depth;ray.mediumRefId=medium;
-    ray.origin=vec4<f32>(optical_offset(hit.position.xyz,hit.geometricNormal.xyz,ray.direction.xyz),1);continue;
+    minimumDistance=next_optical_distance(hit.distance);continue;
    }
    ${split?'if(rough_split_eligible(ray,hit)){key=key*2u+1u+((id.x>>splitLevel)&1u);splitLevel++;rough_branch_key=key;}':''}
    let scatter=scatter_direction(ray,hit);
@@ -38,7 +38,7 @@ export function opticalReplayShader({root,sampler,splitting}) {
     ray.mediumStack=transitioned_medium_stack(ray,hit);ray.mediumStackDepth=depth;ray.mediumRefId=medium;
    }
    ray.origin=vec4<f32>(offset_origin(hit.position.xyz,hit.geometricNormal.xyz,hit.shadingNormal.xyz,scatter.direction.xyz),1);
-   ray.direction=scatter.direction;ray.flags=scatter.flags|(key<<8u);ray.bounce++;
+   ray.direction=scatter.direction;ray.flags=scatter.flags|(key<<8u);ray.bounce++;minimumDistance=0.0;
   }
  }`;
 }

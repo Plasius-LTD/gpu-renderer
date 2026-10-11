@@ -447,39 +447,54 @@ const localIntersection = WAVEFRONT_INTERSECTION_BODY_WGSL
   if (candidate.triangleIndex != 0xffffffffu) { position = optical_triangle_position(hitTriangle, candidate.barycentric); }`);
 
 export const WAVEFRONT_SHADER_KERNELS_WGSL = `
-fn trace_material_hit(ray: RayRecord) -> HitRecord {
+fn trace_material_hit_raw(ray: RayRecord) -> HitRecord {
 ${localIntersection}
+}
+fn trace_material_after(ray: RayRecord, minimumDistance: f32) -> HitRecord {
+  optical_query_minimum = minimumDistance;
+  let hit = trace_material_hit_raw(ray);
+  optical_query_minimum = 0.0;
+  return hit;
+}
+fn trace_material_hit(ray: RayRecord) -> HitRecord {
+  return trace_material_after(ray, 0.0);
 }
 struct NestedIntersection { ray: RayRecord, hit: HitRecord, };
 fn intersect_nested_ray(input: RayRecord) -> NestedIntersection {
   var ray = input;
   var hit = HitRecord();
+  var travelled = 0.0;
+  var minimumDistance = 0.0;
   // Numerical safety bound; exhausted traversal is rejected, never shaded.
   for (var crossing = 0u; crossing < 32u; crossing++) {
-    hit = trace_material_hit(ray);
+    hit = trace_material_after(ray, minimumDistance);
     if (hit.hitType == 2u || !dielectric_event(hit) || !medium_valid(hit.mediumRefId)) {
+      if (hit.distance > 0.0) { hit.distance -= travelled; }
       return NestedIntersection(ray, hit);
     }
     if (recoverable_optical_entry(ray, hit)) {
       // Retry a numerically repeated adjacent entry without changing occupancy
       // or drawing another BSDF event. The shared crossing bound still applies.
-      ray.throughput = vec4<f32>(ray.throughput.xyz * medium_transmittance(medium_stack_current_id(ray), hit.distance), ray.throughput.w);
-      ray.origin = vec4<f32>(optical_offset(hit.position.xyz, hit.geometricNormal.xyz, ray.direction.xyz), 1.0);
+      ray.throughput = vec4<f32>(ray.throughput.xyz * medium_transmittance(medium_stack_current_id(ray), hit.distance - travelled), ray.throughput.w);
+      travelled = hit.distance;
+      minimumDistance = next_optical_distance(hit.distance);
       continue;
     }
     if (medium_transition_invalid(ray, hit)) { hit.pad2 = f32(medium_transition_failure(ray, hit)); hit.hitType = 5u; return NestedIntersection(ray, hit); }
     if (medium_stack_current_id(ray) != transmitted_medium_ref_id(ray, hit)) {
+      hit.distance -= travelled;
       return NestedIntersection(ray, hit);
     }
     // Hidden overlap boundary: account for distance, update occupancy, keep
     // sample ordinal/depth/direction/parent and all previous BSDF state intact.
-    ray.throughput = vec4<f32>(ray.throughput.xyz * medium_transmittance(medium_stack_current_id(ray), hit.distance), ray.throughput.w);
+    ray.throughput = vec4<f32>(ray.throughput.xyz * medium_transmittance(medium_stack_current_id(ray), hit.distance - travelled), ray.throughput.w);
     let nextId = transmitted_medium_ref_id(ray, hit);
     let nextDepth = transitioned_medium_stack_depth(ray, hit);
     ray.mediumStack = transitioned_medium_stack(ray, hit);
     ray.mediumStackDepth = nextDepth;
     ray.mediumRefId = nextId;
-    ray.origin = vec4<f32>(optical_offset(hit.position.xyz, hit.geometricNormal.xyz, ray.direction.xyz), 1.0);
+    travelled = hit.distance;
+    minimumDistance = next_optical_distance(hit.distance);
   }
   hit.hitType = 5u;
   hit.pad2 = 5.0;
