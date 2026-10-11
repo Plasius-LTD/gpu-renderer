@@ -33,7 +33,7 @@ export function opticalReplayShader({root,sampler,splitting}) {
    ${split?'if(rough_split_eligible(ray,hit)){key=key*2u+1u+((id.x>>splitLevel)&1u);splitLevel++;rough_branch_key=key;}':''}
    let scatter=scatter_direction(ray,hit);
    accumulation[o+5u].w=f32(scatter.lobeKind);
-   if(scatter.lobeKind==SCATTER_LOBE_DELTA_TRANSMISSION){
+   if(scatter_is_transmission(scatter)){
     let depth=transitioned_medium_stack_depth(ray,hit);let medium=transmitted_medium_ref_id(ray,hit);
     ray.mediumStack=transitioned_medium_stack(ray,hit);ray.mediumStackDepth=depth;ray.mediumRefId=medium;
    }

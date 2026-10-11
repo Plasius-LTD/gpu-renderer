@@ -1,5 +1,9 @@
 import { createWavefrontPathTracingComputeConfig, type WavefrontRendererFeatureFlags } from "../src/index.js";
 const snapshots: WavefrontRendererFeatureFlags[] = [
+  { "renderer.transport.roughDielectricTransport.enabled": false },
+  { enabled: { "renderer.transport.roughDielectricTransport.enabled": false } },
+  { flags: { "renderer.transport.roughDielectricTransport.enabled": false } },
+  { renderer: { transport: { roughDielectricTransport: { enabled: false } } } },
   { "renderer.materials.layeredClearcoat.enabled": true },
   { enabled: { "renderer.materials.layeredClearcoat.enabled": true } },
   { flags: { "renderer.materials.layeredClearcoat.enabled": false } },
@@ -20,3 +24,4 @@ for (const featureFlags of snapshots) {
 }
 createWavefrontPathTracingComputeConfig({ "renderer.sampling.owenSobol.enabled": true });
 createWavefrontPathTracingComputeConfig({ "renderer.materials.layeredClearcoat.enabled": true });
+createWavefrontPathTracingComputeConfig({ "renderer.transport.roughDielectricTransport.enabled": false });

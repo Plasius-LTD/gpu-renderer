@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add default-off rough optical transmission with matched GGX BSDF/PDF,
+  partial-transmission energy and diffuse response, bounded continuation and
+  medium-aware shadow collision checks. Reject untracked/alpha-covered volume
+  inputs; preserve opaque backface culling and count-once sampling. Add numerical
+  and assembled-device probes plus room controls (#234). Physical and image
+  qualification remain pending; no translucency-volume or performance claim.
+
 - Keep nested bookkeeping crossings on the original ray line with a bounded
   distance cursor; preserve adjacent glass exits and incremental absorption.
   Add cursor/reset GPU probes and matching failure-only replay (#234).

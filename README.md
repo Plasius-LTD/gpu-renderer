@@ -1,7 +1,7 @@
 # @plasius/gpu-renderer
 
-The local glass/water diagnostic has two independent default-off transport
-experiments: bounded dielectric branching and nested-media refraction. The
+The local glass/water diagnostic has default-off transport experiments:
+bounded dielectric branching, nested-media refraction and rough optical transmission. The
 legacy split control still overflows; the combined corrected empty-glass capture
 now completes at 1080p/uniform 32 SPP. Full image/performance qualification remains
 open. See the
@@ -1303,3 +1303,28 @@ regression and image-quality qualification remain open until physical recapture.
 These are not a claim of photographic quality or real-time performance. See
 [ADR 0055](docs/adrs/adr-0055-bounded-nested-dielectrics.md) and
 [qualification status](docs/glass-water-transport-follow-up.md).
+
+### Experimental rough / partially transmitting volumes
+
+`renderer.transport.roughDielectricTransport.enabled` adds a bounded GGX
+reflection/refraction model and a non-transmitted diffuse component. It requires
+`renderer.transport.nestedMediaRefraction.enabled`; it selects one weighted
+continuation even if the older bounded-branching flag is off. The room diagnostic
+exposes an independent switch, resets it off, retains the flag and runs its GPU
+preflight. Authored material values are not automatically changed.
+
+Use `materialKind: "dielectric"`, explicit `transmission` (0..1), `roughness`
+(0..1), `opacity: 1`, opaque base-colour alpha and a valid non-air `mediumRefId`
+with IOR/priority metadata. Higher roughness spreads optical transmission; it
+does not turn the surface into a participating medium. Missing metadata or alpha
+coverage is rejected instead of skipping the surface. Entry and occupied exit
+faces remain ray intersections; reflection does not pop the medium stack.
+Shadow checks retain the current medium and cannot ignore a refractive exit.
+
+This remains experimental. CPU execution of the numerical WGSL and independent
+angular integration are not physical GPU or image-quality qualification.
+Subsurface scattering, thin-sheet/alpha coverage, delta-light caustic sampling,
+and camera-inside initialization are not implemented by this experiment. Mixed
+metallic/clearcoat optical materials are rejected, not silently approximated.
+Disable the new flag to restore the prior transport. See
+[design and remaining tests](docs/rough-dielectric-transport.md).

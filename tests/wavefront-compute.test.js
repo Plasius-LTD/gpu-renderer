@@ -1244,7 +1244,7 @@ test("wavefront compute uses physical continuation throughput with strict physic
   assert.match(source, /let specularEnvironment = reflectionEnvironment \* \(f0 \* brdfTerm\.x \+ vec3<f32>\(brdfTerm\.y\)\);/);
   assert.match(source, /let glossyEnvironment = max\(/);
   assert.match(source, /let environmentFloor = max\(ambientFloor, max\(sunlitFloor, glossyEnvironment \* environmentInfluence\)\);/);
-  assert.match(source, /var continuationThroughput = surface_continuation_throughput\(\s+hit,\s+continuationViewDirection,\s+continuationLightDirection,\s+scatter\s+\) \* segmentTransmittance;/);
+  assert.match(source, /var continuationThroughput = vec3<f32>\(0.0\);\s+if \(rough_dielectric_active\(hit\)\) \{\s+continuationThroughput = rough_dielectric_throughput\(ray, hit, scatter\) \* segmentTransmittance;\s+\} else \{\s+continuationThroughput = surface_continuation_throughput\(\s+hit,\s+continuationViewDirection,\s+continuationLightDirection,\s+scatter\s+\) \* segmentTransmittance;/);
   assert.match(source, /if \(max\(max_component\(continuationThroughput\), max_component\(secondaryThroughput\)\) <= 0\.000001\) \{/);
   assert.match(source, /let throughput = ray\.throughput\.xyz \* continuationThroughput;/);
   assert.match(source, /TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE/);
@@ -1325,10 +1325,10 @@ test("wavefront compute samples all-material direct light with MIS before random
   assert.match(source, /let environmentLight = sample_environment_direct_light\(hit, ray, normal, 0\.5, 1\.0\);/);
   assert.match(source, /let emissiveLight = sample_emissive_direct_light\(hit, ray, 0\.0\);/);
   assert.match(source, /return direct_light_sample_contribution\(ray, hit, sample_direct_light\(hit, ray, normal\)\);/);
-  assert.match(source, /if \(scene_visibility_blocked\(origin, lightDirection, lightSample\.maxDistance\)\) \{/);
-  assert.match(source, /let incidentRadiance = lightSample\.radiance\.xyz;/);
+  assert.match(source, /if \(scene_ray_visibility_blocked\(transport_visibility_ray\(ray, origin, lightDirection\), lightSample\.maxDistance\)\) \{/);
+  assert.match(source, /var incidentRadiance = lightSample\.radiance\.xyz;/);
   assert.match(source, /let bsdf = evaluate_surface_bsdf\(hit, viewDirection, lightDirection\);/);
-  assert.match(source, /let bsdfPdf = evaluate_surface_bsdf_pdf\(hit, viewDirection, lightDirection\);/);
+  assert.match(source, /let bsdfPdf = transport_surface_pdf\(ray, hit, viewDirection, lightDirection\);/);
   assert.match(source, /let misWeight = power_heuristic\(lightSample\.pdf, bsdfPdf\);/);
   assert.match(source, /nDotL \* misWeight \/ max\(lightSample\.pdf, 0\.000001\)/);
   assert.match(source, /var transmissionReflectChance = select\(/);

@@ -941,6 +941,7 @@ export interface WavefrontRoughBounceSplittingConfig {
 }
 
 export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.transport.roughDielectricTransport.enabled"?: boolean;
   readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
   readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
   readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
@@ -960,6 +961,7 @@ export interface WavefrontRendererFeatureFlags {
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly enabled?: {
+    readonly "renderer.transport.roughDielectricTransport.enabled"?: boolean;
     readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
     readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
     readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
@@ -980,6 +982,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly flags?: {
+    readonly "renderer.transport.roughDielectricTransport.enabled"?: boolean;
     readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
     readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
     readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;
@@ -1009,6 +1012,7 @@ export interface WavefrontRendererFeatureFlags {
       readonly roughBounceSplitting?: { readonly enabled?: boolean };
     };
     readonly transport?: {
+      readonly roughDielectricTransport?: { readonly enabled?: boolean };
       readonly boundedDielectricBranching?: { readonly enabled?: boolean };
       readonly nestedMediaRefraction?: { readonly enabled?: boolean };
       readonly strictPhysicalLowSppLighting?: boolean;
@@ -1029,6 +1033,7 @@ export interface WavefrontRendererFeatureFlags {
 }
 
 export interface WavefrontTransportExperimentFlags {
+  readonly roughDielectricTransport?: boolean;
   readonly boundedDielectricBranching?: boolean;
   readonly nestedMediaRefraction?: boolean;
   readonly layeredClearcoat?: boolean;
@@ -1150,6 +1155,8 @@ export interface WavefrontGpuParallelismDiagnostics {
 }
 
 export interface CreateWavefrontPathTracingComputeRendererOptions {
+  /** Experimental rough volume boundaries; requires nestedMediaRefraction. */
+  readonly "renderer.transport.roughDielectricTransport.enabled"?: boolean;
   readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
   readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
   readonly "renderer.materials.layeredClearcoat.enabled"?: boolean;

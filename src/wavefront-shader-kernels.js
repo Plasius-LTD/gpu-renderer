@@ -217,6 +217,10 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
   }
 
   if (ray.bounce + 1u >= config.maxDepth) {
+    if (rough_dielectric_active(hit)) {
+      terminate_optical_path(ray, TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT);
+      return;
+    }
     if (deferred_path_resolve_enabled()) {
       if (strict_physical_low_spp_lighting_enabled()) {
         record_deferred_terminal_source(
@@ -248,17 +252,22 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
   let continuationNormal = surface_shading_normal(hit);
   let continuationViewDirection = safe_normalize(-ray.direction.xyz, continuationNormal);
   let continuationLightDirection = safe_normalize(scatter.direction.xyz, continuationNormal);
-  var continuationThroughput = surface_continuation_throughput(
-    hit,
-    continuationViewDirection,
-    continuationLightDirection,
-    scatter
-  ) * segmentTransmittance;
-  let transmissionBranch = scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION;
-  let totalInternalReflection = dielectric_event(hit) && dielectric_cannot_refract(ray, hit);
-  let splitDielectric = dielectric_event(hit) && !totalInternalReflection && !bounded_dielectric_enabled();
+  var continuationThroughput = vec3<f32>(0.0);
+  if (rough_dielectric_active(hit)) {
+    continuationThroughput = rough_dielectric_throughput(ray, hit, scatter) * segmentTransmittance;
+  } else {
+    continuationThroughput = surface_continuation_throughput(
+      hit,
+      continuationViewDirection,
+      continuationLightDirection,
+      scatter
+    ) * segmentTransmittance;
+  }
+  let transmissionBranch = scatter_is_transmission(scatter);
+  let totalInternalReflection = dielectric_event(hit) && !rough_dielectric_active(hit) && dielectric_cannot_refract(ray, hit);
+  let splitDielectric = dielectric_event(hit) && !totalInternalReflection && !bounded_dielectric_enabled() && !rough_dielectric_active(hit);
   var secondaryThroughput = vec3<f32>(0.0);
-  if (dielectric_event(hit) && (nested_media_enabled() || bounded_dielectric_enabled())) {
+  if (dielectric_event(hit) && !rough_dielectric_active(hit) && (nested_media_enabled() || bounded_dielectric_enabled())) {
     continuationThroughput = select(dielectric_reflection_weight(ray, hit),
       dielectric_transmission_weight(ray, hit), transmissionBranch) * segmentTransmittance;
     if (bounded_dielectric_enabled()) { continuationThroughput /= scatter.pdf; }
@@ -278,6 +287,10 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
     }
   }
   if (max(max_component(continuationThroughput), max_component(secondaryThroughput)) <= 0.000001) {
+    if (rough_dielectric_active(hit)) {
+      terminate_optical_path(ray, TERMINAL_SOURCE_KIND_ABSORPTION_NULL);
+      return;
+    }
     if (deferred_path_resolve_enabled()) {
       if (strict_physical_low_spp_lighting_enabled()) {
         record_deferred_terminal_source(
@@ -347,17 +360,17 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
   let nextMediumStack = select(
     transitioned_medium_stack(ray, hit),
     ray.mediumStack,
-    scatter.lobeKind != SCATTER_LOBE_DELTA_TRANSMISSION
+    !transmissionBranch
   );
   let nextMediumStackDepth = select(
     transitioned_medium_stack_depth(ray, hit),
     ray.mediumStackDepth,
-    scatter.lobeKind != SCATTER_LOBE_DELTA_TRANSMISSION
+    !transmissionBranch
   );
   let nextMediumRefId = select(
     transmitted_medium_ref_id(ray, hit),
     ray.mediumRefId,
-    scatter.lobeKind != SCATTER_LOBE_DELTA_TRANSMISSION
+    !transmissionBranch
   );
   nextQueue[nextIndex] = RayRecord(
     ray.rayId,
@@ -468,6 +481,12 @@ fn intersect_nested_ray(input: RayRecord) -> NestedIntersection {
   // Numerical safety bound; exhausted traversal is rejected, never shaded.
   for (var crossing = 0u; crossing < 32u; crossing++) {
     hit = trace_material_after(ray, minimumDistance);
+    if (hit.hitType != 2u && rough_dielectric_active(hit) && !medium_valid(hit.mediumRefId)) {
+      hit.pad2 = 6.0; hit.hitType = 5u; return NestedIntersection(ray, hit);
+    }
+    if (hit.hitType != 2u && rough_dielectric_active(hit) && hit.material.z < 1.0) {
+      hit.pad2 = 7.0; hit.hitType = 5u; return NestedIntersection(ray, hit);
+    }
     if (hit.hitType == 2u || !dielectric_event(hit) || !medium_valid(hit.mediumRefId)) {
       if (hit.distance > 0.0) { hit.distance -= travelled; }
       return NestedIntersection(ray, hit);
@@ -757,6 +776,10 @@ fn refract_direction(unitDirection: vec3<f32>, normal: vec3<f32>, etaRatio: f32)
 }
 
 fn surface_supports_direct_lighting(hit: HitRecord) -> bool {
+  if (rough_dielectric_active(hit)) {
+    // A purely smooth dielectric has no continuous lobe for direct-light NEE.
+    return hit.material.x > 0.02 || hit.materialExtension.z < 1.0;
+  }
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
   let deltaMetal = hit.materialKind == 1u && roughness <= 0.02;
@@ -852,6 +875,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
   }
 
   if (dielectric_event(hit)) {
+    if (rough_dielectric_active(hit)) { return scatter_rough_dielectric(ray, hit); }
     return scatter_dielectric(ray, hit);
   }
 
@@ -992,7 +1016,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
 // Camera visibility has no competing next-event sample. Preserve the existing
 // terminal MIS only for non-delta secondary rays.
 fn terminal_mis_enabled(ray: RayRecord) -> bool {
-  return ray.bounce > 0u && (ray.flags & RAY_FLAG_DELTA_SAMPLE) == 0u;
+  return ray.bounce > 0u && (ray.flags & (RAY_FLAG_DELTA_SAMPLE | RAY_FLAG_NO_COMPETING_NEE)) == 0u;
 }
 
 @compute @workgroup_size(64)

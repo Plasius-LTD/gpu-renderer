@@ -76,10 +76,12 @@ test('nested traversal protects occupancy and sample identity without consuming 
 test('room transport controls reset off and forward independent flag receipts and GPU preflight',()=>{
  const read=f=>readFileSync(new URL('./fixtures/'+f,import.meta.url),'utf8');
  const html=read('native-room-reference.html'),js=read('native-room-reference.js');
- for(const id of ['bounded-dielectric','nested-media']){
+ for(const id of ['bounded-dielectric','nested-media','rough-dielectric']){
   assert(html.includes(`label for="${id}"`));assert(js.includes(`el('${id}').value='off'`));
  }
  assert.match(js,/receipt.transportFlags=/);assert.match(js,/runDielectricTransportProbe\(cancellation.signal\)/);
+ assert.match(js,/runRoughDielectricTransportProbe\(cancellation.signal\)/);
+ assert.match(js,/roughDielectricTransport&&!nestedMediaRefraction/);
  assert.match(js,/createPairedProbeRunner[\s\S]*boundedDielectricBranching,nestedMediaRefraction/);
  assert.match(html,/label for="max-depth">Maximum bounces/);
  assert.match(js,/el\('max-depth'\)\.value='6'/);

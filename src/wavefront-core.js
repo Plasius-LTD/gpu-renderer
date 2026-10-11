@@ -359,10 +359,12 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   layeredClearcoat: 1 << 13,
   boundedDielectricBranching: 1 << 14,
   nestedMediaRefraction: 1 << 15,
+  roughDielectricTransport: 1 << 16,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
   const requested = Object.freeze({
+    roughDielectricTransport: readBooleanFeatureFlag(options, "renderer.transport.roughDielectricTransport.enabled", flags => flags?.renderer?.transport?.roughDielectricTransport?.enabled),
     boundedDielectricBranching: readBooleanFeatureFlag(options, "renderer.transport.boundedDielectricBranching.enabled", flags => flags?.renderer?.transport?.boundedDielectricBranching?.enabled),
     nestedMediaRefraction: readBooleanFeatureFlag(options, "renderer.transport.nestedMediaRefraction.enabled", flags => flags?.renderer?.transport?.nestedMediaRefraction?.enabled),
     layeredClearcoat: readBooleanFeatureFlag(options, "renderer.materials.layeredClearcoat.enabled", flags => flags?.renderer?.materials?.layeredClearcoat?.enabled),
@@ -423,7 +425,11 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
       (flags) => flags?.renderer?.diagnostics?.productTransportTelemetry
     ),
   });
+  if (requested.roughDielectricTransport && !requested.nestedMediaRefraction) {
+    throw new RangeError('roughDielectricTransport requires renderer.transport.nestedMediaRefraction.enabled');
+  }
   const effective = Object.freeze({
+    roughDielectricTransport: requested.roughDielectricTransport,
     boundedDielectricBranching: requested.boundedDielectricBranching,
     nestedMediaRefraction: requested.nestedMediaRefraction,
     sheen: requested.sheen,
