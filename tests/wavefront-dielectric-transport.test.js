@@ -63,6 +63,9 @@ test('nested traversal protects occupancy and sample identity without consuming 
  assert.match(nested,/recoverable_optical_entry\(ray, hit\)/);
  assert.match(nested,/trace_material_after\(ray, minimumDistance\)/);
  assert.doesNotMatch(nested,/ray.origin\s*=/);
+ assert.match(nested,/minimumDistance = hit.distance;/);
+ assert.doesNotMatch(nested,/next_optical_distance/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/nested_media_enabled\(\) && exit <= transport_ray_minimum\(\)/);
  assert.match(nested,/hit.distance - travelled/);
  assert.match(nested,/hit.distance -= travelled/);
  const query=WAVEFRONT_COMPUTE_WGSL.split('fn trace_material_after')[1].split('fn trace_material_hit(')[0];

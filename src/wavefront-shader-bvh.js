@@ -358,6 +358,9 @@ fn intersect_box(ray: RayRecord, object: SceneObject) -> Candidate {
   if (exit < max(entry, transport_ray_minimum())) {
     return no_candidate();
   }
+  if (nested_media_enabled() && exit <= transport_ray_minimum()) {
+    return no_candidate();
+  }
   var distance = max(entry, 0.001);
   if (nested_media_enabled()) { distance = select(exit, entry, entry > transport_ray_minimum()); }
   let position = ray.origin.xyz + ray.direction.xyz * distance;

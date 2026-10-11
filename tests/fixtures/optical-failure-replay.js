@@ -22,13 +22,13 @@ export function opticalReplayShader({root,sampler,splitting}) {
    accumulation[o+5u]=vec4<f32>(hit.geometricNormal.xyz,-1.0);
    if(hit.hitType==2u||ray.bounce>=config.maxDepth){return;}
    if(recoverable_optical_entry(ray,hit)){
-    minimumDistance=next_optical_distance(hit.distance);continue;
+    minimumDistance=hit.distance;continue;
    }
    if(medium_transition_invalid(ray,hit)){return;}
    if(dielectric_event(hit)&&medium_valid(hit.mediumRefId)&&medium_stack_current_id(ray)==transmitted_medium_ref_id(ray,hit)){
     let depth=transitioned_medium_stack_depth(ray,hit);let medium=transmitted_medium_ref_id(ray,hit);
     ray.mediumStack=transitioned_medium_stack(ray,hit);ray.mediumStackDepth=depth;ray.mediumRefId=medium;
-    minimumDistance=next_optical_distance(hit.distance);continue;
+    minimumDistance=hit.distance;continue;
    }
    ${split?'if(rough_split_eligible(ray,hit)){key=key*2u+1u+((id.x>>splitLevel)&1u);splitLevel++;rough_branch_key=key;}':''}
    let scatter=scatter_direction(ray,hit);

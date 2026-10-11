@@ -12,14 +12,18 @@ export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+`
   triangle.v1=vec4<f32>(1,-1,0,1);triangle.v2=vec4<f32>(0,1,0,1);
   var r=RayRecord();r.origin=vec4<f32>(0,0,0.5,1);r.direction=vec4<f32>(0,0,-1,0);
   let first=intersect_triangle(r,triangle,0u);
-  optical_query_minimum=next_optical_distance(first.distance);
+  optical_query_minimum=first.distance;
   let repeated=intersect_triangle(r,triangle,0u);
-  triangle.v0.z=-0.000001;triangle.v1.z=-0.000001;triangle.v2.z=-0.000001;
+  let adjacentZ=first.distance-bitcast<f32>(bitcast<u32>(first.distance)+1u);
+  triangle.v0.z=adjacentZ;triangle.v1.z=adjacentZ;triangle.v2.z=adjacentZ;
   let adjacent=intersect_triangle(r,triangle,1u);
+  var box=SceneObject();box.center=vec4<f32>(0,0,0,1);box.halfExtent=vec4<f32>(0.25,0.25,0.5,0);
+  var inside=r;inside.origin=vec4<f32>(0,0,0,1);inside.direction=vec4<f32>(0,0,1,0);
+  let repeatedBox=intersect_box(inside,box);
   optical_query_minimum=0.0;
   let reset=transport_ray_minimum();
   accumulation[64]=vec4<f32>(f32(first.hit),f32(repeated.hit),f32(adjacent.hit),reset);
-  accumulation[65]=vec4<f32>(adjacent.distance-first.distance,0,0,0);
+  accumulation[65]=vec4<f32>(adjacent.distance-first.distance,f32(repeatedBox.hit),0,0);
   accumulation[66]=vec4<f32>(0);accumulation[67]=vec4<f32>(0);return;
  }
  if(id.x==10u || id.x==14u){
@@ -124,7 +128,8 @@ export async function runDielectricTransportProbe(signal){
    near(values[224],nested?1:0,0);
    if(nested){near(values[240],0,0);near(values[241],1,0);}
    near(values[256],1,0);near(values[257],nested?0:1,0);near(values[258],1,0);
-   near(values[259],nested?0:0.001,0.000000001);near(values[260],0.000001,0.0000001);
+   near(values[259],nested?0:0.001,0.000000001);near(values[260],2**-24,0);
+   near(values[261],nested?0:1,0);
    if(nested){
     for(const [i,eta,before,after,invalid] of [[0,1/1.5,0,1,0],[1,1.5/water,1,2,0],[2,water,2,0,0],[3,1.5,1,0,0],[4,1,1,1,0],[5,water/1.5,2,1,0],[6,1,1,1,0],[7,1,1,1,1],[8,1,0,0,1],[9,1,1,1,1]]){
      const o=i*16;near(values[o],eta);near(values[o+2],before);near(values[o+3],after);near(values[o+6],invalid);

@@ -23,8 +23,8 @@ texture bytes (plus upload staging), not claimed physical VRAM residency.
 IOR is limited to 1..4; priority to exactly representable integers 0..2048.
 
 Hidden overlap boundaries update occupancy and Beer absorption while preserving
-origin, direction, sample identity and bounce depth. A distance cursor advances
-to the next representable f32 along the original ray; these bookkeeping-only
+origin, direction, sample identity and bounce depth. An exclusive distance cursor
+rejects the last hit while admitting the next representable f32 along the original ray; these bookkeeping-only
 boundaries never re-launch or spatially offset the ray. The cursor is local to
 the invocation and reset after every query, including misses, so it cannot
 affect lighting/shadow queries. Segment absorption uses the incremental distance,

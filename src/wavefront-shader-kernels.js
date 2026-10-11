@@ -477,7 +477,7 @@ fn intersect_nested_ray(input: RayRecord) -> NestedIntersection {
       // or drawing another BSDF event. The shared crossing bound still applies.
       ray.throughput = vec4<f32>(ray.throughput.xyz * medium_transmittance(medium_stack_current_id(ray), hit.distance - travelled), ray.throughput.w);
       travelled = hit.distance;
-      minimumDistance = next_optical_distance(hit.distance);
+      minimumDistance = hit.distance;
       continue;
     }
     if (medium_transition_invalid(ray, hit)) { hit.pad2 = f32(medium_transition_failure(ray, hit)); hit.hitType = 5u; return NestedIntersection(ray, hit); }
@@ -494,7 +494,7 @@ fn intersect_nested_ray(input: RayRecord) -> NestedIntersection {
     ray.mediumStackDepth = nextDepth;
     ray.mediumRefId = nextId;
     travelled = hit.distance;
-    minimumDistance = next_optical_distance(hit.distance);
+    minimumDistance = hit.distance;
   }
   hit.hitType = 5u;
   hit.pad2 = 5.0;

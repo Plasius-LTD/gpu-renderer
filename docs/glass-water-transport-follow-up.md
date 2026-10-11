@@ -170,12 +170,39 @@ image-quality or performance evidence. The normal-validity correction alone did
 not resolve this failure.
 
 The correction preserves the original ray origin/direction and advances a
-next-representable-distance cursor through hidden boundaries. Occupancy and
+strictly-exclusive last-hit distance cursor through hidden boundaries. Occupancy and
 incremental absorption still update; actual scattering still uses an offset.
 Every query resets the cursor before returning. A new assembled GPU probe
 checks repeated-hit exclusion, adjacent-hit retention and reset, and the
 failure-only replay uses the same cursor. No count, overflow or rejection
 threshold is relaxed. Physical recapture of this correction is pending.
+
+### Completed earlier 1080p captures (not final-source qualification)
+
+Both used the stable sampler, uniform 32 SPP, six bounces, both transport flags
+on, no rough splitting and no denoise. Each retained receipt reports all
+66,355,200 samples completed (2,073,600 pixels at exactly 32), no validation
+failures and successful cleanup. These are count-integrity results only.
+
+| Scene | Renderer / lighting commits | Receipt SHA-256 |
+| --- | --- | --- |
+| Empty tumbler | `c605bd3b831ba504692def40e02f0e0025e6c87b` / `1d76fa54d70741172f36fc328eebfd8d1bb65c69` | `3565a91f6c58853638a3ab704e795043eacdcbfbda941b60c84093dde6ca6dd0` |
+| Filled tumbler | `a68a2e7b5c91af4eec204b5f13fab4ecc73c1d1a` / `2852eec116443594394a859550a991b7f84ca995` | `f3b0b427d2d2ea9b7c0f04fbdd3ff3921a46f0d126738dfc08befdad07b78b95` |
+
+Recorded linear HDR hashes respectively:
+`e2b3682554b2cfefabe004a8ec053f3380928cec042689e6931708eb726f497d` and
+`ee0fa8e6acbf6abb89f88c17f827113ae706e6fb9bf4d57b36114082d061e2f2`.
+Summed diagnostic GPU intervals were 58,873.02 / 63,593.45 ms; readback-inclusive
+intervals were 62,391.00 / 66,840.20 ms. These are not timing-only benchmarks,
+matched-quality comparisons or real-time claims. Visible grain and reflected/base
+patterns still require convergence and appearance validation.
+
+On 2026-10-11, local renderer validation passed 401 tests (96.33% lines), and
+lighting passed 172 (81.17% lines), plus lint, types, builds, package checks and
+Zero-Three gates. The new physical cursor probe, 4K reproducer/full capture,
+final-source 1080p recapture, isolated-flag image lanes and viewport/screenshot
+QA remain pending: the browser control session is unavailable. The server can
+serve the committed code, but an HTTP response is not GPU execution evidence.
 
 ### Remaining acceptance lanes
 
