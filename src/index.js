@@ -89,3 +89,5 @@ export {
   defaultRendererClearColor,
   supportsWebGpu,
 } from "./renderer-webgpu-runtime.js";
+
+export { validateNativeMaterials as validateNativeSurfaceMaterials } from './native-surface-materials.js';

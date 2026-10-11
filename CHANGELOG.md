@@ -11,6 +11,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Expose native material preflight validation and transfer the reviewed demo adapters plus their tests to the shared material-study runtime for production reuse (#230).
+
+- Correct vertical grab direction in the material-review camera for mouse, touch and keyboard orbit; preserve horizontal, pan and zoom directions (#230).
+
+- Replace the material review camera toolbar with a five-second focus gesture guide; keep direct mouse/touch movement independent of keyboard modes, with replay and dismissal (#230).
+
+- Update the existing brace-expansion development override to 5.0.12 for patched denial-of-service advisories (#230).
+
+- Fix native normal maps losing detail at close range; add a source-demo camera adapter using shared orbit, truck, pan, dolly and zoom controls with keyboard/touch support (#230).
+
+- Fix full varnish wear to exactly match the uncoated endpoint; replace random rope strands with shorter, finer guide-aligned tufts and bounded denser nap (#230).
+
+- Add a versioned material-ageing profile and crate adapter with independent 30% rope fraying / 90% varnish-wear review defaults; preserve fibre roots across wear edits and retain coating islands within heavily scuffed wood (#230).
+
+- Add bounded, deterministic curved rope fibres to the chest review fixture, with matte exposed-fibre materials and comparison/detail views (#230).
+
+- Support spatial clearcoat coverage and roughness maps; keep the crate fixture's rope and hardware uncoated and vary its wood varnish with a deterministic wear preset (#230).
+
+- Separate optional neutral varnish/clearcoat reflection from the coloured native surface, with independent roughness and Fresnel attenuation (#230).
+
+- Add bounded, mip-filtered authored colour, normal and ORM materials to native surfaces, with optional UVs and draw ranges shared by the main and reflection passes (#230).
+
 - **Added**
   - (placeholder)
 
