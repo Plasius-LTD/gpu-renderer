@@ -13,6 +13,20 @@ import {roughDielectricProbeShader,validateRoughOpticalProbe,ROUGH_OPTICAL_PROBE
 
 const flag='renderer.transport.roughDielectricTransport.enabled';
 const nested='renderer.transport.nestedMediaRefraction.enabled';
+test('assembled optical shaders never use the WGSL reserved token smooth',async()=>{
+ // The reflection parser accepts this reserved word, unlike the device compiler.
+ // Scan tokens so comments and valid identifiers such as smoothstep are ignored.
+ // https://www.w3.org/TR/2026/CRD-WGSL-20260921/#reserved-words
+ const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
+ const {WgslScanner}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
+ const forbiddenLines=source=>new WgslScanner(source).scanTokens()
+  .filter(token=>token.lexeme==='smooth').map(token=>token.line);
+ assert.deepEqual(forbiddenLines('let smooth = true;'),[1],'guard rejects the reported regression');
+ assert.deepEqual(forbiddenLines('// smooth\n/* smooth /* smooth */ */ let isSmooth = smoothstep(0.0, 1.0, 0.5);'),[]);
+ for(const [name,source] of [['canonical',shader],['rough-optical-probe',roughDielectricProbeShader()]]){
+  assert.deepEqual(forbiddenLines(source),[],`${name} uses the reserved WGSL token smooth`);
+ }
+});
 test('rough optical transport is explicit, default off and requires nested media',()=>{
  assert.equal(resolveTransportExperiments().effective.roughDielectricTransport,false);
  assert.throws(()=>resolveTransportExperiments({[flag]:true}),/nestedMediaRefraction/);

@@ -47,6 +47,18 @@ materials continue through their existing path.
 
 ## Current verification boundary
 
+The 2026-10-13 room capture exposed a canonical shader-creation error: the local
+predicate `smooth` is a [reserved WGSL word](https://www.w3.org/TR/2026/CRD-WGSL-20260921/#reserved-words).
+It is renamed to `isSmooth` without changing optical calculations, flags or layouts.
+A red/green token regression covers the canonical and physical-probe assemblies; the existing
+software parser/executor did not reject this name. Device compilation preflight
+remains mandatory, and fixing this error alone does not qualify a water image.
+The regression reproduced line 2940 before the correction. Afterward, all 416
+tests passed (96.38% lines, 83.12% branches; changed shader module in LCOV), as did
+lint, types/clean-package consumer, build, package, Zero-Three and runtime audit.
+No successful device compilation or updated water image is claimed from those
+local checks; the physical room preflight must be rerun on the corrected source.
+
 Software execution of the canonical WGSL numerical functions checks T=0/.25/.5/1,
 roughness 0/.35/.8, total internal reflection, equal IOR, PDFs, medium ownership
 and energy against independent double-precision angular quadrature. A second

@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Fix the canonical optical WGSL's reserved `smooth` identifier, which blocked
+  room rendering at compilation preflight. Add assembled-source token regression
+  coverage without changing transport, layouts or feature flags (#234).
+
 - Simplify the local room demo into scene and sampling presets, an image-first
   layout with a compact Focus / How to navigate panel, and collapsed
   advanced/laboratory tools. Remove numeric camera fields; reuse configurable

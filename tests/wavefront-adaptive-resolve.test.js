@@ -212,5 +212,5 @@ test("pipeline compilation failures propagate without returning partial pipeline
 });
 
 test("the Task 232 opt-in material-corrected fixed shader remains canonical", () => {
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "195f269cf5c07c43419c468b39a40fbd7b941e43110730c8ee2b2b649024f869");
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "7b9f40f06c2d0fe5ee804286cae76a7605611ba321a9a39bd5ae02dc275d1aeb"); // Task 234 reserved-token rename only.
 });

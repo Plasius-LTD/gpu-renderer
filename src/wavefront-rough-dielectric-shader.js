@@ -105,8 +105,8 @@ fn scatter_rough_dielectric_samples(ray: RayRecord, hit: HitRecord, component: f
     return ScatterResult(vec4<f32>(light, 0.0), rough_dielectric_pdf(ray, hit, light), ray.mediumRefId, 0u, SCATTER_LOBE_DIFFUSE);
   }
   var h = n;
-  let smooth = optical_smooth(ray, hit);
-  if (!smooth) { h = optical_sample_half(sample, hit.material.x, n); }
+  let isSmooth = optical_smooth(ray, hit);
+  if (!isSmooth) { h = optical_sample_half(sample, hit.material.x, n); }
   let vh = dot(-ray.direction.xyz, h);
   if (vh <= 0.0) { return ScatterResult(vec4<f32>(n, 0.0), 0.0, ray.mediumRefId, 0u, SCATTER_LOBE_SPECULAR); }
   let eta = dielectric_ratio(ray, hit);
@@ -114,12 +114,12 @@ fn scatter_rough_dielectric_samples(ray: RayRecord, hit: HitRecord, component: f
   let pr = optical_reflection_probability(f, clamp(hit.materialExtension.z, 0.0, 1.0));
   let reflection = selector < pr || pr == 1.0;
   var light = reflect(ray.direction.xyz, h);
-  var lobe = select(SCATTER_LOBE_SPECULAR, SCATTER_LOBE_DELTA_REFLECTION, smooth);
-  var flags = select(0u, RAY_FLAG_DELTA_SAMPLE, smooth);
+  var lobe = select(SCATTER_LOBE_SPECULAR, SCATTER_LOBE_DELTA_REFLECTION, isSmooth);
+  var flags = select(0u, RAY_FLAG_DELTA_SAMPLE, isSmooth);
   var medium = ray.mediumRefId;
   if (!reflection) {
     light = refract_direction(ray.direction.xyz, h, eta);
-    lobe = select(SCATTER_LOBE_ROUGH_TRANSMISSION, SCATTER_LOBE_DELTA_TRANSMISSION, smooth);
+    lobe = select(SCATTER_LOBE_ROUGH_TRANSMISSION, SCATTER_LOBE_DELTA_TRANSMISSION, isSmooth);
     flags |= RAY_FLAG_NO_COMPETING_NEE;
     medium = transmitted_medium_ref_id(ray, hit);
   }
@@ -129,7 +129,7 @@ fn scatter_rough_dielectric_samples(ray: RayRecord, hit: HitRecord, component: f
     return ScatterResult(vec4<f32>(light, 0.0), 0.0, ray.mediumRefId, flags, lobe);
   }
   var pdf = (1.0 - pd) * select(1.0 - pr, pr, reflection);
-  if (!smooth) { pdf = rough_dielectric_pdf(ray, hit, light); }
+  if (!isSmooth) { pdf = rough_dielectric_pdf(ray, hit, light); }
   return ScatterResult(vec4<f32>(light, 0.0), pdf, medium, flags, lobe);
 }
 fn scatter_rough_dielectric(ray: RayRecord, hit: HitRecord) -> ScatterResult {
