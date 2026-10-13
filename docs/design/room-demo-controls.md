@@ -40,6 +40,18 @@ fallbacks. No new packages, model edits, GPU buffers, passes or sampling formula
 
 ## QA inventory (before implementation)
 
+Contact-isolation extension (Story site#2291 / Task gpu-renderer#233): expose the
+lighting-owned `supportClearance` in collapsed advanced glass settings, with units
+and an explicit diagnostic warning. Forward it through validated scene settings;
+default/reset and scene recipes restore the canonical zero clearance. A positive
+value lowers only the pedestal top, not the glass, water or camera. Preserve
+transport switches, sampling and lighting. Nonzero captures must be identifiable
+in both filenames and full scene receipts. Never label this deliberately floating
+control a contact fix. No new camera field, transport flag or GPU work is added.
+Test labelled routing, recipe/reset/custom behavior and retained evidence before
+implementation; physical six/eight-bounce uniform-32 and support-only comparisons
+remain required and separate from unit tests. See the lighting #105 design.
+
 Unit/integration: recipe transitions and rollback, maximum from canonical config,
 unknown preset/focus rejection, custom detection, default-based camera placement,
 removed numeric camera fields, retained non-camera controls, closed advanced panels,

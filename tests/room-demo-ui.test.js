@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createRoomDemoPresets,installRoomDemoUi,revealInvalidControl,setRoomPreviewState,invalidateRoomCaptureUi} from './fixtures/room-demo-ui.js';
 
-const defaults={maximumSpp:32,limit:256,centralReference:'seating',view:'entry'};
+const defaults={maximumSpp:32,limit:256,centralReference:'seating',view:'entry',supportClearance:0};
 const html=readFileSync(new URL('./fixtures/native-room-reference.html',import.meta.url),'utf8');
 function fixture(){
  const nodes=new Map();
@@ -19,6 +19,8 @@ test('scene recipes reuse configured camera defaults and independently restore t
  assert.equal(p.scene.glass.values['bounded-dielectric'],'on');
  assert.equal(p.scene.glass.values['rough-dielectric'],'off');
  assert.equal(p.scene.glass.values['focus-view'],'glass');
+ assert.equal(p.scene.glass.values['glass-support-clearance'],defaults.supportClearance);
+ assert.equal(createRoomDemoPresets({...defaults,supportClearance:.0002}).scene.glass.values['glass-support-clearance'],.0002);
  assert.equal(p.scene.cloth.values.sheen,'on');
  assert.equal(p.scene.cloth.values.denoise,'guided');
  assert.equal(p.scene.room.values['glass-mode'],'off');
@@ -34,6 +36,10 @@ test('recipe controls apply, mark manual changes Custom, and never start a rende
  assert.equal(nodes.get('scene-preset').value,'room');
  nodes.get('scene-preset').value='glass';nodes.get('scene-preset').listeners.change();
  assert.equal(nodes.get('glass-mode').value,'filled');assert.equal(changes,1);
+ nodes.get('glass-support-clearance').value='0.0001';ui.refresh();
+ assert.equal(nodes.get('scene-preset').value,'custom');
+ nodes.get('scene-preset').value='glass';nodes.get('scene-preset').listeners.change();
+ assert.equal(nodes.get('glass-support-clearance').value,'0');
  nodes.get('nested-media').value='off';ui.refresh();
  assert.equal(nodes.get('scene-preset').value,'custom');
  nodes.get('quality-preset').value='reference';nodes.get('quality-preset').listeners.change();

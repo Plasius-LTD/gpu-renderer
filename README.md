@@ -102,6 +102,13 @@ close-up** uses the configured glass camera defaults. A neutral
 pedestal is added explicitly; no room or seating assets are rewritten. Reset/off
 restores the original scene. Other diagnostic buttons do not apply this object.
 The geometry comes from `gpu-lighting/demo/eames-environments/glass-water-reference.js`.
+Advanced glass settings include **Pedestal clearance m (diagnostic)**, default 0.
+A positive value lowers only the support, leaving glass/water and camera fixed.
+Receipts record the value/heights and filenames identify nonzero clearance.
+Reset or select a scene recipe to restore zero. This intentionally floating
+comparison isolates contact; it is not a realism fix. For depth isolation, use
+Uniform reference at 32 SPP, 1080p, raw output and unchanged optical switches,
+comparing six/eight bounces before changing clearance.
 Its small recorded contact overlap is not an air gap. Enable **Bounded glass
 branching** and **Nested glass / water refraction** to test actual incident and
 outgoing media; the disabled refraction control still assumes air on one side.

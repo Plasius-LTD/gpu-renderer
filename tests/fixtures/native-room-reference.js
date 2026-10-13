@@ -22,7 +22,7 @@ resetLighting();
 function resetCoat(){el('clearcoat').value='off';el('wood-coat').value='off';el('coat-weight').value=ROOM_COAT_DEFAULTS.weight;el('coat-roughness').value=ROOM_COAT_DEFAULTS.roughness;}
 function coatSelection(){return {enabled:el('wood-coat').value==='on',weight:el('coat-weight').valueAsNumber,roughness:el('coat-roughness').valueAsNumber};}
 resetCoat();
-const glassFields={'glass-fill':'fill','glass-x':'x','glass-z':'z','glass-radius':'radius','glass-height':'height','glass-ior':'glassIor','water-ior':'waterIor'};
+const glassFields={'glass-fill':'fill','glass-x':'x','glass-z':'z','glass-radius':'radius','glass-height':'height','glass-ior':'glassIor','water-ior':'waterIor','glass-support-clearance':'supportClearance'};
 function resetGlass(){el('rough-dielectric').value='off';el('bounded-dielectric').value='off';el('nested-media').value='off';el('glass-mode').value=GLASS_WATER_DEFAULTS.mode;for(const [id,key] of Object.entries(glassFields))el(id).value=GLASS_WATER_DEFAULTS[key];}
 function focusSettings(){return roomFocusSettings(el('focus-view').value,{room:ROOM_DEFAULTS,cloth:CLOTH_INSPECTION_DEFAULTS,glass:GLASS_WATER_DEFAULTS});}
 function glassSelection(){return glassWaterSettings({mode:el('glass-mode').value,...Object.fromEntries(Object.entries(glassFields).map(([id,key])=>[key,el(id).valueAsNumber])),...focusSettings().glass});}
@@ -45,7 +45,7 @@ el('show-raw').addEventListener('click',()=>showComparison(false));el('show-clea
 for(const mode of ['albedo','normal'])el('show-'+mode).addEventListener('click',()=>{if(!comparison?.[mode])return;preview.src=comparison[mode];download.href=comparison[mode];download.download=comparison.stem+'-'+mode+'.png';el('comparison-label').textContent=mode==='albedo'?'Base colour · no lighting / tone mapping · single first sample':'Mapped world normals · magenta = unavailable · single first sample';});
 function invalidateCapture(){describeSampling();comparison=null;invalidateRoomCaptureUi(document);demoUi.refresh();}
 function clearCapture(){invalidateCapture();preview.hidden=true;preview.removeAttribute('src');setRoomPreviewState(document,'rendering');}
-const demoUi=installRoomDemoUi(document,createRoomDemoPresets({maximumSpp:RADIAL_SAMPLING_DEFAULTS.maximumSpp,limit:RADIAL_MAXIMUM_SPP,centralReference:ROOM_DEFAULTS.centralReference,view:ROOM_DEFAULTS.view}),invalidateCapture);
+const demoUi=installRoomDemoUi(document,createRoomDemoPresets({maximumSpp:RADIAL_SAMPLING_DEFAULTS.maximumSpp,limit:RADIAL_MAXIMUM_SPP,centralReference:ROOM_DEFAULTS.centralReference,view:ROOM_DEFAULTS.view,supportClearance:GLASS_WATER_DEFAULTS.supportClearance}),invalidateCapture);
 for(const control of controls){
  if(['scene-preset','quality-preset'].includes(control.id))continue;
  control.addEventListener("change",invalidateCapture);
@@ -125,7 +125,7 @@ run.addEventListener("click",async()=>{
  receipt.materialFlags={'renderer.materials.sheen.enabled':sheen,'renderer.materials.layeredClearcoat.enabled':layeredClearcoat};
  receipt.transportFlags={'renderer.transport.boundedDielectricBranching.enabled':boundedDielectricBranching,'renderer.transport.nestedMediaRefraction.enabled':nestedMediaRefraction,'renderer.transport.roughDielectricTransport.enabled':roughDielectricTransport};
  receipt.inspection={closeup,distribution,materialViews:materialInspection};
- const lightingIdentity=lightingSelection().style+(layeredClearcoat?'-layered-coat':'')+(woodCoat.enabled?`-varnish${woodCoat.weight}-rough${woodCoat.roughness}`:'')+(glass.mode==='off'?'':'-glass-'+glass.mode+'-fill'+glass.fill+(glass.closeup?'-glass-closeup':''));
+ const lightingIdentity=lightingSelection().style+(layeredClearcoat?'-layered-coat':'')+(woodCoat.enabled?`-varnish${woodCoat.weight}-rough${woodCoat.roughness}`:'')+(glass.mode==='off'?'':'-glass-'+glass.mode+'-fill'+glass.fill+(glass.closeup?'-glass-closeup':'')+(glass.supportClearance>0?'-support-clearance'+glass.supportClearance:''));
  const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}${closeup.enabled?'-closeup':''}${distribution==='uniform'?'-uniform':''}-${lightingIdentity}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
  const save=async(name,dataUrl,payload)=>{
   const response=await fetch("/__plasius-capture",{method:"POST",headers:{"content-type":"application/json"},signal:AbortSignal.timeout(30000),

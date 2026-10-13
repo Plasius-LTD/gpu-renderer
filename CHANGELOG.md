@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Expose lighting-owned pedestal clearance inside advanced glass diagnostics;
+  preserve zero/reset contact, identify separated captures and retain evidence.
+  No transport or sampling change; physical contact isolation remains pending (#233).
+
 - Fix the canonical optical WGSL's reserved `smooth` identifier, which blocked
   room rendering at compilation preflight. Add assembled-source token regression
   coverage without changing transport, layouts or feature flags (#234).

@@ -1,8 +1,8 @@
 // Local demo recipes only. Renderer policy and camera construction stay in the
 // existing GPU packages; pass their defaults instead of duplicating them here.
-export function createRoomDemoPresets({maximumSpp,limit,centralReference,view}){
+export function createRoomDemoPresets({maximumSpp,limit,centralReference,view,supportClearance}){
  const room={models:'all','central-reference':centralReference,'focus-view':view,
-  'glass-mode':'off','bounded-dielectric':'off','nested-media':'off','rough-dielectric':'off',
+  'glass-mode':'off','glass-support-clearance':supportClearance,'bounded-dielectric':'off','nested-media':'off','rough-dielectric':'off',
   sheen:'off',denoise:'off','material-inspection':'off',clearcoat:'off','wood-coat':'off'};
  const quality=(spp,distribution)=>({spp,'sample-distribution':distribution,sampler:'fixed-pattern',splitting:'0'});
  return {
