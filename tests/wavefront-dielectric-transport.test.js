@@ -84,6 +84,6 @@ test('room transport controls reset off and forward independent flag receipts an
  assert.match(js,/roughDielectricTransport&&!nestedMediaRefraction/);
  assert.match(js,/createPairedProbeRunner[\s\S]*boundedDielectricBranching,nestedMediaRefraction/);
  assert.match(html,/label for="max-depth">Maximum bounces/);
- assert.match(js,/el\('max-depth'\)\.value='6'/);
+ assert.match(js,/el\('max-depth'\)\.value=String\(ROOM_CAPTURE_DEPTH_LIMITS\.default\)/);
  assert.match(js,/composed.scene.probeDepth=settings.maxDepth/);
 });

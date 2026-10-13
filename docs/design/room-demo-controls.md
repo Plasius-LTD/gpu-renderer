@@ -40,6 +40,19 @@ fallbacks. No new packages, model edits, GPU buffers, passes or sampling formula
 
 ## QA inventory (before implementation)
 
+Longer glass paths (#233 / lighting#105): use the lighting-owned frozen capture
+depth limits (1..20, default six) for initialization, validation and Reset. Do not
+change camera, materials, lighting, sampling or renderer depth semantics. Give
+labelled help for longer-path cost. Export the existing rough-splitting depth bound
+from its internal renderer module so the UI reuses, not redefines, the eight-bounce
+restriction. Reject splitting + excess depth before loading assets/GPU work,
+without changing the selected settings. Test bounds/default/reset, 20-depth
+forwarding, invalid admission, unsplit memory/schedule, and preserved splitting
+guard. Physical 8/12/16/20 uniform-32 empty/filled comparisons remain a separate
+gate, with source-pinned HDR/counts and failures retained. No new production flag,
+API export, transport shader or pipeline change; existing local/default-off access
+continues. Twenty bounces is an experimental diagnostic ceiling, not convergence.
+
 Contact-isolation extension (Story site#2291 / Task gpu-renderer#233): expose the
 lighting-owned `supportClearance` in collapsed advanced glass settings, with units
 and an explicit diagnostic warning. Forward it through validated scene settings;

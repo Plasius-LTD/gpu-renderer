@@ -1,6 +1,7 @@
 import {createPairedProbeRunner} from "./adaptive-paired-runner.js";
 import {loadOriginalEames,hashBytes} from "./original-eames-scene.js";
-import {ROOM_DEFAULTS,composeRoomEamesScene,roomReferenceSettings,validateRoomFrame} from "/lighting/demo/eames-environments/room-eames.js";
+import {ROOM_DEFAULTS,ROOM_CAPTURE_DEPTH_LIMITS,composeRoomEamesScene,roomReferenceSettings,validateRoomFrame} from "/lighting/demo/eames-environments/room-eames.js";
+import {MAX_ROUGH_SPLIT_PATH_DEPTH} from '../../src/wavefront-rough-bounce-splitting.js';
 import {createRadialSamplingPlan,radialSamplingTiers,RADIAL_SAMPLING_DEFAULTS,RADIAL_MAXIMUM_SPP} from "/lighting/demo/eames-environments/radial-sampling-plan.js";
 import {encodeLinearImageChunks} from "/lighting/demo/eames-environments/linear-image-chunks.js";
 import {compareDenoisedRadiance} from "/lighting/demo/eames-environments/guided-denoise-probe.js";
@@ -29,6 +30,8 @@ function glassSelection(){return glassWaterSettings({mode:el('glass-mode').value
 resetGlass();
 el('central-reference').value=ROOM_DEFAULTS.centralReference;
 el('spp').min='1';el('spp').max=String(RADIAL_MAXIMUM_SPP);el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
+el('max-depth').min=String(ROOM_CAPTURE_DEPTH_LIMITS.minimum);el('max-depth').max=String(ROOM_CAPTURE_DEPTH_LIMITS.maximum);el('max-depth').value=String(ROOM_CAPTURE_DEPTH_LIMITS.default);
+el('depth-help').textContent=`Up to ${ROOM_CAPTURE_DEPTH_LIMITS.maximum} bounces for path-length diagnosis; more depth costs time and memory. Rough-bounce splitting remains limited to ${MAX_ROUGH_SPLIT_PATH_DEPTH}.`;
 function resetInspection(){el('focus-view').value=ROOM_DEFAULTS.view;el('sample-distribution').value='radial';el('material-inspection').value='off';
  el('response-elevation').value=CLOTH_RESPONSE_DEFAULTS.elevation;el('response-intensity').value=CLOTH_RESPONSE_DEFAULTS.intensity;}
 resetInspection();
@@ -53,7 +56,7 @@ for(const control of controls){
 }
 reset.addEventListener("click",()=>{
  resetGlass();
- el('max-depth').value='6';
+ el('max-depth').value=String(ROOM_CAPTURE_DEPTH_LIMITS.default);
  resetCoat();
  resetLighting();
  resetInspection();
@@ -105,6 +108,7 @@ run.addEventListener("click",async()=>{
  for(const control of controls)if(!control.checkValidity()){revealInvalidControl(control);status.textContent="Invalid settings. Check the highlighted field.";return;}
  const settings=roomReferenceSettings(el("resolution").value,el("sampler").value,el('spp').valueAsNumber,el('max-depth').valueAsNumber),view=focusSettings().view;
  const splitDepth=Number(el("splitting").value);
+ if(splitDepth&&settings.maxDepth>MAX_ROUGH_SPLIT_PATH_DEPTH){status.textContent=`Rough-bounce splitting supports at most ${MAX_ROUGH_SPLIT_PATH_DEPTH} bounces. Disable splitting or lower the bounce limit.`;return;}
  const guidedDenoise=el('denoise').value==='guided';
  const sheen=el('sheen').value==='on';
  const layeredClearcoat=el('clearcoat').value==='on',woodCoat=coatSelection();

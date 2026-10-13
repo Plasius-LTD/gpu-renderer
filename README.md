@@ -109,6 +109,11 @@ Reset or select a scene recipe to restore zero. This intentionally floating
 comparison isolates contact; it is not a realism fix. For depth isolation, use
 Uniform reference at 32 SPP, 1080p, raw output and unchanged optical switches,
 comparing six/eight bounces before changing clearance.
+The maximum-bounces field now reads its 1..20 range and six-bounce default from
+lighting's shared capture configuration. For an 8/12/16/20 path-length comparison,
+keep rough-bounce splitting Off. Incompatible deeper splitting is rejected before
+asset loading/GPU work, with no silent clamp or toggle change. All other optical,
+lighting and sampling controls remain independent; higher depth is not signoff.
 Its small recorded contact overlap is not an air gap. Enable **Bounded glass
 branching** and **Nested glass / water refraction** to test actual incident and
 outgoing media; the disabled refraction control still assumes air on one side.

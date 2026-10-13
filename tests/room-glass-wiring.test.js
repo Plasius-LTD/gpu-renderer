@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
 import * as ui from './fixtures/room-demo-ui.js';
+import {MAX_ROUGH_SPLIT_PATH_DEPTH} from '../src/wavefront-rough-bounce-splitting.js';
 
 test('actual room page initializes, forwards and resets canonical support clearance without GPU work',async()=>{
  const filename=fileURLToPath(new URL('./fixtures/native-room-reference.js',import.meta.url));
@@ -18,21 +19,25 @@ test('actual room page initializes, forwards and resets canonical support cleara
  nodes.get('controls').querySelectorAll=()=>[...nodes.values()].filter(n=>html.includes(`<input id="${n.id}"`)||html.includes(`<select id="${n.id}"`));
  const defaults={mode:'off',fill:.55,x:2.85,z:-.1,radius:.055,height:.18,glassIor:1.5,waterIor:1.333,supportClearance:0,distance:.45,elevation:25};
  let forwarded;
- const context=vm.createContext({document,...ui,
+ const depthLimits={minimum:1,maximum:20,default:6};let requestedDepth;
+ const context=vm.createContext({document,...ui,ROOM_CAPTURE_DEPTH_LIMITS:depthLimits,MAX_ROUGH_SPLIT_PATH_DEPTH,
   ROOM_LIGHTING_DEFAULTS:{style:'daylight',intensity:1,minimumIntensity:0,maximumIntensity:10},
   ROOM_COAT_DEFAULTS:{weight:1,roughness:.1},GLASS_WATER_DEFAULTS:defaults,
   ROOM_DEFAULTS:{centralReference:'seating',view:'entry',fovYDegrees:52,x:1,z:2,yaw:3},
   CLOTH_INSPECTION_DEFAULTS:{distance:1,elevation:30,target:[.5,.5,.5]},CLOTH_RESPONSE_DEFAULTS:{elevation:30,intensity:1},
   RADIAL_MAXIMUM_SPP:256,RADIAL_SAMPLING_DEFAULTS:{maximumSpp:32,areaPercent:[100]},
-  radialSamplingTiers:()=>[32],roomReferenceSettings:()=>({sampler:'fixed-pattern'}),
+  radialSamplingTiers:()=>[32],roomReferenceSettings:(_resolution,sampler,_spp,maxDepth)=>{requestedDepth=maxDepth;return {sampler,maxDepth};},
   glassWaterSettings:s=>{forwarded=s;throw Error('intentional stop before GPU work');},
  });
  new vm.Script(source,{filename}).runInContext(context);
  assert.equal(nodes.get('glass-support-clearance').value,0);
+ for(const [field,key] of [['min','minimum'],['max','maximum'],['value','default']])assert.equal(Number(nodes.get('max-depth')[field]),depthLimits[key]);
  nodes.get('scene-preset').value='glass';nodes.get('scene-preset').listeners.change();
  nodes.get('glass-support-clearance').value='0.0001';nodes.get('glass-support-clearance').listeners.input();
  assert.equal(nodes.get('scene-preset').value,'custom');
+ nodes.get('max-depth').value='20';
  await nodes.get('run').listeners.click();
+ assert.equal(requestedDepth,20);
  assert.equal(forwarded.supportClearance,.0001);assert.equal(forwarded.mode,'filled');assert.equal(forwarded.closeup,true);
  assert.equal(nodes.get('status').textContent,'intentional stop before GPU work');
  nodes.get('reset').listeners.click();
@@ -40,6 +45,7 @@ test('actual room page initializes, forwards and resets canonical support cleara
  assert.equal(nodes.get('glass-mode').value,'off');
  assert.equal(nodes.get('nested-media').value,'off');
  assert.equal(nodes.get('focus-view').value,'entry');
+ assert.equal(Number(nodes.get('max-depth').value),depthLimits.default);
  // Reach both filename-clearance branches, then deliberately fail at an inert
  // provenance adapter. No real fetch, browser, shader or device is involved.
  context.glassWaterSettings=s=>s;context.AbortController=AbortController;context.AbortSignal=AbortSignal;
@@ -55,4 +61,13 @@ test('actual room page initializes, forwards and resets canonical support cleara
   assert.equal(nodes.get('run').disabled,false);assert.equal(nodes.get('glass-support-clearance').disabled,false);
  }
  assert.equal(requests,2);
+ for(const splitDepth of [1,2]){
+  nodes.get('splitting').value=String(splitDepth);nodes.get('sampler').value='stable-pattern';nodes.get('max-depth').value='20';
+  await nodes.get('run').listeners.click();
+  assert.match(nodes.get('status').textContent,/splitting.*8.*disable/i);
+  assert.equal(requests,2,'reject before provenance/assets/GPU');assert.equal(nodes.get('max-depth').value,'20');
+  assert.equal(nodes.get('splitting').value,String(splitDepth),'must not silently disable splitting');
+ }
+ nodes.get('max-depth').value=String(MAX_ROUGH_SPLIT_PATH_DEPTH);
+ await nodes.get('run').listeners.click();assert.equal(requests,3,'existing split-depth range still admitted');
 });

@@ -82,6 +82,40 @@ open until required physical and exact-head CI gates pass; no release/CD perform
 
 ## Contact diagnostic local validation
 
+## Twenty-bounce diagnostic continuation
+
+The user approved continuing on 2026-10-13. Lighting now supplies one frozen
+`ROOM_CAPTURE_DEPTH_LIMITS` (1..20, default six) for room settings and the renderer
+fixture. Reset retains six. The renderer exposes its existing internal
+`MAX_ROUGH_SPLIT_PATH_DEPTH` (eight) to the UI; incompatible selections reject
+before loading assets, without silently changing either setting. The public
+package API and all transport shaders remain unchanged. Canonical assembled WGSL
+SHA-256 remains `7b9f40f06c2d0fe5ee804286cae76a7605611ba321a9a39bd5ae02dc275d1aeb`.
+
+Tests now include 20-depth primary/bounce dispatch ordering, native-resolution
+configuration and count admission, reset/forwarding, and split guard preservation.
+With a 128×128 tile and splitting off, path records use 21 MiB at depth 20 versus
+9 MiB at depth eight. This is application-visible path-buffer allocation, not
+total memory or physical VRAM residency; ray queues remain tile-bounded.
+
+Local results: 419 renderer tests, combined source/fixture coverage 96.53% lines /
+82.89% branches; changed runtime module 100% lines. Lighting: 174 tests, combined
+coverage including the frozen test oracle 81.31% lines / 77.32% branches; changed
+room configuration 100% lines. Both pass lint, types/syntax, build, package,
+Zero-Three and runtime dependency audit (zero reported vulnerabilities). Changed
+JavaScript files appear in combined LCOV. Native browser/physical 20-depth evidence
+is still pending; local tests are not substitutes.
+
+The earlier Mac-specific scene checksum failed on Linux (CI 38371792214).
+At the user's request to avoid platform-specific tests, lighting now checks exact
+scene equality against the frozen pre-clearance generator evaluated on the same
+runtime/platform. No floating tolerance or geometry/failure gate is relaxed.
+The frozen source is verified against commit `7df395306b41a731fa3b3f9f8d02668d9343ab39`.
+Exact-head post-push CI remains required before delivery signoff. No merge/CD,
+publication, optical convergence, performance or 4K-quality claim is made.
+
+## Prior contact-diagnostic local validation
+
 Renderer: 417 tests pass. Combined LCOV including the changed fixture controller
 and inert-DOM page wiring reports 96.54% lines / 82.82% branches; controller
 100% lines/branches, page glue 52.36% lines. The latter is not browser/GPU coverage:

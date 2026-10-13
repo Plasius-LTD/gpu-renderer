@@ -75,7 +75,7 @@ pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:32rem;
 <div class="advanced-groups">
 <fieldset><legend>Sampling and presentation</legend><div class="field-grid"><div class="field"><label for="spp">SPP ceiling</label><input id="spp" type="number" step="1" required aria-describedby="sampling-description"></div>
 <div class="field"><label for="sample-distribution">Sample distribution</label><select id="sample-distribution"><option value="radial">Adaptive rings</option><option value="uniform">Uniform — every pixel at ceiling</option></select></div>
-<div class="field"><label for="max-depth">Maximum bounces</label><input id="max-depth" type="number" min="1" max="8" step="1" value="6" required></div>
+<div class="field"><label for="max-depth">Maximum bounces</label><input id="max-depth" type="number" step="1" aria-describedby="depth-help" required><small id="depth-help"></small></div>
 <div class="field"><label for="sampler">Experimental sampler</label><select id="sampler"><option value="fixed-pattern" selected>Fast fixed pattern</option><option value="stable-pattern">Slower stable comparison</option></select></div>
 <div class="field"><label for="splitting">Rough bounce splitting</label><select id="splitting"><option value="0">Off</option><option value="1">2 / 1 / 1 — first bounce</option><option value="2">2 / 2 / 1 — first two bounces</option></select></div>
 <div class="field"><label for="denoise">Guided denoising</label><select id="denoise"><option value="off">Off — raw reference</option><option value="guided">On — compare same-frame raw / cleaned</option></select></div>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {resolveRoughBounceSplitting,roughSplitAdditionalBytes,withRoughBounceSplitting,roughBranchPixel} from '../src/wavefront-rough-bounce-splitting.js';
+import {MAX_ROUGH_SPLIT_PATH_DEPTH,resolveRoughBounceSplitting,roughSplitAdditionalBytes,withRoughBounceSplitting,roughBranchPixel} from '../src/wavefront-rough-bounce-splitting.js';
 import {createWavefrontPathTracingComputeConfig,estimateWavefrontPathTracingMemoryForConfig} from '../src/wavefront-config.js';
 import {createWavefrontPathTracingComputeShaderSource,WAVEFRONT_COMPUTE_WGSL} from '../src/wavefront-shaders.js';
 import {stablePatternWords} from '../src/wavefront-stable-pattern.js';
@@ -12,6 +12,16 @@ import {createWavefrontFrameEncoder} from '../src/wavefront-frame-encoder.js';
 import {createGpuParallelismCounters} from '../src/wavefront-frame-runtime.js';
 const flag='renderer.sampling.roughBounceSplitting.enabled';
 const on={'renderer.sampling.stablePattern.enabled':true,[flag]:true,strictPhysicalLowSppLighting:true};
+test('long optical diagnostics do not lift the rough splitting depth guard',()=>{
+ assert.equal(MAX_ROUGH_SPLIT_PATH_DEPTH,8);
+ assert.equal(roughSplitAdditionalBytes(128*128,20,{enabled:false}),0);
+ for(const splitDepth of [1,2])assert.throws(()=>createWavefrontPathTracingComputeConfig({...on,maxDepth:20,roughBounceSplitting:{splitDepth}}),/depth <= 8/);
+ for(const [width,height] of [[1920,1080],[3840,2160]]){
+  const config=createWavefrontPathTracingComputeConfig({width,height,tileSize:128,maxDepth:20});
+  assert.equal(config.maxDepth,20);assert.equal(config.tilePixelCapacity,128*128);
+  assert.equal(config.memory.pathVertexBytes,128*128*21*64);assert.equal(config.roughBounceSplitting.enabled,false);
+ }
+});
 test('expanded queue telemetry changes only the indirect upper bound, not GPU commands',()=>{
  const capture=enabled=>{
   const calls=[],parallelism=createGpuParallelismCounters();

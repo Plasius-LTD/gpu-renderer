@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Admit room optical diagnostics up to 20 bounces from shared lighting settings,
+  retaining six on Reset. Reuse the unchanged eight-bounce rough-splitting bound
+  and reject incompatible controls before asset/GPU work; no shader change (#233).
+
 - Expose lighting-owned pedestal clearance inside advanced glass diagnostics;
   preserve zero/reset contact, identify separated captures and retain evidence.
   No transport or sampling change; physical contact isolation remains pending (#233).

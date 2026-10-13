@@ -1,5 +1,7 @@
 import {hashUint32} from './wavefront-progressive-sampling.js';
 
+export const MAX_ROUGH_SPLIT_PATH_DEPTH = 8;
+
 export function resolveRoughBounceSplitting(options={}) {
   const flag='renderer.sampling.roughBounceSplitting.enabled',flags=options.featureFlags;
   const enabled=(options[flag]??flags?.[flag]??flags?.enabled?.[flag]??flags?.flags?.[flag]??flags?.renderer?.sampling?.roughBounceSplitting?.enabled??false)===true;
@@ -12,7 +14,7 @@ export function resolveRoughBounceSplitting(options={}) {
 
 export function roughSplitAdditionalBytes(tilePixels,maxDepth,splitting) {
   if(!splitting?.enabled)return 0;
-  if(![1,2].includes(splitting.splitDepth)||maxDepth>8)throw new RangeError('Rough splitting requires depth <= 8.');
+  if(![1,2].includes(splitting.splitDepth)||maxDepth>MAX_ROUGH_SPLIT_PATH_DEPTH)throw new RangeError(`Rough splitting requires depth <= ${MAX_ROUGH_SPLIT_PATH_DEPTH}.`);
   const bytes=(2**splitting.splitDepth-1)*tilePixels*(96*2+256+(maxDepth+1)*64);
   if(!Number.isSafeInteger(bytes)||bytes>splitting.maximumAdditionalBytes)throw new RangeError('Rough splitting allocation exceeds cap.');
   return bytes;
