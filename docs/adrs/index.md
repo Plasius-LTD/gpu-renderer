@@ -53,3 +53,4 @@
 - [ADR 0055: Bounded dielectric continuations and nested optical occupancy](adr-0055-bounded-nested-dielectrics.md)
 - [ADR 0056: Rough optical transmission keeps real surface collisions](adr-0056-rough-optical-transmission.md)
 - [ADR 0057: Consistent optical shared-edge intersections](adr-0057-optical-shared-edge-intersections.md)
+- [ADR 0058: Optical intersection distance ordering](adr-0058-optical-intersection-distance-ordering.md)

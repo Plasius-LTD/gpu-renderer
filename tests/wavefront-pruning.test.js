@@ -9,7 +9,7 @@ import { createWavefrontFrameEncoder } from "../src/wavefront-frame-encoder.js";
 import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
 
 test("fixed shader bytes and transport bodies stay canonical; pruning flags are independent",()=>{
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),"74f156de0e79a9b8ee4a5bfef7d47b05b3cafd8322621bcbaf5269816f44f203"); // Task 234 / ADR 0057; flag-off numerical equivalence and edge probes are independent.
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),"acd6ab659eeb4b5be0075b26af2f190a38733eec09d99c65de9bddcf113566a6"); // Task 234 / ADR 0058; flag-off numerical equivalence and edge/order probes are independent.
   assert.equal(createPrunedContinuationShader(),WAVEFRONT_COMPUTE_WGSL);
   const fused=createPrunedContinuationShader({fusedHits:true});
   assert.ok(fused.includes(WAVEFRONT_SURFACE_BODY_WGSL));

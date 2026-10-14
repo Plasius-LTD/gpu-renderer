@@ -7,6 +7,13 @@ now completes at 1080p/uniform 32 SPP. Full image/performance qualification rema
 open. See the
 [retained evidence and transport follow-up](docs/glass-water-transport-follow-up.md).
 
+The experimental nested-media path now separates shared-edge coverage from
+triangle-plane distance evaluation to preserve very close exit/re-entry order
+at grazing glass corners (#234, [ADR 0058](docs/adrs/adr-0058-optical-intersection-distance-ordering.md)).
+The retained numerical regression passes; the device preflight checks both
+candidate orders and the exclusive cursor. Full high-SPP glass/water recapture
+and timing qualification remain pending. No added buffers or relaxed failure gates.
+
 Material colour no longer inherits a brightness floor from ambient illumination
 (Task #226). Authored dark/saturated texture channels remain material properties;
 ambient light remains a radiance source. This affects fixed and adaptive rendering

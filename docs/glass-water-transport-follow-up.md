@@ -246,6 +246,28 @@ results; the device preflight includes the captured near-wall ray and an
 outer-wall binary32 seam stress case. Full-frame recapture, conservative BVH
 qualification and incremental arithmetic-cost measurement remain pending.
 
+### Grazing exit/entry ordering regression (2026-10-14)
+
+Renderer `522b9db901ba2ed7c87f3e07777d8e09720d5f45` passes the physical
+shared-edge probes but rejects the original 4K/256-SPP/20-depth lane at pixel
+2601331 / sample 76 / bounce 7: 1,261,568 / 2,097,152 primaries. Both zero
+and 0.0001 m pedestal clearance reproduce it. The canonical ray grazes the
+inner-wall corner at triangles 353681/353682 after a hidden water entry.
+The binary32 geometry's double-precision reference places the glass exit at
+0.03073182165 m, then entry at 0.03073210213 m. Normalizing the projected
+edge functions before interpolating ray distance reverses this order in the
+software WGSL executor; physical traversal likewise selects the entry first.
+
+Refine only nested triangle distance evaluation: keep shared-edge admission,
+but evaluate distance against the original unprojected triangle plane. Do not
+reorder by medium state, widen tolerances, skip optical events or alter bounce
+accounting. Add a failing numerical test of the exact retained pair and a
+physical probe exercising both traversal orders and an exclusive exit cursor.
+Preserve the flag-off implementation, allocations and all failure gates. Test
+axis/winding changes and earlier seam regressions. Physical full-frame, energy
+and timing qualification remain required; this is not a universal precision
+guarantee for arbitrarily close surfaces.
+
 Before signoff, exercise each new flag off/on/reset, individual and combined;
 empty/filled and room/close-up; completed counts/queue integrity; the analytic
 GPU probe's IOR/Fresnel/TIR/estimator/occupancy checks. Inspect initial controls,

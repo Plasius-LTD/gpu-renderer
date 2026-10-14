@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve nearby glass exit/re-entry ordering by computing nested triangle hit
+  distance from the original plane rather than normalized projected edge weights.
+  Keep shared-edge coverage, strict cursors, flag-off arithmetic and failure gates.
+  Add exact-ray ordering/cursor regressions and device probes; no new allocations
+  or performance claim. Full physical recapture remains pending (#234, ADR 0058).
+
 - Correct nested-mode triangle-edge classification so adjacent glass faces use
   consistent projected edge tests instead of independent barycentric rejections.
   Preserve opaque culling, occupied-volume exits, strict hit cursors and sample

@@ -174,7 +174,13 @@ fn optical_triangle_coordinates(ray: RayRecord, triangle: TriangleRecord) -> vec
   let determinant = edges.x + edges.y + edges.z;
   if (determinant == 0.0) { return vec4<f32>(0.0, 0.0, 0.0, -1.0); }
   let barycentric = edges / determinant;
-  let distance = dot(barycentric, vec3<f32>(a[z], b[z], c[z])) / direction[z];
+  // Projected edges decide coverage, not distance ordering. Their normalization
+  // is ill-conditioned at grazing corners and can put a re-entry before its
+  // exit. Evaluate t on the original plane without the projected cancellation.
+  let normal = cross(triangle.v1.xyz - triangle.v0.xyz, triangle.v2.xyz - triangle.v0.xyz);
+  let denominator = dot(normal, direction);
+  if (denominator == 0.0) { return vec4<f32>(0.0, 0.0, 0.0, -1.0); }
+  let distance = dot(normal, a) / denominator;
   if (distance <= transport_ray_minimum()) { return vec4<f32>(0.0, 0.0, 0.0, -1.0); }
   return vec4<f32>(barycentric, distance);
 }

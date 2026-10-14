@@ -5,7 +5,39 @@ import {pathToFileURL} from 'node:url';
 import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
 import {WAVEFRONT_COMPUTE_WGSL} from '../src/wavefront-shaders.js';
 import {OPTICAL_EDGE_PROBE_WGSL} from './fixtures/optical-edge-probe.js';
+import {OPTICAL_ORDER_PROBE_WGSL} from './fixtures/optical-order-probe.js';
 import {LEGACY_TRIANGLE_INTERSECTION_WGSL} from './fixtures/legacy-triangle-intersection.js';
+
+test('grazing glass exit precedes re-entry in either BVH order and survives the exclusive cursor',async()=>{
+ const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
+ const {WgslExec,WgslParser}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
+ const base=WAVEFRONT_COMPUTE_WGSL
+  .replace(functionSource('transport_experiment_enabled'),'fn transport_experiment_enabled(flag:u32)->bool{return (flag & 32768u)!=0u;}')
+  .replace(functionSource('medium_optics'),'fn medium_optics(id:u32)->vec2<f32>{return vec2<f32>(1.5,2.0);}');
+ const kernel=`
+ @compute @workgroup_size(1) fn ordering(){
+  let forward=optical_order_probe(false);let backward=optical_order_probe(true);
+  for(var i=0u;i<3u;i++){accumulation[i]=forward[i];accumulation[i+3u]=backward[i];}
+ }`;
+ for(const axis of ['xyz','yzx','zxy'])for(const reverseWinding of [false,true]){
+  const vectors=['ray.origin','ray.direction','exitFace.v0','exitFace.v1','exitFace.v2','entryFace.v0','entryFace.v1','entryFace.v2'];
+  const transform=vectors.map(v=>`${v}=vec4<f32>(${v}.${axis},${v}.w);`).join('\n')+(reverseWinding?`
+   let swapExit=exitFace.v1;exitFace.v1=exitFace.v2;exitFace.v2=swapExit;
+   let swapEntry=entryFace.v1;entryFace.v1=entryFace.v2;entryFace.v2=swapEntry;
+   exitFace.flags=0x40000000u;entryFace.flags=0x40000000u;`:``);
+  const code=base+OPTICAL_ORDER_PROBE_WGSL.replace('let a=intersect_triangle',transform+'\n let a=intersect_triangle')+kernel;
+  const values=new Float32Array(24);
+  new WgslExec(new WgslParser().parse(code)).dispatchWorkgroups('ordering',1,{0:{3:values}});
+  for(const o of [0,12]){
+   assert.deepEqual(Array.from(values.slice(o,o+2)),[1,1]);
+   assert(values[o+2]<values[o+3],'exit must precede entry, not be reordered by rounded projected barycentrics');
+   assert(Math.abs(values[o+2]-.030731821650255987)<2e-8);
+   assert(Math.abs(values[o+3]-.030732102132163742)<2e-8);
+   assert.deepEqual(Array.from(values.slice(o+4,o+8)),[Number(reverseWinding),Number(!reverseWinding),0,1],'strict cursor excludes first face but retains second');
+   assert.equal(values[o+8],Number(reverseWinding),'closest BVH candidate must be the original exit face');
+  }
+ }
+});
 
 test('assembled collision executes retained seams and preserves frozen flag-off results',async()=>{
  const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));

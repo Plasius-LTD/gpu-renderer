@@ -4,11 +4,17 @@ import {createConfigPayload} from '../../src/wavefront-packers.js';
 import {createWavefrontPathTracingComputeConfig} from '../../src/wavefront-config.js';
 import {assertShaderModuleCompiles} from '../../src/wavefront-runtime-support.js';
 import {OPTICAL_EDGE_PROBE_WGSL} from './optical-edge-probe.js';
+import {OPTICAL_ORDER_PROBE_WGSL} from './optical-order-probe.js';
 
 export const DIELECTRIC_PROBE_TOLERANCES=Object.freeze({optics:0.0001,mean:0.025,samples:16384});
-const DIELECTRIC_PROBE_CASES=19;
-export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_EDGE_PROBE_WGSL+`
+const DIELECTRIC_PROBE_CASES=21;
+export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_EDGE_PROBE_WGSL+OPTICAL_ORDER_PROBE_WGSL+`
 @compute @workgroup_size(1) fn dielectric_probe(@builtin(global_invocation_id) id:vec3<u32>){
+ if(id.x>=19u){
+  let o=id.x*4u;let result=optical_order_probe(id.x==20u);
+  for(var i=0u;i<3u;i++){accumulation[o+i]=result[i];}
+  accumulation[o+3u]=vec4<f32>(0);return;
+ }
  if(id.x>=17u){
   let o=id.x*4u;accumulation[o]=optical_edge_probe(id.x==18u);
   accumulation[o+1u]=vec4<f32>(0);accumulation[o+2u]=vec4<f32>(0);accumulation[o+3u]=vec4<f32>(0);return;
@@ -139,6 +145,15 @@ export async function runDielectricTransportProbe(signal){
    if(nested)for(const [index,distance] of [[17,.0040711072],[18,.0358458877]]){
     if(values[index*16]<1)throw Error('Optical shared-edge exit was missed: '+index);
     near(values[index*16+1],distance,0.0000002);
+   }
+   if(nested)for(const index of [19,20]){
+    const o=index*16;
+    near(values[o],1,0);near(values[o+1],1,0);
+    if(values[o+2]>=values[o+3])throw Error('Grazing glass exit/entry order reversed: '+index);
+    near(values[o+2],.030731821650255987,.00000002);
+    near(values[o+3],.030732102132163742,.00000002);
+    for(const [i,v] of [[4,0],[5,1],[6,0],[7,1],[8,0]])near(values[o+i],v,0);
+    near(values[o+9],values[o+2],0);
    }
    if(nested){
     for(const [i,eta,before,after,invalid] of [[0,1/1.5,0,1,0],[1,1.5/water,1,2,0],[2,water,2,0,0],[3,1.5,1,0,0],[4,1,1,1,0],[5,water/1.5,2,1,0],[6,1,1,1,0],[7,1,1,1,1],[8,1,0,0,1],[9,1,1,1,1]]){
