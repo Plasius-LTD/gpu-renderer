@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Correct nested-mode triangle-edge classification so adjacent glass faces use
+  consistent projected edge tests instead of independent barycentric rejections.
+  Preserve opaque culling, occupied-volume exits, strict hit cursors and sample
+  rejection. Add captured-ray and seam probes; high-SPP physical recapture and
+  timing qualification remain pending (#234, ADR 0057).
+
 - Add bounded failure-only canonical ray/hit journaling for the high-SPP glass
   missing-exit investigation. Reuse compiled transport and the retained sample
   configuration without accepting failed images or changing ordinary dispatch

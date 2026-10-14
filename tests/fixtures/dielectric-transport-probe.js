@@ -3,10 +3,16 @@ import {createMediumTextureResource} from '../../src/wavefront-gpu-resources.js'
 import {createConfigPayload} from '../../src/wavefront-packers.js';
 import {createWavefrontPathTracingComputeConfig} from '../../src/wavefront-config.js';
 import {assertShaderModuleCompiles} from '../../src/wavefront-runtime-support.js';
+import {OPTICAL_EDGE_PROBE_WGSL} from './optical-edge-probe.js';
 
 export const DIELECTRIC_PROBE_TOLERANCES=Object.freeze({optics:0.0001,mean:0.025,samples:16384});
-export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+`
+const DIELECTRIC_PROBE_CASES=19;
+export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_EDGE_PROBE_WGSL+`
 @compute @workgroup_size(1) fn dielectric_probe(@builtin(global_invocation_id) id:vec3<u32>){
+ if(id.x>=17u){
+  let o=id.x*4u;accumulation[o]=optical_edge_probe(id.x==18u);
+  accumulation[o+1u]=vec4<f32>(0);accumulation[o+2u]=vec4<f32>(0);accumulation[o+3u]=vec4<f32>(0);return;
+ }
  if(id.x==16u){
   var triangle=TriangleRecord();triangle.v0=vec4<f32>(-1,-1,0,1);
   triangle.v1=vec4<f32>(1,-1,0,1);triangle.v2=vec4<f32>(0,1,0,1);
@@ -107,7 +113,7 @@ export async function runDielectricTransportProbe(signal){
   device.pushErrorScope('validation');
   const mediums=Array.from({length:6},(_,id)=>({id,ior:id===0?1:id===2?1.333:1.5,priority:id===1?2:1}));
   const medium=createMediumTextureResource(device,{texture:GPUTextureUsage},mediums,true);owned.push(medium.texture);
-  const frame=buffer(320,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),output=buffer(17*64,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),staging=buffer(17*64,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ);
+  const frame=buffer(320,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),output=buffer(DIELECTRIC_PROBE_CASES*64,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),staging=buffer(DIELECTRIC_PROBE_CASES*64,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ);
   const module=device.createShaderModule({code:dielectricProbeShader()});await wait(assertShaderModuleCompiles(module,'dielectric-transport-probe'));
   const pipeline=await wait(device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'dielectric_probe'}}));
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:3,resource:{buffer:output}},{binding:5,resource:{buffer:frame}},{binding:32,resource:medium.view}]}),runs=[];
@@ -115,7 +121,7 @@ export async function runDielectricTransportProbe(signal){
    const config=createWavefrontPathTracingComputeConfig({width:1,height:1,'renderer.sampling.independentRandom.enabled':true,
     'renderer.transport.boundedDielectricBranching.enabled':bounded,'renderer.transport.nestedMediaRefraction.enabled':nested});
    device.queue.writeBuffer(frame,0,createConfigPayload(config,{x:0,y:0,width:1,height:1},7));
-   const e=device.createCommandEncoder(),p=e.beginComputePass();p.setPipeline(pipeline);p.setBindGroup(0,group);p.dispatchWorkgroups(17);p.end();
+   const e=device.createCommandEncoder(),p=e.beginComputePass();p.setPipeline(pipeline);p.setBindGroup(0,group);p.dispatchWorkgroups(DIELECTRIC_PROBE_CASES);p.end();
    e.copyBufferToBuffer(output,0,staging,0,output.size);device.queue.submit([e.finish()]);await wait(staging.mapAsync(GPUMapMode.READ));
    const values=Array.from(new Float32Array(staging.getMappedRange().slice(0)));staging.unmap();
    if(!values.every(Number.isFinite))throw Error('Non-finite dielectric probe');
@@ -130,6 +136,10 @@ export async function runDielectricTransportProbe(signal){
    near(values[256],1,0);near(values[257],nested?0:1,0);near(values[258],1,0);
    near(values[259],nested?0:0.001,0.000000001);near(values[260],2**-24,0);
    near(values[261],nested?0:1,0);
+   if(nested)for(const [index,distance] of [[17,.0040711072],[18,.0358458877]]){
+    if(values[index*16]<1)throw Error('Optical shared-edge exit was missed: '+index);
+    near(values[index*16+1],distance,0.0000002);
+   }
    if(nested){
     for(const [i,eta,before,after,invalid] of [[0,1/1.5,0,1,0],[1,1.5/water,1,2,0],[2,water,2,0,0],[3,1.5,1,0,0],[4,1,1,1,0],[5,water/1.5,2,1,0],[6,1,1,1,0],[7,1,1,1,1],[8,1,0,0,1],[9,1,1,1,1]]){
      const o=i*16;near(values[o],eta);near(values[o+2],before);near(values[o+3],after);near(values[o+6],invalid);

@@ -52,3 +52,4 @@
 - [ADR 0054: Layered clearcoat](adr-0054-layered-clearcoat.md)
 - [ADR 0055: Bounded dielectric continuations and nested optical occupancy](adr-0055-bounded-nested-dielectrics.md)
 - [ADR 0056: Rough optical transmission keeps real surface collisions](adr-0056-rough-optical-transmission.md)
+- [ADR 0057: Consistent optical shared-edge intersections](adr-0057-optical-shared-edge-intersections.md)

@@ -402,6 +402,15 @@ fn intersect_bounds(ray: RayRecord, boundsMin: vec3<f32>, boundsMax: vec3<f32>, 
   let tFar = max(t0, t1);
   let entry = max(max(tNear.x, tNear.y), tNear.z);
   let exit = min(min(tFar.x, tFar.y), tFar.z);
+  if (nested_media_enabled()) {
+    // Conservative broad-phase interval only. Final triangle/cursor tests stay
+    // strict; shared-edge projection must not be rejected by slab round-off.
+    let unitRoundoff = 0.000000059604644775390625;
+    let gamma3 = (3.0 * unitRoundoff) / (1.0 - 3.0 * unitRoundoff);
+    let allowance = 2.0 * gamma3;
+    return exit + abs(exit) * allowance >= max(entry, transport_ray_minimum()) &&
+      entry <= nearest + abs(nearest) * allowance;
+  }
   return exit >= max(entry, transport_ray_minimum()) && entry <= nearest;
 }
 
@@ -485,28 +494,31 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
     return no_candidate();
   }
 
-  let invDet = 1.0 / det;
-  let tvec = ray.origin.xyz - triangle.v0.xyz;
-  let u = dot(tvec, pvec) * invDet;
-  if (u < 0.0 || u > 1.0) {
-    return no_candidate();
-  }
-
-  let qvec = cross(tvec, edge1);
-  let v = dot(ray.direction.xyz, qvec) * invDet;
-  if (v < 0.0 || u + v > 1.0) {
-    return no_candidate();
-  }
-
-  let distance = dot(edge2, qvec) * invDet;
-  if (distance <= transport_ray_minimum()) {
-    return no_candidate();
+  var u = 0.0;
+  var v = 0.0;
+  var w = 0.0;
+  var distance = 0.0;
+  if (nested_media_enabled()) {
+    let coordinates = optical_triangle_coordinates(ray, triangle);
+    if (coordinates.w <= transport_ray_minimum()) { return no_candidate(); }
+    w = coordinates.x; u = coordinates.y; v = coordinates.z;
+    distance = coordinates.w;
+  } else {
+    let invDet = 1.0 / det;
+    let tvec = ray.origin.xyz - triangle.v0.xyz;
+    u = dot(tvec, pvec) * invDet;
+    if (u < 0.0 || u > 1.0) { return no_candidate(); }
+    let qvec = cross(tvec, edge1);
+    v = dot(ray.direction.xyz, qvec) * invDet;
+    if (v < 0.0 || u + v > 1.0) { return no_candidate(); }
+    distance = dot(edge2, qvec) * invDet;
+    if (distance <= transport_ray_minimum()) { return no_candidate(); }
+    w = 1.0 - u - v;
   }
 
   let geometric = safe_normalize(cross(edge1, edge2), vec3<f32>(0.0, 1.0, 0.0));
   let frontFace = select(0u, 1u, dot(ray.direction.xyz, geometric) < 0.0);
   let orientedGeometric = select(-geometric, geometric, frontFace == 1u);
-  let w = 1.0 - u - v;
   let interpolated =
     triangle.n0.xyz * w +
     triangle.n1.xyz * u +

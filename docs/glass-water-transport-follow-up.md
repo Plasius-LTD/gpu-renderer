@@ -232,6 +232,20 @@ add a failing transport regression and recapture the original 4K configuration.
 Existing count, medium and overflow rejection remains mandatory. No Three.js,
 dependency addition, permanent gap, silent occupancy reset or performance claim.
 
+The canonical journal subsequently reproduced a separate 4K/256-SPP capture at
+six bounces (settings reset after refresh): pixel 2862715 / sample 198 enters
+outer glass triangle 353209, then reports a duplicate far-side entry at triangle
+353689. The retained ray should first hit inner-wall triangles 353593/353594 at
+approximately 0.0040711072 m. Its near hit lies on their shared edge. This capture
+is not the original 20-bounce case and is retained separately.
+
+ADR 0057 adds consistent ray-aligned edge tests under the existing nested-media
+flag, with no tolerance widening, medium reset, path-count relaxation or added
+runtime allocation. Frozen legacy-function software comparisons check flag-off
+results; the device preflight includes the captured near-wall ray and an
+outer-wall binary32 seam stress case. Full-frame recapture, conservative BVH
+qualification and incremental arithmetic-cost measurement remain pending.
+
 Before signoff, exercise each new flag off/on/reset, individual and combined;
 empty/filled and room/close-up; completed counts/queue integrity; the analytic
 GPU probe's IOR/Fresnel/TIR/estimator/occupancy checks. Inspect initial controls,

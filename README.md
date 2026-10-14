@@ -1320,6 +1320,12 @@ per configured bounce, destroyed after readback. They never publish an image or
 commit samples; unsupported branch histories are reported explicitly. The
 4K/256-SPP missing-exit investigation remains open (#234), not qualified transport.
 
+Nested mode uses consistent ray-aligned shared-edge triangle tests to avoid
+dropping a glass exit at a mesh seam. This adds arithmetic, not ray allocations;
+flag-off retains the legacy intersection path. Captured-ray GPU regression and
+full-frame quality/timing qualification are separate gates. See
+[ADR 0057](docs/adrs/adr-0057-optical-shared-edge-intersections.md).
+
 Two independent, default-off renderer options / remote feature flags are available:
 `renderer.transport.boundedDielectricBranching.enabled` and
 `renderer.transport.nestedMediaRefraction.enabled`. Enable both for bounded

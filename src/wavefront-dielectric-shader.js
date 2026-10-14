@@ -139,4 +139,43 @@ fn optical_triangle_position(triangle: TriangleRecord, barycentric: vec3<f32>) -
   return clamp(p, min(triangle.v0.xyz, min(triangle.v1.xyz, triangle.v2.xyz)),
     max(triangle.v0.xyz, max(triangle.v1.xyz, triangle.v2.xyz)));
 }
+fn optical_projected_edge(a: vec2<f32>, b: vec2<f32>) -> f32 {
+  // Use identical arithmetic for both orientations of a shared edge, including
+  // implementations that contract multiply/subtract. Never widen its boundary.
+  let ordered = a.x < b.x || (a.x == b.x && a.y <= b.y);
+  let first = select(b, a, ordered);
+  let second = select(a, b, ordered);
+  let value = first.x * second.y - first.y * second.x;
+  return select(-value, value, ordered);
+}
+fn optical_triangle_coordinates(ray: RayRecord, triangle: TriangleRecord) -> vec4<f32> {
+  // Ray-aligned edge tests keep adjoining triangles consistent. Independent
+  // Moller-Trumbore barycentrics can both reject the same thin glass seam.
+  let direction = ray.direction.xyz;
+  let magnitude = abs(direction);
+  var z = 0u;
+  if (magnitude.y > magnitude[z]) { z = 1u; }
+  if (magnitude.z > magnitude[z]) { z = 2u; }
+  if (direction[z] == 0.0) { return vec4<f32>(0.0, 0.0, 0.0, -1.0); }
+  let x = (z + 1u) % 3u;
+  let y = (x + 1u) % 3u;
+  let scale = vec2<f32>(direction[x], direction[y]) / direction[z];
+  let a = triangle.v0.xyz - ray.origin.xyz;
+  let b = triangle.v1.xyz - ray.origin.xyz;
+  let c = triangle.v2.xyz - ray.origin.xyz;
+  let pa = vec2<f32>(a[x], a[y]) - scale * a[z];
+  let pb = vec2<f32>(b[x], b[y]) - scale * b[z];
+  let pc = vec2<f32>(c[x], c[y]) - scale * c[z];
+  let edges = vec3<f32>(optical_projected_edge(pb, pc),
+    optical_projected_edge(pc, pa), optical_projected_edge(pa, pb));
+  if (any(edges < vec3<f32>(0.0)) && any(edges > vec3<f32>(0.0))) {
+    return vec4<f32>(0.0, 0.0, 0.0, -1.0);
+  }
+  let determinant = edges.x + edges.y + edges.z;
+  if (determinant == 0.0) { return vec4<f32>(0.0, 0.0, 0.0, -1.0); }
+  let barycentric = edges / determinant;
+  let distance = dot(barycentric, vec3<f32>(a[z], b[z], c[z])) / direction[z];
+  if (distance <= transport_ray_minimum()) { return vec4<f32>(0.0, 0.0, 0.0, -1.0); }
+  return vec4<f32>(barycentric, distance);
+}
 `;
