@@ -7,6 +7,60 @@ import {WAVEFRONT_COMPUTE_WGSL} from '../src/wavefront-shaders.js';
 import {OPTICAL_EDGE_PROBE_WGSL} from './fixtures/optical-edge-probe.js';
 import {OPTICAL_ORDER_PROBE_WGSL} from './fixtures/optical-order-probe.js';
 import {LEGACY_TRIANGLE_INTERSECTION_WGSL} from './fixtures/legacy-triangle-intersection.js';
+import {assertOpticalOrderingProbe,DIELECTRIC_PROBE_CASES} from './fixtures/dielectric-transport-probe.js';
+
+test('ordering preflight retains both complete records on rejection without relaxing the gate',()=>{
+ const values=new Float32Array(DIELECTRIC_PROBE_CASES*16);
+ for(const index of [19,20])values.set([1,1,.030731821650255987,.030732102132163742,0,1,0,1,0,.030731821650255987,0,0],index*16);
+ const flags={bounded:false,nested:true};
+ assert.doesNotThrow(()=>assertOpticalOrderingProbe(values,flags));
+ assert.doesNotThrow(()=>assertOpticalOrderingProbe([], {...flags,nested:false}));
+ for(const index of [19,20])for(const [field,bad] of [[0,0],[3,.030732138082385063],[6,1],[7,0],[8,1],[9,0],[2,NaN]]){
+  const rejected=values.slice();rejected[index*16+field]=bad;
+  assert.throws(()=>assertOpticalOrderingProbe(rejected,flags),error=>{
+   const evidence=JSON.parse(error.message.slice('Optical ordering mismatch '.length));
+   assert.equal(evidence.index,index);assert.equal(evidence.field,field);
+   assert.deepEqual(evidence.records.map(r=>r.index),[19,20]);
+   assert(evidence.records.every(r=>r.values.length===12));
+   if(field===3)assert.equal(evidence.tolerance,2e-8);
+   return true;
+  });
+ }
+});
+
+test('grazing plane distance tolerates contracted dot and non-fused fma arithmetic',async()=>{
+ const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
+ const {WgslExec,WgslParser}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
+ // Explicit f32 intermediates: the executor's ordinary dot uses wider arithmetic
+ // and missed the device's 0.030732138082385063 entry-distance regression.
+ const helpers=`
+ fn device_dot(left:vec3<f32>,right:vec3<f32>)->f32{return fma(left.z,right.z,fma(left.y,right.y,left.x*right.x));}
+ fn unfused_remainder(left:vec3<f32>,right:vec3<f32>,head:vec3<f32>)->vec3<f32>{let product=left*right;return product-head;}
+ @compute @workgroup_size(1) fn precision(){
+  let forward=optical_order_probe(false);let backward=optical_order_probe(true);
+  for(var i=0u;i<3u;i++){accumulation[i]=forward[i];accumulation[i+3u]=backward[i];}
+ }`;
+ const base=WAVEFRONT_COMPUTE_WGSL
+  .replace(functionSource('transport_experiment_enabled'),'fn transport_experiment_enabled(flag:u32)->bool{return (flag & 32768u)!=0u;}')
+  .replace(functionSource('medium_optics'),'fn medium_optics(id:u32)->vec2<f32>{return vec2<f32>(1.5,2.0);}')
+  .replace('let denominator = dot(normal, direction)','let denominator = device_dot(normal, direction)')
+  .replace('let distance = dot(normal, a)','let distance = device_dot(normal, a)');
+ for(const fused of [true,false])for(const axis of ['xyz','yzx','zxy']){
+  const transformed=OPTICAL_ORDER_PROBE_WGSL.replace('let a=intersect_triangle',
+   ['ray.origin','ray.direction','exitFace.v0','exitFace.v1','exitFace.v2','entryFace.v0','entryFace.v1','entryFace.v2']
+    .map(v=>`${v}=vec4<f32>(${v}.${axis},${v}.w);`).join('\n')+'\n let a=intersect_triangle');
+  const code=(fused?base:base.replace('fma(left, right, -high)','unfused_remainder(left, right, high)'))+transformed+helpers;
+  const values=new Float32Array(24);
+  new WgslExec(new WgslParser().parse(code)).dispatchWorkgroups('precision',1,{0:{3:values}});
+  for(const o of [0,12]){
+   assert.deepEqual(Array.from(values.slice(o,o+2)),[1,1]);
+   assert(values[o+2]<values[o+3]);
+   assert(Math.abs(values[o+2]-.030731821650255987)<2e-8,`exit: ${values[o+2]}, fused=${fused}, axis=${axis}`);
+   assert(Math.abs(values[o+3]-.030732102132163742)<2e-8,`entry: ${values[o+3]}, fused=${fused}, axis=${axis}`);
+   assert.deepEqual(Array.from(values.slice(o+4,o+9)),[0,1,0,1,0]);
+  }
+ }
+});
 
 test('grazing glass exit precedes re-entry in either BVH order and survives the exclusive cursor',async()=>{
  const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
@@ -61,6 +115,7 @@ test('optical edge coordinates preserve shared-edge hits, winding, axes and stri
  @group(0) @binding(1) var<storage,read_write> outputs:array<vec4<f32>>;
  fn transport_ray_minimum()->f32{return inputs[5].x;}
  ${functionSource('optical_projected_edge')}
+ ${functionSource('optical_plane_dot')}
  ${functionSource('optical_triangle_coordinates')}
  @compute @workgroup_size(1) fn probe(){
   outputs[0]=optical_triangle_coordinates(RayRecord(inputs[0],inputs[1]),TriangleRecord(inputs[2],inputs[3],inputs[4]));

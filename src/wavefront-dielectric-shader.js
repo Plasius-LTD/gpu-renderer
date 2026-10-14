@@ -148,6 +148,15 @@ fn optical_projected_edge(a: vec2<f32>, b: vec2<f32>) -> f32 {
   let value = first.x * second.y - first.y * second.x;
   return select(-value, value, ordered);
 }
+fn optical_plane_dot(left: vec3<f32>, right: vec3<f32>) -> f32 {
+  // Split rounded products at twelve low significand bits. Summing the high
+  // parts separately prevents a contracted dot from losing the grazing-plane
+  // remainder. The bit split is intentional: a plain product/error expression
+  // permits contraction back into the cancellation-sensitive dot (ADR 0059).
+  let high = bitcast<vec3<f32>>(bitcast<vec3<u32>>(left * right) & vec3<u32>(0xfffff000u));
+  let low = fma(left, right, -high);
+  return (high.x + high.y + high.z) + (low.x + low.y + low.z);
+}
 fn optical_triangle_coordinates(ray: RayRecord, triangle: TriangleRecord) -> vec4<f32> {
   // Ray-aligned edge tests keep adjoining triangles consistent. Independent
   // Moller-Trumbore barycentrics can both reject the same thin glass seam.
@@ -178,9 +187,9 @@ fn optical_triangle_coordinates(ray: RayRecord, triangle: TriangleRecord) -> vec
   // is ill-conditioned at grazing corners and can put a re-entry before its
   // exit. Evaluate t on the original plane without the projected cancellation.
   let normal = cross(triangle.v1.xyz - triangle.v0.xyz, triangle.v2.xyz - triangle.v0.xyz);
-  let denominator = dot(normal, direction);
+  let denominator = optical_plane_dot(normal, direction);
   if (denominator == 0.0) { return vec4<f32>(0.0, 0.0, 0.0, -1.0); }
-  let distance = dot(normal, a) / denominator;
+  let distance = optical_plane_dot(normal, a) / denominator;
   if (distance <= transport_ray_minimum()) { return vec4<f32>(0.0, 0.0, 0.0, -1.0); }
   return vec4<f32>(barycentric, distance);
 }

@@ -10,8 +10,12 @@ open. See the
 The experimental nested-media path now separates shared-edge coverage from
 triangle-plane distance evaluation to preserve very close exit/re-entry order
 at grazing glass corners (#234, [ADR 0058](docs/adrs/adr-0058-optical-intersection-distance-ordering.md)).
-The retained numerical regression passes; the device preflight checks both
-candidate orders and the exclusive cursor. Full high-SPP glass/water recapture
+The first physical plane-distance probe retained the order but exposed a
+contracted-dot rounding error. Split-product plane dots now preserve its small
+remainder, with explicit fused/non-fused numerical regressions and unchanged
+20 nm acceptance ([ADR 0059](docs/adrs/adr-0059-optical-plane-dot-precision.md)).
+The device preflight checks both candidate orders and the exclusive cursor,
+retaining both records on failure. Physical revalidation, full high-SPP recapture
 and timing qualification remain pending. No added buffers or relaxed failure gates.
 
 Material colour no longer inherits a brightness floor from ambient illumination

@@ -268,6 +268,29 @@ axis/winding changes and earlier seam regressions. Physical full-frame, energy
 and timing qualification remain required; this is not a universal precision
 guarantee for arbitrarily close surfaces.
 
+### Contracted plane-dot regression (2026-10-14)
+
+The physical preflight on `e4d2ed847d8166e7087330bb55564c87686db45a`
+preserves exit-before-entry but rejects entry distance 0.030732138082385063 m
+against 0.030732102132163742 m (unchanged 20 nm tolerance). Explicit binary32
+simulation reproduces the physical value exactly when the plane dot product
+contracts from the last component. The software executor's built-in dot hides
+this case by using wider intermediate arithmetic.
+
+Refine the two nested plane dot products with split-product accumulation: mask
+the low twelve significand bits of each rounded product into a high part, compute
+its remainder with `fma`, and sum high and low parts separately. The bit split
+keeps the cancellation-sensitive sum separate from a contracted multiply/add;
+it is a numerical precision constant, not a scene/material tuning value. WGSL
+does not guarantee fused `fma`, so test both fused and non-fused evaluations,
+axis/winding permutations and the original event/cursor checks. Do not claim
+exact arithmetic, universal cross-device precision, or faster rendering.
+
+Retain the 20 nm gate and record both complete ordering-probe records if it
+fails again. No new buffers, public contracts, occupancy recovery, SPP/depth
+change or flag-off arithmetic changes. Physical preflight and the original
+4K/256-SPP/20-depth full image still gate qualification.
+
 Before signoff, exercise each new flag off/on/reset, individual and combined;
 empty/filled and room/close-up; completed counts/queue integrity; the analytic
 GPU probe's IOR/Fresnel/TIR/estimator/occupancy checks. Inspect initial controls,

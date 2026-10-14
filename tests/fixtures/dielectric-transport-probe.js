@@ -7,7 +7,7 @@ import {OPTICAL_EDGE_PROBE_WGSL} from './optical-edge-probe.js';
 import {OPTICAL_ORDER_PROBE_WGSL} from './optical-order-probe.js';
 
 export const DIELECTRIC_PROBE_TOLERANCES=Object.freeze({optics:0.0001,mean:0.025,samples:16384});
-const DIELECTRIC_PROBE_CASES=21;
+export const DIELECTRIC_PROBE_CASES=21;
 export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_EDGE_PROBE_WGSL+OPTICAL_ORDER_PROBE_WGSL+`
 @compute @workgroup_size(1) fn dielectric_probe(@builtin(global_invocation_id) id:vec3<u32>){
  if(id.x>=19u){
@@ -110,6 +110,24 @@ export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_ED
   dielectric_reflection_weight(ray,hit).x,dielectric_transmission_weight(ray,hit).x);
 }`;}
 
+export function assertOpticalOrderingProbe(values,{bounded,nested}){
+ if(!nested)return;
+ const records=[19,20].map(index=>({index,values:Array.from(values.slice(index*16,index*16+12))}));
+ const fail=(index,field,actual,expected,tolerance)=>{
+  throw Error('Optical ordering mismatch '+JSON.stringify({bounded,nested,index,field,actual,expected,tolerance,records}));
+ };
+ for(const {index} of records){
+  const o=index*16;
+  for(const [field,expected,tolerance] of [[0,1,0],[1,1,0],
+   [2,.030731821650255987,2e-8],[3,.030732102132163742,2e-8],
+   [4,0,0],[5,1,0],[6,0,0],[7,1,0],[8,0,0],[9,values[o+2],0]]){
+   const actual=values[o+field];
+   if(!Number.isFinite(actual)||Math.abs(actual-expected)>tolerance)fail(index,field,actual,expected,tolerance);
+  }
+  if(values[o+2]>=values[o+3])fail(index,'exit-before-entry',values[o+2],values[o+3],0);
+ }
+}
+
 export async function runDielectricTransportProbe(signal){
  const adapter=await navigator.gpu.requestAdapter();if(adapter?.info.isFallbackAdapter!==false)throw Error('Physical dielectric probe requires GPU');
  const device=await adapter.requestDevice(),owned=[];
@@ -146,15 +164,7 @@ export async function runDielectricTransportProbe(signal){
     if(values[index*16]<1)throw Error('Optical shared-edge exit was missed: '+index);
     near(values[index*16+1],distance,0.0000002);
    }
-   if(nested)for(const index of [19,20]){
-    const o=index*16;
-    near(values[o],1,0);near(values[o+1],1,0);
-    if(values[o+2]>=values[o+3])throw Error('Grazing glass exit/entry order reversed: '+index);
-    near(values[o+2],.030731821650255987,.00000002);
-    near(values[o+3],.030732102132163742,.00000002);
-    for(const [i,v] of [[4,0],[5,1],[6,0],[7,1],[8,0]])near(values[o+i],v,0);
-    near(values[o+9],values[o+2],0);
-   }
+   assertOpticalOrderingProbe(values,{bounded,nested});
    if(nested){
     for(const [i,eta,before,after,invalid] of [[0,1/1.5,0,1,0],[1,1.5/water,1,2,0],[2,water,2,0,0],[3,1.5,1,0,0],[4,1,1,1,0],[5,water/1.5,2,1,0],[6,1,1,1,0],[7,1,1,1,1],[8,1,0,0,1],[9,1,1,1,1]]){
      const o=i*16;near(values[o],eta);near(values[o+2],before);near(values[o+3],after);near(values[o+6],invalid);

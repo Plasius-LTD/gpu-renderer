@@ -212,5 +212,5 @@ test("pipeline compilation failures propagate without returning partial pipeline
 });
 
 test("the Task 232 opt-in material-corrected fixed shader remains canonical", () => {
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "acd6ab659eeb4b5be0075b26af2f190a38733eec09d99c65de9bddcf113566a6"); // Task 234 / ADR 0058; flag-off numerical equivalence and edge/order probes are independent.
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "479423570cc5b7c7538f94cb2c3da2c5c67876747330995ce9ae0e869adde65c"); // Task 234 / ADR 0059; flag-off numerical equivalence and edge/order probes are independent.
 });

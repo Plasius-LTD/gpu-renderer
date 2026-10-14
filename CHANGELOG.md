@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve grazing nested-plane dot remainders across multiply/add contraction;
+  add the exact physical rounding regression and fused/non-fused checks. Retain
+  both device ordering records on failure without relaxing the 20 nm gate.
+  No new allocations or flag-off changes; physical qualification and incremental
+  GPU timing remain pending (#234, ADR 0059).
+
 - Preserve nearby glass exit/re-entry ordering by computing nested triangle hit
   distance from the original plane rather than normalized projected edge weights.
   Keep shared-edge coverage, strict cursors, flag-off arithmetic and failure gates.
