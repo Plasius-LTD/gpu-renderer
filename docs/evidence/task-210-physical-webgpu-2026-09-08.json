@@ -1,0 +1,231 @@
+{
+  "status": "passed",
+  "scope": "physical-path-ownership-and-fixed-count-smoke",
+  "timestamp": "2026-09-08T10:55:35.109Z",
+  "implementationAndFixtureCommit": "d3a5741031afa73dcb2f87a6add3565777c84c99",
+  "captureMethod": "Transcribed from the physical browser fixture receipt",
+  "shaderSha256": "cf3d68bcb79e9da41718703c39795c8cf741e7f933744ef0c7cb51bddec46567",
+  "adapter": {
+    "vendor": "apple",
+    "architecture": "metal-3",
+    "isFallbackAdapter": false
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "siblingTrials": [
+    [
+      3,
+      6,
+      9,
+      1
+    ],
+    [
+      3,
+      6,
+      9,
+      1
+    ],
+    [
+      3,
+      6,
+      9,
+      1
+    ],
+    [
+      3,
+      6,
+      9,
+      1
+    ],
+    [
+      3,
+      6,
+      9,
+      1
+    ],
+    [
+      3,
+      6,
+      9,
+      1
+    ],
+    [
+      3,
+      6,
+      9,
+      1
+    ],
+    [
+      3,
+      6,
+      9,
+      1
+    ],
+    [
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "rendererTrials": [
+    {
+      "name": "environment-deferred",
+      "deferredPathResolve": true,
+      "denoise": false,
+      "requestedSpp": 32,
+      "actualCountMin": 32,
+      "actualCountMax": 32,
+      "pathCompletionValid": true,
+      "centerRadiance": [
+        0.993707537651062,
+        0.993707537651062,
+        0.993707537651062
+      ],
+      "splitRoots": 0,
+      "outputProbe": {
+        "x": 8,
+        "y": 8,
+        "rgba": [
+          186,
+          186,
+          186,
+          255
+        ],
+        "luminance": 0.7294117647058823,
+        "sampledPixels": 1,
+        "nonZeroSamples": 1,
+        "maxChannel": 186
+      },
+      "queueOverflow": 0
+    },
+    {
+      "name": "environment-forward",
+      "deferredPathResolve": false,
+      "denoise": false,
+      "requestedSpp": 32,
+      "actualCountMin": 32,
+      "actualCountMax": 32,
+      "pathCompletionValid": true,
+      "centerRadiance": [
+        0.993707537651062,
+        0.993707537651062,
+        0.993707537651062
+      ],
+      "splitRoots": 0,
+      "outputProbe": {
+        "x": 8,
+        "y": 8,
+        "rgba": [
+          186,
+          186,
+          186,
+          255
+        ],
+        "luminance": 0.7294117647058823,
+        "sampledPixels": 1,
+        "nonZeroSamples": 1,
+        "maxChannel": 186
+      },
+      "queueOverflow": 0
+    },
+    {
+      "name": "small-glass-mesh",
+      "deferredPathResolve": true,
+      "denoise": false,
+      "requestedSpp": 32,
+      "actualCountMin": 32,
+      "actualCountMax": 32,
+      "pathCompletionValid": true,
+      "centerRadiance": [
+        1,
+        1,
+        1
+      ],
+      "splitRoots": 16,
+      "outputProbe": {
+        "x": 8,
+        "y": 8,
+        "rgba": [
+          186,
+          186,
+          186,
+          255
+        ],
+        "luminance": 0.7294117647058823,
+        "sampledPixels": 1,
+        "nonZeroSamples": 1,
+        "maxChannel": 186
+      },
+      "queueOverflow": 0
+    },
+    {
+      "name": "full-metal-mesh",
+      "deferredPathResolve": true,
+      "denoise": false,
+      "requestedSpp": 32,
+      "actualCountMin": 32,
+      "actualCountMax": 32,
+      "pathCompletionValid": true,
+      "centerRadiance": [
+        1,
+        1,
+        1
+      ],
+      "splitRoots": 0,
+      "outputProbe": {
+        "x": 8,
+        "y": 8,
+        "rgba": [
+          186,
+          186,
+          186,
+          255
+        ],
+        "luminance": 0.7294117647058823,
+        "sampledPixels": 1,
+        "nonZeroSamples": 1,
+        "maxChannel": 186
+      },
+      "queueOverflow": 0
+    },
+    {
+      "name": "overflow-glass-mesh-denoise",
+      "deferredPathResolve": true,
+      "denoise": true,
+      "requestedSpp": 32,
+      "actualCountMin": -1,
+      "actualCountMax": -1,
+      "pathCompletionValid": false,
+      "centerRadiance": [
+        0,
+        0,
+        0
+      ],
+      "splitRoots": 0,
+      "outputProbe": {
+        "x": 8,
+        "y": 8,
+        "rgba": [
+          255,
+          0,
+          255,
+          0
+        ],
+        "luminance": 0.2848,
+        "sampledPixels": 1,
+        "nonZeroSamples": 1,
+        "maxChannel": 255
+      },
+      "queueOverflow": 256,
+      "nextFrameRecovered": true
+    }
+  ],
+  "compilerErrors": 0,
+  "validationErrors": 0,
+  "limitations": [
+    "Only 16x16 and two bounces",
+    "Not an HDR image regression",
+    "Not a performance benchmark",
+    "Broad material, variance and stress qualification remains outstanding"
+  ]
+}

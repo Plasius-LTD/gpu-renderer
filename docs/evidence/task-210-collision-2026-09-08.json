@@ -1,0 +1,16 @@
+{
+  "status": "reproduced-defect",
+  "scope": "actual-deferred-terminal-helper-sibling-address-alias",
+  "timestamp": "2026-09-08T10:23:43.654Z",
+  "transportCommit": "3382f8226c312f06903adbd1f8f37a737de8a97f",
+  "shaderSha256": "6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0",
+  "captureMethod": "Transcribed from the browser's physical WebGPU fixture receipt",
+  "adapter": { "vendor": "apple", "architecture": "metal-3", "isFallbackAdapter": false },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "expectedCameraSampleSum": [3, 6, 9],
+  "observedTerminalValues": [[1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3], [1, 2, 3]],
+  "allContributionsRetained": false,
+  "compilerErrors": 0,
+  "validationErrors": 0,
+  "limitations": ["Not a scene-noise attribution", "Not a performance measurement", "Not a BSDF or split-weight qualification"]
+}

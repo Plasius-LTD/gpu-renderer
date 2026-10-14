@@ -76,7 +76,7 @@ button.addEventListener("click", async () => {
       const prepared = createAdaptivePreparedSampleEncoder({ enabled: true, bootstrapPipelines: bootstrap, cameraPipeline: camera,
         frameEncoder, counterBuffer: counters, primaryDispatchBuffer: b.dispatch, getBindGroups: () => preparedBindings });
       const createBuffer = (size, usage) => { const value = device.createBuffer({ size, usage }); extraBuffers.push(value); return value; };
-      const copyBytes = (195 * 9 + 1) * 16;
+      const copyBytes = (195 * 9 + 1) * 64;
       const copied = createBuffer(copyBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
       const staging = createBuffer(copyBytes, GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ);
       const module = device.createShaderModule({ code: `@group(0) @binding(0) var<storage,read> copyInput: array<u32>;
@@ -105,7 +105,7 @@ button.addEventListener("click", async () => {
         const denseEncoder = device.createCommandEncoder();
         frameEncoder.encodeTileSample(denseEncoder, tile, frameOffset, createGpuParallelismCounters());
         device.queue.submit([denseEncoder.finish()]);
-        const pathBytes = (pixels * (item.depth + 1) + 1) * 16;
+        const pathBytes = (pixels * (item.depth + 1) + 1) * 64;
         const densePaths = await read(paths, pathBytes), denseCounters = await read(counters, 128); active();
         check(denseCounters[0] === 0 && denseCounters[2] === pixels, `${item.name}: dense paths did not terminate`);
         const words = new Uint32Array(config.width * config.height).fill(packAdaptivePixelState({ requested: 2 })), selected = new Set();
@@ -123,12 +123,12 @@ button.addEventListener("click", async () => {
         const actual = await read(paths, pathBytes), counts = await read(counters, 128); active();
         const accepted = item.failed ? 0 : selected.size;
         check(counts[0] === 0 && counts[1] === 0 && counts[2] === accepted, `${item.name}: incorrect actual termination counts`);
-        const stride = (item.depth + 1) * 4;
+        const stride = 16;
         for (let index = 0; index < actual.length; index += 1) {
           const useDense = !item.failed && selected.has(Math.floor(index / stride));
           check(actual[index] === (useDense ? densePaths[index] : sentinel), `${item.name}: deferred path mismatch at ${index}`);
         }
-        for (const local of selected) if (!item.failed) check(actual[local * stride + item.depth * 4 + 3] !== 0, "Missing terminal source");
+        for (const local of selected) if (!item.failed) check(actual[local * stride + 7] !== 0, "Missing terminal source");
         results.push({ name: item.name, denseTerminatedPaths: pixels, compactedTerminatedPaths: accepted,
           selectedPathRecordsBitwiseEqual: true, unselectedAndPaddingUntouched: true, commandCounts: parallelism });
       }

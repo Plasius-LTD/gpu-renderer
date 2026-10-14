@@ -5,6 +5,7 @@ import {
   createGpuWorkerJobDiagnostics,
 } from "./wavefront-frame-runtime.js"
 import { dispatchWavefrontGpuAccelerationBuild } from "./wavefront-acceleration-builder.js";
+import { createMaterialTextureResource } from "./wavefront-texture-transforms.js";
 import {
   createDefaultWavefrontSceneObjects,
   createWavefrontBvhBuildLevels,
@@ -56,6 +57,7 @@ import {
   createWavefrontRayCountTelemetry,
 } from "./wavefront-frame-telemetry.js";
 import { createWavefrontFrameEncoder } from "./wavefront-frame-encoder.js";
+import { createWavefrontCpuProfile } from "./wavefront-cpu-profile.js";
 import {
   dispatchWavefrontFrame,
   dispatchWavefrontFrameAwaitingGpu,
@@ -411,7 +413,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   let mediumTextureResource = createMediumTextureResource(
     device,
     constants,
-    config.mediums
+    config.mediums,
+    config.transportExperiments.effective.nestedMediaRefraction
   );
   config = Object.freeze({
     ...config,
@@ -423,7 +426,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       hasImportanceData: environmentSamplingResource.hasImportanceData,
     }),
   });
-  const brdfLutResource = createBrdfLutResource(device, constants);
+  const brdfLutResource = createBrdfLutResource(device, constants, undefined, config.transportExperiments.effective.sheen);
   const baseColorAtlasResource = createAtlasTextureResource(
     device,
     constants,
@@ -488,6 +491,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     magFilter: "linear",
     minFilter: "linear",
   });
+  const materialTextureResource = createMaterialTextureResource(device, constants, config.gpuMaterialSource.textureMetadata);
 
   const {
     bindGroupLayouts: {
@@ -499,7 +503,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     },
     computePipelines: pipelines,
     presentPipeline,
-  } = await createWavefrontPipelineResources({ device, constants, format });
+  } = await createWavefrontPipelineResources({ device, constants, format, config });
 
   function createTraceBindGroups() {
     return createWavefrontTraceBindGroups({
@@ -529,6 +533,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       environmentSamplingResource,
       mediumTextureResource,
       extensionAtlasResources,
+      materialTextureResource,
     });
   }
 
@@ -655,34 +660,38 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
   }
 
-  function writeFrameConfigSlot(slot, tile, frameIndex, buildRange = {}) {
+  function writeFrameConfigSlot(slot, tile, frameIndex, buildRange = {}, cpuProfile = null, frameDevice = device) {
     if (slot >= frameConfigSlotCount) {
       throw new Error("Wavefront frame config slot capacity exceeded.");
     }
     const offset = slot * configBufferStride;
-    device.queue.writeBuffer(
+    const payload = cpuProfile
+      ? cpuProfile.measure("configPacking", () => createConfigPayload(config, tile, frameIndex, buildRange))
+      : createConfigPayload(config, tile, frameIndex, buildRange);
+    cpuProfile?.recordAllocation(payload.byteLength);
+    frameDevice.queue.writeBuffer(
       configBuffer,
       offset,
-      createConfigPayload(config, tile, frameIndex, buildRange)
+      payload
     );
     return offset;
   }
 
-  function createFrameConfigWriter(frameIndex) {
+  function createFrameConfigWriter(frameIndex, cpuProfile = null, frameDevice = device) {
     let slot = 0;
     return (tile, buildRange = {}) => {
-      const offset = writeFrameConfigSlot(slot, tile, frameIndex, buildRange);
+      const offset = writeFrameConfigSlot(slot, tile, frameIndex, buildRange, cpuProfile, frameDevice);
       slot += 1;
       return offset;
     };
   }
 
-  function dispatchGpuAccelerationBuild(frameIndex, parallelism) {
+  function dispatchGpuAccelerationBuild(frameIndex, parallelism, frameDevice = device) {
     const submitted = dispatchWavefrontGpuAccelerationBuild({
       config,
       accelerationBuilt,
       tiles,
-      device,
+      device: frameDevice,
       bvhBuildConfigBuffer,
       configBufferStride,
       bvhBuildBindGroup,
@@ -697,31 +706,31 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     return submitted;
   }
 
-  function dispatchFrame(frameIndex, parallelism, renderedSamplesPerPixel = config.samplesPerPixel) {
+  function dispatchFrame(frameIndex, parallelism, renderedSamplesPerPixel = config.samplesPerPixel, cpuProfile = null, frameDevice = device) {
     return dispatchWavefrontFrame({
       config,
       tiles,
-      device,
+      device: frameDevice,
       frameIndex,
       parallelism,
       renderedSamplesPerPixel,
       frameEncoder,
-      createFrameConfigWriter,
+      createFrameConfigWriter: cpuProfile ? (index) => createFrameConfigWriter(index, cpuProfile, frameDevice) : createFrameConfigWriter,
     });
   }
 
-  function renderOnce(renderOptions = {}, resolvedSamplingPlan = null) {
+  function renderOnce(renderOptions = {}, resolvedSamplingPlan = null, cpuProfile = null, frameDevice = device) {
     const frameStartTimeMs = nowMs();
     frame += 1;
     const frameIndex = frame + config.frameIndex;
     const samplingPlan = resolvedSamplingPlan ?? resolveRenderedSamplesPerPixel(renderOptions, false);
     const parallelismCounters = createGpuParallelismCounters();
-    const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
-    const frameSubmissionCount = dispatchFrame(
-      frameIndex,
-      parallelismCounters,
-      samplingPlan.renderedSamplesPerPixel
-    );
+    const accelerationBuildSubmitted = cpuProfile
+      ? cpuProfile.measure("accelerationEncoding", () => dispatchGpuAccelerationBuild(frameIndex, parallelismCounters, frameDevice))
+      : dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
+    const frameSubmissionCount = cpuProfile
+      ? cpuProfile.measure("commandEncoding", () => dispatchFrame(frameIndex, parallelismCounters, samplingPlan.renderedSamplesPerPixel, cpuProfile, frameDevice))
+      : dispatchFrame(frameIndex, parallelismCounters, samplingPlan.renderedSamplesPerPixel);
     const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
     return Object.freeze({
       ...createFrameStats({
@@ -753,17 +762,19 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     frameIndex,
     parallelism,
     renderedSamplesPerPixel = config.samplesPerPixel,
-    optionsForFrame = {}
+    optionsForFrame = {},
+    cpuProfile = null,
+    frameDevice = device
   ) {
     return dispatchWavefrontFrameAwaitingGpu({
       config,
       tiles,
-      device,
+      device: frameDevice,
       frameIndex,
       parallelism,
       renderedSamplesPerPixel,
       frameEncoder,
-      writeFrameConfigSlot,
+      writeFrameConfigSlot: cpuProfile ? (slot, tile, index, range) => writeFrameConfigSlot(slot, tile, index, range, cpuProfile, frameDevice) : writeFrameConfigSlot,
       optionsForFrame,
     });
   }
@@ -780,6 +791,29 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   async function renderFrame(renderOptions = {}) {
+    if (renderOptions.onProgress === undefined) return renderFrameInternal(renderOptions);
+    if (typeof renderOptions.onProgress !== "function") throw new TypeError("onProgress must be a function.");
+    let completedTiles = 0, observerFailed = false, observerError;
+    const progress = (stage, count = completedTiles) => {
+      completedTiles = count;
+      // Observer failure cannot release resources before submitted work drains.
+      if (observerFailed) return;
+      try { renderOptions.onProgress(Object.freeze({stage, completedTiles, totalTiles:tiles.length})); }
+      catch (error) { observerFailed = true; observerError = error; }
+    };
+    try {
+      const result = await renderFrameInternal(renderOptions, progress);
+      if (observerFailed) throw observerError;
+      return result;
+    } catch (error) {
+      progress("failed");
+      throw error;
+    }
+  }
+
+  async function renderFrameInternal(renderOptions = {}, progress = null) {
+    const cpuProfile = createWavefrontCpuProfile(renderOptions.cpuProfiling);
+    const frameDevice = cpuProfile ? cpuProfile.wrapDevice(device) : device;
     const awaitGPUCompletion = renderOptions.awaitGPUCompletion !== false;
     const samplingPlan = resolveRenderedSamplesPerPixel(renderOptions, awaitGPUCompletion);
     const useThrottledHighSamplePath =
@@ -794,16 +828,20 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       activeFrameTelemetry = telemetryResourcesForFrame;
     }
     const frameStartTimeMs = nowMs();
+    progress?.("encoding");
     let frameStats;
     try {
       if (useThrottledHighSamplePath) {
         frame += 1;
         const frameIndex = frame + config.frameIndex;
         const parallelismCounters = createGpuParallelismCounters();
-        const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
+        const accelerationBuildSubmitted = cpuProfile
+          ? cpuProfile.measure("accelerationEncoding", () => dispatchGpuAccelerationBuild(frameIndex, parallelismCounters, frameDevice))
+          : dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
         let frameSubmissionCount = 0;
         let frameConfigSlot = 0;
         if (accelerationBuildSubmitted) {
+          progress?.("waiting-acceleration");
           const accelerationWaitOptions = {
             ...estimateSubmittedGpuWorkTiming(
               { ...config, renderedSamplesPerPixel: 1 },
@@ -813,10 +851,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
             ),
             allowTimeout: false,
           };
-          await waitForSubmittedGpuWork(accelerationWaitOptions);
+          if (cpuProfile) await cpuProfile.measureAsync("gpuWait", () => waitForSubmittedGpuWork(accelerationWaitOptions));
+          else await waitForSubmittedGpuWork(accelerationWaitOptions);
         }
         for (let tileIndex = 0; tileIndex < tiles.length; tileIndex += 1) {
-          const tileRangeDispatch = dispatchFrameAwaitingGpu(
+          progress?.("encoding", tileIndex);
+          const dispatchTile = () => dispatchFrameAwaitingGpu(
             frameIndex,
             parallelismCounters,
             samplingPlan.renderedSamplesPerPixel,
@@ -829,8 +869,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
               startingSlot: frameConfigSlot,
               includeDenoise: tileIndex + 1 >= tiles.length,
               includePresent: tileIndex + 1 >= tiles.length,
-            }
+            },
+            cpuProfile,
+            frameDevice
           );
+          const tileRangeDispatch = cpuProfile ? cpuProfile.measure("commandEncoding", dispatchTile) : dispatchTile();
           frameSubmissionCount = tileRangeDispatch.submissionCount;
           frameConfigSlot = tileRangeDispatch.slot;
           const tileWaitOptions = {
@@ -845,7 +888,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
             ),
             allowTimeout: false,
           };
-          await waitForSubmittedGpuWork(tileWaitOptions);
+          progress?.("waiting-gpu", tileIndex);
+          if (cpuProfile) await cpuProfile.measureAsync("gpuWait", () => waitForSubmittedGpuWork(tileWaitOptions));
+          else await waitForSubmittedGpuWork(tileWaitOptions);
+          progress?.("gpu-complete", tileIndex + 1);
         }
         frameStats = createFrameStats({
           frameIndex,
@@ -874,15 +920,19 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
               timeoutMs: submittedWorkTiming.timeoutMs,
               maxWaitMs: submittedWorkTiming.maxWaitMs,
             };
-        frameStats = renderOnce(renderOptions, samplingPlan);
+        frameStats = renderOnce(renderOptions, samplingPlan, cpuProfile, frameDevice);
         if (awaitGPUCompletion) {
-          await waitForSubmittedGpuWork(submissionWaitOptions);
+          progress?.("waiting-gpu");
+          if (cpuProfile) await cpuProfile.measureAsync("gpuWait", () => waitForSubmittedGpuWork(submissionWaitOptions));
+          else await waitForSubmittedGpuWork(submissionWaitOptions);
+          progress?.("gpu-complete", tiles.length);
         }
       }
     } finally {
       activeFrameTelemetry = null;
     }
     const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
+    if (telemetryCanRecord || renderOptions.readOutputProbe !== false) progress?.("readback");
     if (awaitGPUCompletion) {
       lastCompletedFrameTimeMs = frameTimeMs;
       lastCompletedSamplesPerPixel = frameStats.renderedSamplesPerPixel ?? frameStats.samplesPerPixel;
@@ -891,12 +941,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       config.width * config.height * samplingPlan.renderedSamplesPerPixel;
     const expectedRayCounts =
       tiles.length * samplingPlan.renderedSamplesPerPixel * config.maxDepth;
-    const telemetryReadback = telemetryCanRecord
-      ? await telemetryResourcesForFrame.readFrame({
+    const readTelemetry = () => telemetryResourcesForFrame.readFrame({
           expectedPrimaryRays,
           expectedRayCounts,
           waitForSubmittedGpuWork,
-        })
+        });
+    const telemetryReadback = telemetryCanRecord
+      ? await (cpuProfile ? cpuProfile.measureAsync("telemetryReadback", readTelemetry) : readTelemetry())
       : null;
     const rayCounts = !telemetryRequested
       ? createWavefrontRayCountTelemetry()
@@ -962,10 +1013,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       ),
     });
     const terminationMetrics = awaitGPUCompletion && renderOptions.readStats === true
-      ? await readTerminationMetrics()
+      ? await (cpuProfile ? cpuProfile.measureAsync("telemetryReadback", readTerminationMetrics) : readTerminationMetrics())
       : EMPTY_TERMINATION_METRICS;
     const probe =
-      renderOptions.readOutputProbe === false ? null : await readOutputProbe(renderOptions.probe);
+      renderOptions.readOutputProbe === false ? null : await (cpuProfile
+        ? cpuProfile.measureAsync("outputReadback", () => readOutputProbe(renderOptions.probe))
+        : readOutputProbe(renderOptions.probe));
     const maxChannel = probe ? Math.max(...probe.rgba.slice(0, 3)) : 0;
     const completedFrame = Object.freeze({
       ...frameStats,
@@ -978,16 +1031,20 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           })
         : null,
       bounces: [],
+      pathCompletionValid: terminationMetrics.pathCompletionValid,
       termination: terminationMetrics.termination,
       terminalRadiance: terminationMetrics.terminalRadiance,
       radianceDiagnostics: terminationMetrics.radianceDiagnostics,
       transportContributions: terminationMetrics.transportContributions,
       queueOverflow: terminationMetrics.queueOverflow,
     });
-    return Object.freeze({
+    const result = Object.freeze({
       ...completedFrame,
+      ...(cpuProfile ? { cpuProfile: cpuProfile.snapshot() } : {}),
       transportGuardrails: createWavefrontTransportGuardrailSummary(completedFrame),
     });
+    progress?.(awaitGPUCompletion ? "complete" : "submitted");
+    return result;
   }
 
   function rebuildLiveConfig(overrides = {}) {
@@ -1014,7 +1071,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
 
   function rebuildMediumResources(nextConfig) {
     const previousMediumTextureResource = mediumTextureResource;
-    mediumTextureResource = createMediumTextureResource(device, constants, nextConfig.mediums);
+    mediumTextureResource = createMediumTextureResource(device, constants, nextConfig.mediums,
+      nextConfig.transportExperiments.effective.nestedMediaRefraction);
     bindGroups = createTraceBindGroups();
     if (previousMediumTextureResource?.ownsTexture) {
       previousMediumTextureResource.texture?.destroy?.();
@@ -1025,7 +1083,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     const nextPackedScene = packWavefrontSceneObjects(sceneObjects, config.sceneObjectCapacity);
     packedScene = nextPackedScene;
     const nextConfig = rebuildLiveConfig();
-    if (!mediumTablesEqual(config.mediums, nextConfig.mediums)) {
+    if (!mediumTablesEqual(config.mediums, nextConfig.mediums) ||
+        config.transportExperiments.effective.nestedMediaRefraction !== nextConfig.transportExperiments.effective.nestedMediaRefraction) {
       rebuildMediumResources(nextConfig);
     }
     config = nextConfig;
@@ -1069,10 +1128,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       frameConfigSlots: frameConfigSlotCount,
       gpuParallelism: lastGpuParallelism,
       memory: config.memory,
+      materialTextureMetadataBytes: materialTextureResource.allocatedBytes,
     });
   }
 
   function destroy() {
+    materialTextureResource.texture.destroy?.();
     frameTelemetryResources?.destroy?.();
     activeQueue.destroy?.();
     nextQueue.destroy?.();

@@ -42,7 +42,7 @@ button.addEventListener("click", async () => {
       const rays = buffer((16384 + 1) * 96, storage);
       const counters = buffer(128, storage);
       const sums = buffer((16384 + 1) * 16, storage);
-      const paths = buffer((16384 * 9 + 1) * 16, storage);
+      const paths = buffer((16384 * 9 + 1) * 64, storage);
       const wordCopy = buffer(paths.size, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
       const staging = buffer(paths.size, GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ);
       const copyModule = device.createShaderModule({ code: `
@@ -115,7 +115,7 @@ button.addEventListener("click", async () => {
         if (floatChanges[item.veto]) view.setFloat32(...floatChanges[item.veto], true);
         device.queue.writeBuffer(b.primaryControl, 0, control);
         device.queue.writeBuffer(frame, slot * 512, payload);
-        const rayBytes = (pixels + 1) * 96, sumBytes = (pixels + 1) * 16, pathBytes = (pixels * (depth + 1) + 1) * 16;
+        const rayBytes = (pixels + 1) * 96, sumBytes = (pixels + 1) * 16, pathBytes = (pixels * (depth + 1) + 1) * 64;
         const sentinel = 0x3f800000;
         for (const [target, bytes] of [[rays, rayBytes], [sums, sumBytes], [paths, pathBytes], [counters, 128]]) {
           device.queue.writeBuffer(target, 0, new Uint32Array(bytes / 4).fill(sentinel));
@@ -124,7 +124,7 @@ button.addEventListener("click", async () => {
           { binding: 0, resource: { buffer: rays, ...(item.veto === "short-queue" ? { size: 96 } : {}) } },
           { binding: 3, resource: { buffer: sums, ...(item.veto === "short-sums" ? { size: 16 } : {}) } },
           { binding: 5, resource: { buffer: frame, size: 320 } }, { binding: 6, resource: { buffer: counters } },
-          { binding: 22, resource: { buffer: paths, ...(item.veto === "short-path" ? { size: 16 } : {}) } },
+          { binding: 22, resource: { buffer: paths, ...(item.veto === "short-path" ? { size: 64 } : {}) } },
         ] });
         const bootstrapWorklist = device.createBindGroup({ layout: bootstrap.worklistLayout, entries: [
           { binding: 0, resource: { buffer: b.worklist, ...(item.veto === "short-worklist" ? { size: 4 } : {}) } },
@@ -150,7 +150,7 @@ button.addEventListener("click", async () => {
           const expected = index === 0 ? accepted : index === 4 ? Math.max(1, Math.ceil(accepted / 64)) : index === 5 || index === 6 ? 1 : 0;
           check(actualCounters[index] === expected, `${item.name}: stale counter ${index}`);
         }
-        for (const [target, bytes, stride] of [[sums, sumBytes, 4], [paths, pathBytes, (depth + 1) * 4]]) {
+        for (const [target, bytes, stride] of [[sums, sumBytes, 4], [paths, pathBytes, 16]]) {
           const actual = await read(target, bytes); active();
           for (let index = 0; index < actual.length; index += 1) {
             const cleared = !item.veto && selected.has(Math.floor(index / stride));
