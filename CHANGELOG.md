@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.49] - 2026-10-14
+
 - Opt-in progressive wavefront accumulation of linear radiance, sample-weighted history, explicit reset and camera/scene invalidation for still-frame inspection.
 
 - **Added**
@@ -1204,3 +1218,4 @@ All notable changes to this project will be documented in this file.
 [0.2.46]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.46
 [0.2.47]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.47
 [0.2.48]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.48
+[0.2.49]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.49
