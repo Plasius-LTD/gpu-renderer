@@ -46,17 +46,19 @@ export function dispatchWavefrontFrame({
       frameEncoder.encodeTileOutput(batch.reserve(1), tile, outputConfigOffset, parallelism);
     }
   }
-  if (config.denoise) {
+  if (config.denoise || config.progressive) {
+    const totalSamples = renderedSamplesPerPixel + frameEncoder.getAccumulatedSamples();
     const denoiseConfigOffset = writeFrameConfig(
       { x: 0, y: 0, width: config.width, height: config.height },
-      { sampleIndex: 0, sampleWeight: 1 / renderedSamplesPerPixel }
+      { sampleIndex: 0, sampleWeight: 1 / totalSamples }
     );
-    const denoisePassCount = renderedSamplesPerPixel < 4 ? 2 : 1;
+    if (config.progressive) frameEncoder.encodeProgressive(batch.reserve(1), denoiseConfigOffset, parallelism, renderedSamplesPerPixel);
+    const denoisePassCount = totalSamples < 4 ? 2 : 1;
     frameEncoder.encodeDenoise(
       batch.reserve(denoisePassCount),
       denoiseConfigOffset,
       parallelism,
-      renderedSamplesPerPixel
+      totalSamples
     );
   }
   frameEncoder.encodePresent(batch.reserve(1));
@@ -76,7 +78,7 @@ export function dispatchWavefrontFrameAwaitingGpu({
 }) {
   const samplePassesPerSample = config.maxDepth + 1 + (config.deferredPathResolve ? 1 : 0);
   const denoisePassCount = config.denoise ? (renderedSamplesPerPixel < 4 ? 2 : 1) : 0;
-  const tailPassCount = denoisePassCount + 1;
+  const tailPassCount = denoisePassCount + 1 + (config.progressive ? 1 : 0);
   const sampleBatchSize = Math.max(
     1,
     Math.floor(
@@ -161,19 +163,21 @@ export function dispatchWavefrontFrameAwaitingGpu({
       maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
       startingSubmissionCount: submissionCount,
     });
-    if (includeDenoise && config.denoise) {
+    if (includeDenoise && (config.denoise || config.progressive)) {
+      const totalSamples = renderedSamplesPerPixel + frameEncoder.getAccumulatedSamples();
       const denoiseConfigOffset = writeFrameConfigSlot(
         slot,
         { x: 0, y: 0, width: config.width, height: config.height },
         frameIndex,
-        { sampleIndex: 0, sampleWeight: 1 / renderedSamplesPerPixel }
+        { sampleIndex: 0, sampleWeight: 1 / totalSamples }
       );
       slot += 1;
+      if (config.progressive) frameEncoder.encodeProgressive(tail.reserve(1), denoiseConfigOffset, parallelism, renderedSamplesPerPixel);
       frameEncoder.encodeDenoise(
         tail.reserve(denoisePassCount),
         denoiseConfigOffset,
         parallelism,
-        renderedSamplesPerPixel
+        totalSamples
       );
     }
     if (includePresent) {

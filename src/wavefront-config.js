@@ -346,6 +346,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   const queueBytes = tilePixelCapacity * RAY_RECORD_BYTES;
   const hitBytes = tilePixelCapacity * HIT_RECORD_BYTES;
   const accumulationBytes = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
+  const progressiveBytes = options.progressive === true ? width * height * 16 + 16 : 0;
   const pathVertexBytes = tilePixelCapacity * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
   const sceneObjectBytes = sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES;
   const triangleBytes = allocatedRecordBytes(triangleCapacity, TRIANGLE_RECORD_BYTES);
@@ -372,7 +373,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   const outputConfigSlotCount = deferredPathResolve ? 0 : tileCount;
   const frameConfigSlotCount = Math.max(
     1,
-    tileCount * samplesPerPixel + outputConfigSlotCount + (denoise ? 1 : 0)
+    tileCount * samplesPerPixel + outputConfigSlotCount + (denoise || options.progressive === true ? 1 : 0)
   );
   const configBufferStride = alignByteSize(
     CONFIG_BUFFER_BYTES,
@@ -384,6 +385,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     1 + bvhSortStageCount + bvhBuildLevelCount
   ) * configBufferStride;
   const sceneStorageBufferBindingBytes = Math.max(
+    progressiveBytes,
     sceneObjectBytes,
     triangleBytes,
     bvhCombinedBytes,
@@ -397,6 +399,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     queueBytes * 2 +
     hitBytes +
     accumulationBytes +
+    progressiveBytes +
     pathVertexBytes +
     sceneObjectBytes +
     triangleBytes +
@@ -416,6 +419,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     queuePairBytes: queueBytes * 2,
     hitBytes,
     accumulationBytes,
+    progressiveBytes,
     pathVertexBytes,
     sceneObjectBytes,
     triangleBytes,
@@ -459,6 +463,7 @@ export function estimateWavefrontPathTracingMemoryForConfig(config, limits = {})
     bvhSortStageCount: config.bvhSortStages.length,
     bvhBuildLevelCount: config.bvhBuildLevels.length,
     denoise: config.denoise,
+    progressive: config.progressive,
     deferredPathResolve: config.deferredPathResolve,
     minUniformBufferOffsetAlignment:
       limits.minUniformBufferOffsetAlignment ??
@@ -587,10 +592,15 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   );
   const deferredPathResolve = resolveDeferredPathResolve(options);
   const strictPhysicalLowSppLighting = resolveStrictPhysicalLowSppLighting(options);
-  const transportExperiments = resolveTransportExperiments(options, strictPhysicalLowSppLighting);
+  // Progressive batches require distinct frame seeds, even when static-frame
+  // sample routing was requested by a consumer.
+  const transportExperiments = resolveTransportExperiments(options.progressive === true
+    ? { ...options, "renderer.transport.stableSampleRouting.enabled": false }
+    : options, strictPhysicalLowSppLighting);
 
   return Object.freeze({
     mode: rendererWavefrontComputeMode,
+    progressive: options.progressive === true,
     width,
     height,
     maxDepth,
@@ -641,6 +651,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
       height,
       tileSize,
       samplesPerPixel,
+      progressive: options.progressive === true,
       tilePixelCapacity,
       maxDepth,
       sceneObjectCapacity,

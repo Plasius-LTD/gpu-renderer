@@ -1,0 +1,11 @@
+# Progressive model inspection
+
+Parent Feature: Plasius-LTD/plasius-ltd-site#1170; Story #2303. Inherited remote flag: `gpu-demo.scene-fidelity.enabled`. This delivery is the localhost model review override; public discovery and production rollout are unchanged.
+
+The renderer gains opt-in progressive accumulation. Each completed batch contributes its linear radiance with sample-count weighting to a full-image float32 history buffer. Filtering and tone mapping follow accumulation; filtered/display pixels never enter history. Camera/scene changes and explicit reset discard history. Non-progressive callers preserve existing behavior and allocation. Expose submitted sample count separately from the caller's GPU-completed progress. Changing frame seeds must produce independent samples, including when stable sample routing is enabled.
+
+The shared model-inspection runtime owns a single in-flight batch, idle scheduling, bounded targets (1–256 samples), bounces (1–12), render width/height (1–1440), denoising, cancellation and resource disposal. Default target 64, six bounces, 800px width, denoising on; first pass one sample, subsequent batches up to four. Camera movement resets and coalesces; refinement waits 200ms for stillness, stops at target, and pauses while hidden. Quality changes preserve camera and loaded meshes while recreating renderer resources where necessary. GPU failures are visible and stop refinement. Teardown cancels timers and suppresses stale callbacks.
+
+The viewer provides labelled keyboard/touch controls for sample target, bounces, resolution width and denoising, with actual dimensions and completed samples. Native camera controls remain on canvas. No permanent camera buttons. No external assets or new dependencies.
+
+Acceptance tests: weighted unequal batches, independent seeds, history reset, render/denoise ordering, default-off compatibility, disposal, invalid bounds, exact target cap, idle/camera reset, rapid quality changes, hidden-tab pause/resume, stale completions, error/cancellation, accessible controls and 320px layout. Verify real WebGPU output with denoising both off/on and after camera movement. All changed JS in LCOV; >=80% package coverage (existing shader exception). Release only by approved CI/CD; local source overrides are explicit and documented.

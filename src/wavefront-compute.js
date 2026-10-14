@@ -1,3 +1,4 @@
+import { createWavefrontProgressiveResources } from './wavefront-progressive.js';
 import {
   createGpuParallelismCounters,
   createGpuParallelismDiagnostics,
@@ -299,7 +300,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   const outputConfigSlotCount = config.deferredPathResolve ? 0 : tiles.length;
   const frameConfigSlotCount = Math.max(
     1,
-    tiles.length * config.samplesPerPixel + outputConfigSlotCount + (config.denoise ? 1 : 0)
+    tiles.length * config.samplesPerPixel + outputConfigSlotCount + (config.denoise || config.progressive ? 1 : 0)
   );
   const configBuffer = createBuffer(
     device,
@@ -369,7 +370,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     format: "rgba16float",
     usage:
       constants.texture.STORAGE_BINDING |
-      constants.texture.TEXTURE_BINDING,
+      constants.texture.TEXTURE_BINDING | constants.texture.COPY_DST,
   });
   const radianceView = radianceTexture.createView();
   const denoiseScratchTexture = device.createTexture({
@@ -563,10 +564,12 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     outputView,
     sampler,
   });
+  const progressive = await createWavefrontProgressiveResources({device, constants, config, configBuffer, radianceTexture, radianceView, outputView});
   let activeFrameTelemetry = null;
   let frameTelemetryResources = null;
   const frameEncoder = createWavefrontFrameEncoder({
     getConfig: () => config,
+    progressive,
     getBindGroups: () => bindGroups,
     pipelines,
     counterBuffer,
@@ -1022,6 +1025,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function updateSceneObjects(sceneObjects) {
+    progressive?.reset();
     const nextPackedScene = packWavefrontSceneObjects(sceneObjects, config.sceneObjectCapacity);
     packedScene = nextPackedScene;
     const nextConfig = rebuildLiveConfig();
@@ -1034,6 +1038,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function updateCamera(cameraOptions = {}) {
+    progressive?.reset();
     activeCameraOptions = cameraOptions;
     config = rebuildLiveConfig();
     return config;
@@ -1042,6 +1047,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   function getSnapshot() {
     return Object.freeze({
       frame,
+      accumulatedSamplesPerPixel: progressive?.samples ?? 0,
       width: config.width,
       height: config.height,
       maxDepth: config.maxDepth,
@@ -1073,6 +1079,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function destroy() {
+    progressive?.destroy();
     frameTelemetryResources?.destroy?.();
     activeQueue.destroy?.();
     nextQueue.destroy?.();
@@ -1138,6 +1145,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     readOutputProbe,
     updateSceneObjects,
     updateCamera,
+    resetAccumulation: () => progressive?.reset(),
     getSnapshot,
     destroy,
   });

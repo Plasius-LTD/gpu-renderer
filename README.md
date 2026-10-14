@@ -981,3 +981,9 @@ See [ADR-0036](docs/adrs/adr-0036-in-scene-material-inspection.md).
 ### Shared material-study runtime
 
 Production demo helpers and their regression tests now live in `@plasius/gpu-shared/material-study`. The renderer exposes `validateNativeSurfaceMaterials(materials)` so authoring and GPU creation use identical validation without allocation. See [ADR-0037](docs/adrs/adr-0037-shared-material-study-runtime.md).
+
+## Progressive still-frame refinement
+
+Create the wavefront renderer with `progressive: true` to retain linear radiance across frames. `samplesPerPixel` at creation is the maximum batch capacity; pass a smaller value to `renderOnce({ samplesPerPixel })` or `renderFrame({ samplesPerPixel })`. Submit batches serially. `renderFrame()` awaits completion by default; with `renderOnce()`, await `renderer.device.queue.onSubmittedWorkDone()` before reporting completed samples. `getSnapshot().accumulatedSamplesPerPixel` reports submitted history samples.
+
+Camera or scene updates reset history automatically; `resetAccumulation()` also discards it without reallocating. Do not call `updateCamera()` between refinement passes unless the view changed. Progressive mode uses independent frame seeds, overriding static-frame stable sample routing. Denoising is applied after accumulation. Leave `progressive` unset for the existing independent-frame path. See [ADR 0038](docs/adrs/adr-0038-progressive-linear-radiance.md) for memory costs and host rollout responsibilities.
