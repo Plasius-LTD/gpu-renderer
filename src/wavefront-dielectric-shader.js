@@ -131,13 +131,35 @@ fn optical_offset(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>) 
   let epsilon = optical_origin_epsilon(position);
   return position + normal * select(-epsilon, epsilon, dot(normal, direction) >= 0.0);
 }
+fn optical_interior_bound(value: f32, lower: f32, upper: f32) -> f32 {
+  if (lower == upper || (value != lower && value != upper)) { return value; }
+  let upward = value == lower;
+  var candidate = 0.0;
+  if (value == 0.0) {
+    // WGSL may flush subnormals. This is binary32's smallest normal value,
+    // not a scene epsilon; an unresolved interval is deliberately unchanged.
+    candidate = select(-bitcast<f32>(0x00800000u), bitcast<f32>(0x00800000u), upward);
+  } else {
+    let bits = bitcast<u32>(value);
+    candidate = bitcast<f32>(select(bits - 1u, bits + 1u, (value > 0.0) == upward));
+  }
+  return select(value, candidate, candidate > lower && candidate < upper);
+}
 fn optical_triangle_position(triangle: TriangleRecord, barycentric: vec3<f32>) -> vec3<f32> {
   // Reconstruct on the triangle, not along a distant ray. At the glass rim,
   // cancellation in origin + t*direction placed an admitted hit above its edge.
   let p = triangle.v0.xyz + (triangle.v1.xyz - triangle.v0.xyz) * barycentric.y +
     (triangle.v2.xyz - triangle.v0.xyz) * barycentric.z;
-  return clamp(p, min(triangle.v0.xyz, min(triangle.v1.xyz, triangle.v2.xyz)),
-    max(triangle.v0.xyz, max(triangle.v1.xyz, triangle.v2.xyz)));
+  let lower = min(triangle.v0.xyz, min(triangle.v1.xyz, triangle.v2.xyz));
+  let upper = max(triangle.v0.xyz, max(triangle.v1.xyz, triangle.v2.xyz));
+  let bounded = clamp(p, lower, upper);
+  // A strictly interior wall hit can round onto an adjoining cap, erasing its
+  // next exit at t=0. Retain representable interior coordinates (ADR 0060).
+  // Genuine edge/vertex hits and planar axes must not be inset.
+  if (!all(barycentric > vec3<f32>(0.0))) { return bounded; }
+  return vec3<f32>(optical_interior_bound(bounded.x, lower.x, upper.x),
+    optical_interior_bound(bounded.y, lower.y, upper.y),
+    optical_interior_bound(bounded.z, lower.z, upper.z));
 }
 fn optical_projected_edge(a: vec2<f32>, b: vec2<f32>) -> f32 {
   // Use identical arithmetic for both orientations of a shared edge, including

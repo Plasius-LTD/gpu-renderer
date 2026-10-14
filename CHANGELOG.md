@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve representable interior coordinates when nested optical hit positions
+  round onto an adjacent triangle bound, preventing a distinct bottom exit from
+  collapsing to zero distance. Keep exact edge/vertex hits, strict cursors and
+  medium/count guards; add captured-corner, sign/bounds and physical preflight
+  regressions. No new allocations; full-frame qualification pending (#234, ADR 0060).
+
 - Make the optical ordering preflight verify successive traversal queries and
   exact event identities against frozen 20 nm references, replacing unsupported
   bit equality between distinct WGSL call sites. Retain direct cursor checks;

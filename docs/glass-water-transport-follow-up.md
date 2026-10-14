@@ -303,6 +303,40 @@ reference. Retain the direct strict-cursor checks too. A repeated exit, missing
 entry, wrong face or reference-distance violation must still reject. No runtime
 shader change or high-SPP success claim belongs to this diagnostic refinement.
 
+### Interior hit rounded onto the bottom edge (2026-10-14)
+
+Renderer `8b21f4f1ce87627502a3d01e61bc83527ab9c1e8` passes physical
+dielectric, seam, ordering and successive-cursor preflight. The full 4K/256-SPP/
+20-depth render reaches tile 223 (1664,896), then stops at sample 80:
+1,327,104 / 4,194,304 primaries. Pixel 3718874 reflects from outer-glass wall
+353337 at bounce 7, then reaches pedestal 353071 still carrying glass occupancy;
+bounce 9 rejects duplicate glass entry 353167. No queue overflow is recorded.
+
+The exact original binary32 wall triangle and incoming ray intersect at
+y=-0.6940840303552064, approximately 17.916 nm above the glass bottom
+(-0.6940840482711792). Its positive barycentric interior weight is about
+9.9533e-8. The reconstructed f32 hit rounds onto the bottom bounding plane;
+the wall-normal reflection offset cannot move its y coordinate. The next
+downward ray therefore misses the distinct bottom exit at zero distance.
+
+Before correction add a frozen exact-ray/triangle/continuation regression. For
+strictly interior barycentrics only, keep reconstructed coordinates strictly
+inside nondegenerate triangle bounds when a one-representable-step interior
+value exists. Preserve true edge/vertex hits, planar axes and ordinary interior
+coordinates. Derive the correction from binary32 adjacency and primitive bounds,
+not a scene epsilon, volume reset, gap or relaxed t-min. For zero, use the smallest
+normal f32 step because WGSL may flush subnormals; do not cross the opposite bound.
+If no representable interior exists, retain the original bounded coordinate and
+do not claim support for that unresolved geometry.
+
+Test lower/upper bounds, signed coordinates, axis/winding permutations, planar
+and unrepresentable intervals, flag-off equivalence and the actual next bottom
+exit through canonical offset/intersection. Add physical preflight with exact
+event identities and a positive bounded exit distance. No additional allocations,
+passes, BSDF/medium transitions or camera counts. Update ADR/README/CHANGELOG,
+full local/CI gates, then original high-SPP physical recapture; no performance or
+image success claim until those pass.
+
 Before signoff, exercise each new flag off/on/reset, individual and combined;
 empty/filled and room/close-up; completed counts/queue integrity; the analytic
 GPU probe's IOR/Fresnel/TIR/estimator/occupancy checks. Inspect initial controls,

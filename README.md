@@ -19,6 +19,13 @@ queries against the frozen distance references (not cross-call-site bit equality
 retaining both records on failure. Physical revalidation, full high-SPP recapture
 and timing qualification remain pending. No added buffers or relaxed failure gates.
 
+Physical preflight now passes the earlier ordering cases, but the high-SPP frame
+exposed an interior wall hit rounding onto the glass bottom. Nested hit-position
+reconstruction preserves a representable interior coordinate when available,
+so the next real bottom exit can be traced. Exact edge/vertex hits and failure
+guards remain unchanged; the new corner probe and full-frame recapture still
+require physical qualification ([ADR 0060](docs/adrs/adr-0060-optical-interior-hit-rounding.md)).
+
 Material colour no longer inherits a brightness floor from ambient illumination
 (Task #226). Authored dark/saturated texture channels remain material properties;
 ambient light remains a radiance source. This affects fixed and adaptive rendering
