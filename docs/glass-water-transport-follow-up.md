@@ -206,6 +206,32 @@ serve the committed code, but an HTTP response is not GPU execution evidence.
 
 ### Remaining acceptance lanes
 
+### High-SPP missing-exit investigation (2026-10-14)
+
+At renderer `29e24c2709e71ffbf1367f97b5d75ecfc5ab0b39`, the 4K/256-SPP
+radial ceiling/20-bounce filled-glass capture rejects tile 162 after sample 92:
+1,523,712 / 2,097,152 primary rays. Pixel 2470753 reaches a new glass entry at
+bounce 6 while still carrying glass occupancy after a pedestal reflection.
+Repeating with 0.0001 m pedestal clearance preserves this failure, so separating
+the contact is not a correction. The geometry-only replay follows a different
+path and cannot identify the first incorrect canonical transition.
+
+Task #234 now requires a failure-only replay using the already-compiled camera,
+intersection and surface pipelines, original tile worklist, absolute sample
+ordinal and unchanged configuration. Record bounded read-only ray/hit snapshots
+between intersection and surface resolution, without changing ordinary shaders,
+accepting a failed image or reporting replay time as rendering performance.
+No radiance resolve or sample-count commit belongs to this diagnostic. Preserve
+the original failure even if replay fails; destroy temporary buffers on every
+exit. Reject unsupported branching rather than mixing sibling histories.
+
+Acceptance: test command ordering, exact ordinal/config reuse, record bounds,
+decoding and cleanup; compile the diagnostic WGSL; obtain physical evidence of
+the first incorrect transition before selecting a collision correction. Then
+add a failing transport regression and recapture the original 4K configuration.
+Existing count, medium and overflow rejection remains mandatory. No Three.js,
+dependency addition, permanent gap, silent occupancy reset or performance claim.
+
 Before signoff, exercise each new flag off/on/reset, individual and combined;
 empty/filled and room/close-up; completed counts/queue integrity; the analytic
 GPU probe's IOR/Fresnel/TIR/estimator/occupancy checks. Inspect initial controls,

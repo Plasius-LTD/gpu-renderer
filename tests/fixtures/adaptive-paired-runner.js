@@ -133,7 +133,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       guidePostprocess=await wait(createGuidedRoomPostprocess({device,native,b,frame,counters,queue,descriptors,frameEncoder,makeBuffer,read,wait,active}));
     }
     if(native)return await createNativeAdaptiveRunner({native,sampler,guidePostprocess,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
-      tracePipelineLayout,variants,telemetry,timestampPairs,read,makeBuffer,group,descriptors,wait,active,destroy,errors,owner,
+      tracePipelineLayout,pipelines,variants,telemetry,timestampPairs,read,makeBuffer,group,descriptors,wait,active,destroy,errors,owner,
       setMode(diagnostic,fused){activeTelemetry=diagnostic?telemetry:null;activePreparedPipelines=fused?variants.fused:null;},
       setConfig(value){config=value;},adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
       memory:{rendererBufferBytes,textureInventory,adaptiveBufferBytes:resources.allocatedBytes,telemetryBufferBytes:telemetry.memoryBytes,fixtureStagingBytes:extras.reduce((sum,item)=>sum+item.size,0)}});

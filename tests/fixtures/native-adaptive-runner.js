@@ -132,6 +132,10 @@ export async function createNativeAdaptiveRunner(c) {
             failedNodes:await readFailedPathNodes(device,traceEntries.find(e=>e.binding===22).resource.buffer,wait),
           };
           if(details.failedNodes.length){try{
+            const {replayCanonicalFailure}=await import('./canonical-optical-replay.js');
+            details.canonicalReplay=adaptive&&!fused?await replayCanonicalFailure(c,{config,tile,ranges,failure:details.failedNodes[0]}):{status:'unsupported',reason:'canonical-journal-requires-adaptive-staged-transport'};
+          }catch(replayError){details.canonicalReplayError=replayError.message;}
+          try{
             const {replayOpticalFailure}=await import('./optical-failure-replay.js');
             details.opticalReplay=await replayOpticalFailure({device,config,tile,seed,sampler,failure:details.failedNodes[0],frame,layout:c.tracePipelineLayout,entries:traceEntries,read,wait});
           }catch(replayError){details.replayError=replayError.message;}}

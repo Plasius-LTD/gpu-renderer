@@ -1313,6 +1313,13 @@ independently verified.
 <!-- END PLASIUS RELEASE INTEGRITY -->
 ## Experimental glass/water transport
 
+Rejected room captures retain failure-only canonical ray/hit journals when a
+single-continuation failed sample's original tile phase remains available.
+These use the already-compiled camera and transport, with 512 temporary bytes
+per configured bounce, destroyed after readback. They never publish an image or
+commit samples; unsupported branch histories are reported explicitly. The
+4K/256-SPP missing-exit investigation remains open (#234), not qualified transport.
+
 Two independent, default-off renderer options / remote feature flags are available:
 `renderer.transport.boundedDielectricBranching.enabled` and
 `renderer.transport.nestedMediaRefraction.enabled`. Enable both for bounded

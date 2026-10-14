@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add bounded failure-only canonical ray/hit journaling for the high-SPP glass
+  missing-exit investigation. Reuse compiled transport and the retained sample
+  configuration without accepting failed images or changing ordinary dispatch
+  work. The transport correction and physical recapture remain pending (#234).
+
 - Admit room optical diagnostics up to 20 bounces from shared lighting settings,
   retaining six on Reset. Reuse the unchanged eight-bounce rough-splitting bound
   and reject incompatible controls before asset/GPU work; no shader change (#233).
