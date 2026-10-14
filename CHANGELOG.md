@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Make the optical ordering preflight verify successive traversal queries and
+  exact event identities against frozen 20 nm references, replacing unsupported
+  bit equality between distinct WGSL call sites. Retain direct cursor checks;
+  runtime transport is unchanged. Physical follow-up remains pending (#234).
+
 - Preserve grazing nested-plane dot remainders across multiply/add contraction;
   add the exact physical rounding regression and fused/non-fused checks. Retain
   both device ordering records on failure without relaxing the 20 nm gate.

@@ -120,7 +120,8 @@ export function assertOpticalOrderingProbe(values,{bounded,nested}){
   const o=index*16;
   for(const [field,expected,tolerance] of [[0,1,0],[1,1,0],
    [2,.030731821650255987,2e-8],[3,.030732102132163742,2e-8],
-   [4,0,0],[5,1,0],[6,0,0],[7,1,0],[8,0,0],[9,values[o+2],0]]){
+   [4,0,0],[5,1,0],[6,0,0],[7,1,0],[8,0,0],[9,.030731821650255987,2e-8],
+   [10,1,0],[11,.030732102132163742,2e-8]]){
    const actual=values[o+field];
    if(!Number.isFinite(actual)||Math.abs(actual-expected)>tolerance)fail(index,field,actual,expected,tolerance);
   }

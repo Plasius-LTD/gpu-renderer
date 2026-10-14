@@ -11,11 +11,14 @@ import {assertOpticalOrderingProbe,DIELECTRIC_PROBE_CASES} from './fixtures/diel
 
 test('ordering preflight retains both complete records on rejection without relaxing the gate',()=>{
  const values=new Float32Array(DIELECTRIC_PROBE_CASES*16);
- for(const index of [19,20])values.set([1,1,.030731821650255987,.030732102132163742,0,1,0,1,0,.030731821650255987,0,0],index*16);
+ for(const index of [19,20])values.set([1,1,.030731821650255987,.030732102132163742,0,1,0,1,0,.030731821650255987,1,.030732102132163742],index*16);
  const flags={bounded:false,nested:true};
  assert.doesNotThrow(()=>assertOpticalOrderingProbe(values,flags));
  assert.doesNotThrow(()=>assertOpticalOrderingProbe([], {...flags,nested:false}));
- for(const index of [19,20])for(const [field,bad] of [[0,0],[3,.030732138082385063],[6,1],[7,0],[8,1],[9,0],[2,NaN]]){
+ const physical=values.slice();
+ for(const index of [19,20]){physical[index*16+2]=.030731819570064545;physical[index*16+9]=.030731821432709694;}
+ assert.doesNotThrow(()=>assertOpticalOrderingProbe(physical,flags),'different call sites may differ one ULP while both satisfy the frozen plane-distance contract');
+ for(const index of [19,20])for(const [field,bad] of [[0,0],[3,.030732138082385063],[6,1],[7,0],[8,1],[9,0],[10,0],[11,1],[2,NaN]]){
   const rejected=values.slice();rejected[index*16+field]=bad;
   assert.throws(()=>assertOpticalOrderingProbe(rejected,flags),error=>{
    const evidence=JSON.parse(error.message.slice('Optical ordering mismatch '.length));
@@ -58,6 +61,8 @@ test('grazing plane distance tolerates contracted dot and non-fused fma arithmet
    assert(Math.abs(values[o+2]-.030731821650255987)<2e-8,`exit: ${values[o+2]}, fused=${fused}, axis=${axis}`);
    assert(Math.abs(values[o+3]-.030732102132163742)<2e-8,`entry: ${values[o+3]}, fused=${fused}, axis=${axis}`);
    assert.deepEqual(Array.from(values.slice(o+4,o+9)),[0,1,0,1,0]);
+   assert.equal(values[o+10],1,'second traversal query must retain re-entry, not repeat the exit');
+   assert(Math.abs(values[o+11]-.030732102132163742)<2e-8);
   }
  }
 });
@@ -89,6 +94,9 @@ test('grazing glass exit precedes re-entry in either BVH order and survives the 
    assert(Math.abs(values[o+3]-.030732102132163742)<2e-8);
    assert.deepEqual(Array.from(values.slice(o+4,o+8)),[Number(reverseWinding),Number(!reverseWinding),0,1],'strict cursor excludes first face but retains second');
    assert.equal(values[o+8],Number(reverseWinding),'closest BVH candidate must be the original exit face');
+   assert.equal(values[o+10],Number(!reverseWinding),'exclusive traversal cursor must select the second face');
+   assert(Math.abs(values[o+9]-.030731821650255987)<2e-8);
+   assert(Math.abs(values[o+11]-.030732102132163742)<2e-8);
   }
  }
 });

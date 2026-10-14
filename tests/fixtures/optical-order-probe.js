@@ -17,16 +17,25 @@ fn optical_order_probe(reverse:bool)->array<vec4<f32>,3>{
  optical_query_minimum=a.distance;
  let repeated=intersect_triangle(ray,exitFace,0u);let remaining=intersect_triangle(ray,entryFace,1u);
  optical_query_minimum=0.0;
- var nearest=1.0;var front=2u;
  let faces=array<TriangleRecord,2>(exitFace,entryFace);
- for(var i=0u;i<2u;i++){
-  let triangle=faces[select(i,1u-i,reverse)];
-  if(intersect_bounds(ray,min(triangle.v0.xyz,min(triangle.v1.xyz,triangle.v2.xyz)),max(triangle.v0.xyz,max(triangle.v1.xyz,triangle.v2.xyz)),nearest)){
-   let hit=intersect_triangle(ray,triangle,i);
-   if(hit.hit!=0u&&hit.distance<nearest){nearest=hit.distance;front=hit.frontFace;}
+ var selections:array<vec2<f32>,2>;
+ // Repeat the same traversal body using its own cursor. Different direct and
+ // loop call sites may round differently; test event identity and the frozen
+ // distance reference, not unsupported cross-call-site bit equality.
+ for(var query=0u;query<2u;query++){
+  var nearest=1.0;var front=2u;
+  for(var i=0u;i<2u;i++){
+   let triangle=faces[select(i,1u-i,reverse)];
+   if(intersect_bounds(ray,min(triangle.v0.xyz,min(triangle.v1.xyz,triangle.v2.xyz)),max(triangle.v0.xyz,max(triangle.v1.xyz,triangle.v2.xyz)),nearest)){
+    let hit=intersect_triangle(ray,triangle,i);
+    if(hit.hit!=0u&&hit.distance<nearest){nearest=hit.distance;front=hit.frontFace;}
+   }
   }
+  selections[query]=vec2<f32>(f32(front),nearest);
+  optical_query_minimum=nearest;
  }
+ optical_query_minimum=0.0;
  return array<vec4<f32>,3>(vec4<f32>(f32(a.hit),f32(b.hit),a.distance,b.distance),
   vec4<f32>(f32(a.frontFace),f32(b.frontFace),f32(repeated.hit),f32(remaining.hit)),
-  vec4<f32>(f32(front),nearest,0,0));
+  vec4<f32>(selections[0],selections[1]));
 }`;

@@ -291,6 +291,18 @@ fails again. No new buffers, public contracts, occupancy recovery, SPP/depth
 change or flag-off arithmetic changes. Physical preflight and the original
 4K/256-SPP/20-depth full image still gate qualification.
 
+The `4dc8f0347ce668f1b3bd4eb51e06ca40252b3d58` physical rerun passes
+the 20 nm direct distances and both event/cursor identities, but fails the probe's
+zero-ULP equality between direct and loop-selected distance: 0.030731819570064545
+versus 0.030731821432709694 m. The latter is only 0.218 nm from the reference.
+WGSL permits different evaluation at different call sites; bitwise equality
+between those sites is not the traversal contract. Refine the diagnostic to
+query the same bounds/nearest loop twice with its own first-hit cursor, requiring
+exit then entry identities and both distances against the unchanged 20 nm
+reference. Retain the direct strict-cursor checks too. A repeated exit, missing
+entry, wrong face or reference-distance violation must still reject. No runtime
+shader change or high-SPP success claim belongs to this diagnostic refinement.
+
 Before signoff, exercise each new flag off/on/reset, individual and combined;
 empty/filled and room/close-up; completed counts/queue integrity; the analytic
 GPU probe's IOR/Fresnel/TIR/estimator/occupancy checks. Inspect initial controls,

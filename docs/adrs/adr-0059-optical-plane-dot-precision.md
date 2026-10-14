@@ -55,3 +55,22 @@ tests. The original plane normal and input differences remain finite-precision;
 arbitrarily close/ill-conditioned geometry is not qualified.
 
 Reference: [WGSL floating-point accuracy and expression transformations](https://www.w3.org/TR/WGSL/#floating-point-accuracy).
+
+## Physical follow-up: probe contract refinement
+
+Renderer `4dc8f0347ce668f1b3bd4eb51e06ca40252b3d58` passes the direct
+distance references and ordering on the physical device: exit
+0.030731819570064545 m, entry 0.030732102692127228 m. Both candidate orders
+select the exit. However the loop-selected exit is 0.030731821432709694 m,
+one ULP from the direct call and only 0.218 nm from the independent reference.
+The probe's zero-ULP cross-call-site equality rejects it before full rendering.
+
+That equality is not a portable WGSL guarantee and does not test the actual
+traversal cursor. Replace it with two successive queries through the same
+bounds/nearest loop, the second using the first query's exclusive cursor. Require
+the exit then entry identities and both independently reference-checked distances
+at the existing 20 nm limit. Retain the direct repeated-face/re-entry checks too.
+Regression injection must reject wrong faces, repeated exits, missing entries and
+out-of-tolerance distances. This changes only the diagnostic, not runtime
+transport. The newly added physical second-query checks and full image remain
+unqualified until rerun; this receipt is not a successful frame.

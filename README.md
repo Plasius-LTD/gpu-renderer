@@ -14,7 +14,8 @@ The first physical plane-distance probe retained the order but exposed a
 contracted-dot rounding error. Split-product plane dots now preserve its small
 remainder, with explicit fused/non-fused numerical regressions and unchanged
 20 nm acceptance ([ADR 0059](docs/adrs/adr-0059-optical-plane-dot-precision.md)).
-The device preflight checks both candidate orders and the exclusive cursor,
+The device preflight checks both candidate orders and successive exclusive-cursor
+queries against the frozen distance references (not cross-call-site bit equality),
 retaining both records on failure. Physical revalidation, full high-SPP recapture
 and timing qualification remain pending. No added buffers or relaxed failure gates.
 
