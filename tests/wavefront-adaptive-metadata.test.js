@@ -83,6 +83,7 @@ test("4K admission accounts for bounded worklists, optional classifiers and two 
   assert.deepEqual(base.bytes, {
     pixelState: 33177600, firstHitDistance: 0, normalMaterialRisk: 0,
     worklist: 65536, dispatch: 12, history: 0, total: 33243148,
+    cameraSamples: 0, radianceSums: 0, resolvedRadiance: 0, resolveConfig: 0,
   });
   const full = planAdaptiveResources({ ...options, firstHitDistance: true, normalMaterialRisk: true, history: true });
   assert.equal(full.bytes.total, 101671948);
@@ -115,7 +116,7 @@ test("invalid dimensions and allocation options fail closed; disabled state igno
   }
   assert.throws(() => planAdaptiveResources({ ...options, width: 65536, height: 65536 }));
   assert.throws(() => planAdaptiveResources({ ...options, tilePixelCapacity: 16385 }));
-  for (const key of ["firstHitDistance", "normalMaterialRisk", "history"]) {
+  for (const key of ["firstHitDistance", "normalMaterialRisk", "history", "countResolve"]) {
     for (const value of [null, "true", 1]) assert.throws(() => planAdaptiveResources({ ...options, [key]: value }));
   }
   const disabled = planAdaptiveResources({ enabled: false, width: NaN });
@@ -123,6 +124,41 @@ test("invalid dimensions and allocation options fail closed; disabled state igno
   assert.equal(disabled.reason, "adaptive-disabled");
   assert.equal(disabled.bytes.total, 0);
   assert.deepEqual(disabled.buffers, []);
+});
+
+test("count-resolve uniforms are admitted separately from storage, bounded, and cleaned up", async () => {
+  const settings = { ...options, width: 8, height: 8, tilePixelCapacity: 64, countResolve: true, resolveConfigSlots: 256 };
+  const device = fakeDevice();
+  Object.assign(device.limits, { maxStorageBufferBindingSize: 4096, minUniformBufferOffsetAlignment: 256, maxUniformBufferBindingSize: 65536 });
+  const owner = createAdaptiveResourceOwner(device, { ...usage, UNIFORM: 64 }, settings);
+  const result = await owner.acquire();
+  assert.equal(result.status, "ready");
+  assert.equal(result.buffers.resolveConfig.size, 65536);
+  assert.equal(result.buffers.resolveConfig.usage, 64 | usage.COPY_DST);
+  assert.equal(result.buffers.cameraSamples.usage, usage.STORAGE | usage.COPY_DST);
+  assert.equal(result.allocatedBytes, device.buffers.reduce((sum, buffer) => sum + buffer.size, 0));
+  owner.destroy();
+  assert.equal(owner.snapshot().allocatedBytes, 0);
+  assert.ok(device.buffers.every(({ destroyed }) => destroyed === 1));
+  for (const limits of [
+    { minUniformBufferOffsetAlignment: undefined }, { minUniformBufferOffsetAlignment: 0 },
+    { minUniformBufferOffsetAlignment: 512 }, { maxUniformBufferBindingSize: undefined },
+    { maxUniformBufferBindingSize: 16 },
+  ]) {
+    assert.equal(planAdaptiveResources(settings, { ...device.limits, ...limits }).reason, "adaptive-device-uniform-limits");
+  }
+  const missingUsage = fakeDevice();
+  Object.assign(missingUsage.limits, device.limits);
+  assert.equal((await createAdaptiveResourceOwner(missingUsage, usage, settings).acquire()).reason, "adaptive-allocation-failed");
+  assert.equal(missingUsage.buffers.length, 0);
+  for (const failAt of [3, 4, 5, 6]) {
+    const failed = fakeDevice({ failAt });
+    Object.assign(failed.limits, device.limits);
+    const partial = createAdaptiveResourceOwner(failed, { ...usage, UNIFORM: 64 }, settings);
+    assert.equal((await partial.acquire()).reason, "adaptive-allocation-failed");
+    assert.equal(partial.snapshot().allocatedBytes, 0);
+    assert.ok(failed.buffers.every(({ destroyed }) => destroyed === 1));
+  }
 });
 
 test("resource owner is lazy, reuses allocations, and destroys idempotently", async () => {

@@ -7,8 +7,11 @@ import {
   ADAPTIVE_NORMAL_MATERIAL_RISK_BYTE_SIZE, ADAPTIVE_WORKLIST_ENTRY_BYTE_SIZE,
   ADAPTIVE_HISTORY_WORD_BYTE_SIZE, ADAPTIVE_DISPATCH_ARGUMENTS_BYTE_SIZE,
 } from "./wavefront-adaptive-byte-constants.js";
+import { ADAPTIVE_CAMERA_SAMPLE_BYTE_SIZE, ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE } from "./wavefront-adaptive-resolve-constants.js";
+import { ACCUMULATION_RECORD_BYTES } from "./wavefront-core.js";
 
 export const DEFAULT_ADAPTIVE_ALLOCATION_CAP_BYTES = 128 * 1024 ** 2;
+export const ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES = 256;
 const MAX_TILE_PIXELS = 16384;
 const U32_MAX = 0xffffffff;
 
@@ -49,8 +52,16 @@ function admitDevice(plan, limits) {
   if (![maxBufferSize, maxBindingSize].every((value) => Number.isSafeInteger(value) && value > 0)) {
     return refuse(plan, "adaptive-device-limits-unavailable");
   }
-  if (plan.buffers.some(({ size }) => size > maxBufferSize || size > maxBindingSize)) {
+  if (plan.buffers.some(({ size, uniform }) => size > maxBufferSize || (!uniform && size > maxBindingSize))) {
     return refuse(plan, "adaptive-device-buffer-limit");
+  }
+  if (plan.bytes.resolveConfig > 0) {
+    const alignment = limits?.minUniformBufferOffsetAlignment;
+    const bindingSize = limits?.maxUniformBufferBindingSize;
+    if (!Number.isSafeInteger(alignment) || alignment <= 0 || ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES % alignment !== 0
+      || !Number.isSafeInteger(bindingSize) || bindingSize < ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE) {
+      return refuse(plan, "adaptive-device-uniform-limits");
+    }
   }
   return plan;
 }
@@ -59,12 +70,13 @@ export function planAdaptiveResources(options = {}, limits) {
   const bytes = {
     pixelState: 0, firstHitDistance: 0, normalMaterialRisk: 0,
     worklist: 0, dispatch: 0, history: 0, total: 0,
+    cameraSamples: 0, radianceSums: 0, resolvedRadiance: 0, resolveConfig: 0,
   };
   if (options.enabled !== true) {
     return Object.freeze({ enabled: false, reason: "adaptive-disabled",
       bytes: Object.freeze(bytes), buffers: Object.freeze([]) });
   }
-  for (const key of ["firstHitDistance", "normalMaterialRisk", "history"]) {
+  for (const key of ["firstHitDistance", "normalMaterialRisk", "history", "countResolve"]) {
     if (options[key] !== undefined && typeof options[key] !== "boolean") {
       throw new TypeError(`${key} must be a boolean.`);
     }
@@ -82,10 +94,17 @@ export function planAdaptiveResources(options = {}, limits) {
   bytes.worklist = tilePixelCapacity * ADAPTIVE_WORKLIST_ENTRY_BYTE_SIZE;
   bytes.dispatch = ADAPTIVE_DISPATCH_ARGUMENTS_BYTE_SIZE;
   bytes.history = options.history === true ? 2 * Math.ceil(pixelCount / 32) * ADAPTIVE_HISTORY_WORD_BYTE_SIZE : 0;
+  if (options.countResolve === true) {
+    const slots = integer("resolveConfigSlots", options.resolveConfigSlots === undefined ? 1 : options.resolveConfigSlots, 1, 1_000_000);
+    bytes.cameraSamples = tilePixelCapacity * ADAPTIVE_CAMERA_SAMPLE_BYTE_SIZE;
+    bytes.radianceSums = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
+    bytes.resolvedRadiance = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
+    bytes.resolveConfig = slots * ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES;
+  }
   bytes.total = Object.values(bytes).reduce((sum, value) => sum + value, 0);
-  const buffers = ["pixelState", "firstHitDistance", "normalMaterialRisk", "worklist", "dispatch"]
+  const buffers = ["pixelState", "firstHitDistance", "normalMaterialRisk", "worklist", "dispatch", "cameraSamples", "radianceSums", "resolvedRadiance", "resolveConfig"]
     .filter((key) => bytes[key] > 0)
-    .map((key) => Object.freeze({ key, size: bytes[key], indirect: key === "dispatch" }));
+    .map((key) => Object.freeze({ key, size: bytes[key], indirect: key === "dispatch", uniform: key === "resolveConfig" }));
   if (bytes.history) {
     for (const key of ["previousHistory", "currentHistory"]) {
       buffers.push(Object.freeze({ key, size: bytes.history / 2, indirect: false }));
@@ -129,6 +148,7 @@ export function createAdaptiveResourceOwner(device, usage, options = {}) {
     let failed = false;
     try {
       for (const key of ["STORAGE", "COPY_DST", "INDIRECT"]) integer(`GPUBufferUsage.${key}`, usage?.[key], 1, U32_MAX);
+      if (plan.bytes.resolveConfig) integer("GPUBufferUsage.UNIFORM", usage?.UNIFORM, 1, U32_MAX);
       device.pushErrorScope("out-of-memory");
       scopeCount += 1;
       device.pushErrorScope("validation");
@@ -137,7 +157,7 @@ export function createAdaptiveResourceOwner(device, usage, options = {}) {
         const buffer = device.createBuffer({
           label: `wavefront-adaptive-${descriptor.key}`,
           size: descriptor.size,
-          usage: usage.STORAGE | usage.COPY_DST | (descriptor.indirect ? usage.INDIRECT : 0),
+          usage: (descriptor.uniform ? usage.UNIFORM : usage.STORAGE) | usage.COPY_DST | (descriptor.indirect ? usage.INDIRECT : 0),
         });
         buffers.set(descriptor.key, buffer);
         allocatedBytes += descriptor.size;
