@@ -869,6 +869,7 @@ export interface WavefrontEnvironmentMapSnapshot {
 }
 
 export interface WavefrontPathTracingComputeConfig {
+  readonly progressive: boolean;
   readonly mode: typeof rendererWavefrontComputeMode;
   readonly width: number;
   readonly height: number;
@@ -1036,6 +1037,7 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly queuePairBytes: number;
   readonly hitBytes: number;
   readonly accumulationBytes: number;
+  readonly progressiveBytes: number;
   readonly pathVertexBytes: number;
   readonly sceneObjectBytes: number;
   readonly triangleBytes: number;
@@ -1097,6 +1099,8 @@ export interface WavefrontGpuParallelismDiagnostics {
 }
 
 export interface CreateWavefrontPathTracingComputeRendererOptions {
+  /** Accumulate linear radiance between frames until camera/scene/reset changes. Default false. */
+  readonly progressive?: boolean;
   readonly canvas?: HTMLCanvasElement | string;
   readonly navigator?: Navigator | { gpu?: GPU };
   readonly document?: Document;
@@ -1160,7 +1164,8 @@ export interface WavefrontPathTracingComputeRenderer {
   readonly device: GPUDevice;
   readonly format: GPUTextureFormat | string;
   readonly config: WavefrontPathTracingComputeConfig;
-  renderOnce(): WavefrontPathTracingComputeFrameStats;
+  renderOnce(options?: { samplesPerPixel?: number }): WavefrontPathTracingComputeFrameStats;
+  resetAccumulation(): void;
   renderFrame(options?: {
     readStats?: boolean;
     readOutputProbe?: boolean;
@@ -1182,6 +1187,8 @@ export interface WavefrontPathTracingComputeRenderer {
   updateSceneObjects(sceneObjects: readonly WavefrontSceneObjectInput[]): WavefrontPathTracingComputeConfig;
   updateCamera(camera: WavefrontCameraOptions): WavefrontPathTracingComputeConfig;
   getSnapshot(): Readonly<{
+    /** Submitted samples; await GPU completion before reporting completed progress. */
+    accumulatedSamplesPerPixel: number;
     frame: number;
     width: number;
     height: number;

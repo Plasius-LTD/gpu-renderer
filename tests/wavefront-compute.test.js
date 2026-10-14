@@ -268,6 +268,8 @@ class FakeWavefrontCommandEncoder {
     });
   }
 
+  copyTextureToTexture() {}
+
   copyTextureToBuffer(source, destination, size) {
     this.device.copyTextureToBufferCalls.push({ source, destination, size });
   }
@@ -327,7 +329,8 @@ class FakeWavefrontDevice {
         this.queue.submittedWorkDone = true;
       },
       writeBuffer: (buffer, offset, data) => {
-        this.queue.writes.push({ buffer, offset, byteLength: data.byteLength ?? data.length ?? 0 });
+        this.queue.writes.push({ buffer, offset, byteLength: data.byteLength ?? data.length ?? 0,
+          values: buffer.descriptor?.label === "plasius.wavefront.progressiveCounts" ? Array.from(data) : undefined });
       },
       writeTexture: (destination, data, layout, size) => {
         const byteLength = data.byteLength ?? data.length ?? 0;
@@ -1045,7 +1048,7 @@ test("wavefront compute denoise adapts filter cost and strength to spp", () => {
   assert.match(source, /fn denoise_kernel_radius\(\) -> i32/);
   assert.match(source, /encodeDenoise\(encoder, configOffset, parallelism, renderedSamplesPerPixel\)/);
   assert.match(source, /const useTwoPassDenoise = renderedSamplesPerPixel < 4;/);
-  assert.match(source, /const denoisePassCount = renderedSamplesPerPixel < 4 \? 2 : 1;/);
+  assert.match(source, /const denoisePassCount = totalSamples < 4 \? 2 : 1;/);
   assert.match(source, /tone_map_radiance/);
   assert.match(source, /fn present_radiance/);
   assert.match(source, /config\.pathResolveSettings\.w > 0\.5/);
@@ -3840,5 +3843,45 @@ serialWebGpuTest("wavefront memory evidence matches every persistent GPU buffer 
     );
 
     renderer.destroy();
+  });
+});
+
+serialWebGpuTest('progressive samples accumulate unequal batches and reset with camera or scene changes', async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),
+      navigator:createFakeWavefrontNavigator(device),width:8,height:8,samplesPerPixel:8,progressive:true,
+      "renderer.transport.stableSampleRouting.enabled":true});
+    assert.equal(renderer.config.transportExperiments.effective.stableSampleRouting,false);
+    renderer.renderOnce({samplesPerPixel:1});
+    assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,1);
+    await renderer.renderFrame({samplesPerPixel:8});
+    assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,9);
+    assert.deepEqual(device.queue.writes.filter(w=>w.values).map(w=>w.values),[[0,1,0,0],[1,8,0,0]]);
+    const passes=device.computePassDescriptors.map(p=>p.label);
+    assert.equal(passes.filter(p=>p==='plasius.wavefront.denoiseRadiancePass').length,1);
+    assert.ok(passes.indexOf('plasius.wavefront.progressivePass') < passes.indexOf('plasius.wavefront.denoiseRadiancePass'));
+    renderer.updateCamera({position:[0,1,5],target:[0,0,0]});
+    assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,0);
+    renderer.renderOnce({samplesPerPixel:2});
+    renderer.updateSceneObjects([]);
+    assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,0);
+    renderer.renderOnce();renderer.resetAccumulation();
+    assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,0);
+    renderer.destroy();
+    assert.ok(device.buffers.every(b=>b.destroyed));assert.ok(device.textures.every(t=>t.destroyed));
+  });
+});
+serialWebGpuTest('progressive accumulation is opt-in and supports unfiltered output', async () => {
+  await withWebGpuConstants(async () => {
+    for (const progressive of [false,true]) {
+      const device=new FakeWavefrontDevice();
+      const renderer=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),
+        navigator:createFakeWavefrontNavigator(device),width:8,height:8,denoise:false,progressive});
+      renderer.renderOnce();
+      assert.equal(device.buffers.some(b=>b.descriptor.label==='plasius.wavefront.progressiveHistory'),progressive);
+      assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,progressive?renderer.config.samplesPerPixel:0);
+      renderer.resetAccumulation();renderer.destroy();
+    }
   });
 });

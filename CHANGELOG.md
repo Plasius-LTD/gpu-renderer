@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Opt-in progressive wavefront accumulation of linear radiance, sample-weighted history, explicit reset and camera/scene invalidation for still-frame inspection.
+
 - **Added**
   - (placeholder)
 

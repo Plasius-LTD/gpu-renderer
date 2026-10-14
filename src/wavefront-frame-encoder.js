@@ -14,6 +14,7 @@ function resolveGetter(valueOrGetter) {
 
 export function createWavefrontFrameEncoder({
   getConfig,
+  progressive,
   getBindGroups,
   pipelines,
   counterBuffer,
@@ -30,6 +31,12 @@ export function createWavefrontFrameEncoder({
   const resolveBindGroups = resolveGetter(getBindGroups);
 
   return Object.freeze({
+    getAccumulatedSamples() { return progressive?.samples ?? 0; },
+    encodeProgressive(encoder, configOffset, parallelism, samples) {
+      progressive.encode(encoder, configOffset, samples);
+      const config = resolveConfig();
+      recordDirectDispatch(parallelism, [Math.ceil(config.width / 8), Math.ceil(config.height / 8)], WORKGROUP_SIZE);
+    },
     encodeTileSample(encoder, tile, configOffset, parallelism) {
       const config = resolveConfig();
       const bindGroups = resolveBindGroups();
