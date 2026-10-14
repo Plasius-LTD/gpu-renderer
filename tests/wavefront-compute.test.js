@@ -3985,3 +3985,27 @@ serialWebGpuTest("wavefront memory evidence matches every persistent GPU buffer 
     renderer.destroy();
   });
 });
+
+test('experimental adaptive factory exposes only the opt-in API and keeps ordinary renderer unchanged',async()=>{
+ await withWebGpuConstants(async()=>{
+  const {createAdaptiveWavefrontRenderer}=await import('../src/adaptive.js');
+  const fixed=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),navigator:createFakeWavefrontNavigator(),width:2,height:2});
+  assert.equal(fixed.renderAdaptiveFrame,undefined);fixed.destroy();
+  const renderer=await createAdaptiveWavefrontRenderer({'renderer.sampling.adaptivePerPixel.enabled':true,
+   canvas:createFakeWavefrontCanvas(),navigator:createFakeWavefrontNavigator(),width:2,height:2,samplesPerPixel:2});
+  assert.equal(typeof renderer.renderAdaptiveFrame,'function');
+  let release;
+  renderer.device.queue.onSubmittedWorkDone=()=>new Promise(resolve=>{release=resolve;});
+  const ordinary=renderer.renderFrame({samplesPerPixel:1});
+  await assert.rejects(renderer.renderAdaptiveFrame({budgets:new Uint8Array([1,2,1,2])}),/Ordinary frame/);
+  await assert.rejects(renderer.renderFrame(),/Ordinary frame/);
+  renderer.device.queue.onSubmittedWorkDone=async()=>{};release();await ordinary;
+  const adaptive=renderer.renderAdaptiveFrame({budgets:new Uint8Array([1,2,1,2])});
+  assert.throws(()=>renderer.updateCamera({}),/Adaptive render/);
+  assert.throws(()=>renderer.updateSceneObjects([]),/Adaptive render/);
+  assert.throws(()=>renderer.renderOnce(),/Adaptive render/);
+  await assert.rejects(renderer.renderFrame(),/Adaptive render/);
+  await assert.rejects(adaptive,/device.*limits/);
+  renderer.destroy();
+ });
+});

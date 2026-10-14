@@ -78,7 +78,7 @@ export function planAdaptiveResources(options = {}, limits) {
     return Object.freeze({ enabled: false, reason: "adaptive-disabled",
       bytes: Object.freeze(bytes), buffers: Object.freeze([]) });
   }
-  for (const key of ["firstHitDistance", "normalMaterialRisk", "history", "countResolve", "primaryWorklist"]) {
+  for (const key of ["firstHitDistance", "normalMaterialRisk", "history", "countResolve", "primaryWorklist", "readback"]) {
     if (options[key] !== undefined && typeof options[key] !== "boolean") {
       throw new TypeError(`${key} must be a boolean.`);
     }
@@ -155,6 +155,7 @@ export function createAdaptiveResourceOwner(device, usage, options = {}) {
     let failed = false;
     try {
       for (const key of ["STORAGE", "COPY_DST", "INDIRECT"]) integer(`GPUBufferUsage.${key}`, usage?.[key], 1, U32_MAX);
+      if (options.readback === true) integer("GPUBufferUsage.COPY_SRC", usage?.COPY_SRC, 1, U32_MAX);
       if (plan.bytes.resolveConfig || plan.bytes.primaryConfig) integer("GPUBufferUsage.UNIFORM", usage?.UNIFORM, 1, U32_MAX);
       device.pushErrorScope("out-of-memory");
       scopeCount += 1;
@@ -164,7 +165,7 @@ export function createAdaptiveResourceOwner(device, usage, options = {}) {
         const buffer = device.createBuffer({
           label: `wavefront-adaptive-${descriptor.key}`,
           size: descriptor.size,
-          usage: (descriptor.uniform ? usage.UNIFORM : usage.STORAGE) | usage.COPY_DST | (descriptor.indirect ? usage.INDIRECT : 0),
+          usage: (options.readback === true ? usage.COPY_SRC : 0) | (descriptor.uniform ? usage.UNIFORM : usage.STORAGE) | usage.COPY_DST | (descriptor.indirect ? usage.INDIRECT : 0),
         });
         buffers.set(descriptor.key, buffer);
         allocatedBytes += descriptor.size;

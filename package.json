@@ -22,7 +22,12 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./adaptive": {
+      "types": "./src/adaptive.d.ts",
+      "import": "./dist/adaptive.js",
+      "require": "./dist/adaptive.cjs"
+    }
   },
   "scripts": {
     "build": "tsup",

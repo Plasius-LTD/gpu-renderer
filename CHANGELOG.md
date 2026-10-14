@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Expose a gated adaptive frame API with owned GPU resources, verified per-pixel completion, bounded readback and cancellation.
+
 - Correct nested-mode triangle-edge classification so adjacent glass faces use
   consistent projected edge tests instead of independent barycentric rejections.
   Preserve opaque culling, occupied-volume exits, strict hit cursors and sample

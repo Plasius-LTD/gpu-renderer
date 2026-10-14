@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 const sharedConfig = {
-  entry: ["src/index.js"],
+  entry: ["src/index.js", "src/adaptive.js"],
   target: "es2022",
   sourcemap: true,
 };
