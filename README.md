@@ -1365,3 +1365,9 @@ and camera-inside initialization are not implemented by this experiment. Mixed
 metallic/clearcoat optical materials are rejected, not silently approximated.
 Disable the new flag to restore the prior transport. See
 [design and remaining tests](docs/rough-dielectric-transport.md).
+
+## Experimental adaptive inspection
+
+The `@plasius/gpu-renderer/adaptive` entry exports `createAdaptiveWavefrontRenderer`. Pass the explicit positive `renderer.sampling.adaptivePerPixel.enabled` decision, your usual canvas/meshes/camera, dimensions, a 1–256 SPP ceiling and 1–20 bounces. Call `renderAdaptiveFrame({ budgets, signal, onProgress })` with one Uint8/Uint16 budget per pixel. The renderer verifies completed counts before presenting each tile and returns actual mean/min/max SPP, total completed samples and adaptive buffer bytes. Await or cancel/drain the job before changing the camera or scene. Denoising runs after all tiles. The API uses stable-pattern addressing and does not provide temporal reuse or variance convergence.
+
+This source branch is experimental and depends on PR216. It is not a released production API. Hosts own remote flag/capability evaluation; no positive decision means no adaptive API. See [ADR0058](docs/adrs/adr-0058-adaptive-inspection-api.md) and [integration design](docs/adaptive-model-inspection.md).

@@ -264,3 +264,13 @@ test("both scopes are popped before awaiting, and OOM, rejected scopes and inval
     assert.ok(device.buffers.every(({ destroyed }) => destroyed === 1));
   }
 });
+
+test('readback usage is explicitly admitted and default allocations stay unchanged',async()=>{
+ const d=fakeDevice(),r=createAdaptiveResourceOwner(d,{...usage,COPY_SRC:4},{...options,readback:true});
+ const result=await r.acquire();assert.equal(result.status,'ready');assert.ok(d.buffers.every(b=>(b.usage&4)!==0));r.destroy();
+ const plain=fakeDevice(),normal=createAdaptiveResourceOwner(plain,{...usage,COPY_SRC:4},options);
+ await normal.acquire();assert.ok(plain.buffers.every(b=>(b.usage&4)===0));normal.destroy();
+ assert.throws(()=>planAdaptiveResources({...options,readback:'yes'}),/readback/);
+ const invalid=createAdaptiveResourceOwner(fakeDevice(),usage,{...options,readback:true});
+ assert.notEqual((await invalid.acquire()).status,'ready');invalid.destroy();
+});

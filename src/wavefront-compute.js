@@ -1,3 +1,4 @@
+import { createAdaptiveInspectionRuntime } from './wavefront-adaptive-inspection.js';
 import {
   createGpuParallelismCounters,
   createGpuParallelismDiagnostics,
@@ -585,6 +586,16 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     getFrameTelemetry: () => activeFrameTelemetry,
   });
 
+  let adaptiveRuntime, ordinaryFramePending=false;
+  const assertIdle = () => { if(adaptiveRuntime?.busy) throw new Error('Adaptive render in progress; cancel and await it before mutation.'); };
+  async function renderAdaptiveFrame(request) {
+    if(ordinaryFramePending)throw new Error('Ordinary frame in progress; await it before adaptive rendering.');
+    if(options.adaptiveInspection!==true)throw new Error('Adaptive inspection was not enabled.');
+    adaptiveRuntime??=createAdaptiveInspectionRuntime({device,constants,getConfig:()=>config,configBuffer,activeQueue,counterBuffer,pathVertexBuffer,
+      frameEncoder,radianceView,outputView,buildAcceleration:dispatchGpuAccelerationBuild,
+      waitForGpu:()=>waitForSubmittedGpuWork({timeoutMs:60000,maxWaitMs:60000,allowTimeout:false})});
+    return adaptiveRuntime.render(request);
+  }
   let frame = 0;
   let accelerationBuilt = !config.gpuAccelerationBuildRequired;
   let accelerationBuildCount = 0;
@@ -720,6 +731,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function renderOnce(renderOptions = {}, resolvedSamplingPlan = null, cpuProfile = null, frameDevice = device) {
+    assertIdle();
     const frameStartTimeMs = nowMs();
     frame += 1;
     const frameIndex = frame + config.frameIndex;
@@ -827,6 +839,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       telemetryResourcesForFrame.beginFrame();
       activeFrameTelemetry = telemetryResourcesForFrame;
     }
+    assertIdle();
     const frameStartTimeMs = nowMs();
     progress?.("encoding");
     let frameStats;
@@ -1080,6 +1093,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function updateSceneObjects(sceneObjects) {
+    assertIdle();
     const nextPackedScene = packWavefrontSceneObjects(sceneObjects, config.sceneObjectCapacity);
     packedScene = nextPackedScene;
     const nextConfig = rebuildLiveConfig();
@@ -1093,6 +1107,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function updateCamera(cameraOptions = {}) {
+    assertIdle();
     activeCameraOptions = cameraOptions;
     config = rebuildLiveConfig();
     return config;
@@ -1133,6 +1148,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   function destroy() {
+    adaptiveRuntime?.destroy();
     materialTextureResource.texture.destroy?.();
     frameTelemetryResources?.destroy?.();
     activeQueue.destroy?.();
@@ -1195,7 +1211,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     format,
     config,
     renderOnce,
-    renderFrame,
+    renderFrame: options.adaptiveInspection === true ? async (request) => {
+      assertIdle();
+      if(ordinaryFramePending)throw new Error('Ordinary frame already in progress.');
+      ordinaryFramePending=true;
+      try{return await renderFrame(request);}finally{ordinaryFramePending=false;}
+    } : renderFrame,
+    ...(options.adaptiveInspection===true?{renderAdaptiveFrame}:{}),
     readOutputProbe,
     updateSceneObjects,
     updateCamera,

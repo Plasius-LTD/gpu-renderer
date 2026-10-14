@@ -2,12 +2,21 @@
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false,
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmit": true,
     "strict": true,
     "target": "ES2022"
   },
-  "include": ["src/index.d.ts", "tests/feedback-diagnostics.types.ts", "tests/cpu-profile.types.ts", "tests/progressive-sampling.types.ts"]
+  "include": [
+    "src/index.d.ts",
+    "tests/feedback-diagnostics.types.ts",
+    "tests/cpu-profile.types.ts",
+    "tests/progressive-sampling.types.ts",
+    "tests/adaptive-inspection.types.ts"
+  ]
 }
