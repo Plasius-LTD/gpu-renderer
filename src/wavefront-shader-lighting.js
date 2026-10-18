@@ -633,10 +633,20 @@ fn surface_continuation_throughput(
   scatter: ScatterResult
 ) -> vec3<f32> {
   if ((scatter.flags & RAY_FLAG_DELTA_SAMPLE) != 0u) {
-    if (scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION) {
-      return surface_delta_transmission_throughput(hit, viewDirection);
+    let refractive = hit.materialKind == 2u || hit.materialKind == 3u || hit.materialExtension.z > 0.001;
+    if (refractive) {
+      let normal = surface_shading_normal(hit);
+      let eta = select(max(hit.material.w, 1.01), 1.0 / max(hit.material.w, 1.01), hit.frontFace == 1u);
+      let cosine = min(dot(viewDirection, normal), 1.0);
+      let cannotRefract = eta * sqrt(max(0.0, 1.0 - cosine * cosine)) > 1.0;
+      if (cannotRefract) {
+        return vec3<f32>(1.0);
+      }
     }
-    return surface_delta_reflection_throughput(hit, viewDirection);
+    if (scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION) {
+      return surface_delta_transmission_throughput(hit, viewDirection) / scatter.pdf;
+    }
+    return surface_delta_reflection_throughput(hit, viewDirection) / scatter.pdf;
   }
   if (scatter.pdf <= 0.000001) {
     return vec3<f32>(0.0);

@@ -31,3 +31,5 @@
 - [ADR 0031: Canonical Model Ingestion Boundary](./adr-0031-canonical-model-ingestion-boundary.md)
 
 - [ADR 0038: Progressive linear radiance](adr-0038-progressive-linear-radiance.md)
+
+- [ADR 0039: One continuation for fixed wavefront paths](adr-0039-fixed-dielectric-continuation.md)

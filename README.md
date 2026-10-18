@@ -231,9 +231,13 @@ console.log(plan.wavefront.queueLayout.strategy);
 Wavefront materials support authored `KHR_materials_*` factors and extension
 textures, bounded nested media, Beer-Lambert attenuation, and reference
 transport helpers for reflected/transmitted branching and spectral dispersion.
-GPU rays carry up to four nested media and enqueue at most two dielectric
-continuations per hit; deeper nesting and full spectral rendering remain
-bounded by those explicit limits.
+GPU rays carry up to four medium identifiers and enqueue one selected
+continuation per hit. Dielectric lobes are weighted by their selection
+probability; total internal reflection retains unit throughput. The standalone
+CPU reference helper can describe both branches, but the fixed GPU path never
+enqueues an untracked sibling into its tile-sized queue. Physically qualified
+nested media, rough dielectric transport and full spectral rendering remain
+separate work. See [the Amber correction](docs/amber-transport-correction.md).
 
 ```js
 import {
