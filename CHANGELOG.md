@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.50] - 2026-10-18
+
 - Fix fixed-wavefront dielectric queue overflow and concurrent per-path writes by selecting one probability-weighted continuation; preserve total internal reflection energy and avoid spurious metal refraction siblings.
 
 - **Added**
@@ -1221,3 +1235,4 @@ All notable changes to this project will be documented in this file.
 [0.2.47]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.47
 [0.2.48]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.48
 [0.2.49]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.49
+[0.2.50]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.50
