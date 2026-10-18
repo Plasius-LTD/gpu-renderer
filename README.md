@@ -991,3 +991,8 @@ Production demo helpers and their regression tests now live in `@plasius/gpu-sha
 Create the wavefront renderer with `progressive: true` to retain linear radiance across frames. `samplesPerPixel` at creation is the maximum batch capacity; pass a smaller value to `renderOnce({ samplesPerPixel })` or `renderFrame({ samplesPerPixel })`. Submit batches serially. `renderFrame()` awaits completion by default; with `renderOnce()`, await `renderer.device.queue.onSubmittedWorkDone()` before reporting completed samples. `getSnapshot().accumulatedSamplesPerPixel` reports submitted history samples.
 
 Camera or scene updates reset history automatically; `resetAccumulation()` also discards it without reallocating. Do not call `updateCamera()` between refinement passes unless the view changed. Progressive mode uses independent frame seeds, overriding static-frame stable sample routing. Denoising is applied after accumulation. Leave `progressive` unset for the existing independent-frame path. See [ADR 0038](docs/adrs/adr-0038-progressive-linear-radiance.md) for memory costs and host rollout responsibilities.
+
+Camera-only wavefront updates preserve the loaded mesh, material, acceleration
+and lighting resources while resetting progressive accumulation. Changing the
+view no longer rebuilds those CPU scene tables; scene updates retain their
+existing reconstruction path.
