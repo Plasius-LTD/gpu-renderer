@@ -18,6 +18,7 @@ import {
 import {
   estimateWavefrontPathTracingMemoryForConfig,
   createWavefrontPathTracingComputeConfig,
+  updateWavefrontCameraConfig,
   packEnvironmentPortals,
   supportsWavefrontPathTracingCompute,
 } from "./wavefront-config.js";
@@ -1040,7 +1041,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   function updateCamera(cameraOptions = {}) {
     progressive?.reset();
     activeCameraOptions = cameraOptions;
-    config = rebuildLiveConfig();
+    config = updateWavefrontCameraConfig(config, cameraOptions);
     return config;
   }
 

@@ -1,3 +1,4 @@
+import { updateWavefrontCameraConfig } from '../src/wavefront-config.js';
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
@@ -2860,6 +2861,11 @@ serialWebGpuTest("wavefront compute renderer drives GPU-only mesh BVH passes", a
       target: [0, 0.55, 0],
       fovYDegrees: 42,
     });
+    for (const key of ['gpuMeshSource', 'gpuMaterialSource', 'meshAcceleration',
+      'emissiveTriangleIndices', 'mediums', 'environmentMap', 'environmentLighting']) {
+      assert.equal(movedConfig[key], renderer.config[key], `camera-only update must reuse ${key}`);
+    }
+    assert.ok(Object.isFrozen(movedConfig));
     const nextConfig = renderer.updateSceneObjects([]);
     const snapshot = renderer.getSnapshot();
 
@@ -3884,4 +3890,19 @@ serialWebGpuTest('progressive accumulation is opt-in and supports unfiltered out
       renderer.resetAccumulation();renderer.destroy();
     }
   });
+});
+
+
+test('camera-only config updates preserve projection validation and scene identity', () => {
+  const config=createWavefrontPathTracingComputeConfig({width:1920,height:1080});
+  for (const camera of [undefined,{}, {position:[1,2,3],target:[0,0,0],fovYDegrees:180}]) {
+    const updated=updateWavefrontCameraConfig(config,camera);
+    const expected=createWavefrontPathTracingComputeConfig({width:1920,height:1080,camera});
+    assert.deepEqual(updated.camera,expected.camera);
+    assert.equal(updated.meshAcceleration,config.meshAcceleration);
+    assert.equal(updated.gpuMaterialSource,config.gpuMaterialSource);
+    assert.ok(Object.isFrozen(updated));
+    assert.notEqual(updated,config);
+  }
+  assert.throws(()=>updateWavefrontCameraConfig(config,{fovYDegrees:NaN}),/finite/);
 });

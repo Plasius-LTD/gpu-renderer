@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Reuse immutable mesh, material, acceleration and lighting resources for camera-only wavefront updates, avoiding repeated CPU scene preparation during inspection.
+
 - **Added**
   - (placeholder)
 

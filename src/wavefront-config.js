@@ -265,6 +265,14 @@ function resolveCamera(input, width, height) {
   });
 }
 
+/** Camera changes do not invalidate immutable mesh, material or lighting resources. */
+export function updateWavefrontCameraConfig(config, camera) {
+  return Object.freeze({
+    ...config,
+    camera: resolveCamera(camera, config.width, config.height),
+  });
+}
+
 export function estimateWavefrontPathTracingMemory(options = {}) {
   const width = readPositiveInteger("width", options.width, DEFAULT_WIDTH);
   const height = readPositiveInteger("height", options.height, DEFAULT_HEIGHT);
