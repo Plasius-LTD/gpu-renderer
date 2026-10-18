@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Fix fixed-wavefront dielectric queue overflow and concurrent per-path writes by selecting one probability-weighted continuation; preserve total internal reflection energy and avoid spurious metal refraction siblings.
+
 - **Added**
   - (placeholder)
 

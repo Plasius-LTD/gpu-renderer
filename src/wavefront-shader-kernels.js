@@ -451,7 +451,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
     if (cannotRefract || transmissionSelector < transmissionReflectChance) {
       return ScatterResult(
         vec4<f32>(reflect(ray.direction.xyz, normal), 0.0),
-        1.0,
+        select(transmissionReflectChance, 1.0, cannotRefract),
         ray.mediumRefId,
         RAY_FLAG_DELTA_SAMPLE,
         SCATTER_LOBE_DELTA_REFLECTION,
@@ -459,7 +459,7 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
     }
     return ScatterResult(
       vec4<f32>(refract_direction(ray.direction.xyz, normal, etaRatio), 0.0),
-      1.0,
+      1.0 - transmissionReflectChance,
       transmitted_medium_ref_id(ray, hit),
       RAY_FLAG_DELTA_SAMPLE,
       SCATTER_LOBE_DELTA_TRANSMISSION,
@@ -851,7 +851,6 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
   }
   record_deferred_path_throughput(ray, continuationThroughput);
   let throughput = ray.throughput.xyz * continuationThroughput;
-  let transmissionBranch = scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION;
   let nextMediumStack = select(
     transitioned_medium_stack(ray, hit),
     ray.mediumStack,
@@ -890,66 +889,9 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     nextMediumStack
   );
 
-  // Keep both sides of a dielectric event when queue capacity permits. The
-  // selected continuation remains the primary sample; this bounded second
-  // record preserves a reflected/transmitted branch for explicit transport.
-  if (
-    scatter.lobeKind == SCATTER_LOBE_DELTA_REFLECTION ||
-    scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION
-  ) {
-    let secondaryIndex = atomicAdd(&counters.nextCount, 1u);
-    if (secondaryIndex < config.tilePixelCount) {
-      let secondaryIsReflection = transmissionBranch;
-      let secondaryDirection = select(
-        refract_direction(ray.direction.xyz, surface_shading_normal(hit),
-          select(1.0 / max(hit.material.w, 1.01), max(hit.material.w, 1.01), hit.frontFace == 1u)),
-        reflect(ray.direction.xyz, surface_shading_normal(hit)),
-        secondaryIsReflection
-      );
-      let secondaryThroughput = select(
-        surface_delta_transmission_throughput(hit, continuationViewDirection),
-        surface_delta_reflection_throughput(hit, continuationViewDirection),
-        secondaryIsReflection
-      ) * segmentTransmittance;
-      let secondaryStack = select(
-        transitioned_medium_stack(ray, hit),
-        ray.mediumStack,
-        secondaryIsReflection
-      );
-      let secondaryDepth = select(
-        transitioned_medium_stack_depth(ray, hit),
-        ray.mediumStackDepth,
-        secondaryIsReflection
-      );
-      let secondaryMedium = select(
-        transmitted_medium_ref_id(ray, hit),
-        ray.mediumRefId,
-        secondaryIsReflection
-      );
-      nextQueue[secondaryIndex] = RayRecord(
-        ray.rayId,
-        ray.rayId,
-        ray.sourcePixelId,
-        ray.sampleId,
-        ray.bounce + 1u,
-        secondaryMedium,
-        scatter.flags,
-        secondaryDepth,
-        vec4<f32>(
-          offset_origin(
-            hit.position.xyz,
-            hit.geometricNormal.xyz,
-            hit.shadingNormal.xyz,
-            secondaryDirection
-          ),
-          1.0
-        ),
-        vec4<f32>(secondaryDirection, 0.0),
-        vec4<f32>(ray.throughput.xyz * secondaryThroughput, scatter.pdf),
-        secondaryStack
-      );
-    }
-  }
+  // One continuation per incoming path keeps the tile queue bounded and gives
+  // each accumulation/deferred record a single writer. The selected dielectric
+  // lobe is probability-weighted; a sibling must never be silently dropped.
 }
 
 @compute @workgroup_size(1)
