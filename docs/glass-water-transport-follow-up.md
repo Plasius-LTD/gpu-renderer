@@ -2,6 +2,20 @@
 
 ## Near-rim false admission (2026-10-18)
 
+Physical `021d27c` rejects both outside and adjacent inside rays. Reassociating
+the paired-float remainder `(head-high)+tail` as `(head+tail)-high` reproduces
+the same failed admission pattern locally; WGSL permits this transformation.
+The earlier fused/separate tests did not cover it. Replace this fallback with
+integer accumulation of exact dyadic edge determinants from finite binary32
+inputs. Preserve the frozen neighbour, strict sign gate and distance tolerances.
+Use a bounded 27-word signed accumulator per predicate: 18 triple products span
+at most 837 bits including carry and sign. No CPU ray work, new render buffers or passes;
+private-register/spill cost is additional and must be measured before rollout.
+Test against an independent BigInt oracle, exponent/sign/carry/cancellation,
+all existing geometric cases and physical preflight. ADR 0061's paired-float
+implementation is superseded by [ADR 0062](adrs/adr-0062-integer-optical-edge-predicates.md); physical and
+band/performance qualification remain open under the same Task and flags.
+
 The independent-transport capture on `fbf9616` passes physical sampler parity
 and conditional optical means, then rejects tile 162 at sample 93:
 1,540,096 / 2,097,152 primaries. Canonical pixel 2574458 enters rim triangle
@@ -12,19 +26,26 @@ precision places the primary just outside the rim (first barycentric coordinate
 The spurious entry changes occupancy before any water interaction. Do not repair
 this by resetting occupancy, increasing a tolerance or skipping the later entry.
 
-Task #234 will add a frozen original-parametric rim regression, then refine
-near-zero optical edge predicates with split high/low arithmetic evaluated on
-the original vertices and ray. Keep deterministic shared-edge ordering and
-strict sign admission, including genuine edge/vertex hits; preserve distance
-ordering/cursor, culling, BSDF, sample count and flag-off paths. Use a bounded
-arithmetic fallback only near cancellation; no allocations or extra passes.
-This is not an arbitrary-scale exact-arithmetic guarantee. Test outside/inside
+Task #234 retains the frozen original-parametric rim regression and the required
+strict sign admission, including genuine edge/vertex hits. Preserve distance
+ordering/cursor, culling, BSDF, sample count and flag-off paths. The initial
+split-float attempt is rejected by the physical evidence above. Its integer
+replacement is a bounded fallback only near cancellation, not a claim that the
+whole collision pipeline is arbitrary-scale exact geometry. Test outside/inside
 neighbour rays, cyclic axes, winding, original seams/corners/order, false-hit
 injections, assembled WGSL and physical preflight before a full capture.
 Update ADR, README and Unreleased CHANGELOG, retain >=80% coverage/changed-source
 LCOV, lint/types/build/package/Zero-Three and exact-head CI. Physical image and
 GPU-cost qualification remain pending. Existing default-off nested-media flag,
 Feature site#2114 / Story site#2291, ownership and Three prohibition remain.
+
+Local validation of the integer refinement passes 447 tests, 96.41% line and
+83.13% branch coverage, with both changed runtime modules in LCOV; lint, types,
+build, package and Zero-Three checks pass. The independent BigInt comparison
+covers 280 original/reversed finite-input determinants plus full-word carry,
+borrow and extreme cancellation cases. These are software numerical and source
+checks, not GPU execution coverage. The unchanged physical rim gate and full
+independent-transport capture still need a fresh device result.
 
 ## Remaining band isolation (2026-10-18)
 

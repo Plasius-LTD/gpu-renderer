@@ -1,13 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createRequire} from 'node:module';
-import {pathToFileURL} from 'node:url';
+import {OpticalWgslExec as WgslExec,OpticalWgslParser as WgslParser} from './fixtures/optical-wgsl-executor.js';
 import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
 import {WAVEFRONT_COMPUTE_WGSL} from '../src/wavefront-shaders.js';
 import {OPTICAL_CORNER_PROBE_WGSL,assertOpticalCornerProbe} from './fixtures/optical-corner-probe.js';
 
-const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
-const {WgslExec,WgslParser}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
 
 test('interior wall reflection retains its distinct bottom exit after position rounding',()=>{
  const base=WAVEFRONT_COMPUTE_WGSL

@@ -3,6 +3,11 @@
 Status: Accepted for experimental implementation; physical qualification pending.
 Date: 2026-10-18. Task: #234; parent Feature: plasius-ltd-site#2114.
 
+Update 2026-10-18: the paired-float implementation below is superseded by
+[ADR 0062](adr-0062-integer-optical-edge-predicates.md) after build `021d27c`
+rejected the valid neighbouring ray on the physical device. The original
+decision is retained as history, not active implementation guidance.
+
 ## Evidence
 
 The `fbf9616` independent-transport physical capture passes sampling parity and

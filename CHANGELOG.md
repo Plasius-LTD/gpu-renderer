@@ -11,11 +11,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Re-evaluate cancellation-sensitive nested optical edge predicates using split
-  high/low original-ray/vertex arithmetic, rejecting the captured false rim hit
-  without widening coverage. Add outside/inside, canonical far-wall, axis/winding,
-  contracted arithmetic and physical preflight regressions. No default, BSDF,
-  count, buffer or pass changes; physical and cost qualification pending (#234).
+- Replace the cancellation-sensitive nested optical edge fallback with exact
+  integer determinants of the original binary32 inputs. Physical build 021d27c
+  rejected a valid neighbouring ray; permitted floating-point reassociation
+  reproduces the paired-float defect. Retain strict outside/inside, far-wall,
+  axis/winding and device gates; add independent BigInt and unsigned-executor
+  regressions. No default, BSDF, count, buffer or pass changes. Bounded private
+  scratch/arithmetic costs and physical qualification remain pending (#234,
+  ADR 0062).
 
 - Expose the existing fixed-camera/independent-transport diagnostic in the room
   to isolate optical banding without changing camera sampling or production

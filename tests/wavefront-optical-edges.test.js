@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createRequire} from 'node:module';
-import {pathToFileURL} from 'node:url';
+import {OpticalWgslExec as WgslExec,OpticalWgslParser as WgslParser} from './fixtures/optical-wgsl-executor.js';
 import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
 import {WAVEFRONT_COMPUTE_WGSL} from '../src/wavefront-shaders.js';
 import {OPTICAL_EDGE_PROBE_WGSL} from './fixtures/optical-edge-probe.js';
@@ -32,8 +31,6 @@ test('ordering preflight retains both complete records on rejection without rela
 });
 
 test('grazing plane distance tolerates contracted dot and non-fused fma arithmetic',async()=>{
- const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
- const {WgslExec,WgslParser}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
  // Explicit f32 intermediates: the executor's ordinary dot uses wider arithmetic
  // and missed the device's 0.030732138082385063 entry-distance regression.
  const helpers=`
@@ -68,8 +65,6 @@ test('grazing plane distance tolerates contracted dot and non-fused fma arithmet
 });
 
 test('grazing glass exit precedes re-entry in either BVH order and survives the exclusive cursor',async()=>{
- const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
- const {WgslExec,WgslParser}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
  const base=WAVEFRONT_COMPUTE_WGSL
   .replace(functionSource('transport_experiment_enabled'),'fn transport_experiment_enabled(flag:u32)->bool{return (flag & 32768u)!=0u;}')
   .replace(functionSource('medium_optics'),'fn medium_optics(id:u32)->vec2<f32>{return vec2<f32>(1.5,2.0);}');
@@ -102,8 +97,6 @@ test('grazing glass exit precedes re-entry in either BVH order and survives the 
 });
 
 test('assembled collision executes retained seams and preserves frozen flag-off results',async()=>{
- const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
- const {WgslExec,WgslParser}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
  const source=WAVEFRONT_COMPUTE_WGSL
   .replace(functionSource('transport_experiment_enabled'),'fn transport_experiment_enabled(flag:u32)->bool{return (flag & 32768u)!=0u;}')
   .replace(functionSource('medium_optics'),'fn medium_optics(id:u32)->vec2<f32>{return vec2<f32>(1.5,2.0);}')+OPTICAL_EDGE_PROBE_WGSL+`
@@ -115,8 +108,6 @@ test('assembled collision executes retained seams and preserves frozen flag-off 
 });
 
 test('optical edge coordinates preserve shared-edge hits, winding, axes and strict cursor',async()=>{
- const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
- const {WgslExec,WgslParser}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
  const source=`struct RayRecord{origin:vec4<f32>,direction:vec4<f32>};
  struct TriangleRecord{v0:vec4<f32>,v1:vec4<f32>,v2:vec4<f32>};
  @group(0) @binding(0) var<storage,read> inputs:array<vec4<f32>>;
@@ -124,7 +115,7 @@ test('optical edge coordinates preserve shared-edge hits, winding, axes and stri
  fn transport_ray_minimum()->f32{return inputs[5].x;}
  ${functionSource('optical_projected_edge')}
  ${functionSource('optical_plane_dot')}
- ${['optical_wide_head','optical_wide_pair','optical_wide_value','optical_wide_add','optical_wide_multiply','optical_wide_edge','optical_edge_uncertain'].map(functionSource).join('\n')}
+ ${['optical_multiply_words','optical_accumulate_product','optical_exact_edge','optical_edge_uncertain'].map(functionSource).join('\n')}
  ${functionSource('optical_triangle_coordinates')}
  @compute @workgroup_size(1) fn probe(){
   outputs[0]=optical_triangle_coordinates(RayRecord(inputs[0],inputs[1]),TriangleRecord(inputs[2],inputs[3],inputs[4]));
@@ -162,8 +153,6 @@ test('only nested mode selects edge-consistent coordinates; culling and material
 });
 
 test('nested BVH bounds conservatively retain a rounded shared-edge candidate',async()=>{
- const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
- const {WgslExec,WgslParser}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
  const code=`struct RayRecord{origin:vec4<f32>,direction:vec4<f32>};
  @group(0) @binding(0) var<storage,read_write> result:array<u32>;
  fn nested_media_enabled()->bool{return true;}
