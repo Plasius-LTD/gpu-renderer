@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Re-evaluate cancellation-sensitive nested optical edge predicates using split
+  high/low original-ray/vertex arithmetic, rejecting the captured false rim hit
+  without widening coverage. Add outside/inside, canonical far-wall, axis/winding,
+  contracted arithmetic and physical preflight regressions. No default, BSDF,
+  count, buffer or pass changes; physical and cost qualification pending (#234).
+
 - Expose the existing fixed-camera/independent-transport diagnostic in the room
   to isolate optical banding without changing camera sampling or production
   defaults. Add conditional multi-interface slab tests and physical preflight;

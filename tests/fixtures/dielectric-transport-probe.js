@@ -6,11 +6,16 @@ import {assertShaderModuleCompiles} from '../../src/wavefront-runtime-support.js
 import {OPTICAL_EDGE_PROBE_WGSL} from './optical-edge-probe.js';
 import {OPTICAL_ORDER_PROBE_WGSL} from './optical-order-probe.js';
 import {OPTICAL_CORNER_PROBE_WGSL,assertOpticalCornerProbe} from './optical-corner-probe.js';
+import {OPTICAL_RIM_PROBE_WGSL,assertOpticalRimProbe} from './optical-rim-probe.js';
 
 export const DIELECTRIC_PROBE_TOLERANCES=Object.freeze({optics:0.0001,mean:0.025,samples:16384});
-export const DIELECTRIC_PROBE_CASES=22;
-export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_EDGE_PROBE_WGSL+OPTICAL_ORDER_PROBE_WGSL+OPTICAL_CORNER_PROBE_WGSL+`
+export const DIELECTRIC_PROBE_CASES=23;
+export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_EDGE_PROBE_WGSL+OPTICAL_ORDER_PROBE_WGSL+OPTICAL_CORNER_PROBE_WGSL+OPTICAL_RIM_PROBE_WGSL+`
 @compute @workgroup_size(1) fn dielectric_probe(@builtin(global_invocation_id) id:vec3<u32>){
+ if(id.x==22u){
+  let o=id.x*4u;let result=optical_rim_probe();accumulation[o]=result[0];accumulation[o+1u]=result[1];
+  accumulation[o+2u]=vec4<f32>(0);accumulation[o+3u]=vec4<f32>(0);return;
+ }
  if(id.x==21u){
   let o=id.x*4u;let result=optical_corner_probe();
   for(var i=0u;i<4u;i++){accumulation[o+i]=result[i];}return;
@@ -172,6 +177,7 @@ export async function runDielectricTransportProbe(signal){
    }
    assertOpticalOrderingProbe(values,{bounded,nested});
    assertOpticalCornerProbe(values.slice(21*16,22*16),{bounded,nested});
+   assertOpticalRimProbe(values.slice(22*16,22*16+8),{bounded,nested});
    if(nested){
     for(const [i,eta,before,after,invalid] of [[0,1/1.5,0,1,0],[1,1.5/water,1,2,0],[2,water,2,0,0],[3,1.5,1,0,0],[4,1,1,1,0],[5,water/1.5,2,1,0],[6,1,1,1,0],[7,1,1,1,1],[8,1,0,0,1],[9,1,1,1,1]]){
      const o=i*16;near(values[o],eta);near(values[o+2],before);near(values[o+3],after);near(values[o+6],invalid);

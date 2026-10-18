@@ -1,5 +1,31 @@
 # Glass/water transport qualification follow-up
 
+## Near-rim false admission (2026-10-18)
+
+The independent-transport capture on `fbf9616` passes physical sampler parity
+and conditional optical means, then rejects tile 162 at sample 93:
+1,540,096 / 2,097,152 primaries. Canonical pixel 2574458 enters rim triangle
+353436, misses the near inner wall and encounters duplicate entry 353647 at
+bounce one. Original binary32 geometry evaluated independently in double
+precision places the primary just outside the rim (first barycentric coordinate
+-2.79209435e-7), whereas the physical projected test returns +1.438851996e-6.
+The spurious entry changes occupancy before any water interaction. Do not repair
+this by resetting occupancy, increasing a tolerance or skipping the later entry.
+
+Task #234 will add a frozen original-parametric rim regression, then refine
+near-zero optical edge predicates with split high/low arithmetic evaluated on
+the original vertices and ray. Keep deterministic shared-edge ordering and
+strict sign admission, including genuine edge/vertex hits; preserve distance
+ordering/cursor, culling, BSDF, sample count and flag-off paths. Use a bounded
+arithmetic fallback only near cancellation; no allocations or extra passes.
+This is not an arbitrary-scale exact-arithmetic guarantee. Test outside/inside
+neighbour rays, cyclic axes, winding, original seams/corners/order, false-hit
+injections, assembled WGSL and physical preflight before a full capture.
+Update ADR, README and Unreleased CHANGELOG, retain >=80% coverage/changed-source
+LCOV, lint/types/build/package/Zero-Three and exact-head CI. Physical image and
+GPU-cost qualification remain pending. Existing default-off nested-media flag,
+Feature site#2114 / Story site#2291, ownership and Three prohibition remain.
+
 ## Remaining band isolation (2026-10-18)
 
 The physical `f94f2f7` 4K/256-ceiling/20-depth filled capture completes all

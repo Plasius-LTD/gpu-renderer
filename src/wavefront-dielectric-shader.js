@@ -179,6 +179,58 @@ fn optical_plane_dot(left: vec3<f32>, right: vec3<f32>) -> f32 {
   let low = fma(left, right, -high);
   return (high.x + high.y + high.z) + (low.x + low.y + low.z);
 }
+// Split heads deliberately cross an integer bit operation, so a compiler cannot
+// contract the remainder back into the cancellation-sensitive scalar predicate.
+// This bounded fallback improves precision; it is not arbitrary exact arithmetic.
+fn optical_wide_head(value: f32) -> f32 {
+  return bitcast<f32>(bitcast<u32>(value) & 0xfffff000u);
+}
+fn optical_wide_pair(head: f32, tail: f32) -> vec2<f32> {
+  let high = optical_wide_head(head + tail);
+  return vec2<f32>(high, (head - high) + tail);
+}
+fn optical_wide_value(value: f32) -> vec2<f32> {
+  let high = optical_wide_head(value);
+  return vec2<f32>(high, value - high);
+}
+fn optical_wide_add(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
+  let high = optical_wide_head(a.x + b.x);
+  return optical_wide_pair(high, ((a.x - high) + b.x) + (a.y + b.y));
+}
+fn optical_wide_multiply(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
+  let high = optical_wide_head(a.x * b.x);
+  return optical_wide_pair(high, (a.x * b.x - high) + (a.x * b.y + a.y * b.x) + a.y * b.y);
+}
+fn optical_wide_edge(ray: RayRecord, a: vec3<f32>, b: vec3<f32>) -> f32 {
+  // Canonical endpoint order gives identical shared-edge magnitudes in either
+  // triangle, including when the compiler contracts individual products.
+  let ordered = a.x < b.x || (a.x == b.x && (a.y < b.y || (a.y == b.y && a.z <= b.z)));
+  let first = select(b, a, ordered);
+  let second = select(a, b, ordered);
+  var left: array<vec2<f32>,3>;
+  var right: array<vec2<f32>,3>;
+  for (var i=0u; i<3u; i++) {
+    let origin = optical_wide_value(ray.origin[i]);
+    left[i] = optical_wide_add(optical_wide_value(first[i]), -origin);
+    right[i] = optical_wide_add(optical_wide_value(second[i]), -origin);
+  }
+  var total = vec2<f32>(0.0);
+  for (var i=0u; i<3u; i++) {
+    let j=(i+1u)%3u; let k=(i+2u)%3u;
+    let minor = optical_wide_add(optical_wide_multiply(left[j], right[k]),
+      -optical_wide_multiply(left[k], right[j]));
+    total = optical_wide_add(total, optical_wide_multiply(minor, optical_wide_value(ray.direction[i])));
+  }
+  return select(-(total.x + total.y), total.x + total.y, ordered);
+}
+fn optical_edge_uncertain(a: vec3<f32>, b: vec3<f32>, pa: vec2<f32>, pb: vec2<f32>, edge: f32) -> bool {
+  // Broad arithmetic filter only: it selects more precise evaluation, NEVER
+  // expands triangle coverage. Include translation/shear as well as edge error.
+  let aa=abs(a); let bb=abs(b);
+  let error = 0.00000095367431640625 *
+    ((aa.x+aa.y+aa.z)*(abs(pb.x)+abs(pb.y)) + (bb.x+bb.y+bb.z)*(abs(pa.x)+abs(pa.y)));
+  return abs(edge) <= error;
+}
 fn optical_triangle_coordinates(ray: RayRecord, triangle: TriangleRecord) -> vec4<f32> {
   // Ray-aligned edge tests keep adjoining triangles consistent. Independent
   // Moller-Trumbore barycentrics can both reject the same thin glass seam.
@@ -197,8 +249,13 @@ fn optical_triangle_coordinates(ray: RayRecord, triangle: TriangleRecord) -> vec
   let pa = vec2<f32>(a[x], a[y]) - scale * a[z];
   let pb = vec2<f32>(b[x], b[y]) - scale * b[z];
   let pc = vec2<f32>(c[x], c[y]) - scale * c[z];
-  let edges = vec3<f32>(optical_projected_edge(pb, pc),
+  var edges = vec3<f32>(optical_projected_edge(pb, pc),
     optical_projected_edge(pc, pa), optical_projected_edge(pa, pb));
+  if (optical_edge_uncertain(b,c,pb,pc,edges.x) || optical_edge_uncertain(c,a,pc,pa,edges.y) ||
+      optical_edge_uncertain(a,b,pa,pb,edges.z)) {
+    edges = vec3<f32>(optical_wide_edge(ray,triangle.v1.xyz,triangle.v2.xyz),
+      optical_wide_edge(ray,triangle.v2.xyz,triangle.v0.xyz), optical_wide_edge(ray,triangle.v0.xyz,triangle.v1.xyz));
+  }
   if (any(edges < vec3<f32>(0.0)) && any(edges > vec3<f32>(0.0))) {
     return vec4<f32>(0.0, 0.0, 0.0, -1.0);
   }

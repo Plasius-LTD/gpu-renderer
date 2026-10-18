@@ -12,6 +12,16 @@ means for known-bad controls, separately from room quality. Independent transpor
 must pass that analytic gate and sampling parity before capture. No matched-quality
 speedup, lower memory use or removal of all water bands is yet established.
 
+The independent lane exposed a near-rim false collision: projected rounding
+admitted a ray outside the opening, creating invalid glass occupancy. The
+experimental nested-media collision path now re-evaluates near-cancellation
+edges using split high/low original-ray/vertex arithmetic. Coverage still uses
+strict signs, not a wider tolerance; count and medium failures remain fatal.
+The GPU preflight includes the captured outside ray, its valid adjacent ray and
+the real far-wall entry. No added render buffers or passes; physical image and
+incremental GPU-cost qualification are pending
+([ADR 0061](docs/adrs/adr-0061-optical-near-edge-predicates.md)).
+
 The local glass/water diagnostic has default-off transport experiments:
 bounded dielectric branching, nested-media refraction and rough optical transmission. The
 legacy split control still overflows; the combined corrected empty-glass capture

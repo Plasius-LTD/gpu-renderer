@@ -124,6 +124,7 @@ test('optical edge coordinates preserve shared-edge hits, winding, axes and stri
  fn transport_ray_minimum()->f32{return inputs[5].x;}
  ${functionSource('optical_projected_edge')}
  ${functionSource('optical_plane_dot')}
+ ${['optical_wide_head','optical_wide_pair','optical_wide_value','optical_wide_add','optical_wide_multiply','optical_wide_edge','optical_edge_uncertain'].map(functionSource).join('\n')}
  ${functionSource('optical_triangle_coordinates')}
  @compute @workgroup_size(1) fn probe(){
   outputs[0]=optical_triangle_coordinates(RayRecord(inputs[0],inputs[1]),TriangleRecord(inputs[2],inputs[3],inputs[4]));
