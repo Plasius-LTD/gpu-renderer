@@ -1,5 +1,17 @@
 # @plasius/gpu-renderer
 
+The room's experimental sampler now includes **Fixed camera, independent transport**
+(`stable-camera-random`), reusing the existing diagnostic specialization. Camera
+points stay identical to the fast fixed pattern, including pixel centre at 1 SPP;
+lighting, optical branch choices and roulette use frame-stable independent draws.
+This isolates known cross-event correlation in the fast control without switching
+all draws to the more expensive scrambled sampler. Selection is explicit; the
+default and production renderer are unchanged. Use splitting off for this lane.
+Filled/empty captures record a multi-interface slab probe, including rejected
+means for known-bad controls, separately from room quality. Independent transport
+must pass that analytic gate and sampling parity before capture. No matched-quality
+speedup, lower memory use or removal of all water bands is yet established.
+
 The local glass/water diagnostic has default-off transport experiments:
 bounded dielectric branching, nested-media refraction and rough optical transmission. The
 legacy split control still overflows; the combined corrected empty-glass capture

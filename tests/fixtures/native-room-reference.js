@@ -149,6 +149,14 @@ run.addEventListener("click",async()=>{
   if(materialInspection){const {runClothInspectionProbe}=await import('./cloth-inspection-probe.js');receipt.inspection.probe=await runClothInspectionProbe(cancellation.signal);}
   status.textContent='Checking UV0/UV1 texture sampling and CPU/GPU geometry parity';
   if(boundedDielectricBranching||nestedMediaRefraction){const {runDielectricTransportProbe}=await import('./dielectric-transport-probe.js');receipt.dielectricProbe=await runDielectricTransportProbe(cancellation.signal);}
+  if(glass.mode!=='off'&&boundedDielectricBranching&&nestedMediaRefraction){
+   status.textContent='Checking multi-interface optical sampling (separate from scene quality)';
+   const {runOpticalPathSamplingProbe}=await import('./optical-path-sampling-probe.js');
+   receipt.opticalPathSamplingProbe=await runOpticalPathSamplingProbe(cancellation.signal,settings.sampler);
+   if(settings.sampler==='stable-camera-random'){
+    const {probeStablePattern}=await import('./stable-pattern-probe.js');receipt.samplingParityProbe=await probeStablePattern();
+   }
+  }
   if(roughDielectricTransport){const {runRoughDielectricTransportProbe}=await import('./rough-dielectric-transport-probe.js');receipt.roughDielectricProbe=await runRoughDielectricTransportProbe(cancellation.signal);}
   const {runDualUvProbe}=await import('./dual-uv-probe.js');receipt.uvProbe=await runDualUvProbe(cancellation.signal);
   status.textContent='Checking sidedness, medium exits and normal-map validity';

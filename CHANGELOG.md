@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Expose the existing fixed-camera/independent-transport diagnostic in the room
+  to isolate optical banding without changing camera sampling or production
+  defaults. Add conditional multi-interface slab tests and physical preflight;
+  retain known-bad fixed-pattern evidence. Room visual/performance comparison
+  remains pending (#234, lighting #105).
+
 - Preserve representable interior coordinates when nested optical hit positions
   round onto an adjacent triangle bound, preventing a distinct bottom exit from
   collapsing to zero distance. Keep exact edge/vertex hits, strict cursors and

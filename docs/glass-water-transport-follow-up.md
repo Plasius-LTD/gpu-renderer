@@ -1,5 +1,38 @@
 # Glass/water transport qualification follow-up
 
+## Remaining band isolation (2026-10-18)
+
+The physical `f94f2f7` 4K/256-ceiling/20-depth filled capture completes all
+394,813,440 requested samples. Its broad grey/dark water bands remain unqualified.
+Do not change Fresnel, IOR, absorption, geometry, depth or tone mapping to hide them.
+
+The retained fast fixed sampler has uniform scalar marginals but correlated
+cross-event decisions. A white parallel glass slab isolates successive optical
+choices and roulette: with constant unit incident radiance, its exiting mean
+must approach one (apart from the explicitly bounded remaining-path tail).
+Single-interface probes cannot qualify this conditional path expectation.
+
+Under Task #234 / Feature site#2114 / Story site#2291, add a portable analytic
+path test and an assembled-WGSL slab probe, and expose the existing
+`stable-camera-random` diagnostic specialization in the room. It keeps the exact
+fixed camera pattern (including the first pixel-centre sample) and uses the
+existing frame-stable independent transport draws; it is not a new production
+sampler or an automatic replacement for the retained fast control. Existing
+default-off sampling/transport flags remain, with explicit specialization recorded
+in receipts. Lighting Task #105 owns settings admission. No new dependency or
+production buffer/pass/API is required. Three.js remains prohibited.
+
+Acceptance: preserve camera sample points, budgets, identity and normalization;
+test frame/budget independence and conditional means, reject invalid modes, retain
+the fast control's failing distribution as evidence, compile/run the probe on the
+physical device and compare empty/filled room captures with only sampler changed.
+Use native 1080p/4K, raw HDR, actual counts and full-job/GPU timings. Analytic probe
+results alone do not identify the cause of every room band or qualify performance.
+Keep rough splitting off for this control. Record costs and failures; no denoise,
+relaxed image tolerance, occupancy reset or extra bounce allowance. Update
+README/CHANGELOG, run tests/coverage/lint/types/build/package/Zero-Three and exact
+head CI; final image and release gates stay open until measured.
+
 Parent Epic: Plasius-LTD/plasius-ltd-site#2113.
 Parent Feature: Plasius-LTD/plasius-ltd-site#2114.
 Parent Story: Plasius-LTD/plasius-ltd-site#2291.
