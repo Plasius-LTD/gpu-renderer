@@ -59,6 +59,19 @@ Release a minor through PR/exact-SHA CI and approved main/production cd.yml npm
 OIDC; verify registry/provenance before bridge adoption. No local publication,
 production settings change or ACA deployment is needed.
 
+### Release-choice refinement after clean-consumer CI
+
+The original minor-release plan generated an unpublished0.3.0 metadata PR.
+Its clean packed consumer correctly rejected the version: released gpu-shared
+1.1.2 has an optional renderer peer range of^0.2.40. Cancel that unmerged
+candidate and use the approved workflow to prepare a patch in the0.2 line.
+This corrects omitted channels and refusal of previously unsupported sampling,
+without adding a public renderer API or changing shader transport. The owning
+core update is additive. Retain strict peer resolution; do not use force,
+legacy-peer-deps, a test suppression or an unrelated consumer peer update to
+publish0.3.0. The original failed candidate is not a release. Task#252 records
+its CI failure/cancellation and the final workflow-generated patch version.
+
 ## NFR and rollback
 
 - Security/privacy: checked by explicit unsupported interpretation and missing
