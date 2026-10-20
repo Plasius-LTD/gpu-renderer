@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Restore consumer-first rendering examples and API guides; correct unsupported shared-helper imports and separate implementation/release notes.
+
 - **Added**
   - (placeholder)
 
