@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add a first-principles collision/sampling/optical review, repeatable canonical
+  WGSL counterexamples and retained current-build physical evidence. Reproduce
+  fixed determinant cutoff, origin feature-size and partial-transmission defects;
+  preserve runtime behaviour and prior captures. Record a completed radial
+  1080p independent-transport control without promoting it to uniform/full-scene
+  or performance qualification (#234, sampling #203).
+
 - Replace the cancellation-sensitive nested optical edge fallback with exact
   integer determinants of the original binary32 inputs. Physical build 021d27c
   rejected a valid neighbouring ray; permitted floating-point reassociation

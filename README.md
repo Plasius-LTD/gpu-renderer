@@ -1,5 +1,14 @@
 # @plasius/gpu-renderer
 
+The [20 October correctness review](docs/evidence/renderer-first-principles-2026-10-20.md)
+reproduces scale/grazing admission, optical-origin feature-size and smooth
+partial-transmission problems while preserving runtime source and earlier
+evidence. The current independent-transport radial 1080p glass control completes
+and passes physical preflight; uniform controls and full-scene/4K qualification
+remain open. Review reproduction: `node scripts/review-renderer-contracts.mjs`
+(exit 2 reports reproduced defects). Adaptive performance claims await correctness
+qualification.
+
 The room's experimental sampler now includes **Fixed camera, independent transport**
 (`stable-camera-random`), reusing the existing diagnostic specialization. Camera
 points stay identical to the fast fixed pattern, including pixel centre at 1 SPP;

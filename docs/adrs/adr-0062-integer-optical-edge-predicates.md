@@ -71,3 +71,14 @@ pipeline are not thereby arbitrary-scale exact geometry. Physical device
 stability, full-frame completion, banding, HDR comparisons and incremental GPU
 cost remain open. No visual-success, speedup, publication or release claim follows
 from software numerical tests alone. Private reference assets remain local.
+
+## Physical follow-up — 20 October 2026
+
+Renderer c90e706 passes the retained rim/ordering/dielectric preflight and
+completes a physical 1080p filled-glass independent-transport control. All
+12,337,920 radial camera samples complete without a reported failure and cleanup
+passes. This is a 32-SPP ceiling / 5.95-SPP-average image, not uniform 32 SPP or
+the requested full 4K/256-SPP capture. The [fresh contract review](../evidence/renderer-first-principles-2026-10-20.md)
+records provenance/hashes, remaining collision/sampling/material defects and
+qualification limits. Passing this rim case does not prove the whole collision
+pipeline or qualify fallback performance and full-scene image quality.
