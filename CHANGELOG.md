@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.52] - 2026-10-20
+
 - Restore consumer-first rendering examples and API guides; correct unsupported shared-helper imports and separate implementation/release notes.
 
 - **Added**
@@ -1255,3 +1269,4 @@ All notable changes to this project will be documented in this file.
 [0.2.49]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.49
 [0.2.50]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.50
 [0.2.51]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.51
+[0.2.52]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.52
