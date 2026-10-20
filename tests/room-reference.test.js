@@ -4,8 +4,8 @@ import {readFileSync} from "node:fs";
 test('room exposes a fixed-camera independent transport control without changing defaults',()=>{
  const html=readFileSync(new URL('./fixtures/native-room-reference.html',import.meta.url),'utf8');
  const js=readFileSync(new URL('./fixtures/native-room-reference.js',import.meta.url),'utf8');
- assert.match(html,/<option value="stable-camera-random">Fixed camera, independent transport/);
- assert.match(html,/fixed pattern.*correlat/is);
+ assert.match(html,/<option value="stable-camera-random">Independent transport comparison/);
+ assert.match(html,/Fixed camera · corrected transport/);
  assert.match(html,/<option value="fixed-pattern" selected>/);
  assert.match(js,/runOpticalPathSamplingProbe\(cancellation.signal,settings.sampler\)/);
  assert.match(js,/receipt.opticalPathSamplingProbe=/);

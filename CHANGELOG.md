@@ -11,6 +11,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Correct the four first-principles findings: nested small/grazing collision
+  admission and normal scaling, error-aware optical origins in existing hit
+  metadata, smooth partial-transmission weight/diffuse mixture, and independent
+  transport dimensions with unchanged fixed camera coordinates. Preserve frozen
+  rejected regressions and all prior captures; extend assembled GPU preflight and
+  add sequential, fail-closed 1080p/4K room qualification. Flags remain default off;
+  physical full-scene image/performance qualification is still pending (#234,
+  sampling #203, ADR 0063).
+
 - Add a first-principles collision/sampling/optical review, repeatable canonical
   WGSL counterexamples and retained current-build physical evidence. Reproduce
   fixed determinant cutoff, origin feature-size and partial-transmission defects;

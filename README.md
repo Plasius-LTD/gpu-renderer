@@ -1,25 +1,36 @@
 # @plasius/gpu-renderer
 
-The [20 October correctness review](docs/evidence/renderer-first-principles-2026-10-20.md)
-reproduces scale/grazing admission, optical-origin feature-size and smooth
-partial-transmission problems while preserving runtime source and earlier
-evidence. The current independent-transport radial 1080p glass control completes
-and passes physical preflight; uniform controls and full-scene/4K qualification
-remain open. Review reproduction: `node scripts/review-renderer-contracts.mjs`
-(exit 2 reports reproduced defects). Adaptive performance claims await correctness
-qualification.
+The four findings in the [20 October correctness review](docs/evidence/renderer-first-principles-2026-10-20.md)
+now have numerical corrections and automated regressions. The original review,
+rejected implementations and physical captures remain retained. Nested optical
+collisions admit the tested small/grazing hits, retain their correct normals and
+use geometry-error-aware continuation origins. Smooth partial transmission
+includes its transmission fraction and diffuse remainder without enabling rough
+sampling. Successful-hit error metadata reuses existing storage; no record or
+buffer size increases. See [ADR 0063](docs/adrs/adr-0063-optical-contract-corrections.md)
+and the [correction evidence and open gates](docs/evidence/renderer-contract-corrections-2026-10-20.md).
 
-The room's experimental sampler now includes **Fixed camera, independent transport**
-(`stable-camera-random`), reusing the existing diagnostic specialization. Camera
-points stay identical to the fast fixed pattern, including pixel centre at 1 SPP;
-lighting, optical branch choices and roulette use frame-stable independent draws.
-This isolates known cross-event correlation in the fast control without switching
-all draws to the more expensive scrambled sampler. Selection is explicit; the
-default and production renderer are unchanged. Use splitting off for this lane.
-Filled/empty captures record a multi-interface slab probe, including rejected
-means for known-bad controls, separately from room quality. Independent transport
-must pass that analytic gate and sampling parity before capture. No matched-quality
-speedup, lower memory use or removal of all water bands is yet established.
+The opt-in `renderer.sampling.fixedPattern.enabled` path now uses the existing
+independently keyed transport draws with the exact previous camera coordinates,
+including pixel centre at 1 SPP. Its room label is **Fixed camera · corrected transport**;
+`stable-camera-random` remains the equivalent comparison selection. The rejected
+correlated transport pattern exists only in test fixtures and Git history, not
+as a runtime fallback. All production feature flags remain default off. The
+corrected sampler must pass both conditional slab means and CPU/GPU sampling
+parity before a room capture; those gates do not establish full-scene quality.
+
+Run `node scripts/review-renderer-contracts.mjs` to check the four contracts
+(exit 2 means a reproduced defect). In the local room fixture, **Lab → Run scene
+qualification** captures empty glass, filled glass and the whole room sequentially
+at 1080p and 4K, uniform 32 SPP and 20 bounces, with denoise/splitting off and
+bounded/nested transport on. It retains separate HDR/PNG/count/provenance receipts,
+stops without retry on failure or cancellation, restores controls, and writes a
+summary with image review explicitly pending. Geometry and lighting retain the
+session's configuration and are recorded in each receipt. The underlying plan
+accepts validated resolution/SPP/depth variables. Native uniform captures can take
+considerable time. This batch has not yet run on the corrected physical build;
+full-scene image convergence, band removal, memory cost and matched-quality
+performance remain unqualified. Adaptive performance work stays gated.
 
 The independent lane exposed a near-rim false collision: projected rounding
 admitted a ray outside the opening, creating invalid glass occupancy. The

@@ -482,7 +482,7 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
   let edge2 = triangle.v2.xyz - triangle.v0.xyz;
   let pvec = cross(ray.direction.xyz, edge2);
   let det = dot(edge1, pvec);
-  if (abs(det) < 0.0000001) {
+  if (!nested_media_enabled() && abs(det) < 0.0000001) {
     return no_candidate();
   }
   let mediumExit = triangle.mediumRefId != 0u &&
@@ -490,7 +490,7 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
       (nested_media_enabled() && medium_stack_contains(ray, triangle.mediumRefId))) &&
     (triangle.materialExtension.z > 0.001 || triangle.material.z < 0.999 ||
       (nested_media_enabled() && (triangle.materialKind == 2u || triangle.materialKind == 3u)));
-  if (det < 0.0 && (triangle.flags & 0x40000000u) == 0u && !mediumExit) {
+  if (!nested_media_enabled() && det < 0.0 && (triangle.flags & 0x40000000u) == 0u && !mediumExit) {
     return no_candidate();
   }
 
@@ -516,8 +516,15 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
     w = 1.0 - u - v;
   }
 
-  let geometric = safe_normalize(cross(edge1, edge2), vec3<f32>(0.0, 1.0, 0.0));
+  var geometric = safe_normalize(cross(edge1, edge2), vec3<f32>(0.0, 1.0, 0.0));
+  if (nested_media_enabled()) {
+    let areaNormal=cross(edge1,edge2);
+    let areaScale=max(max(abs(areaNormal.x),abs(areaNormal.y)),abs(areaNormal.z));
+    if (areaScale==0.0) { return no_candidate(); }
+    geometric=normalize(areaNormal/areaScale);
+  }
   let frontFace = select(0u, 1u, dot(ray.direction.xyz, geometric) < 0.0);
+  if (nested_media_enabled() && frontFace==0u && (triangle.flags & 0x40000000u)==0u && !mediumExit) { return no_candidate(); }
   let orientedGeometric = select(-geometric, geometric, frontFace == 1u);
   let interpolated =
     triangle.n0.xyz * w +

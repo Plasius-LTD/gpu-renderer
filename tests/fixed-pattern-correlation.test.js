@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {fixedPatternWords} from "../src/wavefront-fixed-pattern.js";
+import {rejectedFixedPatternWords as fixedPatternWords} from "./fixtures/rejected-renderer-contracts.js";
 import {WAVEFRONT_SAMPLE_DIMENSIONS as D} from "../src/wavefront-sampling-dimensions.js";
 
 // Characterization of the retained fast control, NOT an acceptance test for

@@ -101,6 +101,23 @@ test('canonical WGSL numerical execution: partial transmission, TIR, roughness a
  }
 });
 
+test('smooth partial transmission retains its diffuse remainder with rough optical sampling disabled',async()=>{
+ const require=createRequire(import.meta.resolve('@plasius/gpu-shader/node'));
+ const {WgslExec,WgslParser}=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_reflect.module.js')));
+ const ast=new WgslParser().parse(roughDielectricNumericalHarness({rough:false}));
+ for(const t of [0,.25,.5,1]){
+  const inputs=new Float32Array([1/1.5,.8,t,0,0,0,-1,0,.8,.6,.4,1, .99,.9999,.3,.4, .99,0,.3,.4, 0,.5,.3,.4]),out=new Float32Array(36);
+  new WgslExec(ast).dispatchWorkgroups('numerical_probe',3,{0:{0:inputs,1:out}});
+  assert([...out].every(Number.isFinite));
+  if(t>0){assert.equal(out[7],5);assert.equal(out[6],-1);assert(Math.abs(out[0]*out[3]-.8*.96*t/(1.5**2))<1e-5);}
+  assert.equal(out[19],4);assert.equal(out[21],1);
+  if(t<1){assert.equal(out[31],1);assert(out[24]>0);assert(Math.abs(out[27]-out[32])<1e-6);}
+ }
+ const material={kind:'sphere',materialKind:'dielectric',transmission:.5,roughness:.8,opacity:1,color:[1,1,1,1],mediumRefId:1,medium:{id:1,ior:1.5}};
+ assert.doesNotThrow(()=>createWavefrontPathTracingComputeConfig({[nested]:true,sceneObjects:[material]}));
+ for(const patch of [{metallic:.5},{clearcoat:.5},{opacity:.5}])assert.throws(()=>createWavefrontPathTracingComputeConfig({[nested]:true,sceneObjects:[{...material,...patch}]}),/Smooth partial dielectric/);
+});
+
 test('full assembled physical probe retains strict collision, PDF and mean gates',()=>{
  const source=roughDielectricProbeShader();analyzeWgslSource(source,'rough-optical-probe');
  assert.match(source,/intersect_triangle\(collisionRay,triangle,0u\)/);

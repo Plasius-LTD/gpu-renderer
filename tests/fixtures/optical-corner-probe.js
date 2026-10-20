@@ -16,7 +16,7 @@ fn optical_corner_probe()->array<vec4<f32>,4>{
  var reflected=vec3<f32>(0.3201242983341217,-0.7948969602584839,0.5154213309288025);
  let hit=intersect_triangle(ray,wall,0u);
  let position=optical_triangle_position(wall,hit.barycentric);
- ray.origin=vec4<f32>(offset_origin(position,hit.geometricNormal,hit.shadingNormal,reflected),1);
+ ray.origin=vec4<f32>(optical_offset_error(position,hit.geometricNormal,reflected,optical_triangle_error(wall,hit.barycentric,hit.geometricNormal)),1);
  ray.direction=vec4<f32>(reflected,0);
  let bounds=intersect_bounds(ray,min(bottom.v0.xyz,min(bottom.v1.xyz,bottom.v2.xyz)),max(bottom.v0.xyz,max(bottom.v1.xyz,bottom.v2.xyz)),1.0);
  let exit=intersect_triangle(ray,bottom,1u);

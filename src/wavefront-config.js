@@ -591,17 +591,19 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   const deferredPathResolve = resolveDeferredPathResolve(options);
   const strictPhysicalLowSppLighting = resolveStrictPhysicalLowSppLighting(options);
   const transportExperiments = resolveTransportExperiments(options, strictPhysicalLowSppLighting);
-  if (transportExperiments.effective.roughDielectricTransport) {
+  if (transportExperiments.effective.roughDielectricTransport || transportExperiments.effective.nestedMediaRefraction) {
+    const opticalMode = transportExperiments.effective.roughDielectricTransport ? 'Rough dielectric' : 'Smooth partial dielectric';
     for (const surface of [...meshes, ...sceneObjects]) {
       if (!([2, 3].includes(surface.materialKind) || surface.transmission > 0.001)) continue;
+      if (!transportExperiments.effective.roughDielectricTransport && !(surface.mediumRefId && surface.transmission < 1)) continue;
       if (surface.materialKind === 1 || surface.metallic > 0 || surface.clearcoat > 0) {
-        throw new RangeError('Rough dielectric volume transport does not yet combine metallic or clearcoat lobes.');
+        throw new RangeError(`${opticalMode} volume transport does not yet combine metallic or clearcoat lobes.`);
       }
       if (!surface.mediumRefId || !mediums.some(medium => medium.id === surface.mediumRefId)) {
-        throw new RangeError('Rough dielectric volume transport requires a non-air medium for every optical surface.');
+        throw new RangeError(`${opticalMode} volume transport requires a non-air medium for every optical surface.`);
       }
       if (surface.opacity < 1 || surface.color[3] < 1) {
-        throw new RangeError('Rough dielectric volume transport does not implement alpha coverage; use opacity 1 and explicit transmission.');
+        throw new RangeError(`${opticalMode} volume transport does not implement alpha coverage; use opacity 1 and explicit transmission.`);
       }
     }
   }

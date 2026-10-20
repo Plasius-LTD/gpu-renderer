@@ -94,7 +94,7 @@ export async function runOpticalPathSamplingProbe(signal,sampler){
   const error=await wait(device.popErrorScope());if(error)throw Error(error.message);
   const passed=cases.every(c=>c.passed);
   // Known-bad controls are retained, explicitly labeled, not promoted to passes.
-  if(sampler==='stable-camera-random'&&!passed)throw Error('Independent optical path mean mismatch '+JSON.stringify(cases));
+  if((sampler==='stable-camera-random'||sampler==='fixed-pattern')&&!passed)throw Error('Independent optical path mean mismatch '+JSON.stringify(cases));
   return {passed,sampler,cases,settings:OPTICAL_PATH_PROBE,scope:'conditional optical estimator only; not room geometry, image or performance qualification'};
  }finally{owned.forEach(r=>r.destroy());device.destroy();}
 }

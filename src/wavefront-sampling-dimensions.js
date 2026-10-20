@@ -70,7 +70,7 @@ export function radicalInverseVdc(value) {
 
 export function sampleWavefrontDimension1D(pixelId, sampleId, bounce, frameIndex, dimension, sampler = "legacy") {
   if (sampler === "stable-pattern" || sampler === "stable-camera-random") return (stablePatternWords(pixelId, sampleId, bounce, dimension, sampler === "stable-camera-random")[0] >>> 8) / 16777216;
-  if (sampler === "fixed-pattern") return (fixedPatternWords(sampleId, bounce, dimension)[0] >>> 8) / 16777216;
+  if (sampler === "fixed-pattern") return (fixedPatternWords(sampleId, bounce, dimension,pixelId)[0] >>> 8) / 16777216;
   return random01FromSeed(mixSeed(pixelId, sampleId, bounce, frameIndex, dimension));
 }
 
@@ -84,7 +84,7 @@ export function sampleWavefrontDimension2D(
   sampler = "legacy"
 ) {
   if (sampler === "stable-pattern" || sampler === "stable-camera-random") return stablePatternWords(pixelId, sampleId, bounce, dimension, sampler === "stable-camera-random").map(x => (x >>> 8) / 16777216);
-  if (sampler === "fixed-pattern") return fixedPatternWords(sampleId, bounce, dimension).map(x => (x >>> 8) / 16777216);
+  if (sampler === "fixed-pattern") return fixedPatternWords(sampleId, bounce, dimension,pixelId).map(x => (x >>> 8) / 16777216);
   if (sampler !== "legacy") return sampleProgressivePair(pixelId, sampleId, bounce, frameIndex, dimension, sampler);
   const strata = Math.max(1, Number.isFinite(strataCount) ? Math.trunc(strataCount) : 1);
   const jitter = sampleWavefrontDimension1D(

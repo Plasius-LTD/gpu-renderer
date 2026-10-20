@@ -695,7 +695,7 @@ fn sunlit_baseline_radiance(normal: vec3<f32>) -> vec3<f32> {
 
 fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   let normal = surface_shading_normal(hit);
-  let origin = offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, normal);
+  let origin = offset_hit_origin(hit, normal);
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let glossiness = surface_glossiness(hit);
   let normalEnvironment = gated_environment_radiance(origin, normal);
@@ -1045,7 +1045,7 @@ fn sample_environment_direct_light(
     ));
     lightDirection = safe_normalize(environmentSample.direction, normal);
     radiance = direct_environment_radiance(
-      offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection),
+      offset_hit_origin(hit, lightDirection),
       lightDirection
     );
     pdf = environmentSample.pdf;
@@ -1114,7 +1114,7 @@ fn direct_light_sample_contribution(ray: RayRecord, hit: HitRecord, lightSample:
     return vec3<f32>(0.0);
   }
   let lightDirection = safe_normalize(lightSample.direction.xyz, normal);
-  let origin = offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection);
+  let origin = offset_hit_origin(hit, lightDirection);
   let nDotL = saturate(dot(normal, lightDirection));
   if (nDotL <= 0.000001) {
     return vec3<f32>(0.0);
@@ -1175,7 +1175,7 @@ fn surface_procedural_sun_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f
   if (nDotL <= 0.000001) {
     return vec3<f32>(0.0);
   }
-  let origin = offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection);
+  let origin = offset_hit_origin(hit, lightDirection);
   if (scene_ray_visibility_blocked(transport_visibility_ray(ray, origin, lightDirection), 1000000.0)) {
     return vec3<f32>(0.0);
   }

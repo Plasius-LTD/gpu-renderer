@@ -12,7 +12,10 @@ fn terminate_optical_path(ray: RayRecord, kind: u32) {
   atomicAdd(&counters.terminatedCount, 1u);
 }
 fn rough_dielectric_active(hit: HitRecord) -> bool {
-  return transport_experiment_enabled(65536u) && dielectric_event(hit);
+  // The existing mixture also owns the diffuse remainder of smooth partial
+  // transmission. Actual roughness sampling remains independently flagged.
+  let partial = nested_media_enabled() && medium_valid(hit.mediumRefId) && hit.materialExtension.z < 1.0;
+  return dielectric_event(hit) && (transport_experiment_enabled(65536u) || partial);
 }
 fn scatter_is_transmission(scatter: ScatterResult) -> bool {
   return scatter.lobeKind == SCATTER_LOBE_DELTA_TRANSMISSION || scatter.lobeKind == SCATTER_LOBE_ROUGH_TRANSMISSION;
@@ -26,7 +29,7 @@ fn optical_reflection_probability(fresnel: f32, transmission: f32) -> f32 {
   return fresnel / sum;
 }
 fn optical_smooth(ray: RayRecord, hit: HitRecord) -> bool {
-  return hit.material.x <= 0.02 || dielectric_ratio(ray, hit) == 1.0;
+  return !transport_experiment_enabled(65536u) || hit.material.x <= 0.02 || dielectric_ratio(ray, hit) == 1.0;
 }
 fn optical_ggx_d(nh: f32, roughness: f32) -> f32 {
   let a = max(roughness * roughness, 0.0001);

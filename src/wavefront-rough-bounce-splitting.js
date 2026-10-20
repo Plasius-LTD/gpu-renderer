@@ -80,7 +80,7 @@ fn spawn_rough_children(ray: RayRecord, hit: HitRecord, transmittance: vec3<f32>
     link_path_child(ray, slot, branch == 1u);
     nextQueue[slot] = RayRecord(ray.rayId, ray.parentRayId, ray.sourcePixelId, ray.sampleId,
       ray.bounce + 1u, ray.mediumRefId, scatter.flags | (rough_branch_key << 8u), ray.mediumStackDepth,
-      vec4<f32>(offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, scatter.direction.xyz), 1.0),
+      vec4<f32>(offset_hit_origin(hit, scatter.direction.xyz), 1.0),
       scatter.direction, vec4<f32>(ray.throughput.xyz * weight * 0.5, scatter.pdf), ray.mediumStack);
   }
 }

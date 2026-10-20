@@ -1017,16 +1017,17 @@ test("wavefront compute offsets continuation and visibility rays with geometric-
   );
   assert.match(
     source,
-    /radiance = direct_environment_radiance\(\s*offset_origin\(hit\.position\.xyz, hit\.geometricNormal\.xyz, hit\.shadingNormal\.xyz, lightDirection\),\s*lightDirection\s*\);/
+    /radiance = direct_environment_radiance\(\s*offset_hit_origin\(hit, lightDirection\),\s*lightDirection\s*\);/
   );
   assert.match(
     source,
-    /let origin = offset_origin\(\s*hit\.position\.xyz,\s*hit\.geometricNormal\.xyz,\s*hit\.shadingNormal\.xyz,\s*lightDirection\s*\);/
+    /let origin = offset_hit_origin\(hit, lightDirection\);/
   );
   assert.match(
     source,
-    /offset_origin\(\s*hit\.position\.xyz,\s*hit\.geometricNormal\.xyz,\s*hit\.shadingNormal\.xyz,\s*scatter\.direction\.xyz\s*\)/
+    /offset_hit_origin\(hit, scatter\.direction\.xyz\)/
   );
+  assert.match(source,/optical_offset_error\(hit\.position\.xyz,hit\.geometricNormal\.xyz,direction,hit\.pad2\)/);
 });
 
 test("wavefront compute denoise adapts filter cost and strength to spp", () => {

@@ -9,9 +9,33 @@ import {OPTICAL_CORNER_PROBE_WGSL,assertOpticalCornerProbe} from './optical-corn
 import {OPTICAL_RIM_PROBE_WGSL,assertOpticalRimProbe} from './optical-rim-probe.js';
 
 export const DIELECTRIC_PROBE_TOLERANCES=Object.freeze({optics:0.0001,mean:0.025,samples:16384});
-export const DIELECTRIC_PROBE_CASES=23;
+export const DIELECTRIC_PROBE_CASES=26;
 export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_EDGE_PROBE_WGSL+OPTICAL_ORDER_PROBE_WGSL+OPTICAL_CORNER_PROBE_WGSL+OPTICAL_RIM_PROBE_WGSL+`
 @compute @workgroup_size(1) fn dielectric_probe(@builtin(global_invocation_id) id:vec3<u32>){
+ if(id.x>=23u){
+  let o=id.x*4u;
+  for(var i=0u;i<4u;i++){accumulation[o+i]=vec4<f32>(0);}
+  if(!nested_media_enabled()){return;}
+  if(id.x==23u){
+   var ray=RayRecord();ray.origin=vec4<f32>(0.000025,0.000025,0.0001,0);ray.direction=vec4<f32>(0,0,-1,0);
+   var triangle=TriangleRecord();triangle.v1=vec4<f32>(0.0001,0,0,0);triangle.v2=vec4<f32>(0,0.0001,0,0);
+   let hit=intersect_triangle(ray,triangle,0u);accumulation[o]=vec4<f32>(f32(hit.hit),f32(hit.frontFace),hit.geometricNormal.z,hit.distance);return;
+  }
+  if(id.x==24u){
+   var triangle=TriangleRecord();triangle.v0=vec4<f32>(-1,-1,1,0);triangle.v1=vec4<f32>(1,-1,1,0);triangle.v2=vec4<f32>(0,1,1,0);
+   let error=optical_triangle_error(triangle,vec3<f32>(0.25,0.25,0.5),vec3<f32>(0,0,1));
+   let start=optical_offset_error(vec3<f32>(0,0,1),vec3<f32>(0,0,1),vec3<f32>(0,0,-1),error);
+   triangle.v0.z=bitcast<f32>(bitcast<u32>(1.0)-1u);triangle.v1.z=triangle.v0.z;triangle.v2.z=triangle.v0.z;
+   var ray=RayRecord();ray.origin=vec4<f32>(start,0);ray.direction=vec4<f32>(0,0,-1,0);
+   let next=intersect_triangle(ray,triangle,0u);accumulation[o]=vec4<f32>(error,start.z,f32(next.hit),next.distance);return;
+  }
+  var ray=RayRecord();ray.direction=vec4<f32>(0,0,-1,0);
+  var hit=HitRecord();hit.materialKind=2u;hit.mediumRefId=1u;hit.frontFace=1u;hit.color=vec4<f32>(1);hit.material=vec4<f32>(0,0,1,1.5);hit.geometricNormal=vec4<f32>(0,0,1,0);hit.shadingNormal=hit.geometricNormal;
+  hit.materialExtension.z=0.25;let quarter=dielectric_transmission_weight(ray,hit).x;
+  hit.materialExtension.z=0.5;let half=dielectric_transmission_weight(ray,hit).x;
+  hit.materialExtension.z=1.0;let full=dielectric_transmission_weight(ray,hit).x;
+  accumulation[o]=vec4<f32>(quarter,half,full,0);return;
+ }
  if(id.x==22u){
   let o=id.x*4u;let result=optical_rim_probe();accumulation[o]=result[0];accumulation[o+1u]=result[1];
   accumulation[o+2u]=vec4<f32>(0);accumulation[o+3u]=vec4<f32>(0);return;
@@ -139,6 +163,16 @@ export function assertOpticalOrderingProbe(values,{bounded,nested}){
  }
 }
 
+export function assertCorrectedContractsProbe(values,{bounded,nested}){
+ if(!nested)return;
+ for(const [index,expected,tolerance] of [[23*16,1,0],[23*16+1,1,0],[23*16+2,1,1e-6],[23*16+3,.0001,1e-10],
+  [24*16,0,0],[24*16+1,1,0],[24*16+2,1,0],[24*16+3,2**-24,1e-12],
+  ...[.25,.5,1].map((t,i)=>[25*16+i,.96*t/(1.5**2),1e-6])]){
+  const actual=values[index];
+  if(!Number.isFinite(actual)||Math.abs(actual-expected)>tolerance)throw Error('Corrected contract mismatch '+JSON.stringify({bounded,nested,index,actual,expected,tolerance}));
+ }
+}
+
 export async function runDielectricTransportProbe(signal){
  const adapter=await navigator.gpu.requestAdapter();if(adapter?.info.isFallbackAdapter!==false)throw Error('Physical dielectric probe requires GPU');
  const device=await adapter.requestDevice(),owned=[];
@@ -178,6 +212,7 @@ export async function runDielectricTransportProbe(signal){
    assertOpticalOrderingProbe(values,{bounded,nested});
    assertOpticalCornerProbe(values.slice(21*16,22*16),{bounded,nested});
    assertOpticalRimProbe(values.slice(22*16,22*16+8),{bounded,nested});
+   assertCorrectedContractsProbe(values,{bounded,nested});
    if(nested){
     for(const [i,eta,before,after,invalid] of [[0,1/1.5,0,1,0],[1,1.5/water,1,2,0],[2,water,2,0,0],[3,1.5,1,0,0],[4,1,1,1,0],[5,water/1.5,2,1,0],[6,1,1,1,0],[7,1,1,1,1],[8,1,0,0,1],[9,1,1,1,1]]){
      const o=i*16;near(values[o],eta);near(values[o+2],before);near(values[o+3],after);near(values[o+6],invalid);

@@ -1,6 +1,7 @@
 // Optical helpers shared by the staged and fused canonical transport. No new
 // ray fields: the four existing stack slots hold occupied volumes, not IORs.
 import {OPTICAL_PREDICATE_WGSL} from './wavefront-optical-predicate-shader.js';
+import {OPTICAL_ORIGIN_WGSL} from './wavefront-optical-origin-shader.js';
 export const DIELECTRIC_TRANSPORT_WGSL = `
 fn bounded_dielectric_enabled() -> bool {
   return transport_experiment_enabled(16384u);
@@ -80,8 +81,9 @@ fn dielectric_transmission_weight(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   if (nested_media_enabled() && medium_valid(hit.mediumRefId)) {
     let eta = dielectric_ratio(ray, hit);
     let fresnel = interface_fresnel(dot(-ray.direction.xyz, optical_shading_normal(ray, hit)), eta);
-    let tint = mix(vec3<f32>(1.0), clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0)), clamp(hit.materialExtension.z, 0.0, 1.0));
-    return (1.0 - fresnel) * tint * eta * eta;
+    let transmission = clamp(hit.materialExtension.z, 0.0, 1.0);
+    let tint = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
+    return (1.0 - fresnel) * transmission * tint * eta * eta;
   }
   return surface_delta_transmission_throughput(hit, -ray.direction.xyz);
 }
@@ -129,9 +131,11 @@ fn recoverable_optical_entry(ray: RayRecord, hit: HitRecord) -> bool {
     hit.distance <= optical_origin_epsilon(ray.origin.xyz);
 }
 fn optical_offset(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>) -> vec3<f32> {
-  let epsilon = optical_origin_epsilon(position);
-  return position + normal * select(-epsilon, epsilon, dot(normal, direction) >= 0.0);
+  // Exact-position callers need no displacement. Material continuations use
+  // optical_offset_error with the explicitly reconstructed hit error.
+  return position;
 }
+${OPTICAL_ORIGIN_WGSL}
 fn optical_interior_bound(value: f32, lower: f32, upper: f32) -> f32 {
   if (lower == upper || (value != lower && value != upper)) { return value; }
   let upward = value == lower;

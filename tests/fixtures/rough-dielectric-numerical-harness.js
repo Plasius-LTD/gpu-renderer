@@ -11,7 +11,7 @@ export function functionSource(name){
 
 // Numerical isolation only. Canonical BSDF/sampler bodies are unchanged; scene
 // lookups become explicit inputs. The separate device probe uses the full shader.
-export function roughDielectricNumericalHarness(){return `
+export function roughDielectricNumericalHarness({rough=true}={}){return `
 const RAY_FLAG_DELTA_SAMPLE:u32=2u;
 const SCATTER_LOBE_DIFFUSE:u32=1u; const SCATTER_LOBE_SPECULAR:u32=2u;
 const SCATTER_LOBE_DELTA_REFLECTION:u32=4u; const SCATTER_LOBE_DELTA_TRANSMISSION:u32=5u;
@@ -23,6 +23,7 @@ struct ScatterResult { direction:vec4<f32>, pdf:f32, mediumRefId:u32, flags:u32,
 fn dielectric_ratio(ray:RayRecord,hit:HitRecord)->f32{return inputs[0].x;}
 fn optical_shading_normal(ray:RayRecord,hit:HitRecord)->vec3<f32>{return vec3<f32>(0,0,1);}
 fn transmitted_medium_ref_id(ray:RayRecord,hit:HitRecord)->u32{return 2u;}
+fn transport_experiment_enabled(flag:u32)->bool{return ${rough?'flag==65536u':'false'};}
 ${['safe_normalize','build_basis_tangent','local_to_world','cosine_sample_hemisphere','refract_direction','interface_fresnel'].map(functionSource).join('\n')}
 ${ROUGH_DIELECTRIC_WGSL}
 @compute @workgroup_size(1) fn numerical_probe(@builtin(global_invocation_id) id:vec3<u32>){

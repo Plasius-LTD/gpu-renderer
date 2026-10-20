@@ -1,5 +1,5 @@
-import { sobolPairWords, SOBOL_PAIR_WGSL, hashUint32, mixSeed, progressiveSampleWords } from "./wavefront-progressive-sampling.js";
-import { fixedPatternWords } from "./wavefront-fixed-pattern.js";
+import { sobolPairWords, hashUint32, mixSeed, progressiveSampleWords } from "./wavefront-progressive-sampling.js";
+import { fixedCameraWords,FIXED_CAMERA_WGSL } from "./wavefront-fixed-camera-pattern.js";
 
 function reverseBits(word) {
   let x=word>>>0;
@@ -23,7 +23,7 @@ export function fastScrambleWord(word, key) {
 }
 
 export function stablePatternWords(pixelId, sampleId, bounce, dimension, cameraOnly=false) {
-  if(dimension===1)return fixedPatternWords(sampleId,bounce,dimension);
+  if(dimension===1)return fixedCameraWords(sampleId,bounce);
   if(cameraOnly)return progressiveSampleWords(pixelId,sampleId,bounce,0,dimension,"independent-random");
   const seed=mixSeed(pixelId,0,bounce,0,dimension),[x,y]=sobolPairWords(sampleId);
   return [fastScrambleWord(x,hashUint32(seed^0xa511e9b3)),fastScrambleWord(y,hashUint32(seed^0x63d83595))];
@@ -39,7 +39,7 @@ export function stablePatternWgsl(cameraOnly=false) {
   let word=sobol_pair_words(sampleId);
   return vec2<u32>(fast_scramble_word(word.x,hash_u32(seed^0xa511e9b3u)),fast_scramble_word(word.y,hash_u32(seed^0x63d83595u)));
 `;
-  return SOBOL_PAIR_WGSL+`
+  return FIXED_CAMERA_WGSL+`
 fn fast_scramble_word(word:u32,key:u32)->u32 {
   var v=reverseBits(word);
   v=v^(v*0x3d20adeau);
@@ -51,8 +51,7 @@ fn fast_scramble_word(word:u32,key:u32)->u32 {
 }
 fn stable_pattern_words(pixelId:u32,sampleId:u32,bounce:u32,dimension:u32)->vec2<u32>{
   if(dimension==1u){
-    let key=(dimension-1u)+bounce*64u;
-    return sobol_pair_words(sampleId)^vec2<u32>(0x80000000u)^(vec2<u32>(key)*vec2<u32>(0x9e3779b9u,0x7546dc55u));
+    return fixed_camera_words(sampleId,bounce);
   }
 `+lighting+`
 }

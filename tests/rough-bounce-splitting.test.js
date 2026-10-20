@@ -84,6 +84,7 @@ test('specialized assembled shaders preserve off bytes, binary ABI, identity, we
    modelFacingRecordNames:['RayRecord','HitRecord','PathNode'],modelFacingBindings:[],semantics:[]});
   for(const [name,size] of [['RayRecord',96],['HitRecord',240],['PathNode',64]])assert.equal(manifest.records.find(r=>r.name===name).byteSize,size);
   assert.match(source,/throughput\.xyz \* weight \* 0\.5/);
+  assert.match(source.slice(source.indexOf('fn spawn_rough_children')),/offset_hit_origin\(hit, scatter.direction.xyz\)/);
   assert.match(source,/ray\.sourcePixelId, ray\.sampleId/);
   assert.match(source,/rough_split_eligible/);assert.match(source,/split_pixel_id\(pixelId\)/);
   assert.match(source,/hit\.materialKind == 0u\s*&& hit\.material\.x >= 0\.5/);

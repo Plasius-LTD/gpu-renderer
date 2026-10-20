@@ -48,7 +48,17 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
     return;
   }
 
-  let position = ray.origin.xyz + ray.direction.xyz * candidate.distance;
+  var position = ray.origin.xyz + ray.direction.xyz * candidate.distance;
+  var positionError = 0.0;
+  if (nested_media_enabled()) {
+    if (candidate.triangleIndex != 0xffffffffu) {
+      position = optical_triangle_position(hitTriangle, candidate.barycentric);
+      positionError = optical_triangle_error(hitTriangle,candidate.barycentric,candidate.geometricNormal);
+    } else {
+      let error = optical_rounding_gamma(12.0) * (abs(ray.origin.xyz) + abs(ray.direction.xyz*candidate.distance));
+      positionError = dot(abs(candidate.geometricNormal),error);
+    }
+  }
   let hitMaterialKind = select(hitObject.materialKind, hitTriangle.materialKind, candidate.triangleIndex != 0xffffffffu);
   let hitObjectId = select(hitObject.objectId, hitTriangle.meshId, candidate.triangleIndex != 0xffffffffu);
   let meshSurface = sample_surface_material(
@@ -95,7 +105,7 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
     candidate.distance,
     hitOcclusion,
     hitClearcoatNormal.z,
-    0.0,
+    positionError,
     vec4<f32>(position, 1.0),
     vec4<f32>(candidate.geometricNormal, 0.0),
     vec4<f32>(hitShadingNormal, 0.0),
@@ -382,12 +392,7 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
     scatter.flags,
     nextMediumStackDepth,
     vec4<f32>(
-      offset_origin(
-        hit.position.xyz,
-        hit.geometricNormal.xyz,
-        hit.shadingNormal.xyz,
-        scatter.direction.xyz
-      ),
+      offset_hit_origin(hit, scatter.direction.xyz),
       1.0
     ),
     scatter.direction,
@@ -432,12 +437,7 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
         scatter.flags,
         secondaryDepth,
         vec4<f32>(
-          offset_origin(
-            hit.position.xyz,
-            hit.geometricNormal.xyz,
-            hit.shadingNormal.xyz,
-            secondaryDirection
-          ),
+          offset_hit_origin(hit, secondaryDirection),
           1.0
         ),
         vec4<f32>(secondaryDirection, 0.0),
@@ -455,7 +455,11 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
 const localIntersection = WAVEFRONT_INTERSECTION_BODY_WGSL
   .replace("hits[index] = make_miss(ray);\n    return;", "return make_miss(ray);")
   .replace("hits[index] = HitRecord(", "return HitRecord(")
-  .replace("let position = ray.origin.xyz + ray.direction.xyz * candidate.distance;",
+  // Local trace queries already reconstructed mesh positions even when nested
+  // transport was disabled. Preserve that behavior, calculating the error only
+  // for nested transport; do not reconstruct twice in that branch.
+  .replace("      position = optical_triangle_position(hitTriangle, candidate.barycentric);\n", "")
+  .replace("var position = ray.origin.xyz + ray.direction.xyz * candidate.distance;",
     `var position = ray.origin.xyz + ray.direction.xyz * candidate.distance;
   if (candidate.triangleIndex != 0xffffffffu) { position = optical_triangle_position(hitTriangle, candidate.barycentric); }`);
 
@@ -760,6 +764,11 @@ fn offset_origin(
   let positionAwareEpsilon = positionScale * 0.00000047683716;
   let offsetDistance = clamp(max(0.00025, positionAwareEpsilon), 0.00025, 0.01);
   return position + offsetNormal * offsetDistance;
+}
+
+fn offset_hit_origin(hit: HitRecord, direction: vec3<f32>) -> vec3<f32> {
+  if (nested_media_enabled()) { return optical_offset_error(hit.position.xyz,hit.geometricNormal.xyz,direction,hit.pad2); }
+  return offset_origin(hit.position.xyz,hit.geometricNormal.xyz,hit.shadingNormal.xyz,direction);
 }
 
 fn schlick(cosine: f32, refractionRatio: f32) -> f32 {

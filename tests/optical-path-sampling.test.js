@@ -6,6 +6,7 @@ import {analyzeWgslSource} from '@plasius/gpu-shader/node';
 import {sampleWavefrontDimension1D as draw,WAVEFRONT_SAMPLE_DIMENSIONS as D} from '../src/wavefront-sampling-dimensions.js';
 import {OPTICAL_PATH_PROBE as P,opticalSlabReference,opticalPathProbeShader,summarizeOpticalPaths} from './fixtures/optical-path-sampling-probe.js';
 import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
+import {rejectedFixedPatternWords} from './fixtures/rejected-renderer-contracts.js';
 
 // Independent closed-form planar slab, not a replacement renderer. Exercise the
 // actual scalar sequences and the same importance probabilities/roulette policy.
@@ -17,19 +18,20 @@ function slabSamples(sampler){
    const eta=b?P.ior:1/P.ior,cosine=b?Math.sqrt(1-(1-ci*ci)/P.ior**2):ci;
    const ct=Math.sqrt(1-eta*eta*(1-cosine*cosine));
    const r=.5*(((eta*cosine-ct)/(eta*cosine+ct))**2+((cosine-eta*ct)/(cosine+eta*ct))**2),t=(1-r)*eta*eta,probability=r/(r+t);
-   const reflection=draw(pixel,sample,b,7,D.transmissionSelector,sampler)<probability;
+   const reflection=(sampler==='rejected-fixed-pattern'?(rejectedFixedPatternWords(sample,b,D.transmissionSelector)[0]>>>8)/16777216:draw(pixel,sample,b,7,D.transmissionSelector,sampler))<probability;
    let w=reflection?r/probability:t/(1-probability);
-   if(b>=2){const survival=Math.max(.05,Math.min(.95,w));if(draw(pixel,sample,b,7,D.russianRoulette,sampler)>survival){roulette=1;break;}w/=survival;}
+   if(b>=2){const survival=Math.max(.05,Math.min(.95,w));if((sampler==='rejected-fixed-pattern'?(rejectedFixedPatternWords(sample,b,D.russianRoulette)[0]>>>8)/16777216:draw(pixel,sample,b,7,D.russianRoulette,sampler))>survival){roulette=1;break;}w/=survival;}
    weight*=w;if((b===0&&reflection)||(b>0&&!reflection)){result=weight;escaped=1;break;}
   }
   out.set([result,escaped,roulette,1-escaped-roulette],offset);offset+=4;
  }
  return out;
 }
-test('independent transport meets a finite-horizon optical slab mean while fixed control remains rejected',()=>{
+test('corrected fixed transport meets a finite-horizon optical slab mean while frozen original remains rejected',()=>{
  const good=summarizeOpticalPaths(slabSamples('stable-camera-random'));
  assert(good.every(c=>c.passed),JSON.stringify(good));
- const fixed=summarizeOpticalPaths(slabSamples('fixed-pattern'));
+ assert(summarizeOpticalPaths(slabSamples('fixed-pattern')).every(c=>c.passed));
+ const fixed=summarizeOpticalPaths(slabSamples('rejected-fixed-pattern'));
  assert.equal(fixed.at(-1).passed,false,'retain known conditional bias instead of treating uniform scalar marginals as proof');
  assert(fixed.at(-1).error>.04);
  for(const c of P.cosines){assert(opticalSlabReference(c)<=1);assert(opticalSlabReference(c)>.9999);}

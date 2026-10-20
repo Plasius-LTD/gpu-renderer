@@ -25,5 +25,5 @@ test("MIS eligibility remains pinned alongside the Task 232 opt-in coating corre
     .replace(/(fn terminal_surface_environment_source\([\s\S]*?let surfaceColor = )clamp\(hit.color.xyz,/, '$1clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35),')
     .replace('let surfaceColor = max(hit.color.xyz, vec3<f32>(0.0));','let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);');
   assert.equal(createHash("sha256").update(prior).digest("hex"),
-    "392faaca511cd8a0c98ca0e30eb28e369d29c60d2d6ef0f7ed6bf78b1b654ab8"); // Task 234 / ADR 0062; flag-off equivalence and edge/order/corner/rim probes are independent.
+    "515576f4ab2689374d224455df9d5621ad23e9754a39a920f59de0e1251d2e02"); // Task 234 / ADR 0063; disabled-path, geometry, energy and sampling regressions are independent.
 });

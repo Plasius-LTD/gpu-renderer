@@ -2,12 +2,16 @@ import {pathToFileURL} from 'node:url';
 import {WAVEFRONT_COMPUTE_WGSL} from '../src/wavefront-shaders.js';
 import {functionSource} from '../tests/fixtures/rough-dielectric-numerical-harness.js';
 import {OpticalWgslExec,OpticalWgslParser} from '../tests/fixtures/optical-wgsl-executor.js';
+import {REJECTED_CONTRACT_FUNCTIONS,rejectedFixedPatternWords} from '../tests/fixtures/rejected-renderer-contracts.js';
+import {fixedPatternWords} from '../src/wavefront-fixed-pattern.js';
 
 // Review tool: executes the canonical WGSL, replacing resource lookups only.
 // Its JSON distinguishes reproduced defects from supporting analytic checks.
 // Software execution is not physical WGSL compilation or GPU qualification.
-function execute(body,vectorCount){
- const source=WAVEFRONT_COMPUTE_WGSL
+function execute(body,vectorCount,baseline){
+ let canonical=WAVEFRONT_COMPUTE_WGSL;
+ if(baseline)for(const [name,body] of Object.entries(REJECTED_CONTRACT_FUNCTIONS))canonical=canonical.replace(functionSource(name),body);
+ const source=canonical
   .replace(functionSource('transport_experiment_enabled'),'fn transport_experiment_enabled(flag:u32)->bool{return (flag & 49152u)!=0u;}')
   .replace(functionSource('medium_valid'),'fn medium_valid(id:u32)->bool{return id>0u && id<3u;}')
   .replace(functionSource('medium_optics'),'fn medium_optics(id:u32)->vec2<f32>{if(id==1u){return vec2<f32>(1.5,2.0);}if(id==2u){return vec2<f32>(1.333,1.0);}return vec2<f32>(1.0,0.0);}')
@@ -17,7 +21,7 @@ function execute(body,vectorCount){
  return Array.from({length:vectorCount},(_,i)=>Array.from(output.slice(i*4,i*4+4)));
 }
 
-export function reviewRendererContracts(){
+export function reviewRendererContracts({baseline=false}={}){
  const sizes=[1,.01,.0001];
  const collision=execute(`
   let sizes=array<f32,3>(1.0,0.01,0.0001);
@@ -39,7 +43,7 @@ export function reviewRendererContracts(){
   var nextFace=TriangleRecord();nextFace.v0=vec4<f32>(-1,-1,-0.0000005,0);nextFace.v1=vec4<f32>(1,-1,-0.0000005,0);nextFace.v2=vec4<f32>(0,1,-0.0000005,0);
   let nextCoordinates=optical_triangle_coordinates(thinRay,nextFace);
   accumulation[4]=vec4<f32>(nextOrigin.z,nextCoordinates.w,0.0000005,optical_origin_epsilon(vec3<f32>(0)));
- }`,5);
+ }`,5,baseline);
  const collisionCases=collision.slice(0,4).map(([hit,distance,preciseDistance,preciseFirstBarycentric],i)=>({
   kind:i<3?'scaled':'grazing',size:sizes[i]??1,expectedHit:true,expectedDistance:sizes[i]??1,expectedBarycentric:[.5,.25,.25],
   hit:hit===1,distance,preciseDistance,preciseFirstBarycentric,
@@ -53,7 +57,7 @@ export function reviewRendererContracts(){
   for(var i=0u;i<3u;i++){
    hit.materialExtension.z=factors[i];let weight=dielectric_transmission_weight(ray,hit);
    accumulation[i]=vec4<f32>(weight.x,dielectric_reflection_weight(ray,hit).x,dielectric_ratio(ray,hit),dielectric_reflection_probability(ray,hit));
-  }`,3).map(([weight,reflection,eta,reflectionProbability],i)=>({
+  }`,3,baseline).map(([weight,reflection,eta,reflectionProbability],i)=>({
   factor:[.25,.5,1][i],weight,reflection,eta,reflectionProbability,
   // Normal-incidence air/glass: F=((1-1.5)/(1+1.5))^2=.04.
   expectedWeight:(1-.04)*[.25,.5,1][i]*(1/1.5)**2,
@@ -72,7 +76,13 @@ export function reviewRendererContracts(){
   let hidden=transmitted_medium_ref_id(ray,hit);let updated=transitioned_medium_stack(ray,hit);
   ray.mediumStack=updated;ray.mediumStackDepth=2u;hit.frontFace=0u;hit.mediumRefId=1u;
   accumulation[1]=vec4<f32>(f32(hidden),f32(transmitted_medium_ref_id(ray,hit)),dielectric_ratio(ray,hit),f32(medium_transition_failure(ray,hit)));
- }`,2);
+ }`,2,baseline);
+
+ const quadrants=[0,0,0,0],pattern=baseline?rejectedFixedPatternWords:fixedPatternWords;
+ for(let pixel=0;pixel<256;pixel++)for(let sample=0;sample<256;sample++){
+  const x=pattern(sample,0,21,pixel)[0]>>>31,y=pattern(sample,0,22,pixel)[0]>>>31;
+  quadrants[2*x+y]++;
+ }
 
  return {
   scope:'software canonical-WGSL review; no physical/image qualification',
@@ -85,6 +95,8 @@ export function reviewRendererContracts(){
     scope:'feature-size admission/error-bound gap; not proof that this case caused room banding'},
    {id:'T1',contract:'smooth transmitted weight includes material transmission fraction',
     reproduced:transmission.some(c=>Math.abs(c.weight-c.expectedWeight)>1e-6),cases:transmission},
+   {id:'S1',contract:'transport dimensions cover independent joint quadrants',
+    reproduced:quadrants.some(n=>Math.abs(n/65536-.25)>.01),quadrants,samples:65536},
   ],
   supported:{
    etaCancellation:{enter:optics[0][0],leave:optics[0][1],product:optics[0][2],expectedProduct:.96**2},

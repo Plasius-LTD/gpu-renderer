@@ -5,8 +5,10 @@ import {createWavefrontPathTracingComputeConfig} from '../src/wavefront-config.j
 import {WAVEFRONT_COMPUTE_WGSL} from '../src/wavefront-shaders.js';
 import {createMediumTextureResource,mediumTablesEqual} from '../src/wavefront-gpu-resources.js';
 import {analyzeWgslSource} from '@plasius/gpu-shader/node';
-import {dielectricProbeShader,DIELECTRIC_PROBE_TOLERANCES} from './fixtures/dielectric-transport-probe.js';
+import {dielectricProbeShader,DIELECTRIC_PROBE_TOLERANCES,DIELECTRIC_PROBE_CASES,assertCorrectedContractsProbe} from './fixtures/dielectric-transport-probe.js';
 import {readFileSync} from 'node:fs';
+import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
+import {OpticalWgslExec as Exec,OpticalWgslParser as Parser} from './fixtures/optical-wgsl-executor.js';
 
 test('dielectric fixes are independent, explicit default-off remote flags',()=>{
  for(const name of ['boundedDielectricBranching','nestedMediaRefraction']){
@@ -52,6 +54,23 @@ test('physical probe executes canonical dielectric sampling with frozen error to
  assert.equal(DIELECTRIC_PROBE_TOLERANCES.samples,16384);
  assert.match(dielectricProbeShader(),/let scatter=scatter_dielectric\(ray,hit\)/);
 });
+test('new physical preflight cases execute canonical corrections and reject regressed outputs',()=>{
+ const source=dielectricProbeShader()
+  .replace(functionSource('transport_experiment_enabled'),'fn transport_experiment_enabled(flag:u32)->bool{return (flag & 49152u)!=0u;}')
+  .replace(functionSource('medium_valid'),'fn medium_valid(id:u32)->bool{return id==1u;}')
+  .replace(functionSource('medium_optics'),'fn medium_optics(id:u32)->vec2<f32>{return select(vec2<f32>(1.5,2.0),vec2<f32>(1,0),id==0u);}')
+  .replace('if(id.x>=23u){','if(id.x<23u){return;}\n if(id.x>=23u){');
+ const output=new Float32Array(DIELECTRIC_PROBE_CASES*16);
+ new Exec(new Parser().parse(source)).dispatchWorkgroups('dielectric_probe',DIELECTRIC_PROBE_CASES,{0:{3:output}});
+ assert.doesNotThrow(()=>assertCorrectedContractsProbe(output,{bounded:true,nested:true}));
+ assert.doesNotThrow(()=>assertCorrectedContractsProbe([],{bounded:false,nested:false}));
+ for(const index of [23*16,23*16+1,23*16+2,23*16+3,24*16,24*16+1,24*16+2,24*16+3,25*16,25*16+1,25*16+2]){
+  const bad=output.slice();bad[index]=NaN;
+  assert.throws(()=>assertCorrectedContractsProbe(bad,{bounded:true,nested:true}),/Corrected contract mismatch/);
+  bad[index]=output[index]+.01;
+  assert.throws(()=>assertCorrectedContractsProbe(bad,{bounded:true,nested:true}),/Corrected contract mismatch/);
+ }
+});
 test('nested traversal protects occupancy and sample identity without consuming bounces',()=>{
  assert.match(WAVEFRONT_COMPUTE_WGSL,/position = optical_triangle_position\(hitTriangle, candidate.barycentric\)/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/fn optical_triangle_position/);
@@ -72,6 +91,12 @@ test('nested traversal protects occupancy and sample identity without consuming 
  assert.match(query,/optical_query_minimum = minimumDistance;[\s\S]*trace_material_hit_raw\(ray\);[\s\S]*optical_query_minimum = 0.0;[\s\S]*return hit;/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/nested_media_enabled\(\) && \(triangle.materialKind == 2u \|\| triangle.materialKind == 3u\)/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/let normal = optical_shading_normal\(ray, hit\)/);
+});
+test('ordinary local hit reconstruction remains barycentric independently of nested error metadata',()=>{
+ const local=functionSource('trace_material_hit_raw');
+ assert.match(local,/var position = ray\.origin\.xyz \+ ray\.direction\.xyz \* candidate\.distance;\s*if \(candidate\.triangleIndex != 0xffffffffu\) \{ position = optical_triangle_position\(hitTriangle, candidate\.barycentric\); \}\s*var positionError = 0\.0;/);
+ assert.equal((local.match(/position = optical_triangle_position/g)||[]).length,1);
+ assert.match(local,/if \(nested_media_enabled\(\)\) \{\s*if \(candidate.triangleIndex != 0xffffffffu\) \{\s*positionError = optical_triangle_error/);
 });
 test('room transport controls reset off and forward independent flag receipts and GPU preflight',()=>{
  const read=f=>readFileSync(new URL('./fixtures/'+f,import.meta.url),'utf8');
