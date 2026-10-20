@@ -13,6 +13,12 @@ const EXTENSION_TEXTURE_BINDINGS = Object.freeze([
   ["transmission", "transmission", "transmissionTexture"],
   ["sheenColor", "sheen", "sheenColorTexture"],
   ["sheenRoughness", "sheen", "sheenRoughnessTexture"],
+  ["thickness", "volume", "thicknessTexture"],
+  ["specular", "specular", "specularTexture"],
+  ["specularColor", "specular", "specularColorTexture"],
+  ["iridescence", "iridescence", "iridescenceTexture"],
+  ["iridescenceThickness", "iridescence", "iridescenceThicknessTexture"],
+  ["anisotropy", "anisotropy", "anisotropyTexture"],
 ]);
 
 function requireArray(value, label) {
@@ -37,6 +43,23 @@ function textureSample(binding, textures, label, extra = {}) {
   const sample = textures.get(binding.textureId);
   if (!sample) {
     throw new Error(`Missing decoded texture sample ${binding.textureId} for ${label}.`);
+  }
+  // This boundary supplies only UV0 geometry and has no transform evaluator.
+  // Refuse authored interpretations that would otherwise be silently ignored.
+  if ((binding.texCoordSet !== undefined && binding.texCoordSet !== 0)
+    || (sample.texCoord !== undefined && sample.texCoord !== 0)) {
+    throw new Error("Canonical texture sampling supports only UV set 0.");
+  }
+  const transform = binding.transform;
+  if (transform !== undefined) {
+    const identityPair = (value, expected) => value === undefined
+      || (Array.isArray(value) && value.length === 2 && value[0] === expected && value[1] === expected);
+    if (!transform || typeof transform !== "object" || Array.isArray(transform)
+      || Object.keys(transform).some(key => !["offset", "scale", "rotationRadians"].includes(key))
+      || !identityPair(transform.offset, 0) || !identityPair(transform.scale, 1)
+      || (transform.rotationRadians !== undefined && transform.rotationRadians !== 0)) {
+      throw new Error("Canonical texture transforms require upstream application and identity bindings.");
+    }
   }
   const width = Number(sample.width);
   const height = Number(sample.height);

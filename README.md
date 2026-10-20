@@ -66,6 +66,10 @@ Supply decoded triangle geometry and material/texture data through `meshes`.
 The renderer does not fetch glTF files: use a loader such as
 [`@plasius/gpu-shared`](https://www.npmjs.com/package/@plasius/gpu-shared), or adapt
 canonical decoded assets with `createCanonicalWavefrontMeshInputs`.
+The canonical adapter maps the core 0.5 material texture slots; it currently
+accepts UV0 and identity texture transforms. Other selections/transforms fail
+explicitly so authored appearance is not silently changed. See the
+[canonical integration contract](docs/guides/integration.md#canonical-model-ingestion).
 For an interactive model viewer with loading, integrity checks, camera gestures
 and quality controls, use the shared package's `model-inspection` entry.
 

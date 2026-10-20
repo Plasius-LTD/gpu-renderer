@@ -33,3 +33,4 @@
 - [ADR 0038: Progressive linear radiance](adr-0038-progressive-linear-radiance.md)
 
 - [ADR 0039: One continuation for fixed wavefront paths](adr-0039-fixed-dielectric-continuation.md)
+- [ADR 0040: Canonical material texture admission](adr-0040-canonical-material-texture-admission.md)

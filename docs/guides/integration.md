@@ -28,6 +28,29 @@ surface remains responsible for evaluating the remote
 `gpu.model.conversion.enabled` flag: when disabled or rolled back, keep the
 existing rendering path active.
 
+The public canonical types use released `@plasius/gpu-model-core` `^0.5.0`.
+In addition to the existing core/clearcoat/transmission/sheen channels, the
+adapter maps thickness, specular, specularColor, iridescence,
+iridescenceThickness and anisotropy to their existing KHR renderer texture
+inputs. Factors remain in their canonical extension records; decoded pixel
+buffers are reused by reference. This does not add a new shading model.
+
+The current canonical geometry contract supplies **UV0 only**. A binding or
+decoded sample selecting another UV set fails explicitly before meshes are
+returned. Nonidentity or malformed canonical binding transforms also fail;
+identity offset `[0,0]`, scale `[1,1]` and rotation `0` (including omitted fields)
+are accepted. The upstream converter must apply a supported transform and
+reverify the corresponding identity binding, or keep that asset on its previous
+supported consumer path. Do not remove a transform or change the UV selection
+merely to avoid the failure. No converter or texture resampler is embedded here.
+
+The old UV1 fixture used to preserve a marker while the geometry/shader sampled
+UV0; its regression now requires rejection. The broader dual-UV room path is
+tracked separately by renderer#220. Canonical unlit/alpha qualification remains
+renderer#238/#237; metadata normalization does not prove GPU shading fidelity.
+See [ADR 0040](../adrs/adr-0040-canonical-material-texture-admission.md) for the
+owning-package and release sequence with bridge#28 and glTF#14.
+
 ## Adaptive Frame Hooks
 
 `@plasius/gpu-renderer` now exposes frame lifecycle hooks so the app can pass
