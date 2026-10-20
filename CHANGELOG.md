@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.53] - 2026-10-20
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Map six additional canonical material texture channels, align canonical types with core 0.5.0, and reject unsupported UV selections or texture transforms before they can be silently ignored.
 
 - **Security**
@@ -1270,3 +1284,4 @@ All notable changes to this project will be documented in this file.
 [0.2.50]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.50
 [0.2.51]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.51
 [0.2.52]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.52
+[0.2.53]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.53
