@@ -43,7 +43,8 @@ for (const [slot, extension, key] of slots) {
     assert.equal(normalized.materialExtensions.specular, 0.7);
     // Exercise the existing material packing path, not just retained metadata.
     const source = createWavefrontGpuMaterialSource([mesh]);
-    assert.ok(source);
+    assert.equal(source.records[0].extensionTextures[slot].data, sample.data);
+    assert.ok(source.extensionAtlases[slot].data.some(value => value === 32), "authored pixels must reach the packed channel atlas");
   });
 
   test(`rejects missing decoded ${slot} resources`, () => {
