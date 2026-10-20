@@ -64,17 +64,20 @@ test("maps canonical primitives, PBR material fields, and decoded standard textu
     ],
   );
 
-  const result = createCanonicalWavefrontMeshInputs({
+  const options = {
     document,
     geometry: [geometry("primitive-a"), geometry("primitive-b")],
     textures: new Map([["base-color", baseColorSample], ["normal", normalSample]]),
-  });
+  };
+  assert.throws(() => createCanonicalWavefrontMeshInputs(options), /supports only UV set 0/);
+  document.materials[0].textures.baseColor.texCoordSet = 0;
+  const result = createCanonicalWavefrontMeshInputs(options);
 
   assert.equal(result.length, 2);
   assert.deepEqual(result[0].baseColor, [0.2, 0.4, 0.6, 0.75]);
   assert.equal(result[0].metallic, 0.8);
   assert.equal(result[0].roughness, 0.3);
-  assert.deepEqual(result[0].baseColorTexture, { ...baseColorSample, texCoord: 1 });
+  assert.deepEqual(result[0].baseColorTexture, { ...baseColorSample, texCoord: 0 });
   assert.deepEqual(result[0].normalTexture, { ...normalSample, texCoord: 0, scale: 0.4 });
   assert.equal(result[0].materialRefId, 1);
   assert.equal(result[1].materialRefId, 2);

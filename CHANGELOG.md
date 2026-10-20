@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Map six additional canonical material texture channels, align canonical types with core 0.5.0, and reject unsupported UV selections or texture transforms before they can be silently ignored.
 
 - **Security**
   - (placeholder)
