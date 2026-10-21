@@ -51,6 +51,14 @@ For development, `?qualificationOrder=4k-first` changes the automated sequence's
 order only; all six native captures and all count/preflight/image gates remain
 required. The default order is unchanged. Existing evidence is never replaced.
 
+The local room fixture additionally accepts `opticalJournal=u,v,sample;…` for at
+most eight explicitly selected successful samples, with finite UVs in `[0,1)`.
+Use uniform sampling, bounded+nested staged transport and no splitting. This
+default-off diagnostic reuses the original compiled camera/bounce pipelines,
+retains per-bounce geometry/medium records, and does not commit samples or image
+radiance. Unsupported selections fail; buffers are freed and modes restored.
+Captures with journals include replay costs and are not performance results.
+
 The opt-in `renderer.sampling.fixedPattern.enabled` path now uses the existing
 independently keyed transport draws with the exact previous camera coordinates,
 including pixel centre at 1 SPP. Its room label is **Fixed camera · corrected transport**;

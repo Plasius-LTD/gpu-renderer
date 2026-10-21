@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add explicit, bounded successful-sample optical journals to the local uniform
+  room fixture, using original compiled camera/bounce transport without sample
+  commits. Validate URL selections before GPU work, restore diagnostic modes and
+  clean private buffers on failures. Preserve failure-only behavior and all
+  source-bound scene evidence; diagnostic-inclusive timing is not performance
+  evidence. This supports residual banding analysis, not a banding fix (#234).
+
 - Certify unresolved nested optical positions across exact coplanar internal
   diagonals using a bounded existing-BVH search, reverse shared edges and matching
   mesh/medium/material ownership. Retain the native 4K rejection and add exact

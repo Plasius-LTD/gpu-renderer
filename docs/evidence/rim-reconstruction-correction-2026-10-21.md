@@ -140,3 +140,21 @@ consumer, build, public package, all nine Zero-Three gates and runtime audit
 `998cbc8590e7c19fde02466697c549e2b83de23966330bd54b0f8a9520d34e14`.
 Source-pinned CI and native/image results are still required. Shader fingerprints
 are updated after independent functional tests, not substituted for those tests.
+
+### Successful-sample diagnostic preparation
+
+Add bounded explicit `opticalJournal=u,v,sample;…` selections to the local fixture
+for mechanism analysis of count-complete uniform captures. The default has no
+journal allocation/replay. Selected successful samples reuse the original compiled
+camera/bounce pipelines in the retained phase, never fake a failure or commit
+sample/radiance output. Reject unavailable modes/ordinals, validate selection
+identity, restore diagnostic mode and destroy private buffers on failure.
+Retained timings include diagnostic replay and cannot qualify performance.
+
+Requirements-first selection tests initially fail on the absent module. Unit
+selection, actual page pre-GPU rejection, canonical replay reuse, successful versus
+failure-only behavior, mode restoration and cleanup pass. Full local suite:
+478 tests; 96.45% lines / 83.20% branches. Lint, types/clean consumer, build,
+package, all nine Zero-Three gates and runtime audit pass. No runtime shader change
+or new physical/banding result is part of this diagnostic-only change. The running
+immutable 665e2bd matrix continues unaffected; preserve its source identity.

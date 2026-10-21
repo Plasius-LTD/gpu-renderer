@@ -170,3 +170,24 @@ identity/disabled and device regressions, then full gates/CI and the full native
 matrix. Allow an explicitly validated development qualification order so 4K can
 run first without dropping any 1080p lanes; keep the default order unchanged.
 Banding/energy correctness and adaptive performance remain unqualified.
+
+## Selected successful-sample diagnostic acceptance
+
+If count-complete uniform images retain bands, capture bounded selected successful
+camera-sample journals rather than inventing a failure or inferring transport
+from screenshots. Fixture-only, default-off URL selections (at most eight finite
+UV/sample triples) must validate before GPU work. Use the original compiled
+camera/intersection/surface/bounce pipelines and retained worklist/config in the
+selected tile's last phase; unsupported modes or unavailable ordinals fail closed.
+No camera resampling, new material model, accepted count/radiance commit or
+ordinary rendering allocation. Restore diagnostics mode after the separate replay,
+free private journal buffers on every path, and label diagnostic-inclusive times
+as unsuitable for performance. Keep the original failure-only API/labels intact.
+
+Requirements-first tests cover selection bounds, unsupported configurations,
+original pixel/sample identity, canonical encoder reuse, no completion/output
+passes, mode restoration, allocation/compilation/readback failure cleanup and
+unchanged default capture behavior. Retain selected per-bounce geometry/medium
+records in the receipt; compare bands with clear regions and empty/filled controls.
+This is mechanism evidence, not a full image-convergence or energy pass. Existing
+default-off transport flags, Task234/Feature2114 ownership and Zero-Three remain.

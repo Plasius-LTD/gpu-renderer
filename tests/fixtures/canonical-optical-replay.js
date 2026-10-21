@@ -58,9 +58,9 @@ export function decodeCanonicalJournal(bytes){
  return records;
 }
 
-export function encodeCanonicalReplay(encoder,{frameEncoder,tile,frameOffset,phaseOffset,counters,shared,sharedGroup,dispatch,pipelines,journal}){
+export function encodeCanonicalReplay(encoder,{frameEncoder,tile,frameOffset,phaseOffset,counters,shared,sharedGroup,dispatch,pipelines,journal,label='failure-only'}){
  encoder.clearBuffer(counters);
- const prepare=encoder.beginComputePass({label:'failure-only-canonical-prepare'});
+ const prepare=encoder.beginComputePass({label:label+'-canonical-prepare'});
  prepare.setPipeline(shared.prepare);prepare.setBindGroup(0,sharedGroup,[frameOffset,phaseOffset]);prepare.dispatchWorkgroupsIndirect(dispatch,0);prepare.end();
  const observed=new Proxy(encoder,{get(target,key){
   if(key!=='beginComputePass'){const value=target[key];return typeof value==='function'?value.bind(target):value;}
@@ -85,17 +85,26 @@ export function encodeCanonicalReplay(encoder,{frameEncoder,tile,frameOffset,pha
 // Only after a rejected tile. Never resolve radiance or commit sample counts.
 // Preserve the original compiled pipelines, worklist, dynamic config and phase.
 export async function replayCanonicalFailure(c,{config,tile,ranges,failure}){
+ return captureCanonicalJournal(c,{config,tile,ranges,selection:failure,failureOnly:true});
+}
+// An explicitly selected successful sample is not represented as a failure.
+// Its original worklist/config are still required; no image/count commits occur.
+export async function captureCanonicalSelection(c,{config,tile,ranges,selection}){
+ return captureCanonicalJournal(c,{config,tile,ranges,selection,failureOnly:false});
+}
+async function captureCanonicalJournal(c,{config,tile,ranges,selection,failureOnly}){
  if(config.roughBounceSplitting?.enabled||!(config.transportExperimentFlags&16384))return {status:'unsupported',reason:'canonical-journal-requires-bounded-single-continuation'};
  const {device,frameEncoder,counters,shared,sharedGroup,b,pipelines,descriptors,wait,read}=c;
- const phase=ranges.findIndex(r=>failure.sample>=r.firstSample&&failure.sample<r.sampleLimit);
+ const phase=ranges.findIndex(r=>selection.sample>=r.firstSample&&selection.sample<r.sampleLimit);
  if(phase<0)throw Error('Failed ordinal is outside retained tile phases');
  if(phase!==ranges.length-1)return {status:'unsupported',reason:'original-phase-worklist-no-longer-retained'};
- const code=canonicalJournalShader({pixel:failure.pixel,sample:failure.sample,maxDepth:config.maxDepth});
+ const code=canonicalJournalShader({pixel:selection.pixel,sample:selection.sample,maxDepth:config.maxDepth});
+ const label=failureOnly?'failure-only':'selected-sample';
  const size=config.maxDepth*2*RECORD_WORDS*4;
- const buffer=device.createBuffer({label:'failure-only-canonical-journal',size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
+ const buffer=device.createBuffer({label:label+'-canonical-journal',size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
  try{
-  const module=device.createShaderModule({label:'failure-only-canonical-journal',code});
-  await wait(assertShaderModuleCompiles(module,'failure-only-canonical-journal'));
+  const module=device.createShaderModule({label:label+'-canonical-journal',code});
+  await wait(assertShaderModuleCompiles(module,label+'-canonical-journal'));
   const layout=device.createBindGroupLayout({entries:[0,1,2,3].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}}))});
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
   const journal={groups:['activeNext','nextActive'].map(name=>{
@@ -106,11 +115,11 @@ export async function replayCanonicalFailure(c,{config,tile,ranges,failure}){
   c.setMode(false,false);
   // Restore only the sticky control failure; the entire original worklist and
   // dispatch count remain intact. This is not a retry of an accepted render.
-  device.queue.writeBuffer(b.primaryControl,4,new Uint32Array([0]));
+  if(failureOnly)device.queue.writeBuffer(b.primaryControl,4,new Uint32Array([0]));
   const encoder=device.createCommandEncoder();
-  encodeCanonicalReplay(encoder,{frameEncoder,tile,frameOffset:failure.sample*config.memory.configBufferStride,phaseOffset:phase*256,counters,shared,sharedGroup,dispatch:b.dispatch,pipelines,journal});
+  encodeCanonicalReplay(encoder,{frameEncoder,tile,frameOffset:selection.sample*config.memory.configBufferStride,phaseOffset:phase*256,counters,shared,sharedGroup,dispatch:b.dispatch,pipelines,journal,label});
   device.queue.submit([encoder.finish()]);await wait(device.queue.onSubmittedWorkDone());
-  return {status:'captured',scope:'failure-only-canonical-tile-sample; no accepted image or performance claim',allocatedBytes:size,
-   pixel:failure.pixel,sample:failure.sample,records:decodeCanonicalJournal(await read(buffer,size))};
+  return {status:'captured',scope:label+'-canonical-tile-sample; no accepted image or performance claim',allocatedBytes:size,
+   pixel:selection.pixel,sample:selection.sample,records:decodeCanonicalJournal(await read(buffer,size))};
  }finally{buffer.destroy();}
 }

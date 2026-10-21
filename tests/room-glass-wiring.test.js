@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
 import * as ui from './fixtures/room-demo-ui.js';
 import {MAX_ROUGH_SPLIT_PATH_DEPTH} from '../src/wavefront-rough-bounce-splitting.js';
+import {opticalSelectionsFromSearch} from './fixtures/optical-selection.js';
 
 test('actual room page initializes, forwards and resets canonical support clearance without GPU work',async()=>{
  const filename=fileURLToPath(new URL('./fixtures/native-room-reference.js',import.meta.url));
@@ -20,13 +21,13 @@ test('actual room page initializes, forwards and resets canonical support cleara
  const defaults={mode:'off',fill:.55,x:2.85,z:-.1,radius:.055,height:.18,glassIor:1.5,waterIor:1.333,supportClearance:0,distance:.45,elevation:25};
  let forwarded;
  const depthLimits={minimum:1,maximum:20,default:6};let requestedDepth;
- const context=vm.createContext({document,...ui,ROOM_CAPTURE_DEPTH_LIMITS:depthLimits,MAX_ROUGH_SPLIT_PATH_DEPTH,
+ const context=vm.createContext({document,...ui,ROOM_CAPTURE_DEPTH_LIMITS:depthLimits,MAX_ROUGH_SPLIT_PATH_DEPTH,opticalSelectionsFromSearch,location:{search:''},
   ROOM_LIGHTING_DEFAULTS:{style:'daylight',intensity:1,minimumIntensity:0,maximumIntensity:10},
   ROOM_COAT_DEFAULTS:{weight:1,roughness:.1},GLASS_WATER_DEFAULTS:defaults,
   ROOM_DEFAULTS:{centralReference:'seating',view:'entry',fovYDegrees:52,x:1,z:2,yaw:3},
   CLOTH_INSPECTION_DEFAULTS:{distance:1,elevation:30,target:[.5,.5,.5]},CLOTH_RESPONSE_DEFAULTS:{elevation:30,intensity:1},
   RADIAL_MAXIMUM_SPP:256,RADIAL_SAMPLING_DEFAULTS:{maximumSpp:32,areaPercent:[100]},
-  radialSamplingTiers:()=>[32],roomReferenceSettings:(_resolution,sampler,_spp,maxDepth)=>{requestedDepth=maxDepth;return {sampler,maxDepth};},
+  radialSamplingTiers:()=>[32],roomReferenceSettings:(_resolution,sampler,_spp,maxDepth)=>{requestedDepth=maxDepth;return {sampler,maxDepth,width:1920,height:1080,maximumSpp:32};},
   glassWaterSettings:s=>{forwarded=s;throw Error('intentional stop before GPU work');},
  });
  new vm.Script(source,{filename}).runInContext(context);
@@ -70,4 +71,8 @@ test('actual room page initializes, forwards and resets canonical support cleara
  }
  nodes.get('max-depth').value=String(MAX_ROUGH_SPLIT_PATH_DEPTH);
  await nodes.get('run').listeners.click();assert.equal(requests,3,'existing split-depth range still admitted');
+ nodes.get('splitting').value='0';context.location.search='?opticalJournal=1,0,0';
+ await nodes.get('run').listeners.click();assert.match(nodes.get('status').textContent,/Invalid optical journal/);assert.equal(requests,3);
+ context.location.search='?opticalJournal=.5,.5,0';nodes.get('sample-distribution').value='radial';
+ await nodes.get('run').listeners.click();assert.match(nodes.get('status').textContent,/requires uniform bounded nested/);assert.equal(requests,3);
 });

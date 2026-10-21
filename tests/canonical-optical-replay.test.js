@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {analyzeWgslSource} from '@plasius/gpu-shader/node';
-import {canonicalJournalShader,decodeCanonicalJournal,encodeCanonicalReplay,replayCanonicalFailure} from './fixtures/canonical-optical-replay.js';
+import {canonicalJournalShader,decodeCanonicalJournal,encodeCanonicalReplay,replayCanonicalFailure,captureCanonicalSelection} from './fixtures/canonical-optical-replay.js';
 
 test('canonical journal is bounded, read-only on transport and rejects ambiguous siblings',()=>{
  const code=canonicalJournalShader({pixel:2470753,sample:92,maxDepth:20});
@@ -33,8 +33,12 @@ test('failure-only replay guards unsupported histories, reuses config, and clean
  assert.equal(result.status,'captured');assert.equal(result.allocatedBytes,10240);assert.deepEqual(result.records,[]);
  assert.deepEqual(calls,[[false,false]]);assert.equal(writes.length,1);assert.equal(writes[0][0],'control');assert.equal(writes[0][1],4);
  assert.ok(allocated.every(b=>b.destroyed));
+ const successful=await captureCanonicalSelection(c,{...options,selection:options.failure});
+ assert.equal(successful.status,'captured');assert.match(successful.scope,/selected-sample/);
+ assert.equal(writes.length,1,'successful selection never clears a failure word');assert.ok(allocated.every(b=>b.destroyed));
  c.read=async()=>{throw Error('lost');};await assert.rejects(replayCanonicalFailure(c,options),/lost/);assert.ok(allocated.every(b=>b.destroyed));
  device.createShaderModule=()=>{throw Error('compile');};await assert.rejects(replayCanonicalFailure(c,options),/compile/);assert.ok(allocated.every(b=>b.destroyed));
+ await assert.rejects(captureCanonicalSelection(c,{...options,selection:options.failure}),/compile/);assert.ok(allocated.every(b=>b.destroyed));
  const before=allocated.length;
  assert.equal((await replayCanonicalFailure(c,{...options,config:{...options.config,roughBounceSplitting:{enabled:true}}})).status,'unsupported');
  assert.equal((await replayCanonicalFailure(c,{...options,ranges:[...options.ranges,{firstSample:128,sampleLimit:256}]})).reason,'original-phase-worklist-no-longer-retained');

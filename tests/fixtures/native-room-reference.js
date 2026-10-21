@@ -13,6 +13,7 @@ import {ROOM_COAT_DEFAULTS,withRoomWoodCoat} from './room-clearcoat-settings.js'
 import {GLASS_WATER_DEFAULTS,glassWaterSettings,withRoomGlass} from '/lighting/demo/eames-environments/glass-water-reference.js';
 import {createRoomDemoPresets,installRoomDemoUi,roomFocusSettings,revealInvalidControl,setRoomPreviewState,invalidateRoomCaptureUi} from './room-demo-ui.js';
 import {runRoomQualification,roomQualificationSettingsFromSearch} from './room-qualification.js';
+import {opticalSelectionsFromSearch} from './optical-selection.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
@@ -120,6 +121,11 @@ async function captureRoomReference({qualification=false}={}){
  let glass;try{glass=glassSelection();}catch(error){status.textContent=error.message;return;}
  if(woodCoat.enabled&&!layeredClearcoat){status.textContent='Enable the layered clearcoat renderer before adding the wood varnish variant.';return;}
  const distribution=el('sample-distribution').value,materialInspection=el('material-inspection').value==='on';
+ let opticalJournal;
+ try{
+  opticalJournal=opticalSelectionsFromSearch(location.search,settings);
+  check(!opticalJournal.length||(distribution==='uniform'&&boundedDielectricBranching&&nestedMediaRefraction&&!splitDepth),'Selected optical journal requires uniform bounded nested transport');
+ }catch(error){status.textContent=error.message;return;}
  const closeup=closeupControls();
  if(materialInspection&&!guidedDenoise){status.textContent='Select guided denoising to capture material inspection views.';return;}
  if(splitDepth&&settings.sampler!=="stable-pattern"){status.textContent="Select the stable sampler to test splitting.";return;}
@@ -172,7 +178,7 @@ async function captureRoomReference({qualification=false}={}){
   runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,boundedDielectricBranching,nestedMediaRefraction,roughDielectricTransport,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===settings.maxDepth&&runner.sceneSnapshot.samplesPerPixel===settings.maximumSpp&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;
-  const frame=await runner.run(distribution,{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,onProgress:p=>{
+  const frame=await runner.run(distribution,{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,opticalJournal,onProgress:p=>{
    status.textContent=`Rendering room · ${p.completedTiles}/${p.totalTiles} tiles completed`;
   }});
   if(distribution==='radial')validateRoomFrame(frame,plan,settings);
