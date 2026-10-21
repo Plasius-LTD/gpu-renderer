@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Correct absent normal maps to preserve authored normals across CPU triangle,
+  GPU material and GPU mesh packing, without changing real map bytes or scales.
+  Add portable red regressions and assembled missing/authored/zero-scale normal
+  preflight. The matched selected-ray physical diagnostic completes with unchanged
+  HDR/PNG and all eight histories; it exposes pedestal/base-reflection paths, not
+  image convergence or a proven banding fix. New-source native qualification and
+  adaptive performance remain gated (#234).
+
 - Retain the complete six-lane native 1080p/4K uniform-32/depth-20 rim follow-up:
   all 995,328,000 camera samples, 120 HDR chunks, native images and cleanup verify.
   Earlier evidence remains unchanged. The water band is still visible and the

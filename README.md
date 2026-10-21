@@ -27,9 +27,15 @@ Browser access is working, but optical/image qualification is **not complete**.
 The [rim follow-up](docs/evidence/room-qualification-rim-followup-2026-10-21.md)
 now completes all six native 1080p/4K uniform-32/depth-20 captures on 665e2bd, with
 independently verified HDR, exact counts and cleanup. The broad water band remains
-visible; correctness and adaptive-performance gates stay open. Selected-ray
-diagnostics are prepared but their physical run is blocked by unavailable approval
-for browser dropdown automation. No bypass or manual-render handoff is attempted.
+visible; correctness and adaptive-performance gates stay open. The selected-ray
+physical run now completes all 66,355,200 camera samples with all eight journals
+([selected-path evidence](docs/evidence/selected-optical-paths-2026-10-21.md));
+raw HDR and PNG exactly match the retained control. Histories show pedestal
+visibility and base internal reflection, not full-band correctness. They also
+expose an absent-normal-map packing defect: the quantised fallback tilts normals
+without an authored map. Missing maps now use zero normal strength in every mesh
+packing path; authored maps/scales remain unchanged. New-source native image
+qualification remains required; no band-removal or performance claim is made.
 
 The next rim correction interpolates the small triangle-edge offsets before
 adding the large base coordinate. The frozen 4K case and its sign/axis/vertex-order

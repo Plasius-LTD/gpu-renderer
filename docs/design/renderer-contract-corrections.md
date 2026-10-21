@@ -201,3 +201,28 @@ Do not re-evaluate lighting, add radiance/count commits, overwrite path nodes or
 change the original failure-only allocation/API. Validate shader bindings,
 post-surface/pre-swap order, exact decoding/identity and failure cleanup before
 physical use. These records are diagnostic-inclusive, not performance evidence.
+
+## Absent normal-map identity — 21 October
+
+The selected physical capture completes all 66,355,200 samples and retains all
+eight geometry/surface histories. Its HDR and PNG exactly match the frozen
+uniform-32 control. Histories show pedestal visibility, base internal reflection,
+five roulette and three environment terminations; none reaches depth 20. These
+eight paths do not certify the complete band's convergence or physical accuracy.
+
+They also expose a separate material defect: meshes without authored normal maps
+still decode the RGBA8 fallback [128,128,255] at strength one. Its tangent x/y
+components are 1/255, not zero, tilting glass, water and pedestal shading normals.
+Before correction add red portable tests for omitted/null maps through CPU and
+packed triangles, GPU materials and GPU mesh sources, including nested material
+input. Pack the existing normal scale as zero only for absent maps. Keep authored
+images and explicit/default scales unchanged; do not recenter authored byte 128.
+
+Extend assembled physical material preflight with missing-map identity and real
+map/zero-scale controls against analytic normals. No ABI/resource/pipeline,
+sampling/geometry/BSDF/PDF/MIS or medium change. Existing flags remain unchanged;
+this is a material packing correction, not a new performance policy. Require
+full local gates, changed-source LCOV and exact-head CI, then native matched
+1080p/4K controls and independent image review. Preserve defective controls as
+history, not current baselines. Band removal, energy/convergence and adaptive
+performance remain unqualified. Acceptance: Task234 comment6316459126.

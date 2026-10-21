@@ -24,6 +24,12 @@ function clampUnit(value) {
   return clamp(Number(value) || 0, 0, 1);
 }
 
+function normalTextureScale(texture) {
+  // RGBA8 cannot represent an exact tangent-space zero at 0.5. An absent
+  // map must not perturb authored normals through its quantised fallback.
+  return texture == null ? 0 : clampUnit(texture.scale ?? texture.strength ?? 1);
+}
+
 function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
   const source = Array.isArray(meshes) ? meshes : [];
   const resolvedMaterialSource = gpuMaterialSource ?? createWavefrontGpuMaterialSource(source);
@@ -120,7 +126,7 @@ function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
             resolvedMaterialSource.emissiveAtlas.resolveRect(mesh.emissiveTexture)
           ),
           textureSettings: Object.freeze([
-            clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
+            normalTextureScale(mesh.normalTexture),
             clampUnit(mesh.occlusionTexture?.strength ?? 1),
             clampUnit(mesh.emissiveTexture?.strength ?? 1),
             mesh.textureUvMask,
@@ -498,7 +504,7 @@ export function createWavefrontGpuMaterialSource(meshes = []) {
     writeVec4(floatView, byteOffset + 144, occlusionAtlas.resolveRect(mesh.occlusionTexture));
     writeVec4(floatView, byteOffset + 160, emissiveAtlas.resolveRect(mesh.emissiveTexture));
     writeVec4(floatView, byteOffset + 176, [
-      clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
+      normalTextureScale(mesh.normalTexture),
       clampUnit(mesh.occlusionTexture?.strength ?? 1),
       clampUnit(mesh.emissiveTexture?.strength ?? 1),
       mesh.textureUvMask,
@@ -709,7 +715,7 @@ export function createWavefrontGpuMeshSource(meshes = [], gpuMaterialSourceInput
       gpuMaterialSource.emissiveAtlas.resolveRect(mesh.emissiveTexture)
     );
     writeVec4(meshFloats, floatOffset * 4 + 224, [
-      clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
+      normalTextureScale(mesh.normalTexture),
       clampUnit(mesh.occlusionTexture?.strength ?? 1),
       clampUnit(mesh.emissiveTexture?.strength ?? 1),
       mesh.textureUvMask,

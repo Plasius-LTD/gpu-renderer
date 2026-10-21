@@ -30,7 +30,12 @@ export async function runMaterialFidelityProbe(signal){
   const meshes=cases.map(options=>({positions:[0,0,0,1,0,0,0,1,0],indices:[0,1,2],uvs:[.37,.26,.37,.26,.37,.26],
    color:[1,1,1,1],sheenColor:[1,1,1],sheenRoughness:.8,
    ...Object.fromEntries(names.map(name=>[name+'Texture',{width:4,height:4,data:pixels,...options}]))}));
-  const material=createWavefrontGpuMaterialSource(meshes),triangles=createWavefrontMeshAcceleration(meshes,material).triangles;
+  const normalTexel=[200,90,230,255];
+  const normalCases=[undefined,null,{width:1,height:1,data:new Uint8Array(normalTexel)},
+   {width:1,height:1,data:new Uint8Array(normalTexel),scale:0}];
+  const normalMeshes=normalCases.map(normalTexture=>({positions:[0,0,0,1,0,0,0,1,0],indices:[0,1,2],normalTexture}));
+  const allMeshes=[...meshes,...normalMeshes];
+  const material=createWavefrontGpuMaterialSource(allMeshes),triangles=createWavefrontMeshAcceleration(allMeshes,material).triangles;
   const metadata=createMaterialTextureResource(device,{texture:GPUTextureUsage},material.textureMetadata);
   const lut=createBrdfLutResource(device,{texture:GPUTextureUsage},128,true);owned.push(metadata.texture,lut.texture);
   const bindings=[23,24,25,26,27,...Array.from({length:12},(_,i)=>33+i)];
@@ -52,18 +57,24 @@ export async function runMaterialFidelityProbe(signal){
     hit.materialResponse=vec4<f32>(1,0.329,0.1,0);hit.materialExtension.y=1.0;
     hit.specularColor=vec4<f32>(1,1,1,0.8);hit.occlusion=1.0;hit.shadingNormal=vec4<f32>(0,0,1,0);
     accumulation[base+19u]=vec4<f32>(evaluate_surface_bsdf(hit,v,l),evaluate_surface_bsdf_pdf(hit,v,l));
+   }
+   @compute @workgroup_size(1) fn neutralNormalProbe(@builtin(global_invocation_id) id:vec3<u32>){
+    let t=triangles[${cases.length}u+id.x];
+    let material=sample_surface_material(t,vec2<f32>(0.37,0.26),vec3<f32>(1,0,0),vec3<f32>(0,0,1),vec3<f32>(0,0,1));
+    accumulation[id.x]=vec4<f32>(material.shadingNormal,1);
    }`});
   await wait(assertShaderModuleCompiles(module,'material-fidelity'));
   const pipeline=await wait(device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'materialProbe'}}));
-  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[
+  const entries=[
    {binding:3,resource:{buffer:output}},{binding:5,resource:{buffer:frameBuffer}},
    {binding:8,resource:{buffer:buffer(packWavefrontTriangles(triangles).buffer,GPUBufferUsage.STORAGE)}},
    {binding:28,resource:device.createSampler({minFilter:'nearest',magFilter:'nearest'})},
    {binding:29,resource:lut.view},{binding:30,resource:lut.sampler},{binding:45,resource:metadata.view},
-   ...names.map((name,i)=>({binding:bindings[i],resource:texture(i<5?material[name+'Atlas']:material.extensionAtlases[name])}))]});
+   ...names.map((name,i)=>({binding:bindings[i],resource:texture(i<5?material[name+'Atlas']:material.extensionAtlases[name])}))];
+  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries});
   const staging=buffer(output.size,GPUBufferUsage.MAP_READ);
-  const run=async()=>{const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();
-   pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(cases.length);pass.end();
+  const run=async(selectedPipeline=pipeline,count=cases.length,selectedGroup=group)=>{const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();
+   pass.setPipeline(selectedPipeline);pass.setBindGroup(0,selectedGroup);pass.dispatchWorkgroups(count);pass.end();
    encoder.copyBufferToBuffer(output,0,staging,0,output.size);device.queue.submit([encoder.finish()]);
    await wait(staging.mapAsync(GPUMapMode.READ));const values=new Float32Array(staging.getMappedRange().slice(0));staging.unmap();return values;};
   const values=await run();let maxTextureError=0,maxSheenRelativeError=0;
@@ -85,9 +96,22 @@ export async function runMaterialFidelityProbe(signal){
   check(maxSheenRelativeError<.01,'sheen GPU/CPU mismatch '+maxSheenRelativeError);
   frame[67]=0;device.queue.writeBuffer(frameBuffer,0,frame);const off=await run();
   check(off.some((v,i)=>i%80>=76&&Math.abs(v-values[i])>1e-5),'sheen flag had no effect');
+  const normalPipeline=await wait(device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'neutralNormalProbe'}}));
+  const normalGroup=device.createBindGroup({layout:normalPipeline.getBindGroupLayout(0),entries:entries.filter(e=>![29,30].includes(e.binding))});
+  const normalValues=await run(normalPipeline,normalCases.length,normalGroup);
+  const authored=normalTexel.slice(0,3).map(v=>v/255*2-1),length=Math.hypot(...authored);
+  const expectedNormals=[[0,0,1],[0,0,1],authored.map(v=>v/length),[0,0,1]];
+  let maxNormalError=0;
+  for(let i=0;i<normalCases.length;i++)for(let c=0;c<3;c++){
+   const actual=normalValues[i*4+c];check(Number.isFinite(actual),'non-finite normal');
+   maxNormalError=Math.max(maxNormalError,Math.abs(actual-expectedNormals[i][c]));
+  }
+  check(maxNormalError<1e-6,'absent/authored normal mismatch '+maxNormalError);
   const error=await wait(device.popErrorScope());check(!error,error?.message);
   const authoredColour=await runAuthoredColourProbe(device,wait);
   const clearcoat=await runClearcoatProbe(device,wait);
-  return {passed:true,cases:cases.length,slots:17,maxTextureError,maxSheenRelativeError,sheenFlagIndependent:true,authoredColour,clearcoat,scope:'assembled-material-correctness-not-performance'};
+  return {passed:true,cases:cases.length,slots:17,maxTextureError,maxSheenRelativeError,sheenFlagIndependent:true,
+   normalIdentity:{passed:true,cases:normalCases.length,maxNormalError,tolerance:1e-6,expectedNormals,actualNormals:Array.from(normalValues.slice(0,normalCases.length*4))},
+   authoredColour,clearcoat,scope:'assembled-material-correctness-not-performance'};
  }finally{owned.forEach(r=>r.destroy());device.destroy();}
 }

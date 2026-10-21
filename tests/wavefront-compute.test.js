@@ -2138,7 +2138,7 @@ test("wavefront GPU mesh source packs raw mesh buffers without CPU BVH output", 
   );
   assert.deepEqual(round(meshFloats.slice(12, 16)), [0.25, 0.5, 0.75, 0.9]);
   assert.deepEqual(round(meshFloats.slice(36, 40)), round(materialSource.baseColorAtlas.defaultRect));
-  assert.deepEqual(round(meshFloats.slice(56, 60)), [1, 1, 1, 0]);
+  assert.deepEqual(round(meshFloats.slice(56, 60)), [0, 1, 1, 0]);
 });
 
 test("wavefront GPU material source packs per-mesh factors and atlases", () => {

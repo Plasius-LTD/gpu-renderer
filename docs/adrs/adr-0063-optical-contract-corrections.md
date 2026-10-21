@@ -191,3 +191,21 @@ The 30th assembled physical preflight checks the captured shared face and reject
 a one-ULP fold and changed medium. Independent exact-determinant/topology/BVH tests
 precede native six-lane qualification. Extra private shader cost is unmeasured;
 this is a correctness refinement, not adaptive performance evidence.
+
+## Absent normal-map identity follow-up — 21 October 2026
+
+The selected successful-sample physical journals expose a separate packing defect:
+an absent normal texture uses the RGBA8 [128,128,255] fallback at scale one. Since
+128/255 is not 0.5, its decoded x/y components are nonzero. Glass, water and the
+pedestal therefore receive an unauthored normal tilt. This does not by itself
+establish the cause of the broad band.
+
+Set the existing normal scale to zero for omitted/null textures in CPU triangle,
+GPU material and GPU mesh packing. Retain authored images and their scales,
+including explicit zero; do not reinterpret byte 128 in real maps. The shader,
+ABI, resources, BSDF/PDF/MIS and medium contracts do not change. This intentionally
+corrects no-map behavior under existing controls rather than preserving a broken
+fallback behind a new flag. Require portable packing regressions, assembled
+physical absent/authored/zero-scale normal checks and matched native captures.
+Preserve previous source-bound images and do not infer convergence, band removal
+or adaptive-performance qualification from the packing fix.
