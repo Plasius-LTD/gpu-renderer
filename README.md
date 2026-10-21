@@ -17,6 +17,13 @@ other coordinates unchanged so a near-bottom exit is not rounded away. The
 [physical follow-up](docs/evidence/optical-origin-corner-2026-10-21.md) retains the
 failed capture and separates the numerical correction from pending full images.
 
+The [completed qualification attempt](docs/evidence/room-qualification-2026-10-21.md)
+now retains three successful native 1080p/uniform-32-SPP/20-bounce images, each with all
+66,355,200 camera samples, verified HDR and cleanup. The reported horizontal
+water band is still visible. The 4K empty-glass lane rejects a different rim
+hit-point reconstruction case; the remaining 4K lanes stop without running.
+Browser access is working, but optical/image qualification is **not complete**.
+
 The opt-in `renderer.sampling.fixedPattern.enabled` path now uses the existing
 independently keyed transport draws with the exact previous camera coordinates,
 including pixel centre at 1 SPP. Its room label is **Fixed camera · corrected transport**;
@@ -35,8 +42,8 @@ stops without retry on failure or cancellation, restores controls, and writes a
 summary with image review explicitly pending. Geometry and lighting retain the
 session's configuration and are recorded in each receipt. The underlying plan
 accepts validated resolution/SPP/depth variables. Native uniform captures can take
-considerable time. This batch has not yet run on the corrected physical build;
-full-scene image convergence, band removal, memory cost and matched-quality
+considerable time. The latest attempt and exact remaining failure are documented
+above; full-scene image convergence, band removal, memory cost and matched-quality
 performance remain unqualified. Adaptive performance work stays gated.
 
 The independent lane exposed a near-rim false collision: projected rounding

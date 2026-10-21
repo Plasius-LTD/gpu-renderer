@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Retain automated native room qualification: three 1080p uniform-32-SPP/20-bounce
+  captures pass count/HDR/cleanup checks, but the water band remains and the 4K
+  empty-glass lane rejects an independently reproduced in-plane rim reconstruction
+  defect. Record blocked later lanes, exact sources/hashes, visual limits and
+  restored UI state. Browser access works; adaptive/image/release gates remain
+  open. No additional runtime transport change is claimed (#234).
+
 - Preserve the first automated physical qualification failure and correct the
   tiny-normal-component origin rounding that collapsed a glass-wall point onto
   its bottom. Clear the same projected error on the dominant axis only; add the

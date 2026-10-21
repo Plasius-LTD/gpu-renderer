@@ -80,3 +80,18 @@ Require current edge/rim/corner/ordering, energy, sampling, complete-count,
 disabled, ABI and allocation checks, full local gates and exact-head CI. Retain
 the failed physical attempt and rerun the six native lanes on a new clean source
 pin. No adaptive timing work or band-removal claim before valid images/review.
+
+## Corrected rerun and remaining boundary — 21 October
+
+Build `7002c0e` passes all three 1080p uniform-32-SPP/20-bounce lane integrity checks, but
+filled-glass banding remains visible. The 4K empty-glass lane fails at
+pixel 2747573/sample 14/bounce 1. Reconstructed in-plane x shifts ~140 nm outside the
+admitted rim's neighbouring wall; its normal-projected error is correctly zero.
+Independent original-binary32 geometry finds the missing inner-wall exit before
+the canonical far-wall duplicate entry. The current position function reproduces
+the captured bad point exactly in numerical execution. No new runtime correction
+is included in this evidence follow-up. A normal-only offset/error contract is
+insufficient: preserve incident-triangle interior/topology under tangential
+reconstruction uncertainty before another native rerun. No hit/count tolerance,
+SPP/depth, medium reset or skipped interface may conceal this case.
+Full source-bound results and limits: docs/evidence/room-qualification-2026-10-21.md.
