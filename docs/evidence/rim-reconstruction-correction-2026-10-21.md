@@ -88,3 +88,19 @@ package, all nine Zero-Three gates and runtime audit pass. Canonical shader SHA2
 Whole-shader fingerprints are re-pinned only after the independent functional
 tests pass; no behavioral check or threshold is removed. Exact-head CI and the
 new native matrix are still required before physical qualification.
+
+### Physical compilation correction
+
+Source `5b51ea6` fails its first assembled dielectric preflight before any scene
+work: `line 3050:35 value inf cannot be represented as f32`. Constant evaluation
+rejects the initial infinity sentinel used for nearest-candidate distance.
+Preserve that failed capture and zero-lane aggregate. Add a red regression for
+the rejected construct, then initialize the best distance to finite zero: the
+existing independent valid bit already selects the first valid candidate, so
+selection, topology, hit thresholds and memory policy do not change. Physical
+rerun on the new immutable source remains mandatory.
+
+Finite-initializer local gates: 470 tests pass, 96.43% lines / 83.20% branches;
+changed-runtime LCOV 100%, lint/types/build/package/Zero-Three/runtime audit pass.
+Canonical shader SHA256:
+`47431e5b839b539a367cd29cab14bd4610a844d0bb5010317f5920a0ce6e26dd`.

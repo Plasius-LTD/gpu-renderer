@@ -31,7 +31,8 @@ fn optical_triangle_projected_position(triangle:TriangleRecord,point:vec3<f32>)-
   if(orientation==0.0){return vec4<f32>(point,0);}
   if(optical_projected_inside(triangle,point,axis,orientation)){return vec4<f32>(point,1);}
   let x=(axis+1u)%3u;let y=(x+1u)%3u;
-  var best=point;var bestDistance=bitcast<f32>(0x7f800000u);var valid=0.0;
+  // The valid bit selects the first candidate; no non-finite constant is needed.
+  var best=point;var bestDistance=0.0;var valid=0.0;
   // Exactly the eight adjacent lattice points, not an iterative geometric bias.
   // Keep the dominant normal coordinate; the existing normal-error bound covers
   // a single representable step in each of the other coordinates.

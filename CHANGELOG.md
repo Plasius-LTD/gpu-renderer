@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Replace a constant infinity sentinel rejected by physical WGSL preflight with
+  finite initialization and the existing candidate-valid bit; nearest-point
+  selection remains unchanged. Retain the failed preflight and red regression
+  before the corrected native qualification (#234).
+
 - Certify reconstructed nested-volume points against projected triangle edges,
   using an error filter and the existing exact predicate. Select the nearest
   certified adjacent binary32 neighbour when required; reject unresolvable

@@ -6,8 +6,14 @@ import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
 import {OpticalWgslExec as Exec,OpticalWgslParser as Parser} from './fixtures/optical-wgsl-executor.js';
 import {OPTICAL_RIM_RECONSTRUCTION_PROBE_WGSL,assertOpticalRimReconstructionProbe,OPTICAL_PROJECTED_INTERIOR_PROBE_WGSL,assertOpticalProjectedInteriorProbe} from './fixtures/optical-rim-reconstruction-probe.js';
 import {WAVEFRONT_INTERSECTION_BODY_WGSL} from '../src/wavefront-shader-kernels.js';
+import {OPTICAL_RECONSTRUCTION_WGSL} from '../src/wavefront-optical-reconstruction-shader.js';
 
 const frozen=JSON.parse(readFileSync(new URL('../docs/evidence/room-rim-reconstruction-2026-10-21.json',import.meta.url)));
+test('projected guard does not construct an invalid constant infinity sentinel',()=>{
+ // Physical Dawn preflight rejects this constant before any scene dispatch.
+ // The separate valid bit makes an infinite initial distance unnecessary.
+ assert.doesNotMatch(OPTICAL_RECONSTRUCTION_WGSL,/bitcast<f32>\(0x7f800000u\)/);
+});
 const source=WAVEFRONT_COMPUTE_WGSL.replace(functionSource('transport_experiment_enabled'),
  'fn transport_experiment_enabled(flag:u32)->bool{return (flag & 32768u)!=0u;}')+`
  @group(1) @binding(0)var<storage,read>cases:array<vec4<f32>>;
