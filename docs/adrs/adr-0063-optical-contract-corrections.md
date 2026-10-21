@@ -115,3 +115,27 @@ coordinate and at least the required normal projection; old corner/rim/order
 and disabled tests remain. Add the exact case to assembled physical preflight
 and repeat all native scene lanes on the corrected immutable build before
 claiming scene quality, band removal or adaptive performance qualification.
+
+## Tangential rim reconstruction follow-up — 21 October 2026
+
+The first corrected native batch completes its three 1080p controls, then fails
+4K empty glass at pixel 2747573/sample 14. The exact constant-y rim has zero
+normal-projected error, but inserting the large base between two edge products
+rounds x ~140 nm outside the incident triangle. A nearby inner-wall exit is lost.
+The [frozen evidence](../evidence/room-rim-reconstruction-2026-10-21.json) retains
+original binary32 geometry and the independent next-exit comparison.
+
+Interpolate small edge offsets before adding the base once. Use explicit fma for
+the edge sum, but test the non-fused alternative too; WGSL does not inherit HLSL
+precise guarantees. Existing AABB/interior-coordinate handling and normal-error
+offset remain. The exact case, both signs, cyclic axes and all six vertex orders
+must reconstruct inside the triangle and retain the distinct next exit. The
+canonical device probe tests camera-derived and captured barycentrics, and
+rejects the old base-first reconstruction. No new buffers, passes, ABI fields,
+threshold, occupancy repair, sampling sequence or BSDF policy is introduced.
+Ordinary collision admission remains covered by its frozen disabled oracle.
+
+This arithmetic correction is not a universal representable-topology guarantee.
+The full native matrix and separate image/convergence review remain mandatory;
+banding is not cleared by numerical tests. Preserve all earlier failures and
+keep adaptive performance and publication gains gated. Three.js cannot be used.

@@ -95,3 +95,30 @@ insufficient: preserve incident-triangle interior/topology under tangential
 reconstruction uncertainty before another native rerun. No hit/count tolerance,
 SPP/depth, medium reset or skipped interface may conceal this case.
 Full source-bound results and limits: docs/evidence/room-qualification-2026-10-21.md.
+
+## Active rim-reconstruction correction — 21 October
+
+The user approved correcting the frozen 4K case and automatically rerunning the
+full native matrix. Task #234 remains assigned/In progress under the same parent
+and default-off controls. The new exact-case test fails before runtime changes:
+the reconstructed point has a negative projected barycentric weight, and loses
+the distinct inner-wall exit. Require all signs, cyclic axes and six vertex
+orders, not just agreement with one expected point.
+
+First evaluate the minimal arithmetic correction: interpolate the small edge
+offsets before adding the large base coordinate, with explicit fused/non-fused
+variants. This reduces reconstruction rounding, not triangle coverage or an
+interface threshold. NVIDIA's [hit-point analysis](https://developer.nvidia.com/blog/solving-self-intersection-artifacts-in-directx-raytracing/)
+motivates adding the base last; its HLSL precise guarantees must not be assumed
+for WGSL. Retain genuine edges/vertices, constant axes, representable interior
+bounds and the existing normal-error contract. A counterexample to triangle
+interiority must remain a failure, not be hidden by an offset or medium reset.
+
+Add the captured case to final assembled device preflight; run the existing
+geometry/order/corner/cursor, ordinary disabled collision, sampling/energy/count
+and full local gates, then commit/push/verify CI and serve the immutable source.
+Rerun all six uniform-32-SPP/20-bounce native 1080p/4K controls through UI input.
+Retain every before/failure/HDR/PNG receipt and review bands separately from
+integrity. If bands remain, isolate their transport/sampling cause with matched
+controls; no adaptive performance work or success publication until correctness
+and image gates pass. Three.js is prohibited; no new allocations or fallback.

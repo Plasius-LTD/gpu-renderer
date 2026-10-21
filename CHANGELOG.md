@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Interpolate triangle-edge offsets before adding the large base coordinate so
+  the retained 4K rim hit does not round outside its face and miss the adjacent
+  glass exit. Add sign/axis/vertex-order and fused/non-fused regressions plus a
+  canonical physical preflight. No hit/count/medium tolerance, ABI, allocation,
+  BSDF, bounce or sampling-policy change. Native recapture and banding review
+  remain separate required gates; adaptive performance stays paused (#234).
+
 - Retain automated native room qualification: three 1080p uniform-32-SPP/20-bounce
   captures pass count/HDR/cleanup checks, but the water band remains and the 4K
   empty-glass lane rejects an independently reproduced in-plane rim reconstruction

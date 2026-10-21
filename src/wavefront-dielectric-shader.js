@@ -153,8 +153,11 @@ fn optical_interior_bound(value: f32, lower: f32, upper: f32) -> f32 {
 fn optical_triangle_position(triangle: TriangleRecord, barycentric: vec3<f32>) -> vec3<f32> {
   // Reconstruct on the triangle, not along a distant ray. At the glass rim,
   // cancellation in origin + t*direction placed an admitted hit above its edge.
-  let p = triangle.v0.xyz + (triangle.v1.xyz - triangle.v0.xyz) * barycentric.y +
-    (triangle.v2.xyz - triangle.v0.xyz) * barycentric.z;
+  // Add the large base only once, after the small edge offsets. Adding it
+  // between the two products can round an interior rim hit past its inner edge.
+  let edgeOffset = fma(triangle.v1.xyz - triangle.v0.xyz, vec3<f32>(barycentric.y),
+    (triangle.v2.xyz - triangle.v0.xyz) * barycentric.z);
+  let p = triangle.v0.xyz + edgeOffset;
   let lower = min(triangle.v0.xyz, min(triangle.v1.xyz, triangle.v2.xyz));
   let upper = max(triangle.v0.xyz, max(triangle.v1.xyz, triangle.v2.xyz));
   let bounded = clamp(p, lower, upper);

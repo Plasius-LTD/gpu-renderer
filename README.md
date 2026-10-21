@@ -24,6 +24,14 @@ water band is still visible. The 4K empty-glass lane rejects a different rim
 hit-point reconstruction case; the remaining 4K lanes stop without running.
 Browser access is working, but optical/image qualification is **not complete**.
 
+The next rim correction interpolates the small triangle-edge offsets before
+adding the large base coordinate. The frozen 4K case and its sign/axis/vertex-order
+variants retain their nearby exit with fused and non-fused interpolation, without
+widening any hit/count threshold. A new canonical device preflight checks both
+the camera-derived and captured barycentrics. This is a numerical correction,
+not yet a new full-scene or band-removal result; the preceding failed captures
+remain unchanged. See [correction evidence](docs/evidence/rim-reconstruction-correction-2026-10-21.md).
+
 The opt-in `renderer.sampling.fixedPattern.enabled` path now uses the existing
 independently keyed transport draws with the exact previous camera coordinates,
 including pixel centre at 1 SPP. Its room label is **Fixed camera · corrected transport**;
