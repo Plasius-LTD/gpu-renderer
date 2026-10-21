@@ -2,6 +2,7 @@
 // ray fields: the four existing stack slots hold occupied volumes, not IORs.
 import {OPTICAL_PREDICATE_WGSL} from './wavefront-optical-predicate-shader.js';
 import {OPTICAL_ORIGIN_WGSL} from './wavefront-optical-origin-shader.js';
+import {OPTICAL_RECONSTRUCTION_WGSL} from './wavefront-optical-reconstruction-shader.js';
 export const DIELECTRIC_TRANSPORT_WGSL = `
 fn bounded_dielectric_enabled() -> bool {
   return transport_experiment_enabled(16384u);
@@ -188,6 +189,7 @@ fn optical_plane_dot(left: vec3<f32>, right: vec3<f32>) -> f32 {
   return (high.x + high.y + high.z) + (low.x + low.y + low.z);
 }
 ${OPTICAL_PREDICATE_WGSL}
+${OPTICAL_RECONSTRUCTION_WGSL}
 fn optical_edge_uncertain(a: vec3<f32>, b: vec3<f32>, pa: vec2<f32>, pb: vec2<f32>, edge: f32) -> bool {
   // Broad arithmetic filter only: it selects more precise evaluation, NEVER
   // expands triangle coverage. Include translation/shear as well as edge error.

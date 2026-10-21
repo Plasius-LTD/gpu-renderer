@@ -50,9 +50,15 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
 
   var position = ray.origin.xyz + ray.direction.xyz * candidate.distance;
   var positionError = 0.0;
+  var unresolvedOpticalPosition = false;
   if (nested_media_enabled()) {
     if (candidate.triangleIndex != 0xffffffffu) {
       position = optical_triangle_position(hitTriangle, candidate.barycentric);
+      if (hitTriangle.mediumRefId != 0u && all(candidate.barycentric > vec3<f32>(0.0))) {
+        let reconstructed = optical_triangle_projected_position(hitTriangle,position);
+        position = reconstructed.xyz;
+        unresolvedOpticalPosition = reconstructed.w == 0.0;
+      }
       positionError = optical_triangle_error(hitTriangle,candidate.barycentric,candidate.geometricNormal);
     } else {
       let error = optical_rounding_gamma(12.0) * (abs(ray.origin.xyz) + abs(ray.direction.xyz*candidate.distance));
@@ -89,6 +95,7 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
   } else if (hitMaterialKind == 3u || hitMaterial.z < 0.999 || hitMaterialExtension.z > 0.001) {
     hitType = 3u;
   }
+  if (unresolvedOpticalPosition) { hitType = 5u; positionError = 8.0; }
   atomicAdd(&counters.hitCount, 1u);
   hits[index] = HitRecord(
     ray.rayId,
@@ -485,6 +492,7 @@ fn intersect_nested_ray(input: RayRecord) -> NestedIntersection {
   // Numerical safety bound; exhausted traversal is rejected, never shaded.
   for (var crossing = 0u; crossing < 32u; crossing++) {
     hit = trace_material_after(ray, minimumDistance);
+    if (hit.hitType == 5u) { return NestedIntersection(ray, hit); }
     if (hit.hitType != 2u && rough_dielectric_active(hit) && !medium_valid(hit.mediumRefId)) {
       hit.pad2 = 6.0; hit.hitType = 5u; return NestedIntersection(ray, hit);
     }

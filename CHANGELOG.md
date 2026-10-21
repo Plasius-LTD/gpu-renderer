@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Certify reconstructed nested-volume points against projected triangle edges,
+  using an error filter and the existing exact predicate. Select the nearest
+  certified adjacent binary32 neighbour when required; reject unresolvable
+  interiors with reason 8 before hidden-boundary traversal. Preserve exact
+  barycentric edges, ordinary/non-volume paths, normal error, record layouts and
+  count gates. Add near-edge, exact-sign, nearest-neighbour, unresolved and
+  canonical device regressions; native/image qualification remains open (#234).
+
 - Interpolate triangle-edge offsets before adding the large base coordinate so
   the retained 4K rim hit does not round outside its face and miss the adjacent
   glass exit. Add sign/axis/vertex-order and fused/non-fused regressions plus a

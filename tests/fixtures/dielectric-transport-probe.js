@@ -8,16 +8,17 @@ import {OPTICAL_ORDER_PROBE_WGSL} from './optical-order-probe.js';
 import {OPTICAL_CORNER_PROBE_WGSL,assertOpticalCornerProbe} from './optical-corner-probe.js';
 import {OPTICAL_RIM_PROBE_WGSL,assertOpticalRimProbe} from './optical-rim-probe.js';
 import {OPTICAL_ORIGIN_CORNER_PROBE_WGSL,assertOpticalOriginCornerProbe} from './optical-origin-corner-probe.js';
-import {OPTICAL_RIM_RECONSTRUCTION_PROBE_WGSL,assertOpticalRimReconstructionProbe} from './optical-rim-reconstruction-probe.js';
+import {OPTICAL_RIM_RECONSTRUCTION_PROBE_WGSL,assertOpticalRimReconstructionProbe,OPTICAL_PROJECTED_INTERIOR_PROBE_WGSL,assertOpticalProjectedInteriorProbe} from './optical-rim-reconstruction-probe.js';
 
 export const DIELECTRIC_PROBE_TOLERANCES=Object.freeze({optics:0.0001,mean:0.025,samples:16384});
-export const DIELECTRIC_PROBE_CASES=28;
-export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_EDGE_PROBE_WGSL+OPTICAL_ORDER_PROBE_WGSL+OPTICAL_CORNER_PROBE_WGSL+OPTICAL_RIM_PROBE_WGSL+OPTICAL_ORIGIN_CORNER_PROBE_WGSL+OPTICAL_RIM_RECONSTRUCTION_PROBE_WGSL+`
+export const DIELECTRIC_PROBE_CASES=29;
+export function dielectricProbeShader(){return WAVEFRONT_COMPUTE_WGSL+OPTICAL_EDGE_PROBE_WGSL+OPTICAL_ORDER_PROBE_WGSL+OPTICAL_CORNER_PROBE_WGSL+OPTICAL_RIM_PROBE_WGSL+OPTICAL_ORIGIN_CORNER_PROBE_WGSL+OPTICAL_RIM_RECONSTRUCTION_PROBE_WGSL+OPTICAL_PROJECTED_INTERIOR_PROBE_WGSL+`
 @compute @workgroup_size(1) fn dielectric_probe(@builtin(global_invocation_id) id:vec3<u32>){
  if(id.x>=23u){
   let o=id.x*4u;
   for(var i=0u;i<4u;i++){accumulation[o+i]=vec4<f32>(0);}
   if(!nested_media_enabled()){return;}
+  if(id.x==28u){let result=optical_projected_interior_probe();for(var i=0u;i<4u;i++){accumulation[o+i]=result[i];}return;}
   if(id.x==27u){let result=optical_rim_reconstruction_probe();for(var i=0u;i<4u;i++){accumulation[o+i]=result[i];}return;}
   if(id.x==26u){let result=optical_origin_corner_probe();accumulation[o]=result[0];accumulation[o+1u]=result[1];return;}
   if(id.x==23u){
@@ -218,6 +219,7 @@ export async function runDielectricTransportProbe(signal){
    assertOpticalRimProbe(values.slice(22*16,22*16+8),{bounded,nested});
    assertOpticalOriginCornerProbe(values.slice(26*16,26*16+8),{nested});
    assertOpticalRimReconstructionProbe(values.slice(27*16,28*16),{nested});
+   assertOpticalProjectedInteriorProbe(values.slice(28*16,29*16),{nested});
    assertCorrectedContractsProbe(values,{bounded,nested});
    if(nested){
     for(const [i,eta,before,after,invalid] of [[0,1/1.5,0,1,0],[1,1.5/water,1,2,0],[2,water,2,0,0],[3,1.5,1,0,0],[4,1,1,1,0],[5,water/1.5,2,1,0],[6,1,1,1,0],[7,1,1,1,1],[8,1,0,0,1],[9,1,1,1,1]]){

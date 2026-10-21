@@ -52,3 +52,39 @@ Immutable source pin, exact-head CI and physical rerun results
 will be recorded after execution. Until then the prior uniform-32-SPP 1080p
 water band remains unresolved and no complete 4K image is qualified. The browser
 uses the normal working connector; no permission/sandbox changes are required.
+
+## Stronger near-edge refinement
+
+The retained 48-case sweep on the same rim has a counterexample to base-last
+alone: weights `[5.960464477539063e-8,0.699999988079071,0.2999999523162842]`
+reconstruct to `(2.895268440246582,-0.5140840411186218,-0.07656029611825943)`;
+its projected first weight is `-0.000015778221665617126`. The added test fails
+before the projected guard. Source `0f550fb` is an intermediate correction, not
+a universal interior guarantee. Its automatically completed three 1080p controls
+are retained; the operator cancels its 4K preparation after this counterexample
+is established. This cancellation is not a successful 4K result or device loss.
+
+For nested volume hits with positive barycentrics, certify projected interior
+using an arithmetic error filter and the existing exact integer edge predicate.
+If necessary choose the nearest certified point among the eight adjacent binary32
+neighbours in the two non-dominant-normal coordinates. Keep the dominant normal
+coordinate and the existing normal-error estimate. Genuine zero-barycentric
+edges/vertices, non-volume and ordinary hits bypass the guard. No triangle
+coverage tolerance, medium reset, additional sampling or persistent allocation.
+
+An unresolved result becomes hit type 5/reason 8 and returns before nested overlap
+recovery. Tests cover 384 near-edge sign/axis/vertex-order cases, exact dyadic
+orientation parity (including cancellation/exponent extremes), safe identity,
+nearest-neighbour selection, genuinely unresolvable faces and reason/occupancy/
+sample-identity preservation. The 29th physical case checks the corrected next
+exit and unresolved rejection. Private shader arithmetic/occupancy cost remains
+unmeasured. The final immutable six-lane capture and separate image review remain
+required; adaptive performance work stays paused.
+
+Local refinement gates: 469 tests pass, 96.43% lines / 83.20% branches; all three
+changed runtime modules appear in LCOV at 100%. Lint, types/clean consumer, build,
+package, all nine Zero-Three gates and runtime audit pass. Canonical shader SHA256:
+`baa70b7b73c807c8b1cfc18000ca22e593fb305febfe1f57242ce5cae5b609be`.
+Whole-shader fingerprints are re-pinned only after the independent functional
+tests pass; no behavioral check or threshold is removed. Exact-head CI and the
+new native matrix are still required before physical qualification.

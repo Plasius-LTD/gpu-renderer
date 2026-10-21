@@ -32,6 +32,16 @@ the camera-derived and captured barycentrics. This is a numerical correction,
 not yet a new full-scene or band-removal result; the preceding failed captures
 remain unchanged. See [correction evidence](docs/evidence/rim-reconstruction-correction-2026-10-21.md).
 
+A broader near-edge sweep requires a stronger nested-volume guard: certify the
+projected triangle interior and, when necessary, select the closest certified
+point among the eight adjacent binary32 neighbours. The dominant normal coordinate
+does not move; exact barycentric edges/vertices and non-volume/default paths bypass
+this guard. If no point is resolvable, fail explicitly with reason 8 rather than
+accepting a missed interface. The normal error contract, hit/count thresholds and
+allocated record sizes remain unchanged. Canonical device preflight now has 29
+cases. This remains experimental pending the new immutable native matrix and
+separate image/banding review; no adaptive performance claim is made.
+
 The opt-in `renderer.sampling.fixedPattern.enabled` path now uses the existing
 independently keyed transport draws with the exact previous camera coordinates,
 including pixel centre at 1 SPP. Its room label is **Fixed camera · corrected transport**;

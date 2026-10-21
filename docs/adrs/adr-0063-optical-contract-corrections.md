@@ -139,3 +139,33 @@ This arithmetic correction is not a universal representable-topology guarantee.
 The full native matrix and separate image/convergence review remain mandatory;
 banding is not cleared by numerical tests. Preserve all earlier failures and
 keep adaptive performance and publication gains gated. Three.js cannot be used.
+
+### Certified projected interior
+
+The broader 48-case sweep demonstrates that base-last interpolation alone cannot
+guarantee an interior representable point, even on this rim. Preserve its red
+counterexample. For nested triangles with a volume identity and strictly positive
+barycentrics, test projected interior along the dominant-normal axis. An arithmetic
+error filter includes translated subtraction and products; uncertain signs use
+the existing integer exact edge predicate, not a coverage tolerance.
+
+If the point is not strictly interior, test its eight adjacent binary32 neighbours
+in the other two axes and choose the nearest certified interior point, with fixed
+iteration/tie order. Leave the dominant normal coordinate untouched. A single
+step per other coordinate is covered by the existing 12-operation reconstruction
+bound; normal displacement still uses the dominant axis. This is a bounded local
+representation correction, not a mesh modification or triangle expansion.
+
+Return explicit unresolved status when no candidate exists. Raw and staged hit
+assembly turn it into type-5 failure/reason 8, and nested traversal returns it
+before overlap recovery or occupancy changes. No accepted image/count can hide
+an unresolved point. Exact barycentric edges/vertices, non-volume hits and the
+ordinary/default branch do not invoke the guard. No new persistent GPU allocation
+or record layout; additional shader arithmetic/private storage has unmeasured
+occupancy/time cost and must not be presented as a speed improvement.
+
+Retain sweep/sign/axis/winding, exact BigInt-sign parity, closest valid neighbour,
+safe-point identity, unresolved narrow-face and failure propagation tests. The
+29th physical preflight case requires a repaired nearby exit and a rejected
+unresolvable face. Repeat all native scenes on the final immutable source; the
+intermediate base-last captures cannot certify this stronger contract.

@@ -96,7 +96,7 @@ test('ordinary local hit reconstruction remains barycentric independently of nes
  const local=functionSource('trace_material_hit_raw');
  assert.match(local,/var position = ray\.origin\.xyz \+ ray\.direction\.xyz \* candidate\.distance;\s*if \(candidate\.triangleIndex != 0xffffffffu\) \{ position = optical_triangle_position\(hitTriangle, candidate\.barycentric\); \}\s*var positionError = 0\.0;/);
  assert.equal((local.match(/position = optical_triangle_position/g)||[]).length,1);
- assert.match(local,/if \(nested_media_enabled\(\)\) \{\s*if \(candidate.triangleIndex != 0xffffffffu\) \{\s*positionError = optical_triangle_error/);
+ assert.match(local,/if \(nested_media_enabled\(\)\) \{\s*if \(candidate.triangleIndex != 0xffffffffu\) \{\s*if \(hitTriangle.mediumRefId != 0u && all\(candidate.barycentric > vec3<f32>\(0.0\)\)\) \{[\s\S]*?\}\s*positionError = optical_triangle_error/);
 });
 test('room transport controls reset off and forward independent flag receipts and GPU preflight',()=>{
  const read=f=>readFileSync(new URL('./fixtures/'+f,import.meta.url),'utf8');

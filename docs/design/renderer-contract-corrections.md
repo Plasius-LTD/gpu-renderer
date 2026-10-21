@@ -122,3 +122,23 @@ Retain every before/failure/HDR/PNG receipt and review bands separately from
 integrity. If bands remain, isolate their transport/sampling cause with matched
 controls; no adaptive performance work or success publication until correctness
 and image gates pass. Three.js is prohibited; no new allocations or fallback.
+
+### Stronger representable-interior requirement
+
+The 48-case near-edge sweep on the original rim exposes positive-barycentric
+points that still round outside with base-last interpolation. Preserve this
+intermediate result; the running source-pinned batch cannot qualify the stronger
+contract. Before implementation require a red sweep test and explicit unresolved
+case. For nested optical-volume triangles only, certify projected interior using
+a floating-point error filter and the existing exact integer edge predicate.
+If the rounded point fails, search its eight adjacent binary32 neighbours in the
+two projected axes and select the nearest strictly interior candidate. Keep the
+dominant normal axis unchanged; the existing normal error bound covers these
+single-step coordinate changes. Do not move genuine zero-barycentric edges.
+
+If no candidate is certifiably interior, return an unresolved result and reject
+the path explicitly (failure reason 8); never widen coverage, silently accept
+the point or reset occupancy. No unbounded iteration or new persistent resources.
+Test all swept cases, signs/axes/winding, closest valid neighbour, unchanged safe
+points, genuinely unresolved narrow triangles, exact filter parity and raw/fused
+integration, then extend device preflight and repeat native qualification.
