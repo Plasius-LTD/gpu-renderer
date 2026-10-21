@@ -12,6 +12,10 @@ Framework-independent WebGPU rendering for browser applications. Render triangle
 meshes with the wavefront path tracer, draw native raster surfaces, or use the
 frame lifecycle and XR integration APIs in your own rendering pipeline.
 
+The APIs expose GPU resource ownership, render passes and sample accumulation
+directly. Use them from JavaScript or TypeScript when you want explicit control
+over your application's WebGPU pipeline.
+
 Apache-2.0 · ESM and CommonJS · TypeScript declarations included.
 
 ## Install
@@ -145,28 +149,13 @@ route capabilities and rollout policy before mounting a scene.
 
 ## Development
 
-From a checkout, using the repository's Node.js version:
-
-```sh
-npm ci --legacy-peer-deps
-npm run lint
-npm run typecheck
-npm run test:coverage
-npm run build
-npm run pack:check
-npm run zero-three
-```
+For checkout setup and required validation, start with the
+[development guide](https://github.com/Plasius-LTD/gpu-renderer/blob/main/docs/guides/development.md).
 
 `npm run demo` requires Python 3 and serves the parent workspace. With the checkout
 named `gpu-renderer`, visit `http://localhost:8000/gpu-renderer/demo/`.
-See the [development guide](https://github.com/Plasius-LTD/gpu-renderer/blob/main/docs/guides/development.md)
-for sibling-package requirements and source layout, and
+The development guide also describes the source layout. See
 [CONTRIBUTING.md](https://github.com/Plasius-LTD/gpu-renderer/blob/main/CONTRIBUTING.md).
-
-Three.js and dependency paths reaching it are prohibited across runtime,
-development tooling and published artifacts. `npm run zero-three:source` checks
-source admission before installation; `npm run zero-three` validates the installed
-and built package evidence.
 
 <!-- BEGIN PLASIUS RELEASE INTEGRITY -->
 ## Release integrity

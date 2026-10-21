@@ -42,3 +42,13 @@ Promote a lesson from this retrospective file to `AGENTS.md` only when:
 - it is useful across future tasks;
 - it is not merely stylistic or one-off;
 - and it improves operational quality without creating noise or contradiction.
+
+## Public architecture framing — 2026-10-21
+
+- Context: consumer documentation presented an internal dependency boundary as
+  opposition to another rendering library.
+- Reason for rejection: the author supports Three.js and chose a direct WebGPU
+  implementation to suit this project's workflow.
+- Lesson candidate: explain capabilities and design choices positively; keep
+  contributor dependency rules in development documentation.
+- Scope: repository-specific. Not promoted to AGENTS.md; enforcement is unchanged.

@@ -17,14 +17,20 @@ active wavefront depth, tile count, triangle/BVH counts, lighting preset, probe
 luminance, and hot buffer memory so it is clear whether the renderer is tracing
 mesh paths rather than only showing planning metadata.
 
-## Development Checks
+## Setup and validation
+
+Use the repository's Node.js version. Run source admission before installing
+dependencies, then validate the installed and built package:
 
 ```sh
+npm run zero-three:source
+npm ci --legacy-peer-deps
 npm run lint
 npm run typecheck
 npm run test:coverage
 npm run build
 npm run pack:check
+npm run zero-three
 ```
 
 ## Files
@@ -68,12 +74,14 @@ npm run pack:check
 - `docs/adrs/*`: architecture decisions for renderer runtime design.
 - `docs/tdrs/*`: technical direction for frame hook integration.
 
-## Permanent Zero-Three boundary
+## Renderer dependency boundary
 
-This WebGPU renderer and its complete production, development, test, tooling,
-peer, optional, and artifact dependency graphs permanently prohibit Three.js,
-R3F, TSL, their related packages, and any dependency path reaching them. There
-is no compatibility mode, fallback, waiver, or rollback to those renderers.
+This implementation owns its WebGPU pipeline. Repository validation keeps its
+production, development, test, tooling, peer, optional and artifact dependency
+graphs independent of Three.js, R3F, TSL and their related packages, including
+transitive dependencies. This is a constraint on this renderer's implementation,
+not a judgement about those projects. The existing dependency checks remain
+required for every contribution and release.
 
 Run `npm run zero-three:source` before installing dependencies, or run
 `npm run build && npm run zero-three` after `npm ci` for the installed graph,

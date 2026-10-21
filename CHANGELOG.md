@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
-  - (placeholder)
+  - Explain direct WebGPU control in the public README and keep dependency admission guidance in the development guide.
 
 - **Fixed**
   - (placeholder)
