@@ -47,9 +47,9 @@ export const ENVIRONMENT_MIS_PROBE_WGSL=`
 }
 @compute @workgroup_size(1) fn environment_mis_contract(@builtin(global_invocation_id) id:vec3<u32>){
  var ray=RayRecord();ray.bounce=1u;ray.direction=vec4<f32>(0,0,-1,0);ray.throughput.w=0.3;
- var hit=HitRecord();hit.material=vec4<f32>(0.8,0,1,1.5);hit.materialExtension.z=0.5;
+ var hit=HitRecord();hit.material=vec4<f32>(0.8,0,1,1.5);hit.materialExtension.z=0.0;
  hit.shadingNormal=vec4<f32>(0,0,1,0);hit.geometricNormal=hit.shadingNormal;hit.frontFace=1u;hit.mediumRefId=1u;
- if(id.x>=4u){hit.materialKind=2u;}
+ if(id.x>=4u){hit.materialKind=2u;hit.materialExtension.z=0.5;}
  var scatter=ScatterResult();scatter.direction=vec4<f32>(0,0,1,0);scatter.pdf=0.3;
  if(id.x==1u||id.x==5u){scatter.flags=RAY_FLAG_DELTA_SAMPLE;}
  if(id.x==2u||id.x==6u){scatter.flags=RAY_FLAG_NO_COMPETING_NEE;scatter.direction.z=-1.0;}

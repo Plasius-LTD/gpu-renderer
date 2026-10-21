@@ -6,7 +6,7 @@ import {createPrunedContinuationShader} from '../src/wavefront-pruned-continuati
 import {withRoughBounceSplitting} from '../src/wavefront-rough-bounce-splitting.js';
 import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
 import {OpticalWgslExec as Exec,OpticalWgslParser as Parser} from './fixtures/optical-wgsl-executor.js';
-import {ENVIRONMENT_MIS_CASES,ENVIRONMENT_MIS_PROBE,environmentMisProbeConfig,summarizeEnvironmentMis} from './fixtures/environment-mis-probe.js';
+import {ENVIRONMENT_MIS_CASES,ENVIRONMENT_MIS_PROBE,ENVIRONMENT_MIS_PROBE_WGSL,environmentMisProbeConfig,summarizeEnvironmentMis} from './fixtures/environment-mis-probe.js';
 
 // Execute production functions; only scene/config lookup is isolated as inputs.
 function numerical(flags=0,{strict=true,map=false,importance=false,lights=0,portal=false}={}) {
@@ -98,6 +98,23 @@ test('retained wrong-PDF control overestimates a unit Lambertian sky',()=>{
   }
   assert.ok(Math.abs(rejected-(cosine?1.3229229323:1.2252836441))<1e-8);
   assert.ok(Math.abs(matched-1)<3e-6);
+ }
+});
+
+test('assembled contract controls distinguish ordinary diffuse from partial optical materials',()=>{
+ for(const c of ENVIRONMENT_MIS_CASES){
+  // Isolate texture-backed queries only. Material admission, orientation, flags,
+  // carried PDFs, terminal evaluation and the real packed config remain canonical.
+  const source=(WAVEFRONT_COMPUTE_WGSL+ENVIRONMENT_MIS_PROBE_WGSL)
+   .replace(functionSource('medium_valid'),'fn medium_valid(id:u32)->bool{return id==1u;}')
+   .replace(functionSource('medium_optics'),'fn medium_optics(id:u32)->vec2<f32>{return select(vec2<f32>(1,0),vec2<f32>(1.5,2),id==1u);}')
+   .replace(functionSource('environment_direction_pdf'),`fn environment_direction_pdf(d:vec3<f32>)->f32{return ${c.importance?1/(2*Math.PI*Math.PI):1/(4*Math.PI)};}`)
+   .replace(functionSource('environment_portal_radiance_scale'),`fn environment_portal_radiance_scale(o:vec3<f32>,d:vec3<f32>)->vec3<f32>{return vec3<f32>(${c.portal?0:1});}`);
+  const contracts=new Float32Array(36);
+  new Exec(new Parser().parse(source)).dispatchWorkgroups('environment_mis_contract',8,{0:{3:contracts,5:environmentMisProbeConfig(c)}});
+  const values=new Float32Array(ENVIRONMENT_MIS_PROBE.samples*4);
+  for(let i=0;i<ENVIRONMENT_MIS_PROBE.samples;i++)values.set([4,0,0,c.selection],i*4);
+  assert.equal(summarizeEnvironmentMis(values,contracts,c).passed,true);
  }
 });
 

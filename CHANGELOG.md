@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Distinguish ordinary diffuse and partial optical inputs in the MIS contract
+  preflight; preserve its rejected first native attempt and add an assembled
+  numerical regression for all 13 modes. No renderer/tolerance change (#234).
+
 - Correct environment MIS to use the previous surface's actual competing PDF,
   including light-class probability and hemisphere support; preserve unsampled
   procedural glow and portal fallback. Reuse direction.w without growing ray
