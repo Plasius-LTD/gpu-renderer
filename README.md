@@ -1,5 +1,13 @@
 # @plasius/gpu-renderer
 
+Current experimental optical status: the [normal-correction native follow-up](docs/evidence/room-normal-followup-2026-10-21.md)
+completes all six 1080p/4K uniform32/depth20 captures, with independently verified
+HDR/counts/preflights and physical absent-map identity. The water band remains
+visible, and a separate secondary environment MIS PDF mismatch now has a retained
+scalar counterexample. Image/energy correctness and adaptive performance remain
+gated. Implementation notes below include source-bound historical results; the
+latest evidence ledger governs qualification, not an earlier pending/success note.
+
 The four findings in the [20 October correctness review](docs/evidence/renderer-first-principles-2026-10-20.md)
 now have numerical corrections and automated regressions. The original review,
 rejected implementations and physical captures remain retained. Nested optical

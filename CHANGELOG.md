@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Retain all six native1080p/4K controls after the absent-normal correction:
+  995,328,000 completed camera samples, all120 HDR chunks, actual counts,
+  preflights and cleanup independently verify. Physical normal controls and
+  diagnostic non-mutation pass; the broad water band persists. Record a separate
+  unresolved secondary environment MIS PDF counterexample without changing
+  transport or claiming image, energy or adaptive-performance qualification (#234).
+
 - Correct absent normal maps to preserve authored normals across CPU triangle,
   GPU material and GPU mesh packing, without changing real map bytes or scales.
   Add portable red regressions and assembled missing/authored/zero-scale normal

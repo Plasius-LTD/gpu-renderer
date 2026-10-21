@@ -56,3 +56,81 @@ combined LCOV; the changed packing module has 98.72% line coverage. Lint, types,
 clean packed consumer, build, public-package check, all nine Zero-Three gates
 and runtime audit (zero vulnerabilities) pass. The physical normal preflight
 and new-source native images are not implied by these software results.
+
+## Physical correction control
+
+Correction `d53ced33554cab6d669d2d8104ca15cfcf86add2` passes all CI jobs in
+run39603988783. Its matched 1080p uniform32/depth20 filled close-up completes all
+66,355,200 samples, all preflights, eight selected journals and cleanup. Receipt
+`eed607287bdb8de2f819fc83994c87cb89995c0d6504d865d1d3937e78c24235`, capture
+`room-reference-2026-10-21T12-59-27-734Z-7569488f-3b47-403f-ab7d-8432737f49da`.
+New HDR `e050e56eb765a97471b6502bf1c7268aadf53c35b7db127644bbed01183bf88f`;
+PNG `688aae9a67549de301d04055185da8ead46ae32c6cd980bd41c1afd87bb370c3`.
+All eight chunks and native pixels independently verify. Original controls remain.
+
+The four assembled normal cases pass with maximum component error
+`2.579719238227085e-8` against the frozen `1e-6` tolerance: omitted/null/zero-scale
+maps give exactly [0,0,1], and the real map retains its analytic perturbation.
+Actual glass-wall journal normals now have y=0; base normals have y=±1 rather
+than the quantised fallback tilt. This confirms the specific correction on the
+physical device. **The broad band remains visible.** A complete new-source
+six-lane matrix is running; this one control is not its completion.
+
+## Lighting support audit — not a new rendering change
+
+ADR0021 intentionally models procedural direct sun as a shadow-tested directional
+light. At this source, `surface_procedural_sun_contribution` tests a straight
+visibility ray and returns zero on any admitted mesh occluder, including glass.
+The terminal procedural environment has a finite power-192 glow, not that delta
+directional-light contribution. There is no refracted connection for the explicit
+directional sun in these functions. A finite glow is not evidence that every
+delta-light/specular-chain contribution is sampled.
+
+This distinction follows the delta-direction light measure described in
+[PBRT's distant-light contract](https://www.pbr-book.org/4ed/Light_Sources/Distant_Lights).
+It is a source-level support limitation and a plausible contributor to the dark
+pedestal region, **not a measured attribution of the entire band**. Ordinary
+straight visibility rejecting a refractive blocker is not itself proof that the
+collision should be ignored. Do not make glass non-shadowing or apply straight
+alpha transparency as a correction for refracted illumination.
+
+Remaining isolation should compare matched sun/sky contributions and convergence
+before changing lighting. Coherent angular-source evaluation/sampling is already
+tracked in gpu-lighting#97 / site Story2169 / Feature2166; general caustic
+qualification is not supplied by the current eight-path control. Any expanded
+lighting implementation needs its own requirements, independent tests and fixed
+environment baseline before adaptive comparisons. No speculative sun, BSDF or
+visibility change is included here.
+
+## Separate secondary environment MIS counterexample
+
+The source's strict procedural direct estimator samples either uniform hemisphere
+or cosine hemisphere, but terminal environment MIS evaluates its no-importance
+competitor with `uniform_sphere_pdf()`. The light-class selection probability
+must also be represented when emissive lights compete. The previous surface's
+normal/distribution cannot generally be recovered from miss direction alone.
+This is separate from primary-camera MIS, which already bypasses that weighting.
+
+A retained read-only analytic Lambertian/constant-sky control uses the exact
+scalar power-heuristic floor1e-6 and frozen source hashes. Mismatched uniform
+hemisphere/sphere gives mean1.2252836441; cosine hemisphere/sphere gives
+1.3229229323 for a unit target. Matching PDFs gives1 and0.999997532599: the latter
+matches the independent closed form `1-pi²*1e-6/4` for the existing tiny floor.
+The earlier ideal-heuristic prototype is retained but excluded as source-exact
+evidence. These are scalar contract counterexamples, not whole-integrator,
+physical-image or full-band measurements.
+
+The [machine audit](environment-mis-pdf-audit-2026-10-21.json) retains source hashes,
+quadrature counts, distributions, integral, scalar floor and known limitations.
+
+No speculative runtime MIS change is made while retaining the matched d53ced3
+matrix. Before correction, reproduce the defect with failing portable/assembled
+tests; retain the actual previous-vertex strategy/PDF/support/class probability,
+primary/delta/no-competing behavior, importance/emissive mixtures, split and
+staged/fused identity and disabled compatibility. Strict direct sampling uses
+sky only while terminal environment also contains finite glow, so blindly
+substituting a hemisphere constant for the complete miss is insufficient.
+Separate competing sky, unsampled glow and explicit directional sunlight; prove
+the full estimator's furnace/energy means on GPU and in native scenes. Acceptance
+and source hashes are retained on Task234. This unresolved defect independently
+prevents image-correctness signoff and adaptive-performance resumption.
