@@ -3,8 +3,46 @@ import assert from 'node:assert/strict';
 import {WAVEFRONT_COMPUTE_WGSL} from '../src/wavefront-shaders.js';
 import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
 import {OpticalWgslExec as Exec,OpticalWgslParser as Parser} from './fixtures/optical-wgsl-executor.js';
+import {OPTICAL_ORIGIN_CORNER_PROBE_WGSL,assertOpticalOriginCornerProbe} from './fixtures/optical-origin-corner-probe.js';
 
 const base=WAVEFRONT_COMPUTE_WGSL.replace(functionSource('transport_experiment_enabled'),'fn transport_experiment_enabled(flag:u32)->bool{return (flag & 32768u)!=0u;}');
+test('captured tiny normal component cannot round an interior origin onto the adjacent bottom',()=>{
+ const source=base+OPTICAL_ORIGIN_CORNER_PROBE_WGSL+`
+ @compute @workgroup_size(1)fn origin_corner(){let values=optical_origin_corner_probe();accumulation[0]=values[0];accumulation[1]=values[1];}`;
+ const values=new Float32Array(8);
+ new Exec(new Parser().parse(source)).dispatchWorkgroups('origin_corner',1,{0:{3:values}});
+ assertOpticalOriginCornerProbe(values,{nested:true});
+ assert.equal(values[1],Math.fround(-0.6940839886665344));
+ assert(values[6]>=values[7],'normal projection still clears the original error');
+ for(const [index,bad] of [[1,Math.fround(-0.6940840482711792)],[3,0],[3,1],[4,0],[5,1],[6,0],[7,NaN]]){
+  const rejected=values.slice();rejected[index]=bad;
+  assert.throws(()=>assertOpticalOriginCornerProbe(rejected,{nested:true}),/Optical origin corner mismatch/);
+ }
+ assert.doesNotThrow(()=>assertOpticalOriginCornerProbe([],{nested:false}));
+});
+
+test('dominant-axis displacement preserves other coordinates and the required signed normal projection',()=>{
+ const source=base+`
+ @group(1) @binding(0)var<storage,read>cases:array<vec4<f32>>;
+ @compute @workgroup_size(1)fn dominant(@builtin(global_invocation_id)id:vec3<u32>){
+  let point=cases[id.x*3u].xyz;let normal=cases[id.x*3u+1u].xyz;let parameters=cases[id.x*3u+2u];
+  let result=optical_offset_error(point,normal,normal*parameters.x,parameters.y);
+  accumulation[id.x*2u]=vec4<f32>(result,0);
+  accumulation[id.x*2u+1u]=vec4<f32>(dot(result-point,normal)*parameters.x,parameters.y,0,0);
+ }`;
+ const cases=[];
+ for(const n of [[.96,1.2e-10,.29],[.1,.2,.97],[0,1,0],[.7,.7,0],[0,0,4]])for(let rotation=0;rotation<3;rotation++)for(const sign of [-1,1])for(const p of [-10000,-1,0,1,10000]){
+  const normal=n.map((_,i)=>n[(i+rotation)%3]*sign),point=[p,p,p];
+  cases.push({point,normal,side:sign,error:Math.fround(1e-6)});
+ }
+ const input=new Float32Array(cases.flatMap(c=>[...c.point,0,...c.normal,0,c.side,c.error,0,0])),output=new Float32Array(cases.length*8);
+ new Exec(new Parser().parse(source)).dispatchWorkgroups('dominant',cases.length,{0:{3:output},1:{0:input}});
+ cases.forEach((c,i)=>{
+  const changed=c.point.filter((p,axis)=>output[i*8+axis]!==Math.fround(p));
+  assert.equal(changed.length,1,'only the chosen axis may move');
+  assert(output[i*8+4]>=c.error,`case${i} projection ${output[i*8+4]} < ${c.error}`);
+ });
+});
 test('small and grazing triangles retain correct facing and normal, rejecting true degeneracy/backfaces',()=>{
  const source=base+`
  @group(1) @binding(0)var<storage,read>cases:array<vec4<f32>>;

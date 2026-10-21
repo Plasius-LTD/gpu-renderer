@@ -10,6 +10,13 @@ sampling. Successful-hit error metadata reuses existing storage; no record or
 buffer size increases. See [ADR 0063](docs/adrs/adr-0063-optical-contract-corrections.md)
 and the [correction evidence and open gates](docs/evidence/renderer-contract-corrections-2026-10-20.md).
 
+The first automated physical qualification on 21 October exposed another origin
+rounding case before completing the empty-glass lane. The tiny-component regression
+is now covered: clear the same projected error on the dominant normal axis, keeping
+other coordinates unchanged so a near-bottom exit is not rounded away. The
+[physical follow-up](docs/evidence/optical-origin-corner-2026-10-21.md) retains the
+failed capture and separates the numerical correction from pending full images.
+
 The opt-in `renderer.sampling.fixedPattern.enabled` path now uses the existing
 independently keyed transport draws with the exact previous camera coordinates,
 including pixel centre at 1 SPP. Its room label is **Fixed camera · corrected transport**;

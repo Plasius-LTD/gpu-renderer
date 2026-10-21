@@ -56,3 +56,27 @@ restrictions remain; do not bypass them. Avoid further repetitive manual render
 requests. If physical execution cannot run through an approved available path,
 report that verification as incomplete and keep adaptive performance work gated.
 No release, image-quality or performance success claim before its evidence.
+
+## C2 physical follow-up — 21 October
+
+Normal browser automation now reaches the unchanged physical build. The first
+1080p uniform32/20-depth empty-glass capture fails at pixel1535086/sample9.
+Canonical journal: wall hit353199 is one y-ULP above the bottom; its tiny normal-y
+component (1.2064723e-10) makes per-component outward rounding move y onto that
+bottom although the normal displacement there is below representable precision.
+The bottom exit disappears; the ray hits the pedestal while still in glass, then
+fails duplicate entry (reason2). The failed capture/summary remain preserved.
+
+Refine the C2 displacement, not hit/count tolerances: clear the same projected
+error using only the largest-magnitude normal axis, then round that axis outward.
+For k=argmax(abs(n)), delta[k]=side*projectedError/n[k], so its normal projection
+is the required signed error without gratuitously stepping tiny other axes.
+Retain zero-error points and all existing numerical limits. This is still an
+offset error estimate, not a promise about indistinguishable adjacent geometry.
+
+Before implementation, add the exact captured-origin/next-bottom test and
+dominant-axis/sign/permutation/projection tests; extend the physical preflight.
+Require current edge/rim/corner/ordering, energy, sampling, complete-count,
+disabled, ABI and allocation checks, full local gates and exact-head CI. Retain
+the failed physical attempt and rerun the six native lanes on a new clean source
+pin. No adaptive timing work or band-removal claim before valid images/review.

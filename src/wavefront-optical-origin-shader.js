@@ -24,11 +24,15 @@ fn optical_step_outward(value: f32, positive: bool) -> f32 {
 fn optical_offset_error(position: vec3<f32>, normal: vec3<f32>, direction: vec3<f32>, projectedError: f32) -> vec3<f32> {
   if (projectedError <= 0.0) { return position; }
   let side = select(-1.0,1.0,dot(normal,direction)>=0.0);
-  let displacement = normal * (side * projectedError / dot(normal,normal));
-  var result = position + displacement;
-  for (var axis=0u;axis<3u;axis++) {
-    if (displacement[axis] != 0.0) { result[axis] = optical_step_outward(result[axis],displacement[axis]>0.0); }
-  }
+  // Clear the same normal-projected error on the best-conditioned axis. A
+  // tiny nonzero normal component must not force an unrelated coordinate one
+  // ULP across its adjacent boundary (the captured glass-bottom regression).
+  var axis=0u;
+  if (abs(normal.y)>abs(normal.x)) { axis=1u; }
+  if (abs(normal.z)>abs(normal[axis])) { axis=2u; }
+  let displacement=side*projectedError/normal[axis];
+  var result=position;
+  result[axis]=optical_step_outward(position[axis]+displacement,displacement>0.0);
   return result;
 }
 `;

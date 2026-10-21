@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve the first automated physical qualification failure and correct the
+  tiny-normal-component origin rounding that collapsed a glass-wall point onto
+  its bottom. Clear the same projected error on the dominant axis only; add the
+  exact ray/next-exit and signed/translated/permuted regressions and a physical
+  preflight case. Qualification summaries retain the root failed-capture identity
+  instead of masking it. Full native scene/image qualification remains open (#234).
+
 - Correct the four first-principles findings: nested small/grazing collision
   admission and normal scaling, error-aware optical origins in existing hit
   metadata, smooth partial-transmission weight/diffuse mixture, and independent

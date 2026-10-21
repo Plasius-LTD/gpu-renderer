@@ -89,3 +89,29 @@ empty/filled/full-room results, final HDR/visual review and stability remain
 required before adaptive performance work resumes. Software execution and final
 shader fingerprints cannot substitute for those gates. Existing private assets
 and evidence are not overwritten or added to the public package.
+
+## Physical follow-up — 21 October 2026
+
+The normal browser connector now works without permission changes. Build cdfecb0
+passes preflight but fails its first uniform32/20-depth empty-glass lane. At an
+interior wall point one y-ULP above the bottom, the normal's ~1.2e-10 y component
+causes per-component outward rounding to step y down onto the bottom. The lost
+exit leaves the pedestal hit inside glass, causing a later duplicate-entry failure.
+Keep this failed receipt and its canonical journal; software tests had missed it.
+
+Refine the error displacement to the largest-absolute normal axis k:
+`delta[k] = side * projectedError / n[k]`; other components remain zero. Its normal
+projection still clears the same signed error. Round only that axis outward.
+This avoids gratuitous one-ULP changes on tiny other normal components without
+shrinking the error estimate or changing any hit/medium/count threshold. Exact
+zero-error points, flags, ABI, resources, BSDF and sampling remain unchanged.
+Dominant-axis ties are deterministic; finite nonzero geometric normals remain
+the caller contract. Geometry inside unresolved error intervals is still not
+guaranteed distinguishable. Additional shader cost remains unmeasured.
+
+The exact captured-origin/next-bottom test fails on cdfecb0 and passes this
+refinement. Signed/permuted normals and translated points verify one changed
+coordinate and at least the required normal projection; old corner/rim/order
+and disabled tests remain. Add the exact case to assembled physical preflight
+and repeat all native scene lanes on the corrected immutable build before
+claiming scene quality, band removal or adaptive performance qualification.

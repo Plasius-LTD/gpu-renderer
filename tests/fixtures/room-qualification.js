@@ -13,6 +13,7 @@ export function roomQualificationPlan({resolutions=ROOM_QUALIFICATION_DEFAULTS.r
  }));
 }
 export function validateRoomQualification(receipt,lane,source){
+ if(receipt?.status==='failed')throw Error('Room qualification capture failed: '+(receipt.failures?.join('; ')||'missing failure detail'));
  const s=receipt?.settings,f=receipt?.frame;
  if(receipt?.status!=='captured-reference-not-qualified'||receipt.failures?.length||!receipt.cleanupPassed||!s||!f||
   s.width!==lane.width||s.height!==lane.height||s.maximumSpp!==lane.spp||s.maxDepth!==lane.bounces||s.sampler!=='fixed-pattern'||s.denoise!==false||
@@ -34,7 +35,9 @@ export async function runRoomQualification({configure,capture,signal,onLane=()=>
    if(signal?.aborted)throw Error('Room qualification cancelled');
    await configure(lane.controls);await onLane(lane,report.lanes.length,lanes.length);
    const receipt=await capture();if(signal?.aborted)throw Error('Room qualification cancelled');
-   report.lanes.push(validateRoomQualification(receipt,lane,report.sources));report.sources??=receipt.provenance.sources;
+   try{report.lanes.push(validateRoomQualification(receipt,lane,report.sources));}
+   catch(error){report.failedLane={resolution:lane.resolution,glass:lane.glass,focus:lane.focus,captureId:receipt?.provenance?.captureId??null,captureFailures:receipt?.failures??[]};throw error;}
+   report.sources??=receipt.provenance.sources;
   }
   report.status='captures-complete-image-review-pending';
  }catch(error){report.status='failed';report.failures.push(error.message);}

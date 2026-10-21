@@ -34,3 +34,9 @@ test('qualification validates before side effects and never starts another lane 
  const report=await runRoomQualification({configure:()=>{},signal:controller.signal,capture:()=>{calls++;controller.abort();return receipt(roomQualificationPlan()[0]);}});
  assert.equal(report.status,'failed');assert.equal(calls,1);assert.equal(report.lanes.length,0);
 });
+test('qualification preserves the failed capture identity and root rejection instead of masking it',async()=>{
+ const lane=roomQualificationPlan()[0],failed=receipt(lane);failed.status='failed';failed.failures=['primary-ray-count-mismatch:163840/524288'];
+ let calls=0;const report=await runRoomQualification({configure:()=>{},capture:()=>{calls++;return failed;}});
+ assert.equal(calls,1);assert.equal(report.status,'failed');assert.match(report.failures[0],/primary-ray-count-mismatch:163840\/524288/);
+ assert.deepEqual(report.failedLane,{resolution:'1080p',glass:'empty',focus:'glass',captureId:'retained-capture',captureFailures:failed.failures});
+});
