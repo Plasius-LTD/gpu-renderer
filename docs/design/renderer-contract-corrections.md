@@ -191,3 +191,13 @@ unchanged default capture behavior. Retain selected per-bounce geometry/medium
 records in the receipt; compare bands with clear regions and empty/filled controls.
 This is mechanism evidence, not a full image-convergence or energy pass. Existing
 default-off transport flags, Task234/Feature2114 ownership and Zero-Three remain.
+
+The selected-success diagnostic also needs canonical per-bounce PathNode values
+after surface shading and before queue swap: direct/terminal radiance, terminal
+kind, flags and original pixel/sample/depth identity. Add a separate read-only
+diagnostic pipeline using the existing queue/counter/path-node buffers and one
+bounded tail of the private journal allocation (64 bytes per configured depth).
+Do not re-evaluate lighting, add radiance/count commits, overwrite path nodes or
+change the original failure-only allocation/API. Validate shader bindings,
+post-surface/pre-swap order, exact decoding/identity and failure cleanup before
+physical use. These records are diagnostic-inclusive, not performance evidence.

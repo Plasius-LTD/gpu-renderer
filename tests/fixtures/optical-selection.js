@@ -28,6 +28,10 @@ export async function selectedOpticalJournals(c,{config,tile,ranges,selections,d
   for(const selection of chosen){
    const result=await capture(c,{config,tile,ranges,selection});
    if(!result.records?.length||result.records.some(r=>r.pixel!==selection.pixel||r.sample!==selection.sample))throw Error('Missing selected optical sample');
+   const nodes=result.surfaceNodes;
+   if(!nodes?.length||nodes.length!==result.records.filter(r=>r.stage==='after-intersection').length||
+    nodes.some((n,index)=>n.pixel!==selection.pixel||n.sample!==selection.sample||n.bounce!==index||n.bounce>=config.maxDepth||(n.flags&3)!==1||
+     ![...n.directRadiance,...n.terminalRadiance].every(v=>Number.isFinite(v)&&v>=0))||!nodes.at(-1).terminalKind)throw Error('Missing selected optical surface records');
    results.push({...result,selection});
   }
  }finally{c.setMode(diagnostics,fused);}

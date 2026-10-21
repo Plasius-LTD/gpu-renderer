@@ -58,6 +58,9 @@ default-off diagnostic reuses the original compiled camera/bounce pipelines,
 retains per-bounce geometry/medium records, and does not commit samples or image
 radiance. Unsupported selections fail; buffers are freed and modes restored.
 Captures with journals include replay costs and are not performance results.
+The successful-sample journal also reads original post-surface path-node direct
+and terminal radiance plus termination reasons, before queue swap. Its bounded
+private tail is 64 bytes per configured depth; no lighting is re-evaluated.
 
 The opt-in `renderer.sampling.fixedPattern.enabled` path now uses the existing
 independently keyed transport draws with the exact previous camera coordinates,

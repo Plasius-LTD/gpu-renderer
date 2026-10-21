@@ -21,7 +21,7 @@ test('failure-only replay guards unsupported histories, reuses config, and clean
  t.after(()=>{for(const [k,v]of Object.entries(previous)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}});
  const allocated=[],writes=[],calls=[];
  const pass={setPipeline(){},setBindGroup(){},dispatchWorkgroupsIndirect(){},end(){}};
- const descriptors=new Map(['activeNext','nextActive'].map(name=>[`plasius.wavefront.bind.${name}`,{entries:[0,2,6].map(binding=>({binding,resource:{buffer:{name,binding}}}))}]));
+ const descriptors=new Map(['activeNext','nextActive'].map(name=>[`plasius.wavefront.bind.${name}`,{entries:[0,2,6,22].map(binding=>({binding,resource:{buffer:{name,binding}}}))}]));
  const device={createBuffer:d=>{const b={size:d.size,destroy(){this.destroyed=true;}};allocated.push(b);return b;},
   createShaderModule:()=>({getCompilationInfo:async()=>({messages:[]})}),createBindGroupLayout:x=>x,createPipelineLayout:x=>x,createBindGroup:x=>x,
   createComputePipelineAsync:async x=>x,createCommandEncoder:()=>({clearBuffer(){},beginComputePass:()=>pass,finish:()=>({})}),
@@ -35,6 +35,7 @@ test('failure-only replay guards unsupported histories, reuses config, and clean
  assert.ok(allocated.every(b=>b.destroyed));
  const successful=await captureCanonicalSelection(c,{...options,selection:options.failure});
  assert.equal(successful.status,'captured');assert.match(successful.scope,/selected-sample/);
+ assert.equal(successful.allocatedBytes,11520);assert.deepEqual(successful.surfaceNodes,[]);
  assert.equal(writes.length,1,'successful selection never clears a failure word');assert.ok(allocated.every(b=>b.destroyed));
  c.read=async()=>{throw Error('lost');};await assert.rejects(replayCanonicalFailure(c,options),/lost/);assert.ok(allocated.every(b=>b.destroyed));
  device.createShaderModule=()=>{throw Error('compile');};await assert.rejects(replayCanonicalFailure(c,options),/compile/);assert.ok(allocated.every(b=>b.destroyed));

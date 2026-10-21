@@ -158,3 +158,18 @@ failure-only behavior, mode restoration and cleanup pass. Full local suite:
 package, all nine Zero-Three gates and runtime audit pass. No runtime shader change
 or new physical/banding result is part of this diagnostic-only change. The running
 immutable 665e2bd matrix continues unaffected; preserve its source identity.
+
+The selected-success diagnostic now additionally reads original PathNodes after
+surface shading/before queue swap, retaining direct/terminal radiance, termination
+kind and original sample identity. It reuses existing resources and a bounded
+64-byte-per-depth private tail (1,280 bytes at depth20); it does not re-evaluate
+lighting. Missing/failed/non-finite/incorrect-identity records fail the diagnostic.
+Original failure-only sizes/API remain unchanged. New shader/decoder/dispatch-order
+requirements fail before implementation and pass afterward. Additional shared-face
+tests cover108 axis/sign/cyclic/reversed-face variants without runtime changes.
+Full suite481 passes,96.45% lines/83.20% branches; lint, types/clean consumer,
+build/package/Zero-Three/audit pass. All59 changed executable src files relative
+to the PR base appear in combined LCOV; the non-executable index.d.ts contract is
+checked by typecheck/clean consumer, not reported as executable line coverage.
+The running immutable full matrix and subsequent selected-ray physical execution
+remain separate evidence gates. Runtime shader bytes remain unchanged.

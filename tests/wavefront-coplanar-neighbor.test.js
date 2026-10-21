@@ -67,6 +67,26 @@ test('coplanar certification preserves ownership, winding and open-edge topology
  assert.deepEqual(Array.from(out.slice(0,4)),[1,1,0,0]);assert(out.slice(4).every(v=>v===0));
 });
 
+test('captured shared-face certification survives axes, signs, cyclic orders and reversal of both faces',()=>{
+ const cases=[];
+ for(const axes of [[0,1,2],[1,2,0],[2,0,1]])for(const sign of [-1,1])for(const reverse of [false,true])
+ for(const left of [0,1,2])for(const right of [0,1,2]){
+  const transform=p=>axes.map(axis=>p[axis]*sign),order=(vertices,offset)=>[0,1,2].map(i=>vertices[(offset+(reverse?3-i:i))%3]);
+  cases.push({a:order(frozen.vertices,left).map(transform),b:order(frozen.coplanarNeighbour.vertices,right).map(transform),p:transform(frozen.position),axis:axes.indexOf(2)});
+ }
+ const code=WAVEFRONT_COMPUTE_WGSL+`
+ @group(1) @binding(0)var<storage,read>cases:array<vec4<f32>>;
+ @compute @workgroup_size(1)fn permutations(@builtin(global_invocation_id)id:vec3<u32>){let o=id.x*7u;
+  var a=TriangleRecord();a.mediumRefId=1u;a.v0=cases[o];a.v1=cases[o+1u];a.v2=cases[o+2u];
+  var b=a;b.v0=cases[o+3u];b.v1=cases[o+4u];b.v2=cases[o+5u];let position=cases[o+6u].xyz;let projectionAxis=u32(cases[o+6u].w);
+  let proof=optical_coplanar_neighbor_pair(a,b,projectionAxis);
+  accumulation[id.x]=vec4<f32>(proof.w,select(0.0,1.0,optical_neighbor_contains(a,b,position,projectionAxis,proof)),0,0);
+ }`;
+ const input=new Float32Array(cases.flatMap(c=>[...c.a.flatMap(p=>[...p,1]),...c.b.flatMap(p=>[...p,1]),...c.p,c.axis]));
+ const out=new Float32Array(cases.length*4);new Exec(new Parser().parse(code)).dispatchWorkgroups('permutations',cases.length,{0:{3:out},1:{0:input}});
+ cases.forEach((_c,i)=>assert.deepEqual(Array.from(out.slice(i*4,i*4+4)),[1,1,0,0],`variant ${i}`));
+});
+
 test('bounded canonical BVH search accepts the unchanged captured point and fails closed on malformed traversal',()=>{
  // Isolate only scene input; execute the actual canonical lookup and predicates.
  const setup=OPTICAL_COPLANAR_PROBE_WGSL.slice(OPTICAL_COPLANAR_PROBE_WGSL.indexOf(' var first='),OPTICAL_COPLANAR_PROBE_WGSL.indexOf(' let proof='));

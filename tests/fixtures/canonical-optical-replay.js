@@ -2,6 +2,7 @@ import {WAVEFRONT_CAMERA_RAY_RECORD_WGSL} from '../../src/wavefront-camera-share
 import {WAVEFRONT_SHADER_LAYOUT_WGSL} from '../../src/wavefront-shader-layout.js';
 import {assertShaderModuleCompiles} from '../../src/wavefront-runtime-support.js';
 import {createGpuParallelismCounters} from '../../src/wavefront-frame-runtime.js';
+import {canonicalSurfaceJournalShader,decodeSurfaceJournal} from './optical-surface-journal.js';
 
 const RECORD_WORDS=64;
 const hitRecord=WAVEFRONT_SHADER_LAYOUT_WGSL.match(/struct HitRecord \{[\s\S]+?\n\};/)[0];
@@ -71,8 +72,9 @@ export function encodeCanonicalReplay(encoder,{frameEncoder,tile,frameOffset,pha
    return new Proxy(pass,{get(p,k){
     if(k==='setBindGroup')return (...args)=>{binding=args;p.setBindGroup(...args);};
     if(k==='setPipeline')return pipeline=>{
-     const capture=pipeline===pipelines.intersectActiveQueue?journal.before:pipeline===pipelines.resolveSurfaceRecords?journal.after:null;
-     if(capture){p.setPipeline(capture);p.setBindGroup(0,journal.groups[Number(match[1])%2]);p.dispatchWorkgroups(Math.ceil(tile.width*tile.height/64));p.setBindGroup(...binding);}
+     const surface=journal.surface&&pipeline===pipelines.compactAndSwapQueues;
+     const capture=surface?journal.surface:pipeline===pipelines.intersectActiveQueue?journal.before:pipeline===pipelines.resolveSurfaceRecords?journal.after:null;
+     if(capture){p.setPipeline(capture);p.setBindGroup(0,(surface?journal.surfaceGroups:journal.groups)[Number(match[1])%2]);p.dispatchWorkgroups(Math.ceil(tile.width*tile.height/64));p.setBindGroup(...binding);}
      p.setPipeline(pipeline);
     };
     const value=p[k];return typeof value==='function'?value.bind(p):value;
@@ -100,7 +102,8 @@ async function captureCanonicalJournal(c,{config,tile,ranges,selection,failureOn
  if(phase!==ranges.length-1)return {status:'unsupported',reason:'original-phase-worklist-no-longer-retained'};
  const code=canonicalJournalShader({pixel:selection.pixel,sample:selection.sample,maxDepth:config.maxDepth});
  const label=failureOnly?'failure-only':'selected-sample';
- const size=config.maxDepth*2*RECORD_WORDS*4;
+ const recordBytes=config.maxDepth*2*RECORD_WORDS*4;
+ const surfaceBytes=failureOnly?0:config.maxDepth*64,size=recordBytes+surfaceBytes;
  const buffer=device.createBuffer({label:label+'-canonical-journal',size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
  try{
   const module=device.createShaderModule({label:label+'-canonical-journal',code});
@@ -109,9 +112,18 @@ async function captureCanonicalJournal(c,{config,tile,ranges,selection,failureOn
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
   const journal={groups:['activeNext','nextActive'].map(name=>{
    const entries=descriptors.get(`plasius.wavefront.bind.${name}`).entries;
-   return device.createBindGroup({layout,entries:[0,2,6].map((source,binding)=>({binding,resource:entries.find(e=>e.binding===source).resource})).concat({binding:3,resource:{buffer}})});
+   return device.createBindGroup({layout,entries:[0,2,6].map((source,binding)=>({binding,resource:entries.find(e=>e.binding===source).resource})).concat({binding:3,resource:{buffer,size:recordBytes}})});
   })};
   for(const entryPoint of ['before','after'])journal[entryPoint]=await wait(device.createComputePipelineAsync({layout:pipelineLayout,compute:{module,entryPoint}}));
+  if(!failureOnly){
+   const surfaceModule=device.createShaderModule({label:'selected-surface-journal',code:canonicalSurfaceJournalShader({...selection,maxDepth:config.maxDepth,tilePixels:tile.width*tile.height})});
+   await wait(assertShaderModuleCompiles(surfaceModule,'selected-surface-journal'));
+   journal.surface=await wait(device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:surfaceModule,entryPoint:'surface'}}));
+   journal.surfaceGroups=['activeNext','nextActive'].map(name=>{
+    const entries=descriptors.get(`plasius.wavefront.bind.${name}`).entries;
+    return device.createBindGroup({layout,entries:[0,6,22].map((source,binding)=>({binding,resource:entries.find(e=>e.binding===source).resource})).concat({binding:3,resource:{buffer,offset:recordBytes,size:surfaceBytes}})});
+   });
+  }
   c.setMode(false,false);
   // Restore only the sticky control failure; the entire original worklist and
   // dispatch count remain intact. This is not a retry of an accepted render.
@@ -119,7 +131,9 @@ async function captureCanonicalJournal(c,{config,tile,ranges,selection,failureOn
   const encoder=device.createCommandEncoder();
   encodeCanonicalReplay(encoder,{frameEncoder,tile,frameOffset:selection.sample*config.memory.configBufferStride,phaseOffset:phase*256,counters,shared,sharedGroup,dispatch:b.dispatch,pipelines,journal,label});
   device.queue.submit([encoder.finish()]);await wait(device.queue.onSubmittedWorkDone());
+  const bytes=await read(buffer,size);
   return {status:'captured',scope:label+'-canonical-tile-sample; no accepted image or performance claim',allocatedBytes:size,
-   pixel:selection.pixel,sample:selection.sample,records:decodeCanonicalJournal(await read(buffer,size))};
+   pixel:selection.pixel,sample:selection.sample,records:decodeCanonicalJournal(bytes.slice(0,recordBytes)),
+   ...(!failureOnly?{surfaceNodes:decodeSurfaceJournal(bytes.slice(recordBytes))}:{})};
  }finally{buffer.destroy();}
 }

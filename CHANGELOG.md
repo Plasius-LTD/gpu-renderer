@@ -13,7 +13,9 @@ All notable changes to this project will be documented in this file.
 
 - Add explicit, bounded successful-sample optical journals to the local uniform
   room fixture, using original compiled camera/bounce transport without sample
-  commits. Validate URL selections before GPU work, restore diagnostic modes and
+  commits. Read original post-surface direct/terminal radiance and termination
+  reasons before queue swap; validate complete identities and radiance records.
+  Validate URL selections before GPU work, restore diagnostic modes and
   clean private buffers on failures. Preserve failure-only behavior and all
   source-bound scene evidence; diagnostic-inclusive timing is not performance
   evidence. This supports residual banding analysis, not a banding fix (#234).
