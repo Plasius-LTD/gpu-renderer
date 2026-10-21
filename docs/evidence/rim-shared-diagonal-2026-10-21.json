@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "status": "retained-physical-guard-rejection-not-an-image-pass",
+  "rendererCommit": "e2a092228a39a33cd9522309eb9497ad864dfec7",
+  "captureId": "room-reference-2026-10-21T09-29-40-752Z-690bdda7-0ea5-49de-8283-972ae3bae68e",
+  "tile": 319,
+  "pixel": 5178795,
+  "sample": 1,
+  "bounce": 4,
+  "failureReason": 8,
+  "primitive": 353223,
+  "position": [2.874326229095459,-0.5140965580940247,-0.050672098994255066],
+  "barycentric": [0.0000593668082728982,0.9999303817749023,0.0000102981748568709],
+  "vertices": [
+    [2.877500057220459,-0.6940840482711792,-0.05236860364675522],
+    [2.87432599067688,-0.5140840411186218,-0.05067199841141701],
+    [2.87432599067688,-0.6940840482711792,-0.05067199841141701]
+  ],
+  "coplanarNeighbour": {
+    "primitive": 353222,
+    "vertices": [
+      [2.877500057220459,-0.6940840482711792,-0.05236860364675522],
+      [2.877500057220459,-0.5140840411186218,-0.05236860364675522],
+      [2.87432599067688,-0.5140840411186218,-0.05067199841141701]
+    ],
+    "projectedWeightsAtPosition": [0.00006953874947473409,0.00000557580021354053,0.9999248854503118]
+  },
+  "analysis": "Rounded projection crosses an internal triangulation diagonal into the exact coplanar shared-edge neighbour of the same optical wall. It does not leave that wall's continuous surface. No tolerance or occupancy recovery is justified."
+}

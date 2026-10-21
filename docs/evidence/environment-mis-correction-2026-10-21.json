@@ -1,0 +1,784 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "environment-mis-correction-native-integrity",
+  "status": "mis-controls-pass-native-integrity-pass-banding-not-cleared",
+  "renderer": "419561858b40b92d11e17cac45bec54aeba2e023",
+  "runtimeCorrection": "70977ea761f43681ba003e030c56986c35763ad1",
+  "canonicalShaderSha256": "bc1931872d643330a6161e6e07e1b310da95ee21be4de276b63229711f5e51d4",
+  "artifactsRoot": "output/playwright/eames-environments",
+  "aggregate": {
+    "path": "room-qualification-4eee5f4b-6720-45a0-ab46-af733284ffdf/summary.json",
+    "sha256": "5ba6925f7760e4c88777fbfb9354a2ab7fd05815d082b357d990b89efac60c8a",
+    "status": "captures-complete-image-review-pending",
+    "failures": []
+  },
+  "totals": {
+    "cameraSamples": 995328000,
+    "pixels": 31104000,
+    "hdrChunks": 120,
+    "primaryRays": 995328000,
+    "secondaryRays": 2398087448,
+    "totalPathSegments": 3393415448
+  },
+  "analyticMis": {
+    "modesPerCapture": 13,
+    "pdfComponentTolerance": 0.000001,
+    "meanTolerance": 0.00002,
+    "quadratureSamplesPerMode": 4096,
+    "maximumPdfError": 1.2841276653130507e-8,
+    "maximumMeanError": 0.000003934119149562321,
+    "limitation": "Proposal/component Lambertian analytic control, not full rough-BSDF or room energy/convergence certification; existing heuristic floor retained"
+  },
+  "results": [
+    {
+      "receiptSha256": "36a48debbb4a0f4aca13412d43e7f31200b35372d9a4fda5dc8a2c5861c9000b",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "419561858b40b92d11e17cac45bec54aeba2e023",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 3840,
+        "height": 2160,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "glass",
+      "glass": "empty",
+      "actualSamples": 265420800,
+      "histogram": {
+        "32": 8294400
+      },
+      "hdrSha256": "7f3d78edc1bb4cc1d950a5000b53854f41ec03ee350419907604d17b2564ea26",
+      "pngSha256": "4c6c8798a91a8333bcdcce929f2da26f35fc6a67dab46109439455390758bf0e",
+      "verifiedChunks": 32,
+      "verifiedPixels": 8294400,
+      "meanLinearLuminance": 0.5065594346605541,
+      "rgbRms": 0.6110287951812983,
+      "minRadiance": 0,
+      "maxRadiance": 31.37575912475586,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "claim": "Integrity and descriptive HDR statistics only; not convergence, banding or performance acceptance",
+      "maximumMisPdfError": 1.2841276653130507e-8,
+      "maximumMisMeanError": 0.000003934119149562321,
+      "independentRayCounts": {
+        "tiles": 510,
+        "primaryRays": 265420800,
+        "secondaryRays": 656133197,
+        "totalPathSegments": 921553997
+      },
+      "receiptPath": "room-reference-2026-10-21T17-03-59-660Z-bdb09f65-de8b-4111-bdff-553a31d7a94b/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "12a5efa7f01ed11944f589fb37c73711f336d50a82029becb92a75cd5e7f5406",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "419561858b40b92d11e17cac45bec54aeba2e023",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 3840,
+        "height": 2160,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "glass",
+      "glass": "filled",
+      "actualSamples": 265420800,
+      "histogram": {
+        "32": 8294400
+      },
+      "hdrSha256": "3cb25d83d134e3ee5d2353d18be0594d408dd991552d94ce20325e7c7447f126",
+      "pngSha256": "314954b55131f511ebcca53f319969ebaf10e9ec32244a365d672424ac90d4ac",
+      "verifiedChunks": 32,
+      "verifiedPixels": 8294400,
+      "meanLinearLuminance": 0.5047425323690197,
+      "rgbRms": 0.6088768376381306,
+      "minRadiance": 0,
+      "maxRadiance": 31.37575912475586,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "claim": "Integrity and descriptive HDR statistics only; not convergence, banding or performance acceptance",
+      "maximumMisPdfError": 1.2841276653130507e-8,
+      "maximumMisMeanError": 0.000003934119149562321,
+      "independentRayCounts": {
+        "tiles": 510,
+        "primaryRays": 265420800,
+        "secondaryRays": 670634932,
+        "totalPathSegments": 936055732
+      },
+      "receiptPath": "room-reference-2026-10-21T17-18-46-273Z-d7e7a52b-c165-4f19-842a-92b3c5ce26c8/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "b5ca27bed8f1199bc0e165acfad5eafb6ccbf751b9fb70ef0ed8a31b8f051390",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "419561858b40b92d11e17cac45bec54aeba2e023",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 3840,
+        "height": 2160,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "room",
+      "glass": "filled",
+      "actualSamples": 265420800,
+      "histogram": {
+        "32": 8294400
+      },
+      "hdrSha256": "38d8c04b4038f728a31db04d655bce274d0626c77d22ae447d62c3f9bb9b3bed",
+      "pngSha256": "10ad6c337cae9150e3cec4875ccef014f68832d6b64bbb9f8be9287631d084a5",
+      "verifiedChunks": 32,
+      "verifiedPixels": 8294400,
+      "meanLinearLuminance": 0.5606550889138794,
+      "rgbRms": 0.6397466935997488,
+      "minRadiance": 0,
+      "maxRadiance": 50.28951644897461,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "claim": "Integrity and descriptive HDR statistics only; not convergence, banding or performance acceptance",
+      "maximumMisPdfError": 1.2841276653130507e-8,
+      "maximumMisMeanError": 0.000003934119149562321,
+      "independentRayCounts": {
+        "tiles": 510,
+        "primaryRays": 265420800,
+        "secondaryRays": 591654343,
+        "totalPathSegments": 857075143
+      },
+      "receiptPath": "room-reference-2026-10-21T17-34-17-693Z-072e7612-c5af-4a65-bf0d-f7db55cf5f2b/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "daf708e6a11a58d40fc73d479e1121cb20612a82124fedf9fecf956c7cb7d07e",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "419561858b40b92d11e17cac45bec54aeba2e023",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 1920,
+        "height": 1080,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "glass",
+      "glass": "empty",
+      "actualSamples": 66355200,
+      "histogram": {
+        "32": 2073600
+      },
+      "hdrSha256": "0848c0f2dbffb70275134aff8e4ffed2f7db3416a6e027b8f5bd7fcb3c1c1a73",
+      "pngSha256": "66450dae4ac09affc0b67ba17a29b3763d602ceac895e4411a90a93d9f2791cc",
+      "verifiedChunks": 8,
+      "verifiedPixels": 2073600,
+      "meanLinearLuminance": 0.5066703324032265,
+      "rgbRms": 0.6119326256647698,
+      "minRadiance": 0,
+      "maxRadiance": 39.51559066772461,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "claim": "Integrity and descriptive HDR statistics only; not convergence, banding or performance acceptance",
+      "maximumMisPdfError": 1.2841276653130507e-8,
+      "maximumMisMeanError": 0.000003934119149562321,
+      "independentRayCounts": {
+        "tiles": 135,
+        "primaryRays": 66355200,
+        "secondaryRays": 164062162,
+        "totalPathSegments": 230417362
+      },
+      "receiptPath": "room-reference-2026-10-21T17-48-47-532Z-09f63e58-3eef-46fd-930f-254779371c53/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "19672fd667fc9579002879349201f130c8391753ee5a084261898de65547b4a8",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "419561858b40b92d11e17cac45bec54aeba2e023",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 1920,
+        "height": 1080,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "glass",
+      "glass": "filled",
+      "actualSamples": 66355200,
+      "histogram": {
+        "32": 2073600
+      },
+      "hdrSha256": "c63c34faf30c7ed3a1ba5af0516fe779966ddcc7003746fb23d53d1e2ec71df4",
+      "pngSha256": "87fd7a6e5bd370c22b42eb31d3fa576bd252e695c6773e3089fb9db0749162c8",
+      "verifiedChunks": 8,
+      "verifiedPixels": 2073600,
+      "meanLinearLuminance": 0.5048623709924741,
+      "rgbRms": 0.6097101656223088,
+      "minRadiance": 0,
+      "maxRadiance": 39.51559066772461,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "claim": "Integrity and descriptive HDR statistics only; not convergence, banding or performance acceptance",
+      "maximumMisPdfError": 1.2841276653130507e-8,
+      "maximumMisMeanError": 0.000003934119149562321,
+      "independentRayCounts": {
+        "tiles": 135,
+        "primaryRays": 66355200,
+        "secondaryRays": 167688635,
+        "totalPathSegments": 234043835
+      },
+      "receiptPath": "room-reference-2026-10-21T17-52-58-323Z-0cb97b1e-db3f-4532-896a-4e102d559123/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "e42eb99466864b1d659cc1871b7cdaffcb8cb7bf6c20a398c928f68b67a0c53f",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "419561858b40b92d11e17cac45bec54aeba2e023",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 1920,
+        "height": 1080,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "room",
+      "glass": "filled",
+      "actualSamples": 66355200,
+      "histogram": {
+        "32": 2073600
+      },
+      "hdrSha256": "5cfc70164eb69f1ec7383a33b13ed72eee9492938c47f003b13138bcf078b13e",
+      "pngSha256": "7c2db6876c2260cc854d8962f6bd48a2dc0d5d50742b362413f136de31379d48",
+      "verifiedChunks": 8,
+      "verifiedPixels": 2073600,
+      "meanLinearLuminance": 0.5606658130514426,
+      "rgbRms": 0.6392078097369939,
+      "minRadiance": 0,
+      "maxRadiance": 33.22209167480469,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "claim": "Integrity and descriptive HDR statistics only; not convergence, banding or performance acceptance",
+      "maximumMisPdfError": 1.2841276653130507e-8,
+      "maximumMisMeanError": 0.000003934119149562321,
+      "independentRayCounts": {
+        "tiles": 135,
+        "primaryRays": 66355200,
+        "secondaryRays": 147914179,
+        "totalPathSegments": 214269379
+      },
+      "receiptPath": "room-reference-2026-10-21T17-57-24-863Z-3c3ed4fb-04e5-4ed1-b28e-1f43751581d2/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json"
+    }
+  ],
+  "beforeControls": {
+    "renderer": "d53ced33554cab6d669d2d8104ca15cfcf86add2",
+    "ledger": "room-normal-followup-2026-10-21.json",
+    "preserved": true,
+    "comparisons": [
+      {
+        "width": 3840,
+        "glass": "empty",
+        "focus": "glass",
+        "beforeReceiptPath": "room-reference-2026-10-21T13-04-51-322Z-48653014-15cc-4001-99f9-bc0ace0c95df/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json",
+        "beforeReceiptSha256": "2df75add7325fbe35f95301389563e2eb590894b25e0d103b961ec01251bbc0e",
+        "afterReceiptSha256": "36a48debbb4a0f4aca13412d43e7f31200b35372d9a4fda5dc8a2c5861c9000b",
+        "beforeRays": {
+          "primaryRays": 265420800,
+          "secondaryRays": 656133197,
+          "totalPathSegments": 921553997
+        },
+        "rayTotalsUnchanged": true,
+        "fullFrame": {
+          "uv": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "pixels": 8294400,
+          "meanLuminanceBefore": 0.5485313853821426,
+          "meanLuminanceAfter": 0.5065594346604722,
+          "luminanceChangePercent": -7.651695388848189,
+          "rgbRmse": 0.05305624340004836,
+          "maxRgbDelta": 8.001960754394531
+        },
+        "frozenBandRegions": [
+          {
+            "uv": [
+              0.49,
+              0.54,
+              0.51,
+              0.57
+            ],
+            "pixels": 5005,
+            "meanLuminanceBefore": 0.39103142553809384,
+            "meanLuminanceAfter": 0.35768317062318616,
+            "luminanceChangePercent": -8.528280014583867,
+            "rgbRmse": 0.04107058537541452,
+            "maxRgbDelta": 0.8509930372238159
+          },
+          {
+            "uv": [
+              0.49,
+              0.59,
+              0.51,
+              0.62
+            ],
+            "pixels": 5005,
+            "meanLuminanceBefore": 0.19304430926605756,
+            "meanLuminanceAfter": 0.17706447444926246,
+            "luminanceChangePercent": -8.27780672610835,
+            "rgbRmse": 0.034059304066117284,
+            "maxRgbDelta": 1.010667324066162
+          },
+          {
+            "uv": [
+              0.49,
+              0.65,
+              0.51,
+              0.68
+            ],
+            "pixels": 4928,
+            "meanLuminanceBefore": 0.1965303620985796,
+            "meanLuminanceAfter": 0.18672418943555824,
+            "luminanceChangePercent": -4.98964768512592,
+            "rgbRmse": 0.02709455271702254,
+            "maxRgbDelta": 0.8501510620117188
+          }
+        ]
+      },
+      {
+        "width": 3840,
+        "glass": "filled",
+        "focus": "glass",
+        "beforeReceiptPath": "room-reference-2026-10-21T13-19-36-226Z-585b07ff-0002-44cb-85ce-33f65645e08e/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json",
+        "beforeReceiptSha256": "9c052a3cd966ccaef34ad6a6abaaa01cf5f6a50e0aac16a0c66e89b2a4648f6c",
+        "afterReceiptSha256": "12a5efa7f01ed11944f589fb37c73711f336d50a82029becb92a75cd5e7f5406",
+        "beforeRays": {
+          "primaryRays": 265420800,
+          "secondaryRays": 670634932,
+          "totalPathSegments": 936055732
+        },
+        "rayTotalsUnchanged": true,
+        "fullFrame": {
+          "uv": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "pixels": 8294400,
+          "meanLuminanceBefore": 0.5466106075297851,
+          "meanLuminanceAfter": 0.504742532368909,
+          "luminanceChangePercent": -7.659579705209918,
+          "rgbRmse": 0.05284564512947847,
+          "maxRgbDelta": 8.001960754394531
+        },
+        "frozenBandRegions": [
+          {
+            "uv": [
+              0.49,
+              0.54,
+              0.51,
+              0.57
+            ],
+            "pixels": 5005,
+            "meanLuminanceBefore": 0.43465714657181076,
+            "meanLuminanceAfter": 0.4004998718480532,
+            "luminanceChangePercent": -7.858440840823578,
+            "rgbRmse": 0.03845544126733274,
+            "maxRgbDelta": 0.5712906122207642
+          },
+          {
+            "uv": [
+              0.49,
+              0.59,
+              0.51,
+              0.62
+            ],
+            "pixels": 5005,
+            "meanLuminanceBefore": 0.2310476806252231,
+            "meanLuminanceAfter": 0.197523016198777,
+            "luminanceChangePercent": -14.50984677090339,
+            "rgbRmse": 0.03796231715158819,
+            "maxRgbDelta": 0.34547752141952515
+          },
+          {
+            "uv": [
+              0.49,
+              0.65,
+              0.51,
+              0.68
+            ],
+            "pixels": 4928,
+            "meanLuminanceBefore": 0.29293460719806036,
+            "meanLuminanceAfter": 0.2814106513281362,
+            "luminanceChangePercent": -3.933968737989546,
+            "rgbRmse": 0.02108662055086048,
+            "maxRgbDelta": 0.20345282554626465
+          }
+        ]
+      },
+      {
+        "width": 3840,
+        "glass": "filled",
+        "focus": "room",
+        "beforeReceiptPath": "room-reference-2026-10-21T13-35-02-844Z-30874472-f38f-4bc6-ad0f-23094d6a0f65/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json",
+        "beforeReceiptSha256": "971ffccb91eb34f69b83063c789914ec4abc257a048443ac3324cf0f682983a2",
+        "afterReceiptSha256": "b5ca27bed8f1199bc0e165acfad5eafb6ccbf751b9fb70ef0ed8a31b8f051390",
+        "beforeRays": {
+          "primaryRays": 265420800,
+          "secondaryRays": 591654343,
+          "totalPathSegments": 857075143
+        },
+        "rayTotalsUnchanged": true,
+        "fullFrame": {
+          "uv": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "pixels": 8294400,
+          "meanLuminanceBefore": 0.6148523960973145,
+          "meanLuminanceAfter": 0.5606550889139181,
+          "luminanceChangePercent": -8.814685854264503,
+          "rgbRmse": 0.06603857457955972,
+          "maxRgbDelta": 10.293876647949219
+        }
+      },
+      {
+        "width": 1920,
+        "glass": "empty",
+        "focus": "glass",
+        "beforeReceiptPath": "room-reference-2026-10-21T13-49-27-678Z-07cf9353-7885-4041-a49d-c26433b42f55/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json",
+        "beforeReceiptSha256": "7a3bd49285b1f4460c2c187d4faa1b2672c559d5fdd817b8c746f061cd8dbff3",
+        "afterReceiptSha256": "daf708e6a11a58d40fc73d479e1121cb20612a82124fedf9fecf956c7cb7d07e",
+        "beforeRays": {
+          "primaryRays": 66355200,
+          "secondaryRays": 164062162,
+          "totalPathSegments": 230417362
+        },
+        "rayTotalsUnchanged": true,
+        "fullFrame": {
+          "uv": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "pixels": 2073600,
+          "meanLuminanceBefore": 0.5486699802887212,
+          "meanLuminanceAfter": 0.5066703324032238,
+          "luminanceChangePercent": -7.654810613731112,
+          "rgbRmse": 0.05333325155254676,
+          "maxRgbDelta": 10.072919845581055
+        },
+        "frozenBandRegions": [
+          {
+            "uv": [
+              0.49,
+              0.54,
+              0.51,
+              0.57
+            ],
+            "pixels": 1248,
+            "meanLuminanceBefore": 0.39082644465606653,
+            "meanLuminanceAfter": 0.3571924298273535,
+            "luminanceChangePercent": -8.605869763575368,
+            "rgbRmse": 0.04098136011746066,
+            "maxRgbDelta": 0.3856978416442871
+          },
+          {
+            "uv": [
+              0.49,
+              0.59,
+              0.51,
+              0.62
+            ],
+            "pixels": 1248,
+            "meanLuminanceBefore": 0.1880698504538348,
+            "meanLuminanceAfter": 0.1717778449010602,
+            "luminanceChangePercent": -8.662741802293173,
+            "rgbRmse": 0.028563628028986952,
+            "maxRgbDelta": 0.29251331090927124
+          },
+          {
+            "uv": [
+              0.49,
+              0.65,
+              0.51,
+              0.68
+            ],
+            "pixels": 1248,
+            "meanLuminanceBefore": 0.19507295119723775,
+            "meanLuminanceAfter": 0.1853306711741438,
+            "luminanceChangePercent": -4.994172674018527,
+            "rgbRmse": 0.0261707791757195,
+            "maxRgbDelta": 0.38237857818603516
+          }
+        ]
+      },
+      {
+        "width": 1920,
+        "glass": "filled",
+        "focus": "glass",
+        "beforeReceiptPath": "room-reference-2026-10-21T13-53-36-472Z-5f9b9f49-2ea1-43ee-87ae-93241acd48cf/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json",
+        "beforeReceiptSha256": "759b7cdea4de0671082e3e847c7527bedfbbd6af748f52c8fd44c3d52dc5ca48",
+        "afterReceiptSha256": "19672fd667fc9579002879349201f130c8391753ee5a084261898de65547b4a8",
+        "beforeRays": {
+          "primaryRays": 66355200,
+          "secondaryRays": 167688635,
+          "totalPathSegments": 234043835
+        },
+        "rayTotalsUnchanged": true,
+        "fullFrame": {
+          "uv": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "pixels": 2073600,
+          "meanLuminanceBefore": 0.5467634126286308,
+          "meanLuminanceAfter": 0.5048623709924944,
+          "luminanceChangePercent": -7.663468452413847,
+          "rgbRmse": 0.05312359881466598,
+          "maxRgbDelta": 10.072919845581055
+        },
+        "frozenBandRegions": [
+          {
+            "uv": [
+              0.49,
+              0.54,
+              0.51,
+              0.57
+            ],
+            "pixels": 1248,
+            "meanLuminanceBefore": 0.43549808728025813,
+            "meanLuminanceAfter": 0.40166239590356767,
+            "luminanceChangePercent": -7.769423647299744,
+            "rgbRmse": 0.04151618015026297,
+            "maxRgbDelta": 0.6026726961135864
+          },
+          {
+            "uv": [
+              0.49,
+              0.59,
+              0.51,
+              0.62
+            ],
+            "pixels": 1248,
+            "meanLuminanceBefore": 0.22463645982090766,
+            "meanLuminanceAfter": 0.19190853313543646,
+            "luminanceChangePercent": -14.569285285017253,
+            "rgbRmse": 0.03811142462093386,
+            "maxRgbDelta": 0.4628176689147949
+          },
+          {
+            "uv": [
+              0.49,
+              0.65,
+              0.51,
+              0.68
+            ],
+            "pixels": 1248,
+            "meanLuminanceBefore": 0.2933662086636897,
+            "meanLuminanceAfter": 0.2820244260937262,
+            "luminanceChangePercent": -3.8660834939464706,
+            "rgbRmse": 0.020743355659346985,
+            "maxRgbDelta": 0.2116602063179016
+          }
+        ]
+      },
+      {
+        "width": 1920,
+        "glass": "filled",
+        "focus": "room",
+        "beforeReceiptPath": "room-reference-2026-10-21T13-58-00-083Z-6f1bf6b1-d69d-4b21-a8f7-0f49323afbd2/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json",
+        "beforeReceiptSha256": "bc2bb29d3d8bbf3efd4cbf434a9df93133d3e7fa9b1239be28cbe7876e80d2e2",
+        "afterReceiptSha256": "e42eb99466864b1d659cc1871b7cdaffcb8cb7bf6c20a398c928f68b67a0c53f",
+        "beforeRays": {
+          "primaryRays": 66355200,
+          "secondaryRays": 147914179,
+          "totalPathSegments": 214269379
+        },
+        "rayTotalsUnchanged": true,
+        "fullFrame": {
+          "uv": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "pixels": 2073600,
+          "meanLuminanceBefore": 0.6148572354442544,
+          "meanLuminanceAfter": 0.5606658130514772,
+          "luminanceChangePercent": -8.813659377956595,
+          "rgbRmse": 0.06614566196832453,
+          "maxRgbDelta": 5.932162284851074
+        }
+      }
+    ]
+  },
+  "rejectedPreflight": {
+    "renderer": "70977ea761f43681ba003e030c56986c35763ad1",
+    "receiptPath": "room-reference-2026-10-21T17-00-19-373Z-86fe5160-9849-4532-b421-6ed48f5a030e/failed-room-reference.json",
+    "receiptSha256": "9207f34f62259618288a6cf111e6a4e8ee055271bf784bd0b44c6dd4a41a17f6",
+    "aggregatePath": "room-qualification-1fa976c1-d345-4fe1-bc9c-fd93ea4d1310/summary.json",
+    "aggregateSha256": "10dfd838ab0838cc90fd6be5b0912e89bfefa9473be12d297bab171d1b70019b",
+    "cause": "Probe ordinary material accidentally authored partial transmission; corrected test input only after assembled numerical red reproduction. No image accepted, runtime/tolerances unchanged."
+  },
+  "validation": {
+    "tests": 489,
+    "lineCoveragePercent": 96.46,
+    "branchCoveragePercent": 83.27,
+    "changedExecutableSourceFilesInLcov": 59,
+    "lint": true,
+    "typesAndCleanConsumer": true,
+    "build": true,
+    "package": true,
+    "zeroThreeAllNineChecks": true,
+    "runtimeDependencyVulnerabilities": 0,
+    "runtimeCi": 39639221692,
+    "captureSourceCi": 39640372238,
+    "allCiJobsAndStepsSucceeded": true,
+    "browserErrors": 0,
+    "controlsRestored": true
+  },
+  "gates": {
+    "nativeIntegrity": true,
+    "analyticMisConsistency": true,
+    "normalIdentity": true,
+    "waterBandCleared": false,
+    "roomImageConvergence": false,
+    "roomEnergyQualified": false,
+    "adaptivePerformanceResume": false,
+    "whitePaperImprovementClaim": false,
+    "highSpp256NewQualification": false,
+    "adaptiveDisabledPhysicalEquivalence": false,
+    "crossDeviceQualification": false,
+    "release": false
+  },
+  "observations": [
+    "All six complete native PNGs inspected. Broad filled-glass band remains at1080p and4K.",
+    "Before/after HDR changes and unchanged ray totals are descriptive, not accuracy, energy or performance scores.",
+    "No new persistent renderer allocations, ray-record sizes or passes; shader private cost/physical VRAM not measured.",
+    "Adaptive optimization/publication remains paused; Task234 In progress and PR216 draft/open; no local publication/main release."
+  ]
+}

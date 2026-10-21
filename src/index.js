@@ -1,6 +1,7 @@
 export {
   createAnimatedSceneRenderer,
 } from "./animated-scene-renderer.js";
+export { createWavefrontFrameLoop } from "./wavefront-frame-loop.js";
 export {
   createProfessionalAnimatedSceneRenderer,
 } from "./professional-animated-scene-renderer.js";

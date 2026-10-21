@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "status": "failed-correctness-and-visual-qualification-open",
+  "sources": {
+    "renderer": "7002c0e2ff66879ce54e97fb3d1b920d2d5b9c75",
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "settings": {
+    "samplesPerPixel": 32,
+    "distribution": "uniform",
+    "maxDepth": 20,
+    "sampler": "fixed-pattern",
+    "denoise": false,
+    "splitDepth": 0,
+    "boundedDielectric": true,
+    "nestedMedia": true,
+    "roughDielectric": false,
+    "supportClearanceMeters": 0.0001
+  },
+  "device": {"vendor": "apple", "architecture": "metal-3", "isFallbackAdapter": false, "browser": "Chrome/154.0.0.0", "exactChipIdentityVerified": false},
+  "aggregate": {
+    "captureId": "room-qualification-14759371-a95a-48b6-be58-d8a2b9aaf318",
+    "sha256": "bd52863deb6fc1db29118d16c493810717802faad773edd37d13f05c48e41fa4",
+    "status": "failed",
+    "completedLanes": 3,
+    "plannedLanes": 6,
+    "acceptedImageSamples": 199065600,
+    "bandingFixed": false,
+    "adaptivePerformanceWorkResumed": false
+  },
+  "lanes": [
+    {
+      "resolution": "1920x1080", "glass": "empty", "focus": "glass", "integrity": "passed", "visualQualification": "not-converged-reference-qualified",
+      "captureId": "room-reference-2026-10-21T07-33-52-806Z-b2100dd2-9bd2-49c1-8528-56ae1ad0ccd8",
+      "receiptFile": "room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json",
+      "receiptSha256": "6e95480d4ea1401fe6cf600b453bfd43703acf258aabf5d1c51b088b200f166e",
+      "pngSha256": "172daf776ad8224428715f046ddac5972d0b3b11ccc500ade0918baa53109aeb",
+      "hdrSha256": "7edcdfcabf3d03cb3697dcd8a31f6a5d9a709b21187eeac58c167b95d91d9f40",
+      "actualSamples": 66355200, "histogram": {"32": 2073600}, "verifiedHdrChunks": 8, "cleanupPassed": true
+    },
+    {
+      "resolution": "1920x1080", "glass": "filled", "focus": "glass", "integrity": "passed", "visualQualification": "reported-horizontal-band-remains",
+      "captureId": "room-reference-2026-10-21T07-38-08-855Z-83ff3fdf-6556-4cca-878f-4da9fddffe01",
+      "receiptFile": "room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json",
+      "receiptSha256": "66c1581bc187cd53e9ffb8fd0e406a95f5716502267cee28956da40ec2a79a63",
+      "pngSha256": "b92fc6459778f3a64ee8aa5b2bf468e6cf848e1b100744c02421a6cd33740d18",
+      "hdrSha256": "3eae35a9c37bf728708fb439261dddc65ed3a8879429aa8aee001915666226e5",
+      "actualSamples": 66355200, "histogram": {"32": 2073600}, "verifiedHdrChunks": 8, "cleanupPassed": true
+    },
+    {
+      "resolution": "1920x1080", "glass": "filled", "focus": "entry", "integrity": "passed", "visualQualification": "not-converged-reference-qualified",
+      "captureId": "room-reference-2026-10-21T07-42-30-426Z-db2c8ec9-7ca8-4cf0-beb1-a0c7acb2dd0f",
+      "receiptFile": "room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json",
+      "receiptSha256": "3b1b29a999e1efea436f4b7b1938212f936a783f283c1fb27b9977d0a8fbc606",
+      "pngSha256": "9fa98204108f7cbd8eb8d6125f7d926e88a372e65399995ea143e285ec62085f",
+      "hdrSha256": "4654d639bbde69ade1a689d5dd1fe47727857953cd0366773c892e1aec4060d7",
+      "actualSamples": 66355200, "histogram": {"32": 2073600}, "verifiedHdrChunks": 8, "cleanupPassed": true
+    },
+    {
+      "resolution": "3840x2160", "glass": "empty", "focus": "glass", "integrity": "failed", "visualQualification": "no-complete-image",
+      "captureId": "room-reference-2026-10-21T07-46-36-950Z-890fa400-c83e-4cda-93cb-253d5e241521",
+      "receiptFile": "failed-room-reference.json",
+      "receiptSha256": "ac9be55a6612c2d9de6919988a50eea4e7a08c285860c510d61e9d7dd518fedf",
+      "failure": "primary-ray-count-mismatch:245760/524288",
+      "tileIndex": 165, "pixel": 2747573, "sample": 14, "bounce": 1, "reason": 2,
+      "cleanupPassed": null
+    },
+    {"resolution": "3840x2160", "glass": "filled", "focus": "glass", "integrity": "not-run-stop-on-prior-failure", "visualQualification": "not-run"},
+    {"resolution": "3840x2160", "glass": "filled", "focus": "entry", "integrity": "not-run-stop-on-prior-failure", "visualQualification": "not-run"}
+  ],
+  "claimBoundary": "Integrity passes do not certify scene energy, convergence, physical appearance, speedup or memory savings. No complete 4K scene image."
+}

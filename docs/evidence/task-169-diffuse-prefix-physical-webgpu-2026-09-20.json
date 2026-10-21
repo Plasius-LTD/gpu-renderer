@@ -1,0 +1,484 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "88df724dd5c5e47c0af2f48038a56709e5a69e64",
+  "provenance": {
+    "source": "immutable-git-objects",
+    "fixtureUrl": "http://127.0.0.1:5195/tests/fixtures/adaptive-complete-sample.html",
+    "observation": "Browser-visible receipt served from the clean stated commit; values transcribed without rounding. Native production renderer descriptors and GPU objects preserved."
+  },
+  "receipt": {
+    "status": "passed",
+    "timestamp": "2026-09-20T07:52:41.391Z",
+    "scope": "experimental-complete-adaptive-pixels",
+    "fixedShaderSha256": "c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb",
+    "completionShaderSha256": "e9b75a2a86afc02718543bd726e54eedca9bd0cef8458e2e1465335efe7778d7",
+    "fixtureSha256": "de0653beaaf127a876ad0621d27751fac02c29345779aa66da2aeac1f6e7726e",
+    "absoluteTolerance": 0.00001,
+    "cases": [
+      {
+        "name": "environment",
+        "tierOrder": [
+          2,
+          4,
+          8,
+          32
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 1.0000000000000113,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 307864,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "environment",
+        "tierOrder": [
+          32,
+          8,
+          4,
+          2
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 1.0000000000000113,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 307864,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "black",
+        "tierOrder": [
+          2,
+          4,
+          8,
+          32
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 0,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 307864,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "black",
+        "tierOrder": [
+          32,
+          8,
+          4,
+          2
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 0,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 307864,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "emissive",
+        "tierOrder": [
+          2,
+          4,
+          8,
+          32
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 2.3529999999999975,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 308596,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "emissive",
+        "tierOrder": [
+          32,
+          8,
+          4,
+          2
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 2.3529999999999975,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 308596,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "metal",
+        "tierOrder": [
+          2,
+          4,
+          8,
+          32
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 1.0000000000000113,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 308500,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "metal",
+        "tierOrder": [
+          32,
+          8,
+          4,
+          2
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 1.0000000000000113,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 308500,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "dielectric",
+        "tierOrder": [
+          2,
+          4,
+          8,
+          32
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 3292,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 1.0000000000000113,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 308500,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "dielectric",
+        "tierOrder": [
+          32,
+          8,
+          4,
+          2
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 3292,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 1.0000000000000113,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 308500,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "environment-128",
+        "tierOrder": [
+          2,
+          8,
+          32,
+          128
+        ],
+        "sequencePeriod": 128,
+        "pixels": 256,
+        "actualSamples": 10880,
+        "fixedPrimaryReference": 32768,
+        "actualAverageSpp": 42.5,
+        "histogram": {
+          "2": 64,
+          "8": 64,
+          "32": 64,
+          "128": 64
+        },
+        "terminalPaths": 10880,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 1.0000000000000113,
+        "adaptiveAllocatedBytes": 63260,
+        "rendererBufferBytes": 357016,
+        "fixtureReadbackBytes": 19120
+      },
+      {
+        "name": "environment-128",
+        "tierOrder": [
+          128,
+          32,
+          8,
+          2
+        ],
+        "sequencePeriod": 128,
+        "pixels": 256,
+        "actualSamples": 10880,
+        "fixedPrimaryReference": 32768,
+        "actualAverageSpp": 42.5,
+        "histogram": {
+          "2": 64,
+          "8": 64,
+          "32": 64,
+          "128": 64
+        },
+        "terminalPaths": 10880,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 1.0000000000000113,
+        "adaptiveAllocatedBytes": 63260,
+        "rendererBufferBytes": 357016,
+        "fixtureReadbackBytes": 19120
+      },
+      {
+        "name": "diffuse",
+        "tierOrder": [
+          2,
+          4,
+          8,
+          32
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "reference": "fixed-dispatch same-ordinal prefix, not a converged image",
+        "denseReferenceCameraSamples": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 0.596827150244595,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 308500,
+        "fixtureReadbackBytes": 17136
+      },
+      {
+        "name": "diffuse",
+        "tierOrder": [
+          32,
+          8,
+          4,
+          2
+        ],
+        "sequencePeriod": 32,
+        "pixels": 256,
+        "actualSamples": 2944,
+        "fixedPrimaryReference": 8192,
+        "reference": "fixed-dispatch same-ordinal prefix, not a converged image",
+        "denseReferenceCameraSamples": 8192,
+        "actualAverageSpp": 11.5,
+        "histogram": {
+          "2": 64,
+          "4": 64,
+          "8": 64,
+          "32": 64
+        },
+        "terminalPaths": 2944,
+        "maxAbsoluteError": 0,
+        "rgbRmse": 0,
+        "meanLuminance": 0.596827150244595,
+        "adaptiveAllocatedBytes": 31516,
+        "rendererBufferBytes": 308500,
+        "fixtureReadbackBytes": 17136
+      }
+    ],
+    "failures": [
+      {
+        "name": "worklist",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "pending",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "overflow",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "root-failed",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "root-stale",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "missing-child",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "reserved",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "weight",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "identity",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "duplicate",
+        "completedCount": 1,
+        "failureFlag": true,
+        "outputInvalid": true
+      },
+      {
+        "name": "skipped",
+        "completedCount": 0,
+        "failureFlag": true,
+        "outputInvalid": true
+      }
+    ],
+    "limitations": [
+      "16x16 analytic scenes, not Eames or a benchmark",
+      "No noise, speedup or memory-saving claim",
+      "Experimental prerequisite transport, not released",
+      "No temporal reuse; budgets selected before sampling"
+    ],
+    "adapter": {
+      "vendor": "apple",
+      "architecture": "metal-3",
+      "isFallbackAdapter": false
+    },
+    "validationErrors": 0,
+    "unexpectedDeviceLoss": false,
+    "adaptiveBytesAfterCleanup": 0
+  }
+}

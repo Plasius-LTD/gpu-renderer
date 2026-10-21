@@ -20,6 +20,7 @@ import {
   importanceSampleGgx,
   integrateBrdfSample,
 } from "./wavefront-sampling.js";
+import { integrateSheenDirectionalAlbedo, sheenProjectedArea } from "./wavefront-sheen.js";
 
 export function clampTileSizeForDevice(config, device) {
   const limit = Number(device?.limits?.maxStorageBufferBindingSize);
@@ -131,9 +132,10 @@ function readEnvironmentMapComponent(data, index, fallback, integerScale = 1) {
 
 function createBrdfLutUploadBytes(
   size = DEFAULT_BRDF_LUT_SIZE,
-  sampleCount = DEFAULT_BRDF_LUT_SAMPLE_COUNT
+  sampleCount = DEFAULT_BRDF_LUT_SAMPLE_COUNT,
+  sheenEnabled = false
 ) {
-  const cacheKey = `${Math.max(1, Math.trunc(size))}:${Math.max(1, Math.trunc(sampleCount))}`;
+  const cacheKey = `${Math.max(1, Math.trunc(size))}:${Math.max(1, Math.trunc(sampleCount))}:${sheenEnabled}`;
   const cached = BRDF_LUT_UPLOAD_CACHE.get(cacheKey);
   if (cached) {
     return cached;
@@ -152,8 +154,8 @@ function createBrdfLutUploadBytes(
       const offset = y * bytesPerRow + x * 8;
       view.setUint16(offset, float32ToFloat16Bits(scaleTerm), true);
       view.setUint16(offset + 2, float32ToFloat16Bits(biasTerm), true);
-      view.setUint16(offset + 4, float32ToFloat16Bits(0), true);
-      view.setUint16(offset + 6, float32ToFloat16Bits(1), true);
+      view.setUint16(offset + 4, float32ToFloat16Bits(sheenEnabled ? integrateSheenDirectionalAlbedo(nDotV, roughness) : 0), true);
+      view.setUint16(offset + 6, float32ToFloat16Bits(sheenEnabled ? sheenProjectedArea(nDotV, roughness) : 1), true);
     }
   }
   const upload = Object.freeze({ bytes, bytesPerRow, width, height });
@@ -529,8 +531,8 @@ export function createEnvironmentSamplingTextureResource(device, constants, envi
   });
 }
 
-export function createBrdfLutResource(device, constants, size = DEFAULT_BRDF_LUT_SIZE) {
-  const upload = createBrdfLutUploadBytes(size);
+export function createBrdfLutResource(device, constants, size = DEFAULT_BRDF_LUT_SIZE, sheenEnabled = false) {
+  const upload = createBrdfLutUploadBytes(size, DEFAULT_BRDF_LUT_SAMPLE_COUNT, sheenEnabled);
   const texture = device.createTexture({
     label: "plasius.wavefront.brdfLut",
     size: { width: upload.width, height: upload.height },
@@ -559,16 +561,17 @@ export function createBrdfLutResource(device, constants, size = DEFAULT_BRDF_LUT
   });
 }
 
-export function createMediumTextureResource(device, constants, mediums) {
+export function createMediumTextureResource(device, constants, mediums, nestedMedia = false) {
   const normalized = Array.isArray(mediums) && mediums.length > 0 ? mediums : [{ id: 0 }];
   const width = Math.max(
     1,
     normalized.reduce((maximum, medium) => Math.max(maximum, medium.id ?? 0), 0) + 1
   );
+  const height = MEDIUM_TABLE_ROWS + Number(nestedMedia);
   const level = {
     width,
-    height: MEDIUM_TABLE_ROWS,
-    data: new Float32Array(width * MEDIUM_TABLE_ROWS * 4),
+    height,
+    data: new Float32Array(width * height * 4),
   };
 
   for (const medium of normalized) {
@@ -584,12 +587,17 @@ export function createMediumTextureResource(device, constants, mediums) {
     level.data[scatteringOffset + 1] = Math.max(0, medium.scattering?.[1] ?? 0);
     level.data[scatteringOffset + 2] = Math.max(0, medium.scattering?.[2] ?? 0);
     level.data[scatteringOffset + 3] = Math.max(0, medium.density ?? 0);
+    if (nestedMedia) {
+      const opticalOffset = (2 * width + mediumId) * 4;
+      level.data[opticalOffset] = medium.ior ?? (mediumId === 0 ? 1 : 1.5);
+      level.data[opticalOffset + 1] = medium.priority ?? 0;
+    }
   }
 
   const upload = createFloat16RgbaUploadFromLevels([level])[0];
   const texture = device.createTexture({
     label: "plasius.wavefront.mediumTable",
-    size: { width, height: MEDIUM_TABLE_ROWS },
+    size: { width, height },
     format: "rgba16float",
     usage: constants.texture.TEXTURE_BINDING | constants.texture.COPY_DST,
   });
@@ -597,7 +605,7 @@ export function createMediumTextureResource(device, constants, mediums) {
     { texture },
     upload.bytes,
     { bytesPerRow: upload.bytesPerRow, rowsPerImage: upload.height },
-    { width, height: MEDIUM_TABLE_ROWS, depthOrArrayLayers: 1 }
+    { width, height, depthOrArrayLayers: 1 }
   );
   return Object.freeze({
     texture,
@@ -605,6 +613,8 @@ export function createMediumTextureResource(device, constants, mediums) {
     ownsTexture: true,
     count: normalized.length,
     width,
+    height,
+    allocatedBytes: width * height * 8,
   });
 }
 
@@ -624,6 +634,9 @@ export function mediumTablesEqual(left, right) {
       return false;
     }
     if ((leftMedium?.density ?? 0) !== (rightMedium?.density ?? 0)) {
+      return false;
+    }
+    if (leftMedium?.ior !== rightMedium?.ior || leftMedium?.priority !== rightMedium?.priority) {
       return false;
     }
     for (let component = 0; component < 3; component += 1) {
