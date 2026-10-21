@@ -17,12 +17,19 @@ other coordinates unchanged so a near-bottom exit is not rounded away. The
 [physical follow-up](docs/evidence/optical-origin-corner-2026-10-21.md) retains the
 failed capture and separates the numerical correction from pending full images.
 
-The [completed qualification attempt](docs/evidence/room-qualification-2026-10-21.md)
-now retains three successful native 1080p/uniform-32-SPP/20-bounce images, each with all
+The [earlier qualification attempt](docs/evidence/room-qualification-2026-10-21.md)
+retains three successful native 1080p/uniform-32-SPP/20-bounce images, each with all
 66,355,200 camera samples, verified HDR and cleanup. The reported horizontal
 water band is still visible. The 4K empty-glass lane rejects a different rim
 hit-point reconstruction case; the remaining 4K lanes stop without running.
 Browser access is working, but optical/image qualification is **not complete**.
+
+The [rim follow-up](docs/evidence/room-qualification-rim-followup-2026-10-21.md)
+now completes all six native 1080p/4K uniform-32/depth-20 captures on 665e2bd, with
+independently verified HDR, exact counts and cleanup. The broad water band remains
+visible; correctness and adaptive-performance gates stay open. Selected-ray
+diagnostics are prepared but their physical run is blocked by unavailable approval
+for browser dropdown automation. No bypass or manual-render handoff is attempted.
 
 The next rim correction interpolates the small triangle-edge offsets before
 adding the large base coordinate. The frozen 4K case and its sign/axis/vertex-order

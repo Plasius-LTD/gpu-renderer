@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Retain the complete six-lane native 1080p/4K uniform-32/depth-20 rim follow-up:
+  all 995,328,000 camera samples, 120 HDR chunks, native images and cleanup verify.
+  Earlier evidence remains unchanged. The water band is still visible and the
+  selected-ray physical diagnostic is blocked by unavailable dropdown approval;
+  image qualification and adaptive performance remain open (#234).
+
 - Add explicit, bounded successful-sample optical journals to the local uniform
   room fixture, using original compiled camera/bounce transport without sample
   commits. Read original post-surface direct/terminal radiance and termination
