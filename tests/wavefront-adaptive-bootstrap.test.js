@@ -14,7 +14,7 @@ test("bootstrap reuses canonical declarations and clearing without changing the 
     assert.ok(ADAPTIVE_BOOTSTRAP_WGSL.includes(fragment));
   }
   assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),
-    "47431e5b839b539a367cd29cab14bd4610a844d0bb5010317f5920a0ce6e26dd"); // Task 234 / ADR 0063; disabled-path, geometry, energy and sampling regressions are independent.
+    "998cbc8590e7c19fde02466697c549e2b83de23966330bd54b0f8a9520d34e14"); // Task 234 / ADR 0063; disabled-path, geometry, energy and sampling regressions are independent.
   assert.match(ADAPTIVE_BOOTSTRAP_WGSL, /pathNodes\[localPixelId\] = PathNode\(\)/u);
   assert.doesNotMatch(ADAPTIVE_BOOTSTRAP_WGSL, /pathVertices|clear_deferred_path/u);
   assert.doesNotMatch(ADAPTIVE_BOOTSTRAP_WGSL, /fn make_ray\(|bsdf|textureSample/u);

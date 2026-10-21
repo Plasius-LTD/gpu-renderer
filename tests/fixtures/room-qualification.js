@@ -3,6 +3,11 @@
 export const ROOM_QUALIFICATION_DEFAULTS=Object.freeze({resolutions:Object.freeze(['1080p','4k']),spp:32,bounces:20});
 const sizes={'1080p':[1920,1080],'4k':[3840,2160]};
 const sourceKeys=['renderer','lighting','shared','site'];
+export function roomQualificationSettingsFromSearch(search){
+ const values=new URLSearchParams(search).getAll('qualificationOrder');
+ if(values.length>1||values.some(value=>!['default','4k-first'].includes(value)))throw Error('Invalid qualification order');
+ return values[0]==='4k-first'?{resolutions:['4k','1080p']}:{};
+}
 export function roomQualificationPlan({resolutions=ROOM_QUALIFICATION_DEFAULTS.resolutions,spp=ROOM_QUALIFICATION_DEFAULTS.spp,bounces=ROOM_QUALIFICATION_DEFAULTS.bounces}={}){
  if(!Array.isArray(resolutions)||!resolutions.length||new Set(resolutions).size!==resolutions.length||resolutions.some(r=>!sizes[r])||!Number.isInteger(spp)||spp<1||spp>256||!Number.isInteger(bounces)||bounces<1||bounces>20)throw Error('Invalid room qualification settings');
  return resolutions.flatMap(resolution=>[['empty','glass'],['filled','glass'],['filled','entry']].map(([glass,focus])=>{

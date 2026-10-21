@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Certify unresolved nested optical positions across exact coplanar internal
+  diagonals using a bounded existing-BVH search, reverse shared edges and matching
+  mesh/medium/material ownership. Retain the native 4K rejection and add exact
+  integer-determinant, topology, crease, malformed-BVH and canonical preflight
+  regressions. No tolerance, count, ABI or allocation relaxation. Add a validated
+  development-only 4K-first qualification order; all six lanes remain required.
+  Banding/image qualification remains open and adaptive performance paused (#234).
+
 - Replace a constant infinity sentinel rejected by physical WGSL preflight with
   finite initialization and the existing candidate-valid bit; nearest-point
   selection remains unchanged. Retain the failed preflight and red regression

@@ -38,9 +38,18 @@ point among the eight adjacent binary32 neighbours. The dominant normal coordina
 does not move; exact barycentric edges/vertices and non-volume/default paths bypass
 this guard. If no point is resolvable, fail explicitly with reason 8 rather than
 accepting a missed interface. The normal error contract, hit/count thresholds and
-allocated record sizes remain unchanged. Canonical device preflight now has 29
+allocated record sizes remain unchanged. Canonical device preflight now has 30
 cases. This remains experimental pending the new immutable native matrix and
 separate image/banding review; no adaptive performance claim is made.
+
+The next physical 4K control passed the original rim but stopped on a rounded
+point across an internal wall diagonal. An unresolved-only BVH lookup now checks
+the same local representable neighbourhood against exact coplanar, reverse-edge
+neighbours with matching mesh/medium/material ownership. It does not certify real
+creases or external edges. See the [frozen shared-diagonal case](docs/evidence/rim-shared-diagonal-2026-10-21.json).
+For development, `?qualificationOrder=4k-first` changes the automated sequence's
+order only; all six native captures and all count/preflight/image gates remain
+required. The default order is unchanged. Existing evidence is never replaced.
 
 The opt-in `renderer.sampling.fixedPattern.enabled` path now uses the existing
 independently keyed transport draws with the exact previous camera coordinates,

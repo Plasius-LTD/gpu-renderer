@@ -12,7 +12,7 @@ import {ROOM_LIGHTING_DEFAULTS,withRoomLighting} from './room-lighting-settings.
 import {ROOM_COAT_DEFAULTS,withRoomWoodCoat} from './room-clearcoat-settings.js';
 import {GLASS_WATER_DEFAULTS,glassWaterSettings,withRoomGlass} from '/lighting/demo/eames-environments/glass-water-reference.js';
 import {createRoomDemoPresets,installRoomDemoUi,roomFocusSettings,revealInvalidControl,setRoomPreviewState,invalidateRoomCaptureUi} from './room-demo-ui.js';
-import {runRoomQualification} from './room-qualification.js';
+import {runRoomQualification,roomQualificationSettingsFromSearch} from './room-qualification.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
@@ -239,6 +239,9 @@ run.addEventListener('click',captureRoomReference);
 
 el('qualification').addEventListener('click',async()=>{
  if(qualificationRunning||run.disabled)return;
+ let qualificationSettings;
+ try{qualificationSettings=roomQualificationSettingsFromSearch(location.search);}
+ catch(error){status.textContent=error.message;return;}
  for(const control of controls)if(!control.checkValidity()){revealInvalidControl(control);status.textContent='Invalid qualification settings. Check the highlighted field.';return;}
  qualificationRunning=true;run.disabled=true;reset.disabled=true;controls.forEach(c=>c.disabled=true);cancel.disabled=false;
  const snapshot=[...el('controls').querySelectorAll('input,select')].map(control=>[control,control.value]);
@@ -246,7 +249,7 @@ el('qualification').addEventListener('click',async()=>{
  cancel.addEventListener('click',stop);
  let report;
  try{
-  report=await runRoomQualification({signal:abort.signal,
+  report=await runRoomQualification({signal:abort.signal,settings:qualificationSettings,
    configure:values=>{for(const [id,value] of Object.entries(values)){const control=el(id);check(control,'Missing qualification control: '+id);control.value=value;}demoUi.refresh();},
    capture:()=>captureRoomReference({qualification:true}),
    onLane:(lane,index,total)=>{status.textContent=`Qualification ${index+1}/${total}: ${lane.resolution}, ${lane.glass}, ${lane.focus}, uniform ${lane.spp} SPP`;},

@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {roomQualificationPlan,runRoomQualification} from './fixtures/room-qualification.js';
+import {roomQualificationPlan,runRoomQualification,roomQualificationSettingsFromSearch} from './fixtures/room-qualification.js';
+
+test('development order override changes order only, never the six required lanes or sample counts',()=>{
+ for(const query of ['','?qualificationOrder=default','?unrelated=1'])assert.deepEqual(roomQualificationSettingsFromSearch(query),{});
+ const normal=roomQualificationPlan(),first4k=roomQualificationPlan(roomQualificationSettingsFromSearch('?qualificationOrder=4k-first'));
+ assert.deepEqual(first4k,[...normal.slice(3),...normal.slice(0,3)]);
+ for(const query of ['?qualificationOrder=','?qualificationOrder=skip1080p','?qualificationOrder=4k-first&qualificationOrder=default'])assert.throws(()=>roomQualificationSettingsFromSearch(query),/Invalid qualification order/);
+});
 
 function receipt(lane){return {status:'captured-reference-not-qualified',failures:[],cleanupPassed:true,
  settings:{width:lane.width,height:lane.height,maximumSpp:lane.spp,maxDepth:lane.bounces,sampler:'fixed-pattern',denoise:false},

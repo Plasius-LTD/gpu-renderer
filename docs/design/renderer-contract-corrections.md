@@ -142,3 +142,31 @@ the point or reset occupancy. No unbounded iteration or new persistent resources
 Test all swept cases, signs/axes/winding, closest valid neighbour, unchanged safe
 points, genuinely unresolved narrow triangles, exact filter parity and raw/fused
 integration, then extend device preflight and repeat native qualification.
+
+### Shared coplanar optical face acceptance
+
+Physical e2a0922 passes all three native 1080p controls and the original 4K rim
+case, then rejects 4K empty glass at tile 319/pixel 5178795/sample 1/bounce 4,
+reason 8. Preserve the original receipt and frozen shared-diagonal geometry.
+Its projected point is outside the incident triangle but strictly inside the
+reverse-shared-edge coplanar neighbour of the same glass wall. A triangulation
+diagonal is not an optical domain boundary. Do not expand the point search by
+an arbitrary radius or relax the failure gate.
+
+Before implementation add the captured pair as a red regression. On unresolved
+points only, query the existing BVH for adjacent candidates in the projected
+one-step neighbourhood. Require exact shared-edge topology, matching mesh,
+medium/material/flags, consistent orientation and exact binary32 coplanarity.
+Use the existing integer accumulator for a 24-term original-coordinate plane
+determinant; no rounded plane-distance tolerance. Certify the original point or
+its existing eight neighbours in this continuous same-plane optical face,
+selecting the nearest certified candidate. Genuine creases, disconnected faces,
+domain/material changes, unmatched winding and shared-edge endpoints must not
+be accepted by this certificate. No new buffers, ABI, BSDF or sampling policy.
+
+Keep reason 8 for genuinely unresolved geometry, bounded BVH traversal and all
+normal-error protections. Add integer-oracle, topology, one-ULP crease, BVH,
+identity/disabled and device regressions, then full gates/CI and the full native
+matrix. Allow an explicitly validated development qualification order so 4K can
+run first without dropping any 1080p lanes; keep the default order unchanged.
+Banding/energy correctness and adaptive performance remain unqualified.

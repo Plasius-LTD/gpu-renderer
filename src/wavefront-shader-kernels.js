@@ -55,7 +55,10 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
     if (candidate.triangleIndex != 0xffffffffu) {
       position = optical_triangle_position(hitTriangle, candidate.barycentric);
       if (hitTriangle.mediumRefId != 0u && all(candidate.barycentric > vec3<f32>(0.0))) {
-        let reconstructed = optical_triangle_projected_position(hitTriangle,position);
+        var reconstructed = optical_triangle_projected_position(hitTriangle,position);
+        if (reconstructed.w == 0.0) {
+          reconstructed = optical_coplanar_neighbor_position(hitTriangle,candidate.triangleIndex,position);
+        }
         position = reconstructed.xyz;
         unresolvedOpticalPosition = reconstructed.w == 0.0;
       }

@@ -104,3 +104,39 @@ Finite-initializer local gates: 470 tests pass, 96.43% lines / 83.20% branches;
 changed-runtime LCOV 100%, lint/types/build/package/Zero-Three/runtime audit pass.
 Canonical shader SHA256:
 `47431e5b839b539a367cd29cab14bd4610a844d0bb5010317f5920a0ce6e26dd`.
+
+### Preserved native shared-diagonal rejection
+
+The e2a0922 batch passes all 29 physical preflights and completes all three native
+1080p uniform32/20-depth lanes with 66,355,200 samples each. Independently retained
+HDR/PNG/hash/count/cleanup checks pass; the horizontal band remains visible.
+The 4K empty-glass lane passes old tile165 but rejects tile319, pixel5178795,
+sample1/bounce4, reason8: `primary-ray-count-mismatch:32768/524288`.
+Receipt `room-reference-2026-10-21T09-29-40-752Z-690bdda7-0ea5-49de-8283-972ae3bae68e/failed-room-reference.json`,
+SHA256 `8fbd14f9dfb8074674c10b4a026f9289c045da6834bca9949551452537b95125`.
+Remaining 4K lanes do not run. This is not a complete 4K image or a success.
+
+The [frozen original procedural geometry](rim-shared-diagonal-2026-10-21.json)
+places the point strictly inside353222 across353223's internal diagonal. A red
+test reproduces missing certification before implementation. The unresolved-only
+bounded BVH lookup now checks exact shared-edge topology/ownership and a 24-term
+integer coplanarity determinant. Search only the same original/eight neighbours;
+retain the closest certified point and fail reason8 if none exists. Genuine
+one-ULP creases, endpoints, disconnected/changed surfaces and malformed traversals
+remain rejected. No scene epsilon, medium repair, count acceptance or new GPU
+buffer/ABI/pass. The private arithmetic cost is unmeasured.
+
+The normal automated matrix may use validated `qualificationOrder=4k-first`
+during development; this reorders but does not remove any of the six required
+lanes. Final immutable-source physical and image gates remain open. Adaptive
+performance stays paused. An attempted independent Blender CPU supporting control
+crashed without an image (exit139, exact crash point unknown); its script/log/input
+are retained locally and are not reference-image evidence or a renderer fallback.
+
+Shared-face local gates: 476 tests pass, 96.45% lines / 83.20% branches; changed
+runtime shader modules are present in combined LCOV at 100%. Lint, types/clean
+consumer, build, public package, all nine Zero-Three gates and runtime audit
+(zero vulnerabilities) pass. Canonical assembled shader SHA256:
+`998cbc8590e7c19fde02466697c549e2b83de23966330bd54b0f8a9520d34e14`.
+Source-pinned CI and native/image results are still required. Shader fingerprints
+are updated after independent functional tests, not substituted for those tests.

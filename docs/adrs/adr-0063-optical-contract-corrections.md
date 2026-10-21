@@ -169,3 +169,25 @@ safe-point identity, unresolved narrow-face and failure propagation tests. The
 29th physical preflight case requires a repaired nearby exit and a rejected
 unresolvable face. Repeat all native scenes on the final immutable source; the
 intermediate base-last captures cannot certify this stronger contract.
+
+### Connected coplanar optical faces
+
+Native 4K source e2a0922 passes the initial rim but its representable guard rejects
+a point across a wall's internal triangle diagonal. Preserve that exact pair and
+ray journal. Only when the incident triangle's eight-neighbour guard is unresolved,
+query the existing BVH in that same projected neighbourhood. The bounded traversal
+must reject invalid indices/ranges, stack overflow or exhausted node visits.
+
+Certify a reverse directed shared edge, identical mesh/medium/material/flags,
+consistent nonzero orientation, and exact original-binary32 coplanarity. Expand
+the determinant into 24 triple products in the existing 864-bit integer accumulator
+before subtraction; rounded plane tolerances cannot distinguish a one-ULP crease.
+Accept the nearest point inside the adjacent triangle or on the open internal
+edge, never its endpoints/exterior edges. Preserve the dominant coordinate and
+normal-error bound, without persistent resources or ABI changes. Creases and
+disconnected or differently owned surfaces cannot substitute for a missing exit.
+
+The 30th assembled physical preflight checks the captured shared face and rejects
+a one-ULP fold and changed medium. Independent exact-determinant/topology/BVH tests
+precede native six-lane qualification. Extra private shader cost is unmeasured;
+this is a correctness refinement, not adaptive performance evidence.
