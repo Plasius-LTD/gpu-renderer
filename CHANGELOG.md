@@ -15,6 +15,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.54] - 2026-10-21
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Explain direct WebGPU control in the public README and keep dependency admission guidance in the development guide.
 
 - **Fixed**
@@ -1285,3 +1299,4 @@ All notable changes to this project will be documented in this file.
 [0.2.51]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.51
 [0.2.52]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.52
 [0.2.53]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.53
+[0.2.54]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.54
