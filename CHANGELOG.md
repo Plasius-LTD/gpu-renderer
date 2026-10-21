@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Retain all six native1080p/4K MIS-corrected controls and matched before/after
+  evidence:995,328,000 camera samples,120 HDR chunks and3,393,415,448 path segments
+  independently reconcile. All13 GPU estimator modes pass frozen tolerances;
+  the broad water band persists at both resolutions, so image/energy correctness
+  and adaptive performance/publication remain gated (#234).
+
 - Distinguish ordinary diffuse and partial optical inputs in the MIS contract
   preflight; preserve its rejected first native attempt and add an assembled
   numerical regression for all 13 modes. No renderer/tolerance change (#234).
