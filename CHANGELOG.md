@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Correct environment MIS to use the previous surface's actual competing PDF,
+  including light-class probability and hemisphere support; preserve unsampled
+  procedural glow and portal fallback. Reuse direction.w without growing ray
+  records/resources. Add portable estimator regressions and mandatory assembled
+  GPU proposal/component/furnace preflight. Native image/banding qualification
+  remains pending; adaptive performance remains paused (#234, ADR 0064).
+
 - Retain all six native1080p/4K controls after the absent-normal correction:
   995,328,000 completed camera samples, all120 HDR chunks, actual counts,
   preflights and cleanup independently verify. Physical normal controls and

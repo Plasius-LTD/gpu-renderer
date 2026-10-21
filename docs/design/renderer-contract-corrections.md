@@ -226,3 +226,42 @@ full local gates, changed-source LCOV and exact-head CI, then native matched
 1080p/4K controls and independent image review. Preserve defective controls as
 history, not current baselines. Band removal, energy/convergence and adaptive
 performance remain unqualified. Acceptance: Task234 comment6316459126.
+
+## Environment next-event / terminal MIS contract — 21 October
+
+Task234 remains assigned to zephod111r / In progress. Before runtime changes:
+add failing portable numerical tests against the assembled canonical functions.
+The retained d53ced3 six-lane images are before-controls, not converged truth.
+
+Carry the previous surface's actual competing environment solid-angle PDF in
+`RayRecord.direction.w`, previously zero and unread by traversal. Keep direction
+xyz, throughput.w (BSDF PDF), the 96-byte record, offsets, buffers and dispatches
+unchanged. Cameras/visibility/delta/non-competing rays have zero competitor.
+Staged/fused continuations and each rough split child compute their own PDF at
+the original surface; do not reconstruct its normal at the miss. Smooth optical
+siblings remain delta. Include environment class probability (1 with no lights
+or the two-estimator deterministic mode; .5 for mixed selection; 0 for emissive-
+only source-stable selection), actual hemisphere support and map importance PDF.
+
+Use one shared strategy predicate and PDF evaluator in direct sampling and
+continuation packing. Strict procedural sky uses hemisphere/cosine hemisphere;
+a texture without importance data uses full-sphere texture sampling, not sky.
+The strict procedural estimator samples sky only: terminal MIS weights only that
+component, retaining full unsampled finite sun glow. Preserve portal scaling and
+exclude portal-blocked ambient fallback from competing radiance. The explicit
+directional sun remains a separate delta source; no transparent-shadow bypass,
+refracted light connection, BSDF/PDF/IOR/geometry/count or sampling-sequence change.
+
+Test rotated/opposite normals, class mixtures, deterministic/source-stable modes,
+map importance/no-importance, portal fallback, primary/delta/no-NEE, rough/partial
+reflection/transmission and independent split children. Require an assembled
+physical probe with frozen 1e-6 PDF/component and 2e-5 furnace tolerances before
+native scenes. Numerical furnace expectations retain the existing heuristic's
+1e-6 denominator floor explicitly; do not silently change that separate policy.
+Run all six native uniform32/depth20 1080p/4K controls automatically, independently
+verify HDR/count/provenance/cleanup and review bands separately from integrity.
+Preserve every earlier capture and any new failure; no lowered gates or adaptive
+performance/white-paper claim until image correctness passes. No extra production
+flag: this corrects estimator consistency under the existing controls. Three.js
+remains prohibited. Update ADR/README/Unreleased, coverage/LCOV, all package gates,
+push and exact-head CI; no local publication or unauthorized merge/release.

@@ -1,5 +1,13 @@
 # @plasius/gpu-renderer
 
+Environment MIS correction (#234): continuations now carry their previous
+surface's actual competing light PDF, including hemisphere support and light-class
+selection. Strict sky MIS does not suppress unsampled sun glow. No record size,
+buffer, pass, geometry or camera-sampling change; see [ADR 0064](docs/adrs/adr-0064-previous-vertex-environment-mis.md).
+Portable regressions and a mandatory assembled GPU preflight cover the estimator.
+Native 1080p/4K reruns and banding review are pending on this source; no image,
+energy, adaptive-performance or white-paper improvement claim is made.
+
 Current experimental optical status: the [normal-correction native follow-up](docs/evidence/room-normal-followup-2026-10-21.md)
 completes all six 1080p/4K uniform32/depth20 captures, with independently verified
 HDR/counts/preflights and physical absent-map identity. The water band remains

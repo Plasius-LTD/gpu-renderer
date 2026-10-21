@@ -172,12 +172,7 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
 
   if (hit.hitType == 2u) {
     var sourceRadiance = hit.color.xyz;
-    if (terminal_mis_enabled(ray)) {
-      let bsdfPdf = max(ray.throughput.w, 0.000001);
-      let lightPdf = environment_direction_pdf(ray.direction.xyz);
-      let misWeight = power_heuristic(bsdfPdf, lightPdf);
-      sourceRadiance = sourceRadiance * misWeight;
-    }
+    sourceRadiance = terminal_environment_source(ray, sourceRadiance);
     if (deferred_path_resolve_enabled()) {
       record_deferred_terminal_source(
         ray,
@@ -405,7 +400,7 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
       offset_hit_origin(hit, scatter.direction.xyz),
       1.0
     ),
-    scatter.direction,
+    continuation_environment_direction(ray, hit, scatter),
     vec4<f32>(throughput, scatter.pdf),
     nextMediumStack
   );
@@ -1037,6 +1032,17 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
 // terminal MIS only for non-delta secondary rays.
 fn terminal_mis_enabled(ray: RayRecord) -> bool {
   return ray.bounce > 0u && (ray.flags & (RAY_FLAG_DELTA_SAMPLE | RAY_FLAG_NO_COMPETING_NEE)) == 0u;
+}
+
+fn continuation_environment_direction(ray: RayRecord, hit: HitRecord, scatter: ScatterResult) -> vec4<f32> {
+  var pdf = 0.0;
+  if (surface_supports_direct_lighting(hit) &&
+      (scatter.flags & (RAY_FLAG_DELTA_SAMPLE | RAY_FLAG_NO_COMPETING_NEE)) == 0u) {
+    var normal = surface_shading_normal(hit);
+    if (rough_dielectric_active(hit)) { normal = optical_shading_normal(ray, hit); }
+    pdf = environment_nee_direction_pdf(normal, scatter.direction.xyz);
+  }
+  return vec4<f32>(scatter.direction.xyz, pdf);
 }
 
 @compute @workgroup_size(64)

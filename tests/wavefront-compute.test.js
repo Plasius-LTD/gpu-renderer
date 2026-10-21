@@ -1307,11 +1307,12 @@ test("wavefront compute samples all-material direct light with MIS before random
   assert.match(source, /fn direct_light_sample_pixel_id\(ray: RayRecord\) -> u32/);
   assert.match(source, /select\(\s+ray\.sourcePixelId,\s+0u,\s+transport_experiment_enabled\(TRANSPORT_EXPERIMENT_SOURCE_STABLE_DIRECT_LIGHTING\)\s+\)/);
   assert.match(source, /direct_light_sample_pixel_id\(ray\)/);
-  assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) && !environment_importance_sampling_enabled\(\)/);
+  assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) &&\s+!environment_map_enabled\(\) && !environment_importance_sampling_enabled\(\)/);
   assert.match(source, /radiance = procedural_sky_radiance\(lightDirection\);/);
   assert.match(source, /TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE/);
-  assert.match(source, /pdf = cosine_hemisphere_pdf\(normal, lightDirection\);/);
-  assert.match(source, /pdf = uniform_hemisphere_pdf\(\);/);
+  assert.match(source, /return probability \* cosine_hemisphere_pdf\(normal, direction\);/);
+  assert.match(source, /return probability \* uniform_hemisphere_pdf\(\);/);
+  assert.match(source, /pdf = environment_nee_direction_pdf\(normal, lightDirection\);/);
   assert.match(source, /fn surface_supports_direct_lighting/);
   assert.match(source, /u32\(config\.environmentMapMeta\.x\)/);
   assert.match(source, /u32\(config\.environmentMapMeta\.y\)/);
@@ -1393,7 +1394,7 @@ test("wavefront compute converts emissive area PDFs to solid-angle MIS measures"
   );
   assert.match(source, /fn emissive_direct_class_probability\(\) -> f32/);
   assert.match(source, /return select\(1\.0, 0\.5, config\.emissiveTriangleCount > 0u\);/);
-  assert.match(source, /let environmentSelectionProbability =\s+1\.0 - emissive_direct_class_probability\(\);/);
+  assert.match(source, /let environmentSelectionProbability = environment_nee_selection_probability\(\);/);
   assert.match(source, /return DirectLightSample\(vec4<f32>\(lightDirection, 0\.0\), vec4<f32>\(radiance, 0\.0\), lightPdf, traceDistance, 0u, 1u\);/);
 });
 
@@ -1624,7 +1625,7 @@ test("wavefront compute defers visible colour until terminal path resolve", () =
     source,
     /record_deferred_terminal_source\(\s*ray,\s*sourceRadiance \* segmentTransmittance,\s*TERMINAL_SOURCE_KIND_(EMISSIVE|ENVIRONMENT)\s*\);/
   );
-  assert.match(source, /sourceRadiance = sourceRadiance \* misWeight;/);
+  assert.match(source, /sourceRadiance = terminal_environment_source\(ray, sourceRadiance\);/);
   assert.match(source, /fn resolve_complete_path_tree\(root: u32, sourcePixelId: u32, sampleId: u32\) -> vec4<f32>/);
   assert.match(source, /let node = pathNodes\[index\];/);
   assert.match(source, /next = node\.firstChild;/);

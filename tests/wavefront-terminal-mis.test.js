@@ -8,10 +8,11 @@ test("primary terminal MIS is excluded by one shared assembled predicate", () =>
   const terminals = WAVEFRONT_COMPUTE_WGSL.slice(
     WAVEFRONT_COMPUTE_WGSL.indexOf("fn resolveSurfaceRecords"),
     WAVEFRONT_COMPUTE_WGSL.indexOf("let shouldEstimateDirectLight"));
-  assert.equal(terminals.match(/if \(terminal_mis_enabled\(ray\)\)/g)?.length, 2);
+  assert.equal(terminals.match(/if \(terminal_mis_enabled\(ray\)\)/g)?.length, 1);
   assert.match(terminals, /let lightPdf = terminal_emissive_light_pdf\(ray, hit\);/);
-  assert.match(terminals, /let lightPdf = environment_direction_pdf\(ray.direction.xyz\);/);
-  assert.equal(terminals.match(/power_heuristic\(bsdfPdf, lightPdf\)/g)?.length, 2);
+  assert.match(terminals, /terminal_environment_source\(ray, sourceRadiance\)/);
+  assert.match(WAVEFRONT_COMPUTE_WGSL, /if \(!terminal_mis_enabled\(ray\) \|\| ray.direction.w <= 0.0\) \{ return radiance; \}/);
+  assert.equal(terminals.match(/power_heuristic\(bsdfPdf, lightPdf\)/g)?.length, 1);
 });
 
 test("MIS eligibility remains pinned alongside the Task 232 opt-in coating correction", () => {
@@ -25,5 +26,5 @@ test("MIS eligibility remains pinned alongside the Task 232 opt-in coating corre
     .replace(/(fn terminal_surface_environment_source\([\s\S]*?let surfaceColor = )clamp\(hit.color.xyz,/, '$1clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35),')
     .replace('let surfaceColor = max(hit.color.xyz, vec3<f32>(0.0));','let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);');
   assert.equal(createHash("sha256").update(prior).digest("hex"),
-    "bdebf9ed2f4e122ba958c4aacebdf0124b232181438df74473e1de88c507156f"); // Task 234 / ADR 0063; disabled-path, geometry, energy and sampling regressions are independent.
+    "0823933ed00d118c18af313fec594b5f25d97c12f49f88436e9e2ead99adee76"); // Task 234 / environment MIS correction; numerical and physical estimator tests independently verify the changed contract.
 });

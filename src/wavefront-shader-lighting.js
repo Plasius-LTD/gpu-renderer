@@ -944,6 +944,50 @@ fn emissive_direct_class_probability() -> f32 {
   return select(1.0, 0.5, config.emissiveTriangleCount > 0u);
 }
 
+fn environment_nee_selection_probability() -> f32 {
+  // This mode draws both estimators, rather than choosing a light class.
+  if (transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING)) {
+    return 1.0;
+  }
+  return 1.0 - emissive_direct_class_probability();
+}
+
+fn environment_nee_samples_sky_only() -> bool {
+  return strict_physical_low_spp_lighting_enabled() &&
+    !environment_map_enabled() && !environment_importance_sampling_enabled();
+}
+
+fn environment_nee_direction_pdf(normal: vec3<f32>, direction: vec3<f32>) -> f32 {
+  let probability = environment_nee_selection_probability();
+  if (environment_nee_samples_sky_only()) {
+    if (dot(normal, direction) <= 0.0) { return 0.0; }
+    if (transport_experiment_enabled(TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE)) {
+      return probability * cosine_hemisphere_pdf(normal, direction);
+    }
+    return probability * uniform_hemisphere_pdf();
+  }
+  return probability * environment_direction_pdf(direction);
+}
+
+fn terminal_environment_source(ray: RayRecord, radiance: vec3<f32>) -> vec3<f32> {
+  // direction.w carries the previous vertex's competing solid-angle density.
+  // The miss has neither that surface normal nor its light-class selection.
+  if (!terminal_mis_enabled(ray) || ray.direction.w <= 0.0) { return radiance; }
+  let portalScale = environment_portal_radiance_scale(ray.origin.xyz, ray.direction.xyz);
+  let portalHit = max_component(portalScale) > 0.0001;
+  // Portal-gated ambient fallback has no direct-light sampling strategy.
+  if (config.environmentPortalCount > 0u && config.environmentPortalMode == 2u && !portalHit) {
+    return radiance;
+  }
+  let weight = power_heuristic(max(ray.throughput.w, 0.000001), ray.direction.w);
+  if (environment_nee_samples_sky_only()) {
+    let sky = procedural_sky_radiance(ray.direction.xyz) * select(vec3<f32>(1.0), portalScale, portalHit);
+    // The finite procedural sun glow is not sampled by sky NEE. Do not suppress it.
+    return max(radiance - sky, vec3<f32>(0.0)) + sky * weight;
+  }
+  return radiance * weight;
+}
+
 fn terminal_emissive_light_pdf(ray: RayRecord, hit: HitRecord) -> f32 {
   if (config.emissiveTriangleCount == 0u) {
     return 0.0;
@@ -1028,15 +1072,13 @@ fn sample_environment_direct_light(
   var lightDirection = normal;
   var radiance = vec3<f32>(0.0);
   var pdf = 0.0;
-  if (strict_physical_low_spp_lighting_enabled() && !environment_importance_sampling_enabled()) {
+  if (environment_nee_samples_sky_only()) {
     if (transport_experiment_enabled(TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE)) {
       lightDirection = cosine_sample_hemisphere(environmentUv, normal);
       radiance = procedural_sky_radiance(lightDirection);
-      pdf = cosine_hemisphere_pdf(normal, lightDirection);
     } else {
       lightDirection = sample_uniform_hemisphere_direction(environmentUv, normal);
       radiance = procedural_sky_radiance(lightDirection);
-      pdf = uniform_hemisphere_pdf();
     }
   } else {
     let environmentSample = sample_environment_importance(vec2<f32>(
@@ -1048,12 +1090,20 @@ fn sample_environment_direct_light(
       offset_hit_origin(hit, lightDirection),
       lightDirection
     );
-    pdf = environmentSample.pdf;
+  }
+  pdf = environment_nee_direction_pdf(normal, lightDirection);
+  if (environment_nee_samples_sky_only()) {
+    let portalScale = environment_portal_radiance_scale(offset_hit_origin(hit, lightDirection), lightDirection);
+    let portalHit = max_component(portalScale) > 0.0001;
+    radiance *= select(vec3<f32>(1.0), portalScale, portalHit);
+    if (config.environmentPortalCount > 0u && config.environmentPortalMode == 2u && !portalHit) {
+      radiance = vec3<f32>(0.0);
+    }
   }
   return DirectLightSample(
     vec4<f32>(lightDirection, 0.0),
     vec4<f32>(radiance, 0.0),
-    pdf * environmentSelectionProbability,
+    pdf,
     1000000.0,
     0u,
     1u
@@ -1088,8 +1138,7 @@ fn sample_emissive_direct_light(
 }
 
 fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> DirectLightSample {
-  let environmentSelectionProbability =
-    1.0 - emissive_direct_class_probability();
+  let environmentSelectionProbability = environment_nee_selection_probability();
   let selector = sample_dimension_1d(
     direct_light_sample_pixel_id(ray),
     ray.sampleId,

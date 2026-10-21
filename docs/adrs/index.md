@@ -57,3 +57,4 @@
 - [ADR 0059: Optical plane dot precision](adr-0059-optical-plane-dot-precision.md)
 - [ADR 0060: Optical interior hit rounding](adr-0060-optical-interior-hit-rounding.md)
 - [ADR 0063: Optical geometry, partial transmission and sampling contracts](adr-0063-optical-contract-corrections.md)
+- [ADR 0064: Previous-vertex environment MIS density](adr-0064-previous-vertex-environment-mis.md)
