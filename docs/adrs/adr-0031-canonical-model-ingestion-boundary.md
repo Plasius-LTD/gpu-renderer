@@ -4,6 +4,11 @@
 
 Accepted
 
+The original unlit-workflow acceptance below is superseded by
+[ADR0042: Canonical unlit refusal](adr-0042-canonical-unlit-refusal.md).
+Its historical decision text is retained; current canonical ingestion rejects
+referenced unlit workflows and declared unlit extension markers.
+
 ## Context
 
 Feature `Plasius-LTD/plasius-ltd-site#1153` and Task

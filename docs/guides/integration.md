@@ -8,8 +8,15 @@ samples from the canonical model pipeline to the renderer's existing
 texture bindings, preserves supported material extension data, and rejects
 missing primitive, material, or decoded texture references. It accepts triangle
 primitives; parsing, resource fetching, image decoding, and other topologies stay
-in the upstream conversion layer. Metallic-roughness and unlit workflows are
-supported; workflows without an existing Wavefront mapping fail explicitly.
+in the upstream conversion layer. Metallic-roughness is supported. Referenced
+unlit workflows and declared `KHR_materials_unlit` or `unlit` extension keys fail
+with a fixed actionable error, even for an empty marker or malformed value.
+The adapter does not return partial meshes after any refusal or mutate inputs.
+Keep unlit assets on an unlit-capable rendering path; do not remove the marker,
+relabel the material as lit, or approximate it with emission to bypass refusal.
+Other workflows without an implemented Wavefront mapping also fail explicitly.
+Canonical core types still describe unlit source documents; accepting that type
+does not promise support for every workflow at this rendering boundary.
 
 Canonical `blend` computes `baseColorFactor.a × baseColorTexture.a` exactly once
 (the missing texture contributes one). Canonical `opaque` uses alpha one even
@@ -64,8 +71,10 @@ merely to avoid the failure. No converter or texture resampler is embedded here.
 
 The old UV1 fixture used to preserve a marker while the geometry/shader sampled
 UV0; its regression now requires rejection. The broader dual-UV room path is
-tracked separately by renderer#220. Canonical unlit/alpha qualification remains
-renderer#238/#237; metadata normalization does not prove GPU shading fidelity.
+tracked separately by renderer#220. Canonical alpha follows ADR0041; canonical
+unlit is explicitly refused under [ADR0042](../adrs/adr-0042-canonical-unlit-refusal.md).
+Metadata normalization does not prove GPU shading fidelity. Direct legacy
+Wavefront extension metadata is unchanged; this refusal adds no unlit shader.
 See [ADR 0040](../adrs/adr-0040-canonical-material-texture-admission.md) for the
 owning-package and release sequence with bridge#28 and glTF#14.
 

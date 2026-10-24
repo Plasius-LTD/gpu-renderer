@@ -78,6 +78,9 @@ Canonical blend materials multiply authored factor alpha by texture alpha once;
 opaque materials ignore both alpha channels. Direct `WavefrontMeshInput` callers
 can select `alphaMode: "opaque" | "blend"`; omitting it preserves legacy opacity
 composition. Alpha masks remain unsupported by the canonical adapter.
+Referenced canonical unlit workflows and declared `KHR_materials_unlit`/`unlit`
+extension markers are unsupported and fail explicitly. Keep those assets on an
+unlit-capable rendering path; do not drop their markers or reinterpret them as lit.
 For an interactive model viewer with loading, integrity checks, camera gestures
 and quality controls, use the shared package's `model-inspection` entry.
 
