@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Reject referenced canonical unlit workflows and declared unlit extension markers until an explicit unlit shading path exists, with a bounded diagnostic that preserves the caller's previous supported rendering path.
 
 - **Security**
   - (placeholder)

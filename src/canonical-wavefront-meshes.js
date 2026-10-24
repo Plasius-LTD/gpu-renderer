@@ -84,14 +84,6 @@ function textureSample(binding, textures, label, extra = {}) {
 
 function cloneMaterialExtensions(material, textures) {
   const extensions = { ...(material.extensions ?? {}) };
-  if (material.workflow === "unlit") {
-    const unlitKey = "KHR_materials_unlit";
-    const unlitValue = extensions[unlitKey] ?? extensions.unlit ?? {};
-    if (typeof unlitValue !== "object" || unlitValue === null || Array.isArray(unlitValue)) {
-      throw new TypeError(`Canonical material extension ${unlitKey} must be an object.`);
-    }
-    extensions[unlitKey] = { ...unlitValue, enabled: true };
-  }
   for (const [bindingName, extensionName, textureKey] of EXTENSION_TEXTURE_BINDINGS) {
     const binding = material.textures?.[bindingName];
     if (!binding) {
@@ -118,7 +110,12 @@ function mapMaterial(material, materialRefId, textures) {
   if (material.alphaMode === "mask") {
     throw new Error("Canonical alphaMode mask is unsupported by WavefrontMeshInput.");
   }
-  if (material.workflow !== "metallic-roughness" && material.workflow !== "unlit") {
+  if (material.workflow === "unlit"
+    || Object.hasOwn(material.extensions ?? {}, "KHR_materials_unlit")
+    || Object.hasOwn(material.extensions ?? {}, "unlit")) {
+    throw new Error("Canonical unlit materials are unsupported by WavefrontMeshInput; retain an unlit-capable rendering path.");
+  }
+  if (material.workflow !== "metallic-roughness") {
     throw new Error(`Unsupported canonical material workflow: ${material.workflow}.`);
   }
 
@@ -160,6 +157,8 @@ function mapMaterial(material, materialRefId, textures) {
 /**
  * Maps decoded canonical mesh primitives into the renderer's existing Wavefront
  * input contract. Geometry and image decoding remain upstream responsibilities.
+ * Referenced unlit workflows or extension markers are rejected until an explicit
+ * unlit shading path exists; callers must retain an unlit-capable rendering path.
  */
 export function createCanonicalWavefrontMeshInputs({ document, geometry, textures = new Map() } = {}) {
   if (!document || typeof document !== "object") {

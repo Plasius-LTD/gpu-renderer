@@ -227,15 +227,14 @@ test("maps blend material kind and rejects unsupported alpha masks", () => {
   );
 });
 
-test("preserves unlit workflow and rejects workflows without a Wavefront mapping", () => {
-  const [unlit] = createCanonicalWavefrontMeshInputs({
+test("rejects unlit and other workflows without an implemented Wavefront mapping", () => {
+  assert.throws(() => createCanonicalWavefrontMeshInputs({
     document: documentWith(
       [{ id: "primitive-a", topology: "triangles", attributes: [], materialId: "unlit" }],
       [material("unlit", { workflow: "unlit" })],
     ),
     geometry: [geometry("primitive-a")],
-  });
-  assert.equal(normalizeWavefrontMesh(unlit).materialExtensions.unlit, true);
+  }), /Canonical unlit materials are unsupported/);
 
   assert.throws(
     () => createCanonicalWavefrontMeshInputs({
