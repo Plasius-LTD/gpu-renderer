@@ -67,7 +67,7 @@ fn sample_surface_material(
   let baseColorTexel = sample_atlas(baseColorAtlasTexture, triangle.baseColorAtlas, uv);
   let baseColor = vec4<f32>(
     clamp(triangle.color.rgb * srgb_to_linear_vec3(baseColorTexel.rgb), vec3<f32>(0.0), vec3<f32>(1.0)),
-    clamp(triangle.color.a * baseColorTexel.a, 0.0, 1.0)
+    select(clamp(triangle.color.a * baseColorTexel.a, 0.0, 1.0), 1.0, triangle.textureSettings.w > 0.5)
   );
   let metallicRoughnessTexel = sample_atlas(
     metallicRoughnessAtlasTexture,

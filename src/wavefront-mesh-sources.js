@@ -121,7 +121,7 @@ function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
             clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
             clampUnit(mesh.occlusionTexture?.strength ?? 1),
             clampUnit(mesh.emissiveTexture?.strength ?? 1),
-            0,
+            mesh.alphaMode === "opaque" ? 1 : 0,
           ]),
           extensionTextures: Object.freeze(
             Object.fromEntries(
@@ -499,7 +499,7 @@ export function createWavefrontGpuMaterialSource(meshes = []) {
       clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
       clampUnit(mesh.occlusionTexture?.strength ?? 1),
       clampUnit(mesh.emissiveTexture?.strength ?? 1),
-      0,
+      mesh.alphaMode === "opaque" ? 1 : 0,
     ]);
   });
 
@@ -705,7 +705,7 @@ export function createWavefrontGpuMeshSource(meshes = [], gpuMaterialSourceInput
       clampUnit(mesh.normalTexture?.scale ?? mesh.normalTexture?.strength ?? 1),
       clampUnit(mesh.occlusionTexture?.strength ?? 1),
       clampUnit(mesh.emissiveTexture?.strength ?? 1),
-      0,
+      mesh.alphaMode === "opaque" ? 1 : 0,
     ]);
 
     vertexCursor += meshVertexCount;

@@ -20,6 +20,12 @@ const result: readonly WavefrontMeshInput[] = createCanonicalWavefrontMeshInputs
 
 void result;
 
+const alphaMesh: WavefrontMeshInput = { positions: [0, 0, 0, 1, 0, 0, 0, 1, 0], alphaMode: "opaque" };
+const blendMesh: WavefrontMeshInput = { ...alphaMesh, alphaMode: "blend" };
+// @ts-expect-error masks need an explicit future rendering contract
+const maskedMesh: WavefrontMeshInput = { ...alphaMesh, alphaMode: "mask" };
+void blendMesh; void maskedMesh;
+
 import { createWavefrontPathTracingComputeRenderer } from '../src/index.js';
 async function progressiveContract() {
   const renderer=await createWavefrontPathTracingComputeRenderer({progressive:true,samplesPerPixel:4});

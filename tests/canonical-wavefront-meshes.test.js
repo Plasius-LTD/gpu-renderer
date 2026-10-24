@@ -212,7 +212,8 @@ test("maps blend material kind and rejects unsupported alpha masks", () => {
     geometry: [geometry("primitive-a")],
   });
   assert.equal(blended.materialKind, "transparent");
-  assert.equal(blended.opacity, 0.4);
+  assert.equal(blended.opacity, 1);
+  assert.equal(blended.baseColor[3], 0.4);
 
   assert.throws(
     () => createCanonicalWavefrontMeshInputs({

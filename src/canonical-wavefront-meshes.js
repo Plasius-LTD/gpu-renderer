@@ -124,6 +124,7 @@ function mapMaterial(material, materialRefId, textures) {
 
   const mapped = {
     materialRefId,
+    alphaMode: material.alphaMode,
     ...(material.alphaMode === "blend" ? { materialKind: "transparent" } : {}),
     baseColor: material.baseColorFactor,
     emission: material.emissiveFactor
@@ -131,7 +132,8 @@ function mapMaterial(material, materialRefId, textures) {
       : [0, 0, 0, 1],
     roughness: material.roughnessFactor,
     metallic: material.metallicFactor,
-    opacity: material.alphaMode === "opaque" ? 1 : material.baseColorFactor?.[3],
+    // The authored factor remains in baseColor.a; do not multiply it twice.
+    opacity: 1,
     clearcoat: material.clearcoatFactor,
     clearcoatRoughness: material.clearcoatRoughnessFactor,
     transmission: material.transmissionFactor,
