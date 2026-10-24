@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.55] - 2026-10-24
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Preserve canonical blend alpha exactly once and ignore factor/texture alpha for opaque materials through CPU/GPU packing and material sampling; retain legacy Wavefront alpha composition when mode is omitted.
 
 - **Security**
@@ -1300,3 +1314,4 @@ All notable changes to this project will be documented in this file.
 [0.2.52]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.52
 [0.2.53]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.53
 [0.2.54]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.54
+[0.2.55]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.55
