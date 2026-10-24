@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.56] - 2026-10-24
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Reject referenced canonical unlit workflows and declared unlit extension markers until an explicit unlit shading path exists, with a bounded diagnostic that preserves the caller's previous supported rendering path.
 
 - **Security**
@@ -1315,3 +1329,4 @@ All notable changes to this project will be documented in this file.
 [0.2.53]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.53
 [0.2.54]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.54
 [0.2.55]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.55
+[0.2.56]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.56
