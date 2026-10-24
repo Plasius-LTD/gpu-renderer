@@ -193,6 +193,10 @@ export function createDefaultWavefrontSceneObjects() {
 }
 
 export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
+  const alphaMode = input.alphaMode;
+  if (alphaMode !== undefined && alphaMode !== "opaque" && alphaMode !== "blend") {
+    throw new TypeError("mesh alphaMode must be opaque or blend.");
+  }
   const positions = input.positions;
   const positionLength = getArrayLikeLength(positions);
   if (positionLength < 9 || positionLength % 3 !== 0) {
@@ -236,7 +240,11 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     input.emission ?? input.emissive ?? input.material?.emission ?? input.material?.emissive,
     [0, 0, 0, 1]
   );
-  const opacity = clamp(readFiniteNumber("opacity", input.opacity ?? input.material?.opacity, color[3] ?? 1), 0, 1);
+  const opacity = alphaMode === "opaque" ? 1 : clamp(
+    readFiniteNumber("opacity", input.opacity ?? input.material?.opacity, alphaMode === "blend" ? 1 : color[3] ?? 1),
+    0,
+    1
+  );
   const transmission = clamp(
     readFiniteNumber("transmission", input.transmission ?? input.material?.transmission, materialExtensions.transmission),
     0,
@@ -280,6 +288,7 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
       0
     ),
     medium,
+    alphaMode,
     color: Object.freeze(color),
     emission: Object.freeze(emission),
     roughness: clamp(readFiniteNumber("roughness", input.roughness ?? input.material?.roughness, 0.72), 0, 1),

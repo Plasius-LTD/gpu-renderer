@@ -74,6 +74,10 @@ The canonical adapter maps the core 0.5 material texture slots; it currently
 accepts UV0 and identity texture transforms. Other selections/transforms fail
 explicitly so authored appearance is not silently changed. See the
 [canonical integration contract](docs/guides/integration.md#canonical-model-ingestion).
+Canonical blend materials multiply authored factor alpha by texture alpha once;
+opaque materials ignore both alpha channels. Direct `WavefrontMeshInput` callers
+can select `alphaMode: "opaque" | "blend"`; omitting it preserves legacy opacity
+composition. Alpha masks remain unsupported by the canonical adapter.
 For an interactive model viewer with loading, integrity checks, camera gestures
 and quality controls, use the shared package's `model-inspection` entry.
 

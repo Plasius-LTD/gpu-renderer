@@ -11,6 +11,24 @@ primitives; parsing, resource fetching, image decoding, and other topologies sta
 in the upstream conversion layer. Metallic-roughness and unlit workflows are
 supported; workflows without an existing Wavefront mapping fail explicitly.
 
+Canonical `blend` computes `baseColorFactor.a × baseColorTexture.a` exactly once
+(the missing texture contributes one). Canonical `opaque` uses alpha one even
+when the factor or sampled texture is transparent. Authored RGB, transmission,
+and IOR are independent of that alpha decision. Canonical `mask` still fails
+explicitly.
+
+For direct `WavefrontMeshInput`, optional `alphaMode: "opaque" | "blend"`
+selects the same packing/shader interpretation. Opaque forces opacity and sampled
+alpha to one. Blend defaults `opacity` to one; an explicit opacity remains an
+additional multiplier. Omitted mode preserves the legacy behavior, including
+defaulting opacity to factor alpha and multiplying opacity, factor alpha, and
+texture alpha. Scene-object APIs are unchanged. Unsupported mesh modes fail
+with a fixed diagnostic.
+
+Both CPU-uploaded triangles and GPU-built meshes carry the interpretation in
+the existing `textureSettings.w` slot (one for opaque, zero otherwise); record
+sizes and atlas pixels remain unchanged. See [ADR0041](../adrs/adr-0041-canonical-alpha-semantics.md).
+
 ```js
 import { createCanonicalWavefrontMeshInputs } from "@plasius/gpu-renderer";
 

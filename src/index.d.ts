@@ -522,6 +522,9 @@ export interface WavefrontSceneObject {
 }
 
 export interface WavefrontMeshInput {
+  /** Opaque ignores factor/texture alpha. Blend defaults opacity to one.
+   * Omitted preserves legacy factor × opacity × texture alpha semantics. */
+  readonly alphaMode?: "opaque" | "blend";
   readonly id?: number;
   readonly positions: readonly number[] | Float32Array;
   readonly indices?: readonly number[] | Uint16Array | Uint32Array;
@@ -749,6 +752,7 @@ export interface WavefrontGpuMeshSource {
       readonly roughness: number;
       readonly metallic: number;
       readonly opacity: number;
+      readonly alphaMode?: "opaque" | "blend";
       readonly ior: number;
       readonly sheen: number;
       readonly sheenTint: number;
@@ -1416,6 +1420,7 @@ export function normalizeWavefrontMesh(
   roughness: number;
   metallic: number;
   opacity: number;
+  alphaMode?: "opaque" | "blend";
   ior: number;
   sheen: number;
   sheenTint: number;

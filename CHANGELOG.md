@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Preserve canonical blend alpha exactly once and ignore factor/texture alpha for opaque materials through CPU/GPU packing and material sampling; retain legacy Wavefront alpha composition when mode is omitted.
 
 - **Security**
   - (placeholder)

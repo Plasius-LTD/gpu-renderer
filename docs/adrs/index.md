@@ -34,3 +34,4 @@
 
 - [ADR 0039: One continuation for fixed wavefront paths](adr-0039-fixed-dielectric-continuation.md)
 - [ADR 0040: Canonical material texture admission](adr-0040-canonical-material-texture-admission.md)
+- [ADR 0041: Canonical alpha semantics](adr-0041-canonical-alpha-semantics.md)
