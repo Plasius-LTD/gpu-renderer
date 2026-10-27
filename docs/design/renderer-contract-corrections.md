@@ -1,5 +1,38 @@
 # Collision, sampling and optical contract corrections
 
+## Optical reference and source isolation — 27 October
+
+Task234 remains assigned to zephod111r / In progress, under Story2291 and
+Feature2114. Preserve all six 4195618 native controls and the rejected offline
+startup. The installed Cycles reference now runs outside the sandbox with
+explicit approval. Its simplified emissive-pedestal control also contains a
+horizontal pedestal-reflection region; this is mechanism evidence, not matched
+room truth or a reason to dismiss a remaining defect.
+
+Before any further transport change, add portable requirements-first regressions
+and an opt-in automated canonical-renderer fixture. Reuse gpu-lighting's original
+glass/water geometry, camera and medium descriptions. Isolate uniform known
+radiance, a contrasting known-radiance pedestal, empty/filled/index-one water,
+and room sky-only/sun-only illumination. Never bypass optical visibility.
+Retain source hashes, settings, linear HDR, counts, cleanup and PNGs in unique
+directories; failure or missing lanes cannot qualify the image. Test fixture
+dimensions are optical diagnostics, not 1080p/4K performance evidence.
+
+For the uniform .75-radiance furnace, freeze acceptance before measurement:
+finite/nonnegative HDR, exact completed counts, interior mean error <=2%, and
+row-mean deviation <=5% over the central glass region at 256 SPP. Reject any
+missing/invalid pixel or unretained evidence. Different-emission pedestal and
+checker controls are attribution, not a uniform-furnace test. An independently
+rendered explicit shared-interface reference must retain its differences from
+priority-overlap geometry, sample sequence and display transform. Do not compare
+tone-mapped PNG brightness as linear energy or relax tolerances after results.
+
+Correct only a demonstrated defect, adding a failing canonical numerical and
+assembled-device regression first. Existing transport/sampling flags/defaults,
+ABI and Three.js prohibition remain unchanged. Diagnostics are development-only,
+not a new production feature or fallback. Then rerun native1080p/4K correctness
+and convergence gates before adaptive performance or publication claims resume.
+
 Date: 2026-10-20. Task gpu-renderer#234, Story site#2291, Feature site#2114,
 Epic site#2113. User approved implementation of all four review findings.
 The evidence at renderer c90e706/dabe0af and all prior captures remains retained.

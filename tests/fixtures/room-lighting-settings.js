@@ -5,6 +5,8 @@ const styles={
  daylight:{label:'Original daylight',options:{preset:'neutral-studio',sunDirection:[.18,.93,.24],sunColor:[2.4,2.25,2,1]}},
  'cool-evening':{label:'Cool evening — blue-hour colour study',options:{preset:'neutral-studio',sunDirection:[.18,.93,.24],
   sunColor:[2,2.25,2.45,1],horizonColor:[.43,.52,.62,1],zenithColor:[.2,.27,.36,1],ambientColor:[.025,.029,.035,1]}},
+ 'sky-only':{label:'Sky only — lighting isolation',options:{preset:'neutral-studio',sunDirection:[.18,.93,.24],sunColor:[0,0,0,1]}},
+ 'sun-only':{label:'Sun only — lighting isolation',options:{preset:'neutral-studio',sunDirection:[.18,.93,.24],sunColor:[2.4,2.25,2,1],horizonColor:[0,0,0,1],zenithColor:[0,0,0,1],ambientColor:[0,0,0,1]}},
 };
 export function roomLightingRequest({style=ROOM_LIGHTING_DEFAULTS.style,intensity=ROOM_LIGHTING_DEFAULTS.intensity}={}){
  if(typeof style!=='string'||!Object.hasOwn(styles,style))throw Error('Unknown room lighting style');

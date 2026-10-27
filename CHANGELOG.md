@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add development-only automated known-radiance glass/water furnace and pedestal
+  attribution controls, with frozen HDR/count gates, plus room sky-only/sun-only
+  lighting isolation. These diagnostics do not qualify room banding or adaptive
+  performance and do not change production transport (#234).
+
 - Retain all six native1080p/4K MIS-corrected controls and matched before/after
   evidence:995,328,000 camera samples,120 HDR chunks and3,393,415,448 path segments
   independently reconcile. All13 GPU estimator modes pass frozen tolerances;

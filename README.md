@@ -1,5 +1,15 @@
 # @plasius/gpu-renderer
 
+Development optical attribution: the immutable room-reference server also serves
+`/tests/fixtures/optical-lighting-isolation.html`. Its explicit run action captures
+empty/filled/index-one constant-radiance controls and a contrasting pedestal at
+a diagnostic extent, using canonical GPU transport and package geometry. It
+retains linear HDR and provenance and rejects incomplete samples or failed
+furnace checks. It is not a native-resolution performance benchmark or proof of
+full-scene convergence. Room lighting also offers explicit sky-only and sun-only
+isolation styles; original daylight remains unchanged. See the
+[correctness design](docs/design/renderer-contract-corrections.md).
+
 Environment MIS correction (#234): continuations now carry their previous
 surface's actual competing light PDF, including hemisphere support and light-class
 selection. Strict sky MIS does not suppress unsampled sun glow. No record size,
