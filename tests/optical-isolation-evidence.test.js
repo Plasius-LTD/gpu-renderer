@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {compareOpticalRows} from '../scripts/verify-optical-isolation.mjs';
+import {compareOpticalRows,opticalEvidenceExitCode} from '../scripts/verify-optical-isolation.mjs';
+test('failed or missing image evidence cannot become a green verifier command',()=>{
+ const report={status:'controls-complete-image-review-pending',lanes:Array.from({length:4},()=>({})),failures:[]};
+ assert.equal(opticalEvidenceExitCode(report),0);assert.equal(opticalEvidenceExitCode(),1);
+ assert.equal(opticalEvidenceExitCode({...report,status:'failed'}),1);
+ assert.equal(opticalEvidenceExitCode({...report,lanes:report.lanes.slice(1)}),1);
+ assert.equal(opticalEvidenceExitCode({...report,lanes:[{error:'row failure'},...report.lanes.slice(1)]}),1);
+ assert.equal(opticalEvidenceExitCode({...report,failures:['missing HDR']}),1);
+});
 test('independent row metrics retain a band mismatch, not PNG/display equality',()=>{
  const a=new Float32Array(64*36*4).fill(.75),b=a.slice();
  assert.equal(compareOpticalRows(a,b,64,36).rowRmse,0);

@@ -54,8 +54,12 @@ export function verifyOpticalBatch(root,summaryFile,referenceDirectory){
  if(hash(referenceBytes)!==referenceReceipt.linearSha256||referenceReceipt.settings.width!==c.width||referenceReceipt.settings.height!==c.height||referenceReceipt.settings.spp!==c.spp||referenceReceipt.settings.pedestal!==.35||referenceReceipt.settings.mode!=='filled'||
   JSON.stringify(referenceReceipt.camera)!==JSON.stringify({...c.camera,up:[0,1,0]})||referenceReceipt.geometrySources.lighting!==summary.provenance.sources.lighting)throw Error('Independent reference identity failure');
  const reference=new Float32Array(referenceBytes.buffer,referenceBytes.byteOffset,referenceBytes.length/4);
+ for(let i=0;i<reference.length;i++)if(!Number.isFinite(reference[i])||reference[i]<0||(i%4===3&&reference[i]!==1))throw Error('Invalid independent reference pixel');
  const comparison=compareOpticalRows(lanes.at(-1).image,reference);
  return {summarySha256:hash(bytes),sources:summary.provenance.sources,status:summary.status,failures:summary.failures,lanes:lanes.map(({image,...l})=>l),comparison,reference:referenceReceipt,
   qualification:'attribution only; any furnace failure keeps image/adaptive gates closed'};
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)console.log(JSON.stringify(verifyOpticalBatch(...process.argv.slice(2)),null,2));
+export function opticalEvidenceExitCode(report){return report?.status==='controls-complete-image-review-pending'&&report.lanes?.length===4&&report.lanes.every(l=>!l.error)&&report.failures?.length===0?0:1;}
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
+ const report=verifyOpticalBatch(...process.argv.slice(2));console.log(JSON.stringify(report,null,2));process.exitCode=opticalEvidenceExitCode(report);
+}
