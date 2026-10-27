@@ -10,13 +10,14 @@ export function readOpticalLane(root,summary,lane){
  const base=path.resolve(root,'output/playwright/eames-environments'),file=path.resolve(root,lane.artifact.path.replace(/\.png$/,'.json'));
  if(!file.startsWith(base+path.sep))throw Error('Optical evidence outside capture root');
  const bytes=fs.readFileSync(file),r=JSON.parse(bytes),size=c.width*c.height*16,raw=Buffer.alloc(size);let offset=0;
- if(JSON.stringify(r.provenance)!==JSON.stringify(summary.provenance)||!r.provenance?.sources?.renderer||!r.cleanupPassed||r.adapter?.isFallbackAdapter!==false||
+ if(JSON.stringify(r.provenance)!==JSON.stringify(summary.provenance)||['renderer','lighting','shared','site'].some(k=>!(/^[a-f0-9]{40}$/).test(r.provenance?.sources?.[k]))||!r.cleanupPassed||r.adapter?.isFallbackAdapter!==false||
+  r.frame.width!==c.width||r.frame.height!==c.height||r.frame.maximumSpp!==c.spp||r.frame.sampler!=='fixed-pattern'||r.frame.mode!=='uniform'||r.frame.diagnostics!==true||r.frame.fused!==false||
   r.frame.actualSamples!==c.width*c.height*c.spp||r.frame.actualHistogram?.[c.spp]!==c.width*c.height||Object.keys(r.frame.actualHistogram).length!==1||r.frame.validationErrors!==0)throw Error('Optical count/source/cleanup failure');
  for(const part of r.chunks){
   const chunkPath=path.resolve(root,part.path.replace(/\.png$/,'.json'));
   if(path.dirname(chunkPath)!==path.dirname(file))throw Error('Optical chunk outside capture');
   const chunkReceipt=JSON.parse(fs.readFileSync(chunkPath)),chunk=chunkReceipt.chunk;
-  if(JSON.stringify(chunkReceipt.provenance)!==JSON.stringify(r.provenance)||chunk.byteOffset!==offset||chunk.totalBytes!==size||chunk.byteLength%16||chunk.byteLength>8*1024**2||offset+chunk.byteLength>size)throw Error('Optical chunk extent/source failure');
+  if(JSON.stringify(chunkReceipt.provenance)!==JSON.stringify(r.provenance)||chunk.format!=='float32-byteplanes-gzip-base64'||chunk.byteOffset!==offset||chunk.totalBytes!==size||chunk.byteLength%16||chunk.byteLength>8*1024**2||offset+chunk.byteLength>size)throw Error('Optical chunk extent/source failure');
   const shuffled=gunzipSync(Buffer.from(chunk.data,'base64'),{maxOutputLength:chunk.byteLength});
   if(shuffled.length!==chunk.byteLength)throw Error('Optical compression extent failure');
   const restored=Buffer.alloc(shuffled.length),n=restored.length/4;
