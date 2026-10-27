@@ -1,3 +1,4 @@
+import {pathEventCapacity} from '../../src/wavefront-optical-interface-budget.js';
 const MAX_JOURNALS=8;
 export function validateOpticalSelections(values,{width,height,maximumSpp}){
  if(!Array.isArray(values)||values.length>MAX_JOURNALS||!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||!Number.isSafeInteger(width*height)||width<1||height<1||
@@ -30,7 +31,7 @@ export async function selectedOpticalJournals(c,{config,tile,ranges,selections,d
    if(!result.records?.length||result.records.some(r=>r.pixel!==selection.pixel||r.sample!==selection.sample))throw Error('Missing selected optical sample');
    const nodes=result.surfaceNodes;
    if(!nodes?.length||nodes.length!==result.records.filter(r=>r.stage==='after-intersection').length||
-    nodes.some((n,index)=>n.pixel!==selection.pixel||n.sample!==selection.sample||n.bounce!==index||n.bounce>=config.maxDepth||(n.flags&3)!==1||
+    nodes.some((n,index)=>n.pixel!==selection.pixel||n.sample!==selection.sample||n.bounce!==index||n.bounce>=pathEventCapacity(config)||(n.flags&3)!==1||
      ![...n.directRadiance,...n.terminalRadiance].every(v=>Number.isFinite(v)&&v>=0))||!nodes.at(-1).terminalKind)throw Error('Missing selected optical surface records');
    results.push({...result,selection});
   }

@@ -1365,7 +1365,7 @@ test("wavefront compute samples all-material direct light with MIS before random
   );
   assert.ok(
     source.indexOf("let directLight = surface_direct_light_contribution(") <
-      source.indexOf("if (ray.bounce + 1u >= config.maxDepth)")
+      source.indexOf("if (path_budget_exhausted(ray, hit))")
   );
 });
 

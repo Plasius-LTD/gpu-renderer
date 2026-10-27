@@ -3,10 +3,11 @@ import { WAVEFRONT_SAMPLE_DIMENSIONS_WGSL, WAVEFRONT_SAMPLE_SEQUENCE_WGSL, WAVEF
 import { WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL, WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL } from "./wavefront-primary-shared-shader.js";
 import { PATH_NODE_STRUCT_WGSL, PATH_TREE_WGSL } from "./wavefront-path-tree-shader.js";
 import { ADAPTIVE_PREFIX_SCAN_WGSL } from "./wavefront-adaptive-scan-shader.js";
+import {OPTICAL_EVENT_CONFIG_WGSL} from './wavefront-optical-interface-budget.js';
 
 export const SHARED_ADAPTIVE_WGSL = [WAVEFRONT_SAMPLE_DIMENSIONS_WGSL, WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL, WAVEFRONT_SAMPLE_SEQUENCE_WGSL,
   WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL, WAVEFRONT_SAFE_NORMALIZE_WGSL, WAVEFRONT_MAKE_CAMERA_RAY_WGSL,
-  WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL, WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL, PATH_NODE_STRUCT_WGSL, PATH_TREE_WGSL].join("\n") + `
+  WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL, WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL, PATH_NODE_STRUCT_WGSL, PATH_TREE_WGSL,OPTICAL_EVENT_CONFIG_WGSL].join("\n") + `
 struct SharedPhase {
   canvasWidth: u32, canvasHeight: u32, tileX: u32, tileY: u32,
   tileWidth: u32, tileHeight: u32, firstSample: u32, sampleLimit: u32,
@@ -32,7 +33,7 @@ fn shared_config_valid() -> bool {
   if (config.canvasWidth == 0u || config.canvasHeight == 0u || config.tileWidth == 0u || config.tileHeight == 0u) { return false; }
   if (config.canvasWidth > 0xffffffffu / config.canvasHeight || config.tileWidth > 16384u / config.tileHeight) { return false; }
   if (config.tileX >= config.canvasWidth || config.tileY >= config.canvasHeight || config.tileWidth > config.canvasWidth - config.tileX || config.tileHeight > config.canvasHeight - config.tileY) { return false; }
-  if (config.tilePixelCount != config.tileWidth * config.tileHeight || config.maxDepth < 1u || config.maxDepth > 32u) { return false; }
+  if (config.tilePixelCount != config.tileWidth * config.tileHeight || !path_event_config_valid()) { return false; }
   if (config.tilePixelCount > arrayLength(&worklist.words) || config.tilePixelCount > arrayLength(&activeQueue)
     || config.tilePixelCount > arrayLength(&pathNodes) / (config.maxDepth + 1u) || config.tilePixelCount > arrayLength(&sums) || config.tilePixelCount > arrayLength(&resolved)
     || config.canvasWidth * config.canvasHeight > arrayLength(&pixels.words)) { return false; }

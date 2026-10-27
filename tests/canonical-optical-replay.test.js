@@ -12,7 +12,8 @@ test('canonical journal is bounded, read-only on transport and rejects ambiguous
  assert.doesNotMatch(code,/(?:rays|hits|counters)\[[^\]]+\]\s*=/);
  assert.throws(()=>canonicalJournalShader({pixel:-1,sample:92,maxDepth:20}),/Invalid/);
  assert.throws(()=>canonicalJournalShader({pixel:1,sample:256,maxDepth:20}),/Invalid/);
- assert.throws(()=>canonicalJournalShader({pixel:1,sample:0,maxDepth:33}),/Invalid/);
+ assert.match(canonicalJournalShader({pixel:1,sample:0,maxDepth:96}),/bounce >= 96u/);
+ assert.throws(()=>canonicalJournalShader({pixel:1,sample:0,maxDepth:97}),/Invalid/);
 });
 
 test('failure-only replay guards unsupported histories, reuses config, and cleans up on every exit',async t=>{

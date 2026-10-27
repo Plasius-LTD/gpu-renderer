@@ -13,6 +13,7 @@ import {
 } from "./wavefront-core.js";
 import { writeVec4 } from "./wavefront-binary.js";
 import { normalizeSceneObjects } from "./wavefront-scene-data.js";
+import {pathEventCapacity} from './wavefront-optical-interface-budget.js';
 
 export function packWavefrontSceneObjects(sceneObjects, capacity = sceneObjects.length) {
   const normalized =
@@ -190,7 +191,7 @@ export function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
   data.setUint32(16, tile.width, true);
   data.setUint32(20, tile.height, true);
   data.setUint32(24, tile.width * tile.height, true);
-  data.setUint32(28, config.maxDepth, true);
+  data.setUint32(28, pathEventCapacity(config), true);
   data.setUint32(32, config.sceneObjectCount, true);
   data.setUint32(36, frameIndex, true);
   data.setUint32(40, config.denoise ? 1 : 0, true);
@@ -201,8 +202,8 @@ export function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
   data.setUint32(60, config.bvhNodeCapacity, true);
   writeVec4(floatView, 64, [...config.camera.position, 1]);
   writeVec4(floatView, 80, [...config.camera.forward, 0]);
-  writeVec4(floatView, 96, [...config.camera.right, 0]);
-  writeVec4(floatView, 112, [...config.camera.up, 0]);
+  writeVec4(floatView, 96, [...config.camera.right, config.opticalInterfaceBudget?.enabled?config.opticalInterfaceBudget.maximumInterfaces:0]);
+  writeVec4(floatView, 112, [...config.camera.up, config.opticalInterfaceBudget?.enabled?config.maxDepth:0]);
   writeVec4(floatView, 128, [
     config.camera.tanHalfFovY,
     config.camera.aspect,

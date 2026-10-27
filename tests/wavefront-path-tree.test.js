@@ -35,6 +35,12 @@ test("complete sibling trees reduce once, independent of temporary slot order", 
   assert.deepEqual(reducePathTreeReference(nested, 0, { sourcePixelId: 10, sampleId: 7, maxDepth: 8 }), { radiance: [10, 13, 13], complete: true, terminalPaths: 2 });
   assert.deepEqual(reducePathTreeReference([node()], 0, { sourcePixelId: 10, sampleId: 7, maxDepth: 1 }), { radiance: [0, 0, 0], complete: true, terminalPaths: 1 });
 });
+test('bounded optical-capacity chains normalize once and reject an excessive physical limit',()=>{
+ const nodes=Array.from({length:84},(_,i)=>node({parent:i?i-1:NONE,depth:i,firstChild:i<83?i+1:NONE,terminalKind:i<83?0:2,terminal:i===83?[1,1,1]:[0,0,0]}));
+ assert.deepEqual(reducePathTreeReference(nodes,0,{sourcePixelId:10,sampleId:7,maxDepth:84}),{radiance:[1,1,1],complete:true,terminalPaths:1});
+ assert.equal(reducePathTreeReference(nodes,0,{sourcePixelId:10,sampleId:7,maxDepth:20}).complete,false);
+ assert.equal(reducePathTreeReference(nodes,0,{sourcePixelId:10,sampleId:7,maxDepth:97}).complete,false);
+});
 
 test("missing branches, overflow and invalid lineage never become a successful darker sample", () => {
   for (const changes of [

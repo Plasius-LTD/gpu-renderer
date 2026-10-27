@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import * as ui from './fixtures/room-demo-ui.js';
 import {MAX_ROUGH_SPLIT_PATH_DEPTH} from '../src/wavefront-rough-bounce-splitting.js';
 import {opticalSelectionsFromSearch} from './fixtures/optical-selection.js';
+import {MAX_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG} from '../src/wavefront-optical-interface-budget.js';
 
 test('actual room page initializes, forwards and resets canonical support clearance without GPU work',async()=>{
  const filename=fileURLToPath(new URL('./fixtures/native-room-reference.js',import.meta.url));
@@ -21,7 +22,7 @@ test('actual room page initializes, forwards and resets canonical support cleara
  const defaults={mode:'off',fill:.55,x:2.85,z:-.1,radius:.055,height:.18,glassIor:1.5,waterIor:1.333,supportClearance:0,distance:.45,elevation:25};
  let forwarded;
  const depthLimits={minimum:1,maximum:20,default:6};let requestedDepth;
- const context=vm.createContext({document,...ui,ROOM_CAPTURE_DEPTH_LIMITS:depthLimits,MAX_ROUGH_SPLIT_PATH_DEPTH,opticalSelectionsFromSearch,location:{search:''},
+ const context=vm.createContext({document,...ui,ROOM_CAPTURE_DEPTH_LIMITS:depthLimits,MAX_ROUGH_SPLIT_PATH_DEPTH,MAX_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG,opticalSelectionsFromSearch,location:{search:''},
   ROOM_LIGHTING_DEFAULTS:{style:'daylight',intensity:1,minimumIntensity:0,maximumIntensity:10},
   ROOM_COAT_DEFAULTS:{weight:1,roughness:.1},GLASS_WATER_DEFAULTS:defaults,
   ROOM_DEFAULTS:{centralReference:'seating',view:'entry',fovYDegrees:52,x:1,z:2,yaw:3},
@@ -45,6 +46,7 @@ test('actual room page initializes, forwards and resets canonical support cleara
  assert.equal(nodes.get('glass-support-clearance').value,0);
  assert.equal(nodes.get('glass-mode').value,'off');
  assert.equal(nodes.get('nested-media').value,'off');
+ assert.equal(nodes.get('optical-interface-budget').value,'off');assert.equal(Number(nodes.get('optical-interface-limit').value),MAX_OPTICAL_INTERFACES);
  assert.equal(nodes.get('focus-view').value,'entry');
  assert.equal(Number(nodes.get('max-depth').value),depthLimits.default);
  // Reach both filename-clearance branches, then deliberately fail at an inert

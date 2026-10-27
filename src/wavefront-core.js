@@ -360,10 +360,12 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   boundedDielectricBranching: 1 << 14,
   nestedMediaRefraction: 1 << 15,
   roughDielectricTransport: 1 << 16,
+  opticalInterfaceBudget: 1 << 17,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
   const requested = Object.freeze({
+    opticalInterfaceBudget: readBooleanFeatureFlag(options, "renderer.transport.opticalInterfaceBudget.enabled", flags => flags?.renderer?.transport?.opticalInterfaceBudget?.enabled),
     roughDielectricTransport: readBooleanFeatureFlag(options, "renderer.transport.roughDielectricTransport.enabled", flags => flags?.renderer?.transport?.roughDielectricTransport?.enabled),
     boundedDielectricBranching: readBooleanFeatureFlag(options, "renderer.transport.boundedDielectricBranching.enabled", flags => flags?.renderer?.transport?.boundedDielectricBranching?.enabled),
     nestedMediaRefraction: readBooleanFeatureFlag(options, "renderer.transport.nestedMediaRefraction.enabled", flags => flags?.renderer?.transport?.nestedMediaRefraction?.enabled),
@@ -428,7 +430,11 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
   if (requested.roughDielectricTransport && !requested.nestedMediaRefraction) {
     throw new RangeError('roughDielectricTransport requires renderer.transport.nestedMediaRefraction.enabled');
   }
+  if (requested.opticalInterfaceBudget && (!requested.boundedDielectricBranching || !requested.nestedMediaRefraction)) {
+    throw new RangeError('opticalInterfaceBudget requires boundedDielectricBranching and nestedMediaRefraction');
+  }
   const effective = Object.freeze({
+    opticalInterfaceBudget: requested.opticalInterfaceBudget,
     roughDielectricTransport: requested.roughDielectricTransport,
     boundedDielectricBranching: requested.boundedDielectricBranching,
     nestedMediaRefraction: requested.nestedMediaRefraction,

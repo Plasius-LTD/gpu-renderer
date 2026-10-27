@@ -52,6 +52,7 @@ import {
   subtract,
 } from "./wavefront-core.js";
 import { writeVec4 } from "./wavefront-binary.js";
+import {resolveOpticalInterfaceBudget,OPTICAL_INTERFACE_BUDGET_FLAG} from './wavefront-optical-interface-budget.js';
 import {
   collectWavefrontMediums,
   createWavefrontEmissiveTriangleIndexSource,
@@ -343,12 +344,15 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   );
   const denoise = options.denoise !== false;
   const deferredPathResolve = options.deferredPathResolve !== false;
+  const transport=resolveTransportExperiments(options);
+  const opticalBudget=resolveOpticalInterfaceBudget(options,{enabled:transport.effective.opticalInterfaceBudget,maxDepth,tilePixelCapacity,
+    strict:resolveStrictPhysicalLowSppLighting(options),deferred:deferredPathResolve,roughSplitting:options.roughBounceSplitting?.enabled});
   roughSplitAdditionalBytes(tilePixelCapacity,maxDepth,options.roughBounceSplitting);
   const queueFactor = options.roughBounceSplitting?.enabled ? 2**options.roughBounceSplitting.splitDepth : 1;
   const queueBytes = tilePixelCapacity * queueFactor * RAY_RECORD_BYTES;
   const hitBytes = tilePixelCapacity * queueFactor * HIT_RECORD_BYTES;
   const accumulationBytes = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
-  const pathVertexBytes = tilePixelCapacity * queueFactor * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
+  const pathVertexBytes = tilePixelCapacity * queueFactor * (opticalBudget.maximumPathEvents + 1) * PATH_VERTEX_RECORD_BYTES;
   const sceneObjectBytes = sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES;
   const triangleBytes = allocatedRecordBytes(triangleCapacity, TRIANGLE_RECORD_BYTES);
   const materialTableBytes = 0;
@@ -443,6 +447,11 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
 
 export function estimateWavefrontPathTracingMemoryForConfig(config, limits = {}) {
   return estimateWavefrontPathTracingMemory({
+    [OPTICAL_INTERFACE_BUDGET_FLAG]:config.opticalInterfaceBudget?.enabled??false,
+    opticalInterfaceBudget:config.opticalInterfaceBudget?.enabled?{maximumInterfaces:config.opticalInterfaceBudget.maximumInterfaces,maximumAdditionalBytes:config.opticalInterfaceBudget.maximumAdditionalBytes}:undefined,
+    'renderer.transport.boundedDielectricBranching.enabled':config.transportExperiments?.effective.boundedDielectricBranching??false,
+    'renderer.transport.nestedMediaRefraction.enabled':config.transportExperiments?.effective.nestedMediaRefraction??false,
+    strictPhysicalLowSppLighting:config.strictPhysicalLowSppLighting,
     roughBounceSplitting: config.roughBounceSplitting,
     width: config.width,
     height: config.height,
@@ -611,6 +620,8 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   if(roughBounceSplitting.enabled && (!transportExperiments.effective.stablePattern || !deferredPathResolve || !strictPhysicalLowSppLighting)) {
     throw new Error('Rough splitting requires stable sampling, deferred resolve and strict physical lighting.');
   }
+  const opticalInterfaceBudget=resolveOpticalInterfaceBudget(options,{enabled:transportExperiments.effective.opticalInterfaceBudget,
+    maxDepth,tilePixelCapacity,strict:strictPhysicalLowSppLighting,deferred:deferredPathResolve,roughSplitting:roughBounceSplitting.enabled});
   roughSplitAdditionalBytes(tilePixelCapacity,maxDepth,roughBounceSplitting);
 
   return Object.freeze({
@@ -618,6 +629,8 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     width,
     height,
     maxDepth,
+    maximumPathEvents:opticalInterfaceBudget.maximumPathEvents,
+    opticalInterfaceBudget,
     tileSize,
     samplesPerPixel,
     maxFramePassesPerSubmission,
@@ -662,6 +675,11 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     denoise: options.denoise !== false,
     frameIndex: readNonNegativeInteger("frameIndex", options.frameIndex, 0),
     memory: estimateWavefrontPathTracingMemory({
+      [OPTICAL_INTERFACE_BUDGET_FLAG]:opticalInterfaceBudget.enabled,
+      opticalInterfaceBudget:opticalInterfaceBudget.enabled?{maximumInterfaces:opticalInterfaceBudget.maximumInterfaces,maximumAdditionalBytes:opticalInterfaceBudget.maximumAdditionalBytes}:undefined,
+      'renderer.transport.boundedDielectricBranching.enabled':transportExperiments.effective.boundedDielectricBranching,
+      'renderer.transport.nestedMediaRefraction.enabled':transportExperiments.effective.nestedMediaRefraction,
+      strictPhysicalLowSppLighting,
       roughBounceSplitting,
       width,
       height,

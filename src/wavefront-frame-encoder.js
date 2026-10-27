@@ -2,6 +2,7 @@ import {
   recordDirectDispatch,
   recordIndirectDispatch,
 } from "./wavefront-frame-runtime.js";
+import {pathEventCapacity} from './wavefront-optical-interface-budget.js';
 import {
   COUNTER_DISPATCH_ARGS_OFFSET,
   INDIRECT_DISPATCH_ARGS_BYTES,
@@ -32,7 +33,7 @@ export function createWavefrontFrameEncoder({
   const resolveBindGroups = resolveGetter(getBindGroups);
 
   function encodeContinuations(encoder, config, bindGroups, frameTelemetry, tileWorkgroups, configOffset, parallelism, preparedPipelines = null) {
-    for (let bounceIndex = 0; bounceIndex < config.maxDepth; bounceIndex += 1) {
+    for (let bounceIndex = 0; bounceIndex < pathEventCapacity(config); bounceIndex += 1) {
       // Metadata only: primary count is unchanged, later queues may fan out.
       const queueFactor = bounceIndex > 0 && config.roughBounceSplitting?.enabled
         ? config.roughBounceSplitting.queueFactor : 1;

@@ -1,3 +1,4 @@
+import {MAX_PHYSICAL_PATH_EVENTS} from './wavefront-optical-interface-budget.js';
 const NONE = 0xffffffff;
 const validRgb = (value) => Array.isArray(value) && value.length === 3
   && value.every((channel) => Number.isFinite(Math.fround(channel)) && channel >= 0);
@@ -6,7 +7,7 @@ const validRgb = (value) => Array.isArray(value) && value.length === 3
 export function reducePathTreeReference(nodes, root, { sourcePixelId, sampleId, maxDepth }) {
   const failure = () => ({ radiance: [0, 0, 0], complete: false, terminalPaths: 0 });
   if (!Array.isArray(nodes) || !Number.isSafeInteger(root) || root < 0 || root >= nodes.length
-    || !Number.isSafeInteger(maxDepth) || maxDepth < 1 || maxDepth > 32) return failure();
+    || !Number.isSafeInteger(maxDepth) || maxDepth < 1 || maxDepth > MAX_PHYSICAL_PATH_EVENTS) return failure();
   let index = root;
   let previous = NONE;
   let radiance = [0, 0, 0];

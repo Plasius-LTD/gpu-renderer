@@ -5,6 +5,7 @@ import {gunzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {OPTICAL_ISOLATION as c,opticalIsolationPlan,validateOpticalFurnace} from '../tests/fixtures/optical-lighting-isolation.js';
+import {validateOpticalBudgetEvidence} from '../tests/fixtures/optical-budget-evidence.js';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 export function readOpticalLane(root,summary,lane){
  const base=path.resolve(root,'output/playwright/eames-environments'),file=path.resolve(root,lane.artifact.path.replace(/\.png$/,'.json'));
@@ -29,9 +30,11 @@ export function readOpticalLane(root,summary,lane){
  for(let i=0;i<image.length;i++)if(!Number.isFinite(image[i])||image[i]<0||(i%4===3&&image[i]!==1))throw Error('Optical invalid pixel');
  const png=fs.readFileSync(file.replace(/\.json$/,'.png'));
  if(png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||png.readUInt32BE(16)!==c.width||png.readUInt32BE(20)!==c.height)throw Error('Optical PNG extent failure');
+ if(JSON.stringify(r.settings)!==JSON.stringify(summary.settings))throw Error('Optical lane settings changed');
+ const opticalBudget=validateOpticalBudgetEvidence({settings:summary.settings,frame:r.frame,probe:summary.opticalPathSamplingProbe});
  let furnace,error;
  if(r.lane.furnace)try{furnace=validateOpticalFurnace({...r.frame,image},c.spp);}catch(e){error=e.message;}
- return {name:r.lane.name,receiptSha256:hash(bytes),pngSha256:hash(png),hdrSha256:r.hdrSha256,actualSamples:r.frame.actualSamples,furnace,error,image};
+ return {name:r.lane.name,receiptSha256:hash(bytes),pngSha256:hash(png),hdrSha256:r.hdrSha256,actualSamples:r.frame.actualSamples,opticalBudget,furnace,error,image};
 }
 export function compareOpticalRows(a,b,width=c.width,height=c.height){
  if(a.length!==width*height*4||b.length!==a.length)throw Error('Optical reference extent mismatch');

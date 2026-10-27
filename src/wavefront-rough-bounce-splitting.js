@@ -45,7 +45,7 @@ export function withRoughBounceSplitting(source,splitting,trace=false) {
   source=replaceRequired(source,'nextIndex >= config.tilePixelCount','nextIndex >= rough_queue_capacity()');
   source=replaceRequired(source,'secondaryIndex < config.tilePixelCount','secondaryIndex < rough_queue_capacity()');
   source=replaceRequired(source,'min(nextCount, config.tilePixelCount)','min(nextCount, rough_queue_capacity())');
-  source=replaceRequired(source,'    scatter.flags,\n    nextMediumStackDepth,',`    scatter.flags | (select(rough_branch_key, rough_branch_key * 2u + 1u, splitDielectric) << 8u),
+  source=replaceRequired(source,'    continuation_budget_flags(ray, hit, scatter.flags),\n    nextMediumStackDepth,',`    continuation_budget_flags(ray, hit, scatter.flags) | (select(rough_branch_key, rough_branch_key * 2u + 1u, splitDielectric) << 8u),
     nextMediumStackDepth,`);
   source=replaceRequired(source,'        scatter.flags,\n        secondaryDepth,',`        scatter.flags | ((rough_branch_key * 2u + 2u) << 8u),
         secondaryDepth,`);

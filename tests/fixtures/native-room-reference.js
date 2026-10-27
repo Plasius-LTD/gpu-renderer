@@ -14,6 +14,7 @@ import {GLASS_WATER_DEFAULTS,glassWaterSettings,withRoomGlass} from '/lighting/d
 import {createRoomDemoPresets,installRoomDemoUi,roomFocusSettings,revealInvalidControl,setRoomPreviewState,invalidateRoomCaptureUi} from './room-demo-ui.js';
 import {runRoomQualification,roomQualificationSettingsFromSearch} from './room-qualification.js';
 import {opticalSelectionsFromSearch} from './optical-selection.js';
+import {MAX_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG} from '../../src/wavefront-optical-interface-budget.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
@@ -26,9 +27,10 @@ function resetCoat(){el('clearcoat').value='off';el('wood-coat').value='off';el(
 function coatSelection(){return {enabled:el('wood-coat').value==='on',weight:el('coat-weight').valueAsNumber,roughness:el('coat-roughness').valueAsNumber};}
 resetCoat();
 const glassFields={'glass-fill':'fill','glass-x':'x','glass-z':'z','glass-radius':'radius','glass-height':'height','glass-ior':'glassIor','water-ior':'waterIor','glass-support-clearance':'supportClearance'};
-function resetGlass(){el('rough-dielectric').value='off';el('bounded-dielectric').value='off';el('nested-media').value='off';el('glass-mode').value=GLASS_WATER_DEFAULTS.mode;for(const [id,key] of Object.entries(glassFields))el(id).value=GLASS_WATER_DEFAULTS[key];}
+function resetGlass(){el('optical-interface-budget').value='off';el('optical-interface-limit').value=String(MAX_OPTICAL_INTERFACES);el('rough-dielectric').value='off';el('bounded-dielectric').value='off';el('nested-media').value='off';el('glass-mode').value=GLASS_WATER_DEFAULTS.mode;for(const [id,key] of Object.entries(glassFields))el(id).value=GLASS_WATER_DEFAULTS[key];}
 function focusSettings(){return roomFocusSettings(el('focus-view').value,{room:ROOM_DEFAULTS,cloth:CLOTH_INSPECTION_DEFAULTS,glass:GLASS_WATER_DEFAULTS});}
 function glassSelection(){return glassWaterSettings({mode:el('glass-mode').value,...Object.fromEntries(Object.entries(glassFields).map(([id,key])=>[key,el(id).valueAsNumber])),...focusSettings().glass});}
+el('optical-interface-limit').min='1';el('optical-interface-limit').max=String(MAX_OPTICAL_INTERFACES);
 resetGlass();
 el('central-reference').value=ROOM_DEFAULTS.centralReference;
 el('spp').min='1';el('spp').max=String(RADIAL_MAXIMUM_SPP);el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
@@ -117,6 +119,8 @@ async function captureRoomReference({qualification=false}={}){
  const layeredClearcoat=el('clearcoat').value==='on',woodCoat=coatSelection();
  const boundedDielectricBranching=el('bounded-dielectric').value==='on',nestedMediaRefraction=el('nested-media').value==='on';
  const roughDielectricTransport=el('rough-dielectric').value==='on';
+ const opticalInterfaceBudget={enabled:el('optical-interface-budget').value==='on',maximumInterfaces:el('optical-interface-limit').valueAsNumber};
+ if(opticalInterfaceBudget.enabled&&(!boundedDielectricBranching||!nestedMediaRefraction||splitDepth)){status.textContent='The optical-interface allowance requires bounded nested transport without splitting.';return;}
  if(roughDielectricTransport&&!nestedMediaRefraction){status.textContent='Enable nested glass / water refraction before testing rough optical transport.';return;}
  let glass;try{glass=glassSelection();}catch(error){status.textContent=error.message;return;}
  if(woodCoat.enabled&&!layeredClearcoat){status.textContent='Enable the layered clearcoat renderer before adding the wood varnish variant.';return;}
@@ -136,6 +140,7 @@ async function captureRoomReference({qualification=false}={}){
   browser:{userAgent:navigator.userAgent,platform:navigator.platform},failures:[],qualification:"visual-reference-only-not-performance-or-convergence"};
  receipt.materialFlags={'renderer.materials.sheen.enabled':sheen,'renderer.materials.layeredClearcoat.enabled':layeredClearcoat};
  receipt.transportFlags={'renderer.transport.boundedDielectricBranching.enabled':boundedDielectricBranching,'renderer.transport.nestedMediaRefraction.enabled':nestedMediaRefraction,'renderer.transport.roughDielectricTransport.enabled':roughDielectricTransport};
+ receipt.transportFlags[OPTICAL_INTERFACE_BUDGET_FLAG]=opticalInterfaceBudget.enabled;receipt.opticalInterfaceBudget=opticalInterfaceBudget;
  receipt.inspection={closeup,distribution,materialViews:materialInspection};
  const lightingIdentity=lightingSelection().style+(layeredClearcoat?'-layered-coat':'')+(woodCoat.enabled?`-varnish${woodCoat.weight}-rough${woodCoat.roughness}`:'')+(glass.mode==='off'?'':'-glass-'+glass.mode+'-fill'+glass.fill+(glass.closeup?'-glass-closeup':'')+(glass.supportClearance>0?'-support-clearance'+glass.supportClearance:''));
  const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}${closeup.enabled?'-closeup':''}${distribution==='uniform'?'-uniform':''}-${lightingIdentity}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
@@ -160,7 +165,7 @@ async function captureRoomReference({qualification=false}={}){
   if(glass.mode!=='off'&&boundedDielectricBranching&&nestedMediaRefraction){
    status.textContent='Checking multi-interface optical sampling (separate from scene quality)';
    const {runOpticalPathSamplingProbe}=await import('./optical-path-sampling-probe.js');
-   receipt.opticalPathSamplingProbe=await runOpticalPathSamplingProbe(cancellation.signal,settings.sampler);
+   receipt.opticalPathSamplingProbe=await runOpticalPathSamplingProbe(cancellation.signal,settings.sampler,{opticalInterfaceBudget:opticalInterfaceBudget.enabled});
    if(settings.sampler==='stable-camera-random'||settings.sampler==='fixed-pattern'){
     const {probeStablePattern}=await import('./stable-pattern-probe.js');receipt.samplingParityProbe=await probeStablePattern();
    }
@@ -175,7 +180,7 @@ async function captureRoomReference({qualification=false}={}){
   const plan=selectInspectionPlan(distribution,createRadialSamplingPlan(settings.width,settings.height,settings.maximumSpp),settings.maximumSpp);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
-  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,boundedDielectricBranching,nestedMediaRefraction,roughDielectricTransport,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
+  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,boundedDielectricBranching,nestedMediaRefraction,roughDielectricTransport,opticalInterfaceBudget,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===settings.maxDepth&&runner.sceneSnapshot.samplesPerPixel===settings.maximumSpp&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;
   const frame=await runner.run(distribution,{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,opticalJournal,onProgress:p=>{

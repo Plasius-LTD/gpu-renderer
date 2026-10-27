@@ -21,6 +21,7 @@ import {
   integrateBrdfSample,
 } from "./wavefront-sampling.js";
 import { integrateSheenDirectionalAlbedo, sheenProjectedArea } from "./wavefront-sheen.js";
+import {pathEventCapacity} from './wavefront-optical-interface-budget.js';
 
 export function clampTileSizeForDevice(config, device) {
   const limit = Number(device?.limits?.maxStorageBufferBindingSize);
@@ -31,7 +32,7 @@ export function clampTileSizeForDevice(config, device) {
   const maxPixelsByRay = Math.floor(limit / RAY_RECORD_BYTES);
   const maxPixelsByHit = Math.floor(limit / HIT_RECORD_BYTES);
   const maxPixelsByPathVertex = Math.floor(
-    limit / ((config.maxDepth + 1) * PATH_VERTEX_RECORD_BYTES)
+    limit / ((pathEventCapacity(config) + 1) * PATH_VERTEX_RECORD_BYTES)
   );
   const maxPixels = Math.max(
     256,

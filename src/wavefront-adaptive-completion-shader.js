@@ -2,10 +2,11 @@ import { WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL } 
 import { WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL } from "./wavefront-primary-shared-shader.js";
 import { PATH_NODE_STRUCT_WGSL, PATH_TREE_WGSL } from "./wavefront-path-tree-shader.js";
 import { ADAPTIVE_CAMERA_SAMPLE_RECORD_WGSL, ADAPTIVE_RESOLVE_CONFIG_RECORD_WGSL } from "./wavefront-adaptive-sample-records.js";
+import {OPTICAL_EVENT_CONFIG_WGSL} from './wavefront-optical-interface-budget.js';
 
 export const ADAPTIVE_COMPLETION_WGSL = [WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL,
   WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL, PATH_NODE_STRUCT_WGSL,
-  ADAPTIVE_CAMERA_SAMPLE_RECORD_WGSL, ADAPTIVE_RESOLVE_CONFIG_RECORD_WGSL, PATH_TREE_WGSL].join("\n") + `
+  ADAPTIVE_CAMERA_SAMPLE_RECORD_WGSL, ADAPTIVE_RESOLVE_CONFIG_RECORD_WGSL, PATH_TREE_WGSL,OPTICAL_EVENT_CONFIG_WGSL].join("\n") + `
 struct CompletionControl { count: u32, failure: u32, reserved0: u32, reserved1: u32, };
 @group(0) @binding(0) var<uniform> config: FrameConfig;
 @group(0) @binding(1) var<storage, read_write> pathNodes: array<PathNode>;
@@ -20,7 +21,7 @@ fn complete_config_valid() -> bool {
   if (config.canvasWidth > 0xffffffffu / config.canvasHeight || config.tileWidth > 16384u / config.tileHeight) { return false; }
   if (config.tileX >= config.canvasWidth || config.tileY >= config.canvasHeight
     || config.tileWidth > config.canvasWidth - config.tileX || config.tileHeight > config.canvasHeight - config.tileY) { return false; }
-  if (config.tilePixelCount != config.tileWidth * config.tileHeight || config.maxDepth < 1u || config.maxDepth > 32u) { return false; }
+  if (config.tilePixelCount != config.tileWidth * config.tileHeight || !path_event_config_valid()) { return false; }
   if (config.tilePixelCount > arrayLength(&pathNodes) / (config.maxDepth + 1u) || config.tilePixelCount > arrayLength(&cameraSamples)
     || config.canvasWidth * config.canvasHeight > arrayLength(&pixelWords)) { return false; }
   if (sampleConfig.canvasWidth != config.canvasWidth || sampleConfig.canvasHeight != config.canvasHeight

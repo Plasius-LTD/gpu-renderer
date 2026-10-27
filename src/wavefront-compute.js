@@ -1,3 +1,4 @@
+import {pathEventCapacity} from './wavefront-optical-interface-budget.js';
 import {
   createGpuParallelismCounters,
   createGpuParallelismDiagnostics,
@@ -604,7 +605,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         device,
         constants,
         maxRayCountRecords:
-          tiles.length * config.samplesPerPixel * config.maxDepth,
+          tiles.length * config.samplesPerPixel * pathEventCapacity(config),
       });
     }
     return frameTelemetryResources;
@@ -940,7 +941,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     const expectedPrimaryRays =
       config.width * config.height * samplingPlan.renderedSamplesPerPixel;
     const expectedRayCounts =
-      tiles.length * samplingPlan.renderedSamplesPerPixel * config.maxDepth;
+      tiles.length * samplingPlan.renderedSamplesPerPixel * pathEventCapacity(config);
     const readTelemetry = () => telemetryResourcesForFrame.readFrame({
           expectedPrimaryRays,
           expectedRayCounts,
@@ -1104,6 +1105,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       width: config.width,
       height: config.height,
       maxDepth: config.maxDepth,
+      maximumPathEvents:pathEventCapacity(config),
+      opticalInterfaceBudget:config.opticalInterfaceBudget,
       tiles: tiles.length,
       tileSize: config.tileSize,
       samplesPerPixel: config.samplesPerPixel,

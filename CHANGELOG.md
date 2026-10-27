@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add a default-off, independently capped smooth optical-interface allowance
+  without increasing ordinary scattering limits. Bound added tile storage and
+  physical dispatch/telemetry; preserve disabled frame bytes and sample identity.
+  Add canonical TIR/counter/energy regressions and explicit automated room/furnace
+  controls. Image/adaptive qualification remains gated (#234, ADR 0066).
+
 - Correct avoidable smooth bounded+nested optical roulette variance by using
   cumulative prospective throughput with outgoing-medium IOR compensation;
   preserve radiance/BSDF weights, event horizons, sampling dimensions and ordinary/

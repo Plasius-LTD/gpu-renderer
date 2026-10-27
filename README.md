@@ -1,14 +1,39 @@
 # @plasius/gpu-renderer
 
+Experimental separate optical-interface budget ([ADR 0066](docs/adrs/adr-0066-separate-optical-interface-budget.md)):
+set the remotely controllable `renderer.transport.opticalInterfaceBudget.enabled`
+flag with bounded+nested transport, strict physical lighting and deferred resolve.
+Keep `maxDepth` as the ordinary limit; configure
+`opticalInterfaceBudget: {maximumInterfaces: 64, maximumAdditionalBytes: 134217728}`
+independently. These are the defaults, not mandatory scene settings. Smooth fully
+transmitting valid-medium interfaces, including TIR, use the separate allowance;
+rough/partial and ordinary scattering do not. Rough-bounce splitting is rejected.
+All physical events still advance sampler ordinals and consume dispatch/storage.
+Snapshots/frame statistics expose `maximumPathEvents` and the bounded additional
+allocation. Disabled mode adds no path storage or dispatches. At a 128² tile,
+64 extra interfaces allocate 64 MiB of path nodes, not measured physical VRAM.
+
+For automated correctness captures use
+`native-room-reference.html?qualificationOrder=4k-first&opticalInterfaces=64`
+or `optical-lighting-isolation.html?opticalDepth=20&opticalInterfaces=64`.
+The room's Advanced settings exposes the same independent switch and limit;
+reset/presets turn it off. Preserved off-controls are not recertified. Physical
+image qualification is pending; adaptive performance work remains paused.
+
 Smooth bounded+nested optical roulette now uses cumulative prospective throughput
 with outgoing IOR compensation, retaining the radiance weights themselves.
 Bounded nested branch selection likewise excludes reversible eta scaling from
 transmission importance; its selected PDF is compensated consistently.
 It no longer treats a reversible glass-entry radiance decrease as absorption.
 The supported camera starts in air; no camera-inside initialization, extra ray
-state, uncounted interactions, or longer depth limit is introduced. Other
+state, uncounted interactions, or longer depth limit is introduced by those
+roulette/importance corrections themselves. The separate opt-in policy above
+is the only additional event allowance. Other
 roulette paths are unchanged. See [ADR 0065](docs/adrs/adr-0065-optical-roulette.md).
-Physical image qualification is pending; adaptive work remains paused.
+The [optical-tail follow-up](docs/evidence/optical-roulette-2026-10-27.md) retains
+the corrections and failed empty/index-one furnace gates, with actual TIR tails
+reaching strict depth termination. Native recapture is in progress; image
+correctness has not passed and adaptive work remains paused.
 
 Optical furnace attribution accepts the same bounded `opticalJournal=u,v,s;...`
 selection as the room fixture. It replays canonical successful samples, retains

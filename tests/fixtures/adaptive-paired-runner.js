@@ -20,9 +20,11 @@ import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 import { createSharedSampleRanges, packSharedPhase, createSharedAdaptivePipelines, encodeSharedPhase, encodeSharedSample } from "/src/wavefront-adaptive-shared.js";
 import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continuations.js";
 import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
+import {pathEventCapacity} from '/src/wavefront-optical-interface-budget.js';
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false}={}) {
+export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false,opticalInterfaceBudget={enabled:false}}={}) {
+  check(!opticalInterfaceBudget.enabled||(boundedDielectricBranching&&nestedMediaRefraction&&!splitDepth),'Optical interface budget requires bounded+nested transport without rough splitting');
   check(!guidedDenoise||(native&&!pruningVariants),"Guided denoise requires native staged transport");
   check([0,1,2].includes(splitDepth)&&(!splitDepth||sampler==="stable-pattern"),"Splitting requires stable-pattern and depth 1 or 2");
   check(!splitDepth||!pruningVariants,"Splitting/pruning combination is not admitted");
@@ -70,9 +72,11 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
         return device;
       } };
     const width=native?.width??128,height=native?.height??128,pixels=128*128,tile={x:0,y:0,width:128,height:128},sceneConfig=typeof scene==="string"?createPairedProbeScene(scene):scene;
-    const maximum=native?.maximumSpp??sceneConfig.probeMaximum??32,maxDepth=sceneConfig.probeDepth??4;
+    const maximum=native?.maximumSpp??sceneConfig.probeMaximum??32,requestedDepth=sceneConfig.probeDepth??4;
     check(Number.isSafeInteger(maximum)&&maximum>=1&&maximum<=ADAPTIVE_MAX_SAMPLES,"Invalid sample ceiling");
-    renderer = await wait(createWavefrontPathTracingComputeRenderer({ ...sceneConfig, canvas:native?.canvas??new OffscreenCanvas(width,height), width,height,tileSize:128,maxDepth,
+    renderer = await wait(createWavefrontPathTracingComputeRenderer({ ...sceneConfig, canvas:native?.canvas??new OffscreenCanvas(width,height), width,height,tileSize:128,maxDepth:requestedDepth,
+      'renderer.transport.opticalInterfaceBudget.enabled':opticalInterfaceBudget.enabled,
+      opticalInterfaceBudget:opticalInterfaceBudget.enabled?{maximumInterfaces:opticalInterfaceBudget.maximumInterfaces,maximumAdditionalBytes:opticalInterfaceBudget.maximumAdditionalBytes}:undefined,
       samplesPerPixel:native?maximum:ADAPTIVE_MAX_SAMPLES,denoise:false,deferredPathResolve:true,strictPhysicalLowSppLighting:true,
       "renderer.materials.sheen.enabled":sheen,
       "renderer.materials.layeredClearcoat.enabled":layeredClearcoat,
@@ -86,6 +90,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       "renderer.sampling.roughBounceSplitting.enabled":splitDepth>0,
       roughBounceSplitting:{splitDepth},
       navigator:{gpu:{requestAdapter:async()=>observedAdapter,getPreferredCanvasFormat:()=>navigator.gpu.getPreferredCanvasFormat()}} }));
+    const maxDepth=pathEventCapacity(renderer.config);
     const rendererBufferBytes=[...buffers.values()].reduce((sum,buffer)=>sum+buffer.size,0);
     const textureInventory=textures.map(item=>({format:item.format,size:item.size,mipLevelCount:item.mipLevelCount??1,sampleCount:item.sampleCount??1}));
     const get=name=>{const value=buffers.get(`plasius.wavefront.${name}`);check(value,`Missing ${name}`);return value;};

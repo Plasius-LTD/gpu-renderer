@@ -866,6 +866,8 @@ export interface WavefrontEnvironmentMapSnapshot {
 }
 
 export interface WavefrontPathTracingComputeConfig {
+  readonly maximumPathEvents?: number;
+  readonly opticalInterfaceBudget?: WavefrontOpticalInterfaceBudgetConfig;
   readonly roughBounceSplitting: WavefrontRoughBounceSplittingConfig;
   readonly mode: typeof rendererWavefrontComputeMode;
   readonly width: number;
@@ -940,7 +942,16 @@ export interface WavefrontRoughBounceSplittingConfig {
   readonly maximumAdditionalBytes: number;
 }
 
+export interface WavefrontOpticalInterfaceBudgetConfig {
+  readonly enabled: boolean;
+  readonly maximumInterfaces: number;
+  readonly maximumAdditionalBytes: number;
+  readonly additionalPathBytes: number;
+  readonly maximumPathEvents: number;
+}
+
 export interface WavefrontRendererFeatureFlags {
+  readonly "renderer.transport.opticalInterfaceBudget.enabled"?: boolean;
   readonly "renderer.transport.roughDielectricTransport.enabled"?: boolean;
   readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
   readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
@@ -961,6 +972,7 @@ export interface WavefrontRendererFeatureFlags {
   readonly "renderer.environment.productStudioImportance.enabled"?: boolean;
   readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   readonly enabled?: {
+    readonly "renderer.transport.opticalInterfaceBudget.enabled"?: boolean;
     readonly "renderer.transport.roughDielectricTransport.enabled"?: boolean;
     readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
     readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
@@ -982,6 +994,7 @@ export interface WavefrontRendererFeatureFlags {
     readonly "renderer.diagnostics.productTransportTelemetry.enabled"?: boolean;
   };
   readonly flags?: {
+    readonly "renderer.transport.opticalInterfaceBudget.enabled"?: boolean;
     readonly "renderer.transport.roughDielectricTransport.enabled"?: boolean;
     readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
     readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
@@ -1012,6 +1025,7 @@ export interface WavefrontRendererFeatureFlags {
       readonly roughBounceSplitting?: { readonly enabled?: boolean };
     };
     readonly transport?: {
+      readonly opticalInterfaceBudget?: { readonly enabled?: boolean };
       readonly roughDielectricTransport?: { readonly enabled?: boolean };
       readonly boundedDielectricBranching?: { readonly enabled?: boolean };
       readonly nestedMediaRefraction?: { readonly enabled?: boolean };
@@ -1033,6 +1047,7 @@ export interface WavefrontRendererFeatureFlags {
 }
 
 export interface WavefrontTransportExperimentFlags {
+  readonly opticalInterfaceBudget?: boolean;
   readonly roughDielectricTransport?: boolean;
   readonly boundedDielectricBranching?: boolean;
   readonly nestedMediaRefraction?: boolean;
@@ -1155,6 +1170,9 @@ export interface WavefrontGpuParallelismDiagnostics {
 }
 
 export interface CreateWavefrontPathTracingComputeRendererOptions {
+  /** Separate smooth full-transmission interface allowance; requires bounded+nested strict deferred transport. */
+  readonly "renderer.transport.opticalInterfaceBudget.enabled"?: boolean;
+  readonly opticalInterfaceBudget?: {readonly maximumInterfaces?: number; readonly maximumAdditionalBytes?: number};
   /** Experimental rough volume boundaries; requires nestedMediaRefraction. */
   readonly "renderer.transport.roughDielectricTransport.enabled"?: boolean;
   readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
@@ -1303,6 +1321,8 @@ export interface WavefrontPathTracingComputeRenderer {
     width: number;
     height: number;
     maxDepth: number;
+    maximumPathEvents?: number;
+    opticalInterfaceBudget?: WavefrontOpticalInterfaceBudgetConfig;
     tiles: number;
     tileSize: number;
     samplesPerPixel: number;
@@ -1382,6 +1402,8 @@ export interface WavefrontCpuProfile {
 }
 
 export interface WavefrontPathTracingComputeFrameStats {
+  readonly maximumPathEvents?: number;
+  readonly opticalInterfaceBudget?: WavefrontOpticalInterfaceBudgetConfig | null;
   readonly cpuProfile?: WavefrontCpuProfile;
   readonly frame: number;
   readonly width: number;
@@ -1514,6 +1536,12 @@ export function createWavefrontGpuMaterialSource(
 ): WavefrontGpuMaterialSource;
 export function createDefaultWavefrontSceneObjects(): readonly WavefrontSceneObject[];
 export function estimateWavefrontPathTracingMemory(options?: {
+  readonly "renderer.transport.opticalInterfaceBudget.enabled"?: boolean;
+  readonly "renderer.transport.boundedDielectricBranching.enabled"?: boolean;
+  readonly "renderer.transport.nestedMediaRefraction.enabled"?: boolean;
+  readonly featureFlags?: WavefrontRendererFeatureFlags;
+  readonly strictPhysicalLowSppLighting?: boolean;
+  readonly opticalInterfaceBudget?: {readonly maximumInterfaces?: number; readonly maximumAdditionalBytes?: number};
   roughBounceSplitting?: WavefrontRoughBounceSplittingConfig;
   width?: number;
   height?: number;

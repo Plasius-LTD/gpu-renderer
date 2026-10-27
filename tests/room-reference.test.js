@@ -7,7 +7,7 @@ test('room exposes a fixed-camera independent transport control without changing
  assert.match(html,/<option value="stable-camera-random">Independent transport comparison/);
  assert.match(html,/Fixed camera · corrected transport/);
  assert.match(html,/<option value="fixed-pattern" selected>/);
- assert.match(js,/runOpticalPathSamplingProbe\(cancellation.signal,settings.sampler\)/);
+ assert.match(js,/runOpticalPathSamplingProbe\(cancellation.signal,settings.sampler,\{opticalInterfaceBudget:opticalInterfaceBudget.enabled\}\)/);
  assert.match(js,/receipt.opticalPathSamplingProbe=/);
 });
 test("room reference exposes original-scene placement, native resolutions and explicit render controls",()=>{

@@ -9,6 +9,7 @@ import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 import { readWavefrontTerminationMetrics } from '/src/wavefront-readbacks.js';
 import { retainNativeFailure,readFailedPathNodes } from './native-failure-evidence.js';
 import {validateOpticalSelections,selectedOpticalJournals} from './optical-selection.js';
+import {pathEventCapacity} from '../../src/wavefront-optical-interface-budget.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 export async function createNativeAdaptiveRunner(c) {
@@ -43,7 +44,7 @@ export async function createNativeAdaptiveRunner(c) {
     },
     sceneSnapshot:{triangleCount:renderer.config.triangleCount,bvhNodeCount:renderer.config.bvhNodeCount,
       displayQuality:renderer.config.displayQuality,accelerationBuildMode:renderer.config.accelerationBuildMode,
-      maxDepth:renderer.config.maxDepth,samplesPerPixel:renderer.config.samplesPerPixel,camera:renderer.config.camera},
+      maxDepth:renderer.config.maxDepth,maximumPathEvents:renderer.config.maximumPathEvents,opticalInterfaceBudget:renderer.config.opticalInterfaceBudget,samplesPerPixel:renderer.config.samplesPerPixel,camera:renderer.config.camera},
     async run(mode,{diagnostics=false,profile=false,onProgress,fused=false,seed=7,sampler="legacy",opticalJournal=[]}={}){
       active();check(["fixed","uniform","radial"].includes(mode),"Invalid native mode");
       check(!c.guidePostprocess||(mode!=="fixed"&&!fused),'Guided denoise requires adaptive staged transport');
@@ -110,7 +111,7 @@ export async function createNativeAdaptiveRunner(c) {
         await asyncStage("gpuWait",()=>wait(device.queue.onSubmittedWorkDone()));
         trace.renderIntervalMs=performance.now()-tileStarted;trace.parallelism=parallelism;
         if(diagnostics){const readStarted=performance.now();
-          const measured=await asyncStage("telemetryReadback",()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:samples*config.maxDepth,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())})));
+          const measured=await asyncStage("telemetryReadback",()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:samples*pathEventCapacity(config),waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())})));
           trace.telemetry=measured;trace.rawTimestampPair=timestampPairs.at(-1)??null;
           check(measured.rayCounts.status==="available",measured.rayCounts.reason);
           await asyncStage("outputReadback",async()=>{
@@ -154,6 +155,7 @@ export async function createNativeAdaptiveRunner(c) {
       const validation=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!validation&&!errors.length,validation?.message??errors[0]);
       check(opticalJournals.length===selections.length,'Missing selected optical journals');
       return {mode,sampler,maximumSpp:maximum,roughBounceSplitting:renderer.config.roughBounceSplitting,seed,fused:adaptive&&fused,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
+        maximumPathEvents:config.maximumPathEvents??config.maxDepth,opticalInterfaceBudget:config.opticalInterfaceBudget,
         ...(selections.length?{opticalJournals,timingScope:'includes selected-sample diagnostic replays; not performance'}:{}),
         diagnosticReadbackMs:diagnostics?readbackMs:null,diagnosticRenderIntervalsMs:diagnostics?elapsed-readbackMs:null,
         actualSamples:diagnostics?actualSamples:null,actualHistogram:diagnostics?actualHistogram:null,tiles,

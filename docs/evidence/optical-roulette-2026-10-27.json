@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "status": "image-correctness-failed-adaptive-paused",
+  "task": "https://github.com/Plasius-LTD/gpu-renderer/issues/234",
+  "pullRequest": "https://github.com/Plasius-LTD/gpu-renderer/pull/216",
+  "renderer": "70e02d765ed085a8be4bc66a18af55dc7d0efc87",
+  "shaderSha256": "c276c550b87b16f800f6e4953446b7d1ccc57db95f2281ba5bcd8e88f01844a2",
+  "dependencies": {
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "furnaceAcceptance": {"meanRelativeError": 0.02, "maximumRowRelativeError": 0.05, "changed": false},
+  "diagnosticCameraSamples": 754974720,
+  "diagnosticSummaries": [
+    {
+      "name": "original-journals-32",
+      "capture": "room-reference-2026-10-27T14-22-28-619Z-442aecd9-2b3c-49d4-9a53-7605de10509f",
+      "renderer": "d97578d97d65038c599032f3909bf1d5aae5bcef",
+      "summarySha256": "bd401d0981e9dfcf4e8fc087715f308efdd49e8c901966175ca47470a9458696",
+      "allFourHdrHashesEqualUninstrumented": true
+    },
+    {
+      "name": "roulette-only-32",
+      "capture": "room-reference-2026-10-27T14-33-18-851Z-2fee1e91-b233-4616-a4f6-a6c0841c8f56",
+      "renderer": "016e8c1ce9ab8dce729695eb3e908d85231e0874",
+      "summarySha256": "8ba0f3108e048e87fb1ec127510466c291ad4c597b74abd81629a744526157dc"
+    },
+    {
+      "name": "roulette-only-20",
+      "capture": "room-reference-2026-10-27T14-36-53-180Z-bb2f940c-e6e5-4c46-9143-cca4d928c60a",
+      "renderer": "016e8c1ce9ab8dce729695eb3e908d85231e0874",
+      "summarySha256": "84607b710d1be1993f8b7e4fc5d8b5371f710cd6c26f030babe156f4c17fe678"
+    },
+    {
+      "name": "roulette-and-branch-32",
+      "capture": "room-reference-2026-10-27T14-41-38-917Z-de0a2b4d-1eb0-4ece-a38c-614c1f1afa07",
+      "renderer": "70e02d765ed085a8be4bc66a18af55dc7d0efc87",
+      "summarySha256": "6fc6386ba18cba3d38d21bed1888bbb525a85b26db95c6a6fee9420d0ddbbeb0"
+    },
+    {
+      "name": "roulette-and-branch-20",
+      "capture": "room-reference-2026-10-27T14-45-15-056Z-0d278e28-d018-447c-bcd8-e7792a0c3e81",
+      "renderer": "70e02d765ed085a8be4bc66a18af55dc7d0efc87",
+      "summarySha256": "053afcb9cb9b0c912d0290ff526c195d3776edd737b38651955bc0338fbdb1e6"
+    }
+  ],
+  "tail": {
+    "pixel": 90374,
+    "samples": [32, 59, 88, 127, 129, 159, 165, 239],
+    "allEightTermination": "MAX_DEPTH_STRICT",
+    "events": 20,
+    "zeroTerminalRadiance": true,
+    "remainingEmptyWorstRowError": 0.0653075550993284,
+    "remainingImageGatePassed": false
+  },
+  "native": {
+    "status": "running",
+    "allSixComplete": false,
+    "firstVerifiedCapture": "room-reference-2026-10-27T14-48-21-157Z-105439d7-dfd3-4737-b571-c7880996dbaa",
+    "firstVerifiedSamples": 265420800,
+    "firstVerifiedHdr": "0a4b5884397fd43deacc3a0151dcd4f0964eead175345cc98da6def95f331d6c",
+    "imageConvergencePassed": false
+  },
+  "localValidation": {"testsPassed": 504, "lineCoveragePercent": 96.41, "branchCoveragePercent": 83.3, "changedExecutableFilesInLcov": 59},
+  "ci": {"run": 40523484281, "head": "70e02d765ed085a8be4bc66a18af55dc7d0efc87", "conclusion": "success", "allJobsAndStepsSucceeded": true},
+  "releasePerformed": false,
+  "adaptiveWorkPaused": true
+}

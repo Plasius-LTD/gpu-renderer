@@ -3,11 +3,12 @@ import {WAVEFRONT_SHADER_LAYOUT_WGSL} from '../../src/wavefront-shader-layout.js
 import {assertShaderModuleCompiles} from '../../src/wavefront-runtime-support.js';
 import {createGpuParallelismCounters} from '../../src/wavefront-frame-runtime.js';
 import {canonicalSurfaceJournalShader,decodeSurfaceJournal} from './optical-surface-journal.js';
+import {pathEventCapacity,MAX_PHYSICAL_PATH_EVENTS} from '../../src/wavefront-optical-interface-budget.js';
 
 const RECORD_WORDS=64;
 const hitRecord=WAVEFRONT_SHADER_LAYOUT_WGSL.match(/struct HitRecord \{[\s\S]+?\n\};/)[0];
 export function canonicalJournalShader({pixel,sample,maxDepth}) {
- if(!Number.isSafeInteger(pixel)||pixel<0||pixel>0xffffffff||!Number.isInteger(sample)||sample<0||sample>255||!Number.isInteger(maxDepth)||maxDepth<1||maxDepth>32)throw Error('Invalid canonical journal selection');
+ if(!Number.isSafeInteger(pixel)||pixel<0||pixel>0xffffffff||!Number.isInteger(sample)||sample<0||sample>255||!Number.isInteger(maxDepth)||maxDepth<1||maxDepth>MAX_PHYSICAL_PATH_EVENTS)throw Error('Invalid canonical journal selection');
  // Writable binding types match the canonical pass usage scope; these kernels
  // only read transport resources. The sole destination is the private journal.
  return `${WAVEFRONT_CAMERA_RAY_RECORD_WGSL}\n${hitRecord}
@@ -45,7 +46,7 @@ export function canonicalJournalShader({pixel,sample,maxDepth}) {
 }
 
 export function decodeCanonicalJournal(bytes){
- if(bytes.byteLength%(RECORD_WORDS*4)||bytes.byteLength>32*2*RECORD_WORDS*4)throw Error('Invalid canonical journal length');
+ if(bytes.byteLength%(RECORD_WORDS*4)||bytes.byteLength>MAX_PHYSICAL_PATH_EVENTS*2*RECORD_WORDS*4)throw Error('Invalid canonical journal length');
  const u=new Uint32Array(bytes),f=new Float32Array(bytes),records=[];
  for(let o=0;o<u.length;o+=RECORD_WORDS){
   if(!u[o])continue;
@@ -100,10 +101,11 @@ async function captureCanonicalJournal(c,{config,tile,ranges,selection,failureOn
  const phase=ranges.findIndex(r=>selection.sample>=r.firstSample&&selection.sample<r.sampleLimit);
  if(phase<0)throw Error('Failed ordinal is outside retained tile phases');
  if(phase!==ranges.length-1)return {status:'unsupported',reason:'original-phase-worklist-no-longer-retained'};
- const code=canonicalJournalShader({pixel:selection.pixel,sample:selection.sample,maxDepth:config.maxDepth});
+ const maxDepth=pathEventCapacity(config);
+ const code=canonicalJournalShader({pixel:selection.pixel,sample:selection.sample,maxDepth});
  const label=failureOnly?'failure-only':'selected-sample';
- const recordBytes=config.maxDepth*2*RECORD_WORDS*4;
- const surfaceBytes=failureOnly?0:config.maxDepth*64,size=recordBytes+surfaceBytes;
+ const recordBytes=maxDepth*2*RECORD_WORDS*4;
+ const surfaceBytes=failureOnly?0:maxDepth*64,size=recordBytes+surfaceBytes;
  const buffer=device.createBuffer({label:label+'-canonical-journal',size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
  try{
   const module=device.createShaderModule({label:label+'-canonical-journal',code});
@@ -116,7 +118,7 @@ async function captureCanonicalJournal(c,{config,tile,ranges,selection,failureOn
   })};
   for(const entryPoint of ['before','after'])journal[entryPoint]=await wait(device.createComputePipelineAsync({layout:pipelineLayout,compute:{module,entryPoint}}));
   if(!failureOnly){
-   const surfaceModule=device.createShaderModule({label:'selected-surface-journal',code:canonicalSurfaceJournalShader({...selection,maxDepth:config.maxDepth,tilePixels:tile.width*tile.height})});
+   const surfaceModule=device.createShaderModule({label:'selected-surface-journal',code:canonicalSurfaceJournalShader({...selection,maxDepth,tilePixels:tile.width*tile.height})});
    await wait(assertShaderModuleCompiles(surfaceModule,'selected-surface-journal'));
    journal.surface=await wait(device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:surfaceModule,entryPoint:'surface'}}));
    journal.surfaceGroups=['activeNext','nextActive'].map(name=>{

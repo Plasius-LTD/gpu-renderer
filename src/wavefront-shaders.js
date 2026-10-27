@@ -9,6 +9,7 @@ import { withProgressiveSampling } from "./wavefront-sampling-dimensions.js";
 import { withRoughBounceSplitting } from './wavefront-rough-bounce-splitting.js';
 import { DIELECTRIC_TRANSPORT_WGSL } from './wavefront-dielectric-shader.js';
 import { ROUGH_DIELECTRIC_WGSL } from './wavefront-rough-dielectric-shader.js';
+import {OPTICAL_INTERFACE_BUDGET_WGSL} from './wavefront-optical-interface-budget.js';
 export { PRESENT_WGSL } from "./wavefront-present-shader.js";
 
 function readPositiveInteger(name, value, fallback) {
@@ -30,6 +31,7 @@ export const WAVEFRONT_COMPUTE_WGSL = [
   PATH_TREE_WGSL,
   DIELECTRIC_TRANSPORT_WGSL,
   ROUGH_DIELECTRIC_WGSL,
+  OPTICAL_INTERFACE_BUDGET_WGSL,
   WAVEFRONT_SHADER_KERNELS_WGSL,
 ].join("\n");
 

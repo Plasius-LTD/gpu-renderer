@@ -2,11 +2,11 @@ import { WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL } 
 import { WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL,
   WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL } from "./wavefront-primary-shared-shader.js";
 import { PATH_NODE_STRUCT_WGSL } from "./wavefront-path-tree-shader.js";
-import { MAX_PATH_TRACING_DEPTH } from "./wavefront-core.js";
+import {OPTICAL_EVENT_CONFIG_WGSL} from './wavefront-optical-interface-budget.js';
 
 export const ADAPTIVE_BOOTSTRAP_WGSL = [WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL,
   WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL,
-  WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL, PATH_NODE_STRUCT_WGSL].join("\n") + `
+  WAVEFRONT_DEFERRED_PATH_ENABLED_WGSL, PATH_NODE_STRUCT_WGSL,OPTICAL_EVENT_CONFIG_WGSL].join("\n") + `
 @group(0) @binding(0) var<storage, read> bootstrapRays: array<RayRecord>;
 @group(0) @binding(3) var<storage, read_write> accumulation: array<vec4<f32>>;
 @group(0) @binding(5) var<uniform> config: FrameConfig;
@@ -28,7 +28,7 @@ fn bootstrap_config_valid(groups: vec3<u32>) -> bool {
   if (config.canvasWidth > 0xffffffffu / config.canvasHeight || config.tileWidth > 16384u / config.tileHeight) { return false; }
   if (config.tileX > config.canvasWidth || config.tileY > config.canvasHeight) { return false; }
   if (config.tileWidth > config.canvasWidth - config.tileX || config.tileHeight > config.canvasHeight - config.tileY) { return false; }
-  if (config.tilePixelCount != config.tileWidth * config.tileHeight || config.maxDepth < 1u || config.maxDepth > ${MAX_PATH_TRACING_DEPTH}u) { return false; }
+  if (config.tilePixelCount != config.tileWidth * config.tileHeight || !path_event_config_valid()) { return false; }
   if (groups.x < (config.tilePixelCount + 63u) / 64u || groups.y != 1u || groups.z != 1u) { return false; }
   if (bootstrapTile.canvasWidth != config.canvasWidth || bootstrapTile.canvasHeight != config.canvasHeight
     || bootstrapTile.tileX != config.tileX || bootstrapTile.tileY != config.tileY

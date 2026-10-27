@@ -1,9 +1,10 @@
 import {WAVEFRONT_CAMERA_RAY_RECORD_WGSL} from '../../src/wavefront-camera-shared-shader.js';
 import {PATH_NODE_STRUCT_WGSL} from '../../src/wavefront-path-tree-shader.js';
+import {MAX_PHYSICAL_PATH_EVENTS} from '../../src/wavefront-optical-interface-budget.js';
 
 export function canonicalSurfaceJournalShader({pixel,sample,maxDepth,tilePixels}){
  if(!Number.isSafeInteger(pixel)||pixel<0||pixel>0xffffffff||!Number.isInteger(sample)||sample<0||sample>255||
-  !Number.isInteger(maxDepth)||maxDepth<1||maxDepth>32||!Number.isInteger(tilePixels)||tilePixels<1||tilePixels>16384)throw Error('Invalid surface journal selection');
+  !Number.isInteger(maxDepth)||maxDepth<1||maxDepth>MAX_PHYSICAL_PATH_EVENTS||!Number.isInteger(tilePixels)||tilePixels<1||tilePixels>16384)throw Error('Invalid surface journal selection');
  return `${WAVEFRONT_CAMERA_RAY_RECORD_WGSL}\n${PATH_NODE_STRUCT_WGSL}
  @group(0) @binding(0)var<storage,read_write>rays:array<RayRecord>;
  @group(0) @binding(1)var<storage,read_write>counters:array<u32>;
@@ -17,7 +18,7 @@ export function canonicalSurfaceJournalShader({pixel,sample,maxDepth,tilePixels}
  }`;
 }
 export function decodeSurfaceJournal(bytes){
- if(bytes.byteLength%64||bytes.byteLength>32*64)throw Error('Invalid surface journal length');
+ if(bytes.byteLength%64||bytes.byteLength>MAX_PHYSICAL_PATH_EVENTS*64)throw Error('Invalid surface journal length');
  const u=new Uint32Array(bytes),f=new Float32Array(bytes),nodes=[];
  for(let o=0;o<u.length;o+=16){if(!u[o+3])continue;
   nodes.push({directRadiance:Array.from(f.slice(o,o+3)),terminalRadiance:Array.from(f.slice(o+4,o+7)),flags:u[o+3],terminalKind:u[o+7],pixel:u[o+12],sample:u[o+13],bounce:u[o+14]});

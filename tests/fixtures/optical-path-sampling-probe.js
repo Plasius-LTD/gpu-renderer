@@ -3,6 +3,7 @@ import {createMediumTextureResource} from '../../src/wavefront-gpu-resources.js'
 import {createConfigPayload} from '../../src/wavefront-packers.js';
 import {createWavefrontPathTracingComputeConfig} from '../../src/wavefront-config.js';
 import {assertShaderModuleCompiles} from '../../src/wavefront-runtime-support.js';
+import {OPTICAL_TAIL_PROBE,OPTICAL_TAIL_PROBE_WGSL,summarizeOpticalTail} from './optical-tail-budget-probe.js';
 
 // Frozen analytic qualification inputs, not scene or runtime sampling policy.
 export const OPTICAL_PATH_PROBE=Object.freeze({samples:256,pixels:256,maxInteractions:19,
@@ -53,7 +54,7 @@ export const OPTICAL_PATH_PROBE_WGSL=`
 
 export function opticalPathProbeShader(sampler){
  if(!['fixed-pattern','stable-pattern','stable-camera-random'].includes(sampler))throw Error('Unknown optical path sampler');
- return createWavefrontPathTracingComputeShaderSource({progressiveSampling:sampler})+OPTICAL_PATH_PROBE_WGSL;
+ return createWavefrontPathTracingComputeShaderSource({progressiveSampling:sampler})+OPTICAL_PATH_PROBE_WGSL+OPTICAL_TAIL_PROBE_WGSL;
 }
 
 export function summarizeOpticalPaths(values){
@@ -72,7 +73,7 @@ export function summarizeOpticalPaths(values){
  });
 }
 
-export async function runOpticalPathSamplingProbe(signal,sampler){
+export async function runOpticalPathSamplingProbe(signal,sampler,{opticalInterfaceBudget=false}={}){
  const source=opticalPathProbeShader(sampler);
  if(signal.aborted)throw Error('Cancelled');
  const adapter=await navigator.gpu.requestAdapter();if(adapter?.info.isFallbackAdapter!==false)throw Error('Physical optical path probe requires GPU');
@@ -85,6 +86,7 @@ export async function runOpticalPathSamplingProbe(signal,sampler){
   const count=OPTICAL_PATH_PROBE.samples*OPTICAL_PATH_PROBE.pixels*OPTICAL_PATH_PROBE.cosines.length;
   const frame=buffer(320,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST),output=buffer(count*16,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),staging=buffer(count*16,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ);
   const config=createWavefrontPathTracingComputeConfig({width:1,height:1,
+   ...(opticalInterfaceBudget?{maxDepth:20,strictPhysicalLowSppLighting:true,'renderer.transport.opticalInterfaceBudget.enabled':true}:{}),
    'renderer.transport.boundedDielectricBranching.enabled':true,'renderer.transport.nestedMediaRefraction.enabled':true});
   device.queue.writeBuffer(frame,0,createConfigPayload(config,{x:0,y:0,width:1,height:1},7));
   const module=device.createShaderModule({code:source});await wait(assertShaderModuleCompiles(module,'optical-path-sampling-'+sampler));
@@ -93,10 +95,18 @@ export async function runOpticalPathSamplingProbe(signal,sampler){
   const e=device.createCommandEncoder(),p=e.beginComputePass();p.setPipeline(pipeline);p.setBindGroup(0,group);p.dispatchWorkgroups(Math.ceil(count/64));p.end();
   e.copyBufferToBuffer(output,0,staging,0,output.size);device.queue.submit([e.finish()]);await wait(staging.mapAsync(GPUMapMode.READ));
   const cases=summarizeOpticalPaths(new Float32Array(staging.getMappedRange().slice(0)));staging.unmap();
+  let opticalInterfaceBudgetProbe;
+  if(opticalInterfaceBudget){
+   const tail=await wait(device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'optical_tail_budget_probe'}}));
+   const g=device.createBindGroup({layout:tail.getBindGroupLayout(0),entries:[{binding:3,resource:{buffer:output}},{binding:5,resource:{buffer:frame}},{binding:32,resource:medium.view}]});
+   const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(tail);pass.setBindGroup(0,g);pass.dispatchWorkgroups(Math.ceil(OPTICAL_TAIL_PROBE.samples/64));pass.end();
+   encoder.copyBufferToBuffer(output,0,staging,0,OPTICAL_TAIL_PROBE.samples*16);device.queue.submit([encoder.finish()]);await wait(staging.mapAsync(GPUMapMode.READ));
+   opticalInterfaceBudgetProbe=summarizeOpticalTail(new Float32Array(staging.getMappedRange().slice(0,OPTICAL_TAIL_PROBE.samples*16)));staging.unmap();
+  }
   const error=await wait(device.popErrorScope());if(error)throw Error(error.message);
   const passed=cases.every(c=>c.passed);
   // Known-bad controls are retained, explicitly labeled, not promoted to passes.
   if((sampler==='stable-camera-random'||sampler==='fixed-pattern')&&!passed)throw Error('Independent optical path mean mismatch '+JSON.stringify(cases));
-  return {passed,sampler,cases,settings:OPTICAL_PATH_PROBE,scope:'conditional optical estimator only; not room geometry, image or performance qualification'};
+  return {passed,sampler,cases,settings:OPTICAL_PATH_PROBE,...(opticalInterfaceBudgetProbe?{opticalInterfaceBudgetProbe}:{}),scope:'conditional optical estimator only; not room geometry, image or performance qualification'};
  }finally{owned.forEach(r=>r.destroy());device.destroy();}
 }

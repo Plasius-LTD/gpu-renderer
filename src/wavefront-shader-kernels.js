@@ -129,7 +129,14 @@ export const WAVEFRONT_INTERSECTION_BODY_WGSL = `  var nearest = 1000000.0;
     hitSpecularColor
   );`;
 
-export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_transition_invalid(ray, hit)) {
+export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (!path_budget_state_valid(ray)) {
+    fail_path_node(ray);
+    pathNodes[ray.parentRayId].reserved = 8u;
+    atomicAdd(&counters.termination.invalidSampleCount, 1u);
+    atomicAdd(&counters.terminatedCount, 1u);
+    return;
+  }
+  if (hit.hitType == 5u || medium_transition_invalid(ray, hit)) {
     fail_path_node(ray);
     pathNodes[ray.parentRayId].reserved = (hit.primitiveId << 4u) | max(u32(hit.pad2), medium_transition_failure(ray, hit));
     // Rejected nodes cannot resolve radiance; retain the optical failure ray.
@@ -231,7 +238,7 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
     record_path_direct(ray, weightedDirectLight);
   }
 
-  if (ray.bounce + 1u >= config.maxDepth) {
+  if (path_budget_exhausted(ray, hit)) {
     if (rough_dielectric_active(hit)) {
       terminate_optical_path(ray, TERMINAL_SOURCE_KIND_MAX_DEPTH_STRICT);
       return;
@@ -394,7 +401,7 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
     ray.sampleId,
     ray.bounce + 1u,
     nextMediumRefId,
-    scatter.flags,
+    continuation_budget_flags(ray, hit, scatter.flags),
     nextMediumStackDepth,
     vec4<f32>(
       offset_hit_origin(hit, scatter.direction.xyz),

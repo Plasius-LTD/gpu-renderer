@@ -47,3 +47,17 @@ test('qualification preserves the failed capture identity and root rejection ins
  assert.equal(calls,1);assert.equal(report.status,'failed');assert.match(report.failures[0],/primary-ray-count-mismatch:163840\/524288/);
  assert.deepEqual(report.failedLane,{resolution:'1080p',glass:'empty',focus:'glass',captureId:'retained-capture',captureFailures:failed.failures});
 });
+test('optical qualification preserves all six lanes and requires the actual allowance and GPU proof',async()=>{
+ const settings=roomQualificationSettingsFromSearch('?qualificationOrder=4k-first&opticalInterfaces=64');
+ const plan=roomQualificationPlan(settings);assert.equal(plan.length,6);
+ assert(plan.every(l=>l.controls['optical-interface-budget']==='on'&&l.controls['optical-interface-limit']==='64'&&l.bounces===20));
+ const qualified=lane=>{const r=receipt(lane);r.transportFlags['renderer.transport.opticalInterfaceBudget.enabled']=true;
+  r.admission={maximumPathEvents:84,opticalInterfaceBudget:{enabled:true,maximumInterfaces:64,additionalPathBytes:67108864,maximumAdditionalBytes:134217728}};
+  r.frame.maximumPathEvents=84;r.opticalPathSamplingProbe.opticalInterfaceBudgetProbe={passed:true};return r;};
+ let i=0;assert.equal((await runRoomQualification({settings,configure:()=>{},capture:()=>qualified(plan[i++])})).status,'captures-complete-image-review-pending');
+ for(const mutate of [r=>r.admission.maximumPathEvents=20,r=>r.frame.maximumPathEvents=20,r=>r.admission.opticalInterfaceBudget.maximumInterfaces=32,r=>r.admission.opticalInterfaceBudget.additionalPathBytes=0,r=>r.admission.opticalInterfaceBudget.maximumAdditionalBytes=1,r=>delete r.opticalPathSamplingProbe.opticalInterfaceBudgetProbe,r=>r.transportFlags['renderer.transport.opticalInterfaceBudget.enabled']=false]){
+  const r=qualified(plan[0]);mutate(r);assert.equal((await runRoomQualification({settings,configure:()=>{},capture:()=>r})).status,'failed');
+ }
+ for(const opticalInterfaceBudget of [{enabled:true,maximumInterfaces:65},{enabled:true,maximumInterfaces:0},{enabled:1,maximumInterfaces:64}])assert.throws(()=>roomQualificationPlan({opticalInterfaceBudget}),/Invalid/);
+ const r=qualified(plan[0]);assert.equal((await runRoomQualification({settings:{resolutions:['4k']},configure:()=>{},capture:()=>r})).status,'failed');
+});
