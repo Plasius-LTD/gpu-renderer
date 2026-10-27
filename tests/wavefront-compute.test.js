@@ -1251,7 +1251,8 @@ test("wavefront compute uses physical continuation throughput with strict physic
   assert.match(source, /TRANSPORT_EXPERIMENT_DEFER_LOW_SPP_RUSSIAN_ROULETTE/);
   assert.match(source, /let rouletteStartBounce = select\(/);
   assert.match(source, /strict_physical_low_spp_lighting_enabled\(\) && ray\.bounce >= rouletteStartBounce/);
-  assert.match(source, /let survivalProbability = clamp\(max\(max_component\(continuationThroughput\), max_component\(secondaryThroughput\)\), 0\.05, 0\.95\);/);
+  assert.match(source, /let survivalProbability = continuation_survival_probability\(ray, hit, continuationThroughput, secondaryThroughput, transmissionBranch\);/);
+  assert.match(source, /return clamp\(max\(max_component\(continuation\), max_component\(secondary\)\), 0\.05, 0\.95\);/);
   assert.match(source, /SAMPLE_DIM_RUSSIAN_ROULETTE/);
   assert.match(source, /continuationThroughput = continuationThroughput \/ survivalProbability;/);
   assert.match(

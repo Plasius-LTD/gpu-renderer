@@ -3,6 +3,7 @@ import {encodeLinearImageChunks} from '/lighting/demo/eames-environments/linear-
 import {createPairedProbeRunner} from './adaptive-paired-runner.js';
 import {hashBytes} from './original-eames-scene.js';
 import {opticalSelectionsFromSearch} from './optical-selection.js';
+import {runOpticalPathSamplingProbe} from './optical-path-sampling-probe.js';
 import {OPTICAL_ISOLATION as c,createOpticalIsolationScene,opticalIsolationPlan,opticalIsolationBudgets,opticalIsolationDepth,validateOpticalFurnace} from './optical-lighting-isolation.js';
 const el=id=>document.getElementById(id);
 el('run').addEventListener('click',async()=>{
@@ -18,6 +19,7 @@ el('run').addEventListener('click',async()=>{
   const response=await fetch('/__provenance');if(!response.ok)throw Error('Missing provenance');report.provenance=await response.json();
   const receipt={scene:{camera:c.camera,floorY:c.floorY,glassWater:{settings:{...GLASS_WATER_DEFAULTS,mode:'filled',closeup:true,supportClearance:.0001}}}};
   report.settings={...c,depth};report.input=receipt;
+  report.opticalPathSamplingProbe=await runOpticalPathSamplingProbe(new AbortController().signal,'fixed-pattern');
   for(const lane of opticalIsolationPlan()){
    el('status').textContent='Preparing '+lane.name;
    const composed=createOpticalIsolationScene(withRoomGlass,receipt,lane,{depth}),canvas=el('canvas');canvas.width=c.width;canvas.height=c.height;

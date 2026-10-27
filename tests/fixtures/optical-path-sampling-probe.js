@@ -40,7 +40,8 @@ export const OPTICAL_PATH_PROBE_WGSL=`
   let reflection=scatter.lobeKind==SCATTER_LOBE_DELTA_REFLECTION;
   var eventWeight=select(dielectric_transmission_weight(ray,hit).x,dielectric_reflection_weight(ray,hit).x,reflection)/scatter.pdf;
   if(bounce>=2u){
-   let survival=clamp(eventWeight,0.05,0.95);
+   ray.throughput=vec4<f32>(vec3<f32>(weight),1);
+   let survival=continuation_survival_probability(ray,hit,vec3<f32>(eventWeight),vec3<f32>(0),!reflection);
    if(sample_dimension_1d(ray.sourcePixelId,ray.sampleId,bounce,config.frameIndex,SAMPLE_DIM_RUSSIAN_ROULETTE)>survival){terminated=1u;break;}
    eventWeight/=survival;
   }

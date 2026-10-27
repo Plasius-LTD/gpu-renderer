@@ -16,6 +16,7 @@ test('optical furnace journals reuse the validated canonical selection path befo
  assert.match(source,/opticalSelectionsFromSearch\(location.search/);
  assert(source.indexOf('opticalSelectionsFromSearch(location.search')<source.indexOf('createPairedProbeRunner(composed.scene'));
  assert.match(source,/diagnostics:true,opticalJournal/);
+ assert.match(source,/report.opticalPathSamplingProbe=await runOpticalPathSamplingProbe/);
  assert.doesNotMatch(source,/replayOpticalFailure|scatter_dielectric|sample_dimension/);
 });
 

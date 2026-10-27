@@ -2,6 +2,25 @@
 
 ## Optical tails and roulette — active 27 October follow-up
 
+Roulette correction acceptance (before runtime implementation): the retained
+eight original samples at empty-furnace pixel90374 are all short (<=6 records),
+four terminate at bounce2 on re-entering glass, and the surviving exits amplify
+the .75 source to ~1.74. All four journalled HDR hashes equal their previous
+uninstrumented controls. This demonstrates unnecessary variance from using a
+local eta-squared entry weight for roulette, not proof of an asymptotic bias.
+For bounded+nested smooth optical events only, choose survival from cumulative
+prospective throughput with the reversible radiance-mode IOR factor removed.
+With the supported air-initialized camera contract, that factor is the outgoing
+occupied medium's IOR squared. Allow survival1 for importance>=1; retain the
+.05 lower bound and exact reciprocal-survival compensation. Do not change the
+BSDF, Fresnel branch probability, PDF, sample dimensions, event horizon or ABI.
+Legacy/split/non-optical/rough behavior stays pinned. Add canonical numerical
+tests for entry, exit, TIR, absorption, nested priority, flag-off and compensation,
+and execute this same helper in the assembled physical slab probe. Retain20/32
+furnace controls independently; a finite-depth loss is not fixed by roulette.
+Reference: PBRT4 section13.4, cumulative beta*etaScale roulette; the production
+policy here is deliberately restricted to the tracked smooth nested contract.
+
 The user authorizes tracing/correcting the residual, adding regressions and
 automatically rerunning native1080p/4K; adaptive work remains paused. Task234
 retains owner zephod111r / In progress, Story2291 / Feature2114 and default-off

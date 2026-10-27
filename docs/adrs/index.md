@@ -58,3 +58,4 @@
 - [ADR 0060: Optical interior hit rounding](adr-0060-optical-interior-hit-rounding.md)
 - [ADR 0063: Optical geometry, partial transmission and sampling contracts](adr-0063-optical-contract-corrections.md)
 - [ADR 0064: Previous-vertex environment MIS density](adr-0064-previous-vertex-environment-mis.md)
+- [ADR 0065: IOR-compensated cumulative optical roulette](adr-0065-optical-roulette.md)

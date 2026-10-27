@@ -20,7 +20,8 @@ function slabSamples(sampler){
    const r=.5*(((eta*cosine-ct)/(eta*cosine+ct))**2+((cosine-eta*ct)/(cosine+eta*ct))**2),t=(1-r)*eta*eta,probability=r/(r+t);
    const reflection=(sampler==='rejected-fixed-pattern'?(rejectedFixedPatternWords(sample,b,D.transmissionSelector)[0]>>>8)/16777216:draw(pixel,sample,b,7,D.transmissionSelector,sampler))<probability;
    let w=reflection?r/probability:t/(1-probability);
-   if(b>=2){const survival=Math.max(.05,Math.min(.95,w));if((sampler==='rejected-fixed-pattern'?(rejectedFixedPatternWords(sample,b,D.russianRoulette)[0]>>>8)/16777216:draw(pixel,sample,b,7,D.russianRoulette,sampler))>survival){roulette=1;break;}w/=survival;}
+   if(b>=2){const nextIor=reflection?P.ior:1;
+    const survival=Math.max(.05,Math.min(1,weight*w*nextIor**2));if((sampler==='rejected-fixed-pattern'?(rejectedFixedPatternWords(sample,b,D.russianRoulette)[0]>>>8)/16777216:draw(pixel,sample,b,7,D.russianRoulette,sampler))>survival){roulette=1;break;}w/=survival;}
    weight*=w;if((b===0&&reflection)||(b>0&&!reflection)){result=weight;escaped=1;break;}
   }
   out.set([result,escaped,roulette,1-escaped-roulette],offset);offset+=4;

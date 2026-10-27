@@ -48,6 +48,22 @@ fn dielectric_ratio(ray: RayRecord, hit: HitRecord) -> f32 {
   }
   return dielectric_eta(hit);
 }
+fn continuation_survival_probability(ray: RayRecord, hit: HitRecord,
+    continuation: vec3<f32>, secondary: vec3<f32>, transmission: bool) -> f32 {
+  if (bounded_dielectric_enabled() && nested_media_enabled() &&
+      dielectric_event(hit) && !rough_dielectric_active(hit)) {
+    // Air-initialized camera paths: the product of radiance eta_i^2/eta_t^2
+    // telescopes to 1/eta_out^2. Remove that reversible change ONLY for the
+    // roulette decision, not from transported radiance. Local entry weights
+    // otherwise kill useful paths immediately before their compensating exit.
+    let outgoingMedium = select(medium_stack_current_id(ray),
+      transmitted_medium_ref_id(ray, hit), transmission);
+    let eta = medium_optics(outgoingMedium).x;
+    let importance = ray.throughput.xyz * continuation * eta * eta;
+    return clamp(max_component(importance), 0.05, 1.0);
+  }
+  return clamp(max(max_component(continuation), max_component(secondary)), 0.05, 0.95);
+}
 fn optical_shading_normal(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   let normal = surface_shading_normal(hit);
   if (!nested_media_enabled() || !medium_valid(hit.mediumRefId)) { return normal; }

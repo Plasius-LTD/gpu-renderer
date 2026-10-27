@@ -26,5 +26,5 @@ test("MIS eligibility remains pinned alongside the Task 232 opt-in coating corre
     .replace(/(fn terminal_surface_environment_source\([\s\S]*?let surfaceColor = )clamp\(hit.color.xyz,/, '$1clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35),')
     .replace('let surfaceColor = max(hit.color.xyz, vec3<f32>(0.0));','let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);');
   assert.equal(createHash("sha256").update(prior).digest("hex"),
-    "0823933ed00d118c18af313fec594b5f25d97c12f49f88436e9e2ead99adee76"); // Task 234 / environment MIS correction; numerical and physical estimator tests independently verify the changed contract.
+    "a150eb927643f94ae4a3fd1c21a171f413e78429ac932690df24412fc04ffb61"); // Includes Task234's separately tested optical-roulette refinement.
 });

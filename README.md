@@ -1,5 +1,13 @@
 # @plasius/gpu-renderer
 
+Smooth bounded+nested optical roulette now uses cumulative prospective throughput
+with outgoing IOR compensation, retaining the radiance weights themselves.
+It no longer treats a reversible glass-entry radiance decrease as absorption.
+The supported camera starts in air; no camera-inside initialization, extra ray
+state, uncounted interactions, or longer depth limit is introduced. Other
+roulette paths are unchanged. See [ADR 0065](docs/adrs/adr-0065-optical-roulette.md).
+Physical image qualification is pending; adaptive work remains paused.
+
 Optical furnace attribution accepts the same bounded `opticalJournal=u,v,s;...`
 selection as the room fixture. It replays canonical successful samples, retains
 geometry/throughput and post-surface termination records, and does not commit

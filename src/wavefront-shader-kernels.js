@@ -339,7 +339,7 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (hit.hitType == 5u || medium_tr
       config.samplesPerPixel <= 8u
   );
   if (strict_physical_low_spp_lighting_enabled() && ray.bounce >= rouletteStartBounce) {
-    let survivalProbability = clamp(max(max_component(continuationThroughput), max_component(secondaryThroughput)), 0.05, 0.95);
+    let survivalProbability = continuation_survival_probability(ray, hit, continuationThroughput, secondaryThroughput, transmissionBranch);
     let roulette = sample_dimension_1d(
       ray.sourcePixelId,
       ray.sampleId,
