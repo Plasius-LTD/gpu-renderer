@@ -22,6 +22,18 @@ All notable changes to this project will be documented in this file.
   HDR hashes identical between ordinary limits. Preserve failed off-controls and
   original tail records; native1080p/4K recapture/image review remains pending.
 
+- Add an all-pixel RGB furnace gate without replacing original central gates:
+  reproduce severe filled-glass edge loss beyond the ROI, retain3 new1080p
+  captures and cancel the larger matrix on the known failure. Record canonical
+  optical64 exhaustion and independent128/1024-event reference evidence; validate
+  actual reference API limits/depths. Adaptive remains paused (#234).
+
+- Add a default-off original-ray optical-tail diagnostic with an explicit bounded
+  allowance, canonical-prefix checks and private scratch; factor its linear
+  chain helper without assembling it into production yet. Add numerical struct-
+  assignment interpreter litmus coverage; physical shaders are not rewritten to
+  accommodate the interpreter. No renderer-memory or performance gain is claimed.
+
 - Correct avoidable smooth bounded+nested optical roulette variance by using
   cumulative prospective throughput with outgoing-medium IOR compensation;
   preserve radiance/BSDF weights, event horizons, sampling dimensions and ordinary/

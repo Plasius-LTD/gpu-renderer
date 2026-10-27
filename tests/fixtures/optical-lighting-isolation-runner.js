@@ -5,7 +5,8 @@ import {hashBytes} from './original-eames-scene.js';
 import {opticalSelectionsFromSearch} from './optical-selection.js';
 import {runOpticalPathSamplingProbe} from './optical-path-sampling-probe.js';
 import {opticalBudgetFromSearch} from './optical-budget-settings.js';
-import {OPTICAL_ISOLATION as c,createOpticalIsolationScene,opticalIsolationPlan,opticalIsolationBudgets,opticalIsolationDepth,validateOpticalFurnace} from './optical-lighting-isolation.js';
+import {opticalTraceEventsFromSearch} from './optical-chain-trace.js';
+import {OPTICAL_ISOLATION as c,createOpticalIsolationScene,opticalIsolationPlan,opticalIsolationBudgets,opticalIsolationDepth,validateOpticalFurnace,validateOpticalFurnacePixels} from './optical-lighting-isolation.js';
 const el=id=>document.getElementById(id);
 el('run').addEventListener('click',async()=>{
  el('run').disabled=true;const report={status:'running',scope:'optical-attribution-not-scene-or-performance-qualification',lanes:[],failures:[]};
@@ -18,22 +19,24 @@ el('run').addEventListener('click',async()=>{
   const depth=opticalIsolationDepth(location.search);
   const opticalInterfaceBudget=opticalBudgetFromSearch(location.search);
   const opticalJournal=opticalSelectionsFromSearch(location.search,{width:c.width,height:c.height,maximumSpp:c.spp});
+  const opticalTraceEvents=opticalTraceEventsFromSearch(location.search);
+  if(opticalTraceEvents&&!opticalJournal.length)throw Error('Optical tail trace requires selected original samples');
   const response=await fetch('/__provenance');if(!response.ok)throw Error('Missing provenance');report.provenance=await response.json();
   const receipt={scene:{camera:c.camera,floorY:c.floorY,glassWater:{settings:{...GLASS_WATER_DEFAULTS,mode:'filled',closeup:true,supportClearance:.0001}}}};
-  report.settings={...c,depth,opticalInterfaceBudget};report.input=receipt;
+  report.settings={...c,depth,opticalInterfaceBudget,opticalTraceEvents,opticalTraceLane:'furnace-filled'};report.input=receipt;
   report.opticalPathSamplingProbe=await runOpticalPathSamplingProbe(new AbortController().signal,'fixed-pattern',{opticalInterfaceBudget:opticalInterfaceBudget.enabled});
   for(const lane of opticalIsolationPlan()){
    el('status').textContent='Preparing '+lane.name;
    const composed=createOpticalIsolationScene(withRoomGlass,receipt,lane,{depth}),canvas=el('canvas');canvas.width=c.width;canvas.height=c.height;
    const budgets=opticalIsolationBudgets(),abort=new AbortController();
    runner=await createPairedProbeRunner(composed.scene,abort.signal,{opticalInterfaceBudget,sampler:'fixed-pattern',boundedDielectricBranching:true,nestedMediaRefraction:true,native:{width:c.width,height:c.height,maximumSpp:c.spp,canvas,budgets}});
-   const frame=await runner.run('uniform',{sampler:'fixed-pattern',seed:7,diagnostics:true,opticalJournal,onProgress:p=>{el('status').textContent=lane.name+` · ${p.completedTiles}/${p.totalTiles} tiles`;}});
+   const frame=await runner.run('uniform',{sampler:'fixed-pattern',seed:7,diagnostics:true,opticalJournal,opticalTraceEvents:lane.name==='furnace-filled'?opticalTraceEvents:0,onProgress:p=>{el('status').textContent=lane.name+` · ${p.completedTiles}/${p.totalTiles} tiles`;}});
    const image=frame.image;delete frame.image;
    const retained={lane,settings:report.settings,provenance:report.provenance,scene:composed.evidence,frame,adapter:runner.adapter,hdrSha256:await hashBytes(image.buffer),chunks:[]};
    for await(const chunk of encodeLinearImageChunks(image))retained.chunks.push(await save(lane.name+'-hdr-'+retained.chunks.length,marker.toDataURL(),{chunk,provenance:report.provenance}));
    const png=canvas.toDataURL();
    runner.destroy();runner=null;retained.cleanupPassed=true;
-   try{if(lane.furnace)retained.furnace=validateOpticalFurnace({...frame,image},c.spp);}catch(error){retained.failure=error.message;}
+   try{if(lane.furnace){retained.furnace=validateOpticalFurnace({...frame,image},c.spp);retained.pixelFurnace=validateOpticalFurnacePixels({...frame,image},c.spp);}}catch(error){retained.failure=error.message;}
    retained.artifact=await save(lane.name,png,retained);report.lanes.push(retained);
    el('preview').src=png;el('preview').hidden=false;
    // Count/device/retention failures abort; a retained image-gate failure may

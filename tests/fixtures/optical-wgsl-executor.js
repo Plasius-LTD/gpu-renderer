@@ -10,6 +10,18 @@ const engine=await import(pathToFileURL(require.resolve('wgsl_reflect/wgsl_refle
 // physical preflight still compiles the original assembled source unchanged.
 export const OpticalWgslParser=engine.WgslParser;
 export class OpticalWgslExec extends engine.WgslExec {
+ _assign(node,context){
+  // Upstream struct assignment copies the complete backing buffer rather than
+  // the RHS member extent. Snapshot only RHS struct values, as WGSL requires;
+  // never clone an lvalue or modify the shader executed on a physical device.
+  const evaluate=this.evalExpression;
+  this.evalExpression=(expression,scope)=>{
+   const data=evaluate.call(this,expression,scope);
+   return expression===node.value&&data instanceof engine.TypedData&&data.typeInfo.isStruct
+    &&(data.offset!==0||data.buffer.byteLength!==data.typeInfo.size)?data.clone():data;
+  };
+  try{return super._assign(node,context);}finally{this.evalExpression=evaluate;}
+ }
  _makeCwiseData(values,type){
   if(type.format?.name==='u32')return new engine.VectorData(new Uint32Array(values),type);
   return super._makeCwiseData(values,type);

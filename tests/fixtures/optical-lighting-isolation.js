@@ -1,6 +1,6 @@
 // Development-only optical attribution. Reuse package geometry and transport;
 // known radiance removes lighting variance, not optical interfaces.
-export const OPTICAL_ISOLATION=Object.freeze({width:512,height:288,spp:256,depth:20,radiance:.75,meanTolerance:.02,rowTolerance:.05,
+export const OPTICAL_ISOLATION=Object.freeze({width:512,height:288,spp:256,depth:20,radiance:.75,meanTolerance:.02,rowTolerance:.05,pixelTolerance:.05,
  region:Object.freeze({x0:.47,x1:.53,y0:.34,y1:.72}),
  camera:Object.freeze({position:Object.freeze([3.176982833805939,-.4139058066460065,.14375083974624536]),target:Object.freeze([2.85,-.6040840244293213,-.1]),up:Object.freeze([0,1,0]),fovYDegrees:52}),floorY:-1.3440840244293213});
 export function opticalIsolationPlan(){return [
@@ -42,4 +42,18 @@ export function validateOpticalFurnace(frame,spp){
  const mean=sum/count,relativeError=Math.abs(mean/c.radiance-1),maxRowError=Math.max(...rows.map(v=>Math.abs(v/c.radiance-1)));
  if(relativeError>c.meanTolerance||maxRowError>c.rowTolerance)throw Error('Optical furnace mismatch '+JSON.stringify({mean,relativeError,maxRowError}));
  return {passed:true,mean,relativeError,maxRowError,region:r,rows,expected:c.radiance,meanTolerance:c.meanTolerance,rowTolerance:c.rowTolerance};
+}
+// Additional version-2 gate; never replace or retroactively relabel the original
+// region gate. A uniform-radiance lossless furnace must not hide edge losses.
+export function validateOpticalFurnacePixels(frame,spp){
+ validateOpticalFurnace(frame,spp); // same exact count/finite HDR contract
+ const c=OPTICAL_ISOLATION;let maximumRgbRelativeError=0,worstPixel=0;
+ for(let i=0;i<frame.image.length;i+=4)for(let k=0;k<3;k++){
+  const error=Math.abs(frame.image[i+k]/c.radiance-1);
+  if(error>maximumRgbRelativeError){maximumRgbRelativeError=error;worstPixel=i/4;}
+ }
+ const result={passed:maximumRgbRelativeError<=c.pixelTolerance,maximumRgbRelativeError,worstPixel,
+  x:worstPixel%frame.width,y:Math.floor(worstPixel/frame.width),expected:c.radiance,pixelTolerance:c.pixelTolerance,scope:'all pixels and RGB channels, not only central rows',gateVersion:2};
+ if(!result.passed)throw Error('Optical furnace pixel mismatch '+JSON.stringify(result));
+ return result;
 }

@@ -1,7 +1,8 @@
 # Separate optical budget — 27 October 2026
 
-Status: **both known-radiance batches pass; new native qualification is running.
-Adaptive performance and publication remain paused.** This is a correctness
+Status: **original central gates pass, but the additional whole-pixel check fails
+at a filled-glass edge. Native4K qualification is stopped; adaptive performance
+and publication remain paused.** This is a correctness
 checkpoint, not a claim that every visible room band should disappear or that
 the renderer has become faster. Task234 remains In progress; PR216 remains draft.
 See the [versioned ledger](optical-interface-budget-2026-10-27.json).
@@ -49,6 +50,28 @@ finite-horizon bias or arbitrary-scene convergence.
 
 ## Original path proof and canonical regression
 
+### Additional whole-image failure (not hidden by the central ROI)
+
+All-pixel inspection finds75 filled-furnace pixels losing more than20% of the
+expected light. Worst pixel(230,187) returns.0820312947 instead of.75 (89.0625%
+loss), outside the historical central ROI. The new gate requires every RGB
+channel at every pixel to remain within5%, in addition to the unchanged original
+mean/row gates. A requirements-first regression reproduces the ROI omission;
+the read-only verifier now rejects this control with gate version2/exit1. The
+earlier version1 positive reports and raw receipts remain preserved, explicitly
+limited to their original region checks. They are not whole-glass passes.
+
+At this exact edge,6 of8 original samples reach optical64 with zero terminal
+radiance, while2 reflect directly to the emissive pedestal. Independent filled
+references show the same depth trend: at128 events this pixel is.5799517; at1024
+actual events it is.7501887. The1024 reference still has2 pixels losing>5%, so
+it is not a convergence pass. It confirms long tails, not permission to clip or
+invent light. Reference scripts now validate supported API bounds and actual
+applied depths. See the [streaming design](../design/streamed-optical-interface-budget.md)
+before choosing a larger bounded qualification allowance.
+
+### Earlier central-tail correction
+
 The same8 selected original samples at pixel90374 previously terminated with
 `MAX_DEPTH_STRICT` at20 events and zero terminal light. They now reach the
 environment/emissive pedestal after34–64 events, return .75 within4.77e-7, and
@@ -74,7 +97,11 @@ The **new** six-lane run started automatically at16:05UTC on immutable62f23df:
 1080p then4K, empty glass, filled glass and full room, uniform32, ordinary20 plus
 64 optical interfaces. It must retain native PNG/linear HDR, exact counts,84-event
 telemetry, source identity, all physical preflights and cleanup, then pass image
-review. The broad pedestal-reflection region already reproduced independently;
+review. All three1080p lanes completed (199,065,600 camera samples and698,207,900
+physical segments); their integrity/preflights pass. The sequence was deliberately
+cancelled after pending work at4K start once the additional edge failure was
+identified. No new4K lane is complete; cancellation is retained as a failure, not
+silently skipped. The broad pedestal-reflection region already reproduced independently;
 removing physical reflections is not the acceptance criterion.
 
 520 tests pass,96.43% line/83.46% branch coverage; all62 changed executable source

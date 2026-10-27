@@ -19,7 +19,7 @@ export function opticalSelectionsFromSearch(search,settings){
  });
  return validateOpticalSelections(selections,settings);
 }
-export async function selectedOpticalJournals(c,{config,tile,ranges,selections,diagnostics,fused},capture){
+export async function selectedOpticalJournals(c,{config,tile,ranges,selections,diagnostics,fused,traceEvents=0,sampler},capture){
  const chosen=selections.filter(({pixel})=>{const x=pixel%config.width,y=Math.floor(pixel/config.width);
   return x>=tile.x&&x<tile.x+tile.width&&y>=tile.y&&y<tile.y+tile.height;});
  if(!chosen.length)return [];
@@ -33,6 +33,8 @@ export async function selectedOpticalJournals(c,{config,tile,ranges,selections,d
    if(!nodes?.length||nodes.length!==result.records.filter(r=>r.stage==='after-intersection').length||
     nodes.some((n,index)=>n.pixel!==selection.pixel||n.sample!==selection.sample||n.bounce!==index||n.bounce>=pathEventCapacity(config)||(n.flags&3)!==1||
      ![...n.directRadiance,...n.terminalRadiance].every(v=>Number.isFinite(v)&&v>=0))||!nodes.at(-1).terminalKind)throw Error('Missing selected optical surface records');
+   if(traceEvents){const {captureOpticalChainTrace}=await import('./optical-chain-trace.js');
+    result.tailTrace=await captureOpticalChainTrace(c,{config,tile,selection,sampler,maximumInterfaces:traceEvents,original:result});}
    results.push({...result,selection});
   }
  }finally{c.setMode(diagnostics,fused);}

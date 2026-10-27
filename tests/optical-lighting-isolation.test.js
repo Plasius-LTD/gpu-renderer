@@ -59,6 +59,19 @@ test('furnace acceptance rejects biased bands, missing samples and nonfinite evi
  const band=image.slice();for(let y=18;y<23;y++)for(let x=29;x<35;x++)band[(y*width+x)*4]=.1;
  assert.throws(()=>validateOpticalFurnace({...f,image:band},256),/furnace/);
 });
+test('a dark glass edge outside the historical row ROI cannot pass whole-pixel qualification',async()=>{
+ const {validateOpticalFurnacePixels}=await import('./fixtures/optical-lighting-isolation.js');
+ const width=64,height=36,image=new Float32Array(width*height*4);
+ for(let i=0;i<image.length;i+=4)image.set([.75,.75,.75,1],i);
+ const f={image,width,height,actualSamples:width*height*256,validationErrors:0};
+ assert.equal(validateOpticalFurnacePixels(f,256).passed,true);
+ const edge=image.slice();edge.set([.082,.082,.082,1],(23*width+28)*4);
+ assert.equal(validateOpticalFurnace({...f,image:edge},256).passed,true,'preserve the historical ROI gate, do not mislabel it as whole-glass proof');
+ assert.throws(()=>validateOpticalFurnacePixels({...f,image:edge},256),/pixel/);
+ const color=image.slice();color.set([.3,.88309,.75,1],0);
+ assert.throws(()=>validateOpticalFurnacePixels({...f,image:color},256),/pixel/,'RGB errors must not cancel in luminance');
+ assert.throws(()=>validateOpticalFurnacePixels({...f,actualSamples:0},256),/Invalid/);
+});
 
 test('room source isolation zeros only the selected source and retains daylight camera direction',()=>{
  const original=roomLightingRequest(),sky=roomLightingRequest({style:'sky-only'}),sun=roomLightingRequest({style:'sun-only'});

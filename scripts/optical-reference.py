@@ -24,7 +24,9 @@ parser.add_argument("--radiance", type=float, default=.75)
 parser.add_argument("--pedestal", type=float, default=.35)
 parser.add_argument("--mode", choices=["filled", "empty", "index-one"], default="filled")
 args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
-if not (128 <= args.width <= 3840 and 128 <= args.height <= 2160 and 1 <= args.spp <= 4096 and 1 <= args.depth <= 128):
+depth_fields = ["max_bounces", "transmission_bounces", "glossy_bounces", "transparent_max_bounces", "min_light_bounces"]
+depth_limit = min(bpy.context.scene.cycles.bl_rna.properties[field].hard_max for field in depth_fields)
+if not (128 <= args.width <= 3840 and 128 <= args.height <= 2160 and 1 <= args.spp <= 4096 and 1 <= args.depth <= depth_limit):
     raise ValueError("Invalid reference settings")
 if not all(math.isfinite(v) and 0 <= v <= 100 for v in [args.radiance, args.pedestal]):
     raise ValueError("Invalid reference radiance")
@@ -43,8 +45,11 @@ scene.cycles.samples = args.spp
 scene.cycles.use_denoising = False
 scene.cycles.use_adaptive_sampling = False
 scene.cycles.seed = 7
-for field in ["max_bounces", "transmission_bounces", "glossy_bounces", "transparent_max_bounces", "min_light_bounces"]:
+for field in depth_fields:
     setattr(scene.cycles, field, args.depth)
+actual_depth_policy = {field: getattr(scene.cycles, field) for field in depth_fields}
+if any(value != args.depth for value in actual_depth_policy.values()):
+    raise RuntimeError("Independent reference depth policy was clamped")
 scene.render.resolution_x = args.width
 scene.render.resolution_y = args.height
 scene.render.resolution_percentage = 100
@@ -126,7 +131,7 @@ scene.render.image_settings.color_depth = "8"
 bpy.data.images["Render Result"].save_render(os.path.join(args.output_dir,"reference.png"),scene=scene)
 with open(__file__,"rb") as stream:
     script_sha256 = hashlib.sha256(stream.read()).hexdigest()
-metadata = {"status":"rendered-attribution-not-full-scene-qualified", "settings":vars(args), "blender":bpy.app.version_string,
+metadata = {"status":"rendered-attribution-not-full-scene-qualified", "settings":vars(args), "actualDepthPolicy":actual_depth_policy, "supportedDepthLimit":depth_limit, "blender":bpy.app.version_string,
             "engine":"CYCLES", "device":"CPU", "camera":data["camera"], "inputSha256":hashlib.sha256(source).hexdigest(),
             "linearSha256":hashlib.sha256(raw).hexdigest(), "scriptSha256":script_sha256, "format":"rgba-f32-le-top-left", "geometrySources":data["nativeSources"],
             "differences":["explicit shared interfaces instead of priority overlaps", "independent random sampling and roulette", "different bounce-limit semantics", "no room, floor or checker geometry", "PNG uses independent display transform"]}

@@ -10,6 +10,7 @@ import { readWavefrontTerminationMetrics } from '/src/wavefront-readbacks.js';
 import { retainNativeFailure,readFailedPathNodes } from './native-failure-evidence.js';
 import {validateOpticalSelections,selectedOpticalJournals} from './optical-selection.js';
 import {pathEventCapacity} from '../../src/wavefront-optical-interface-budget.js';
+import {MAX_OPTICAL_TRACE_INTERFACES} from './optical-chain-trace.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 export async function createNativeAdaptiveRunner(c) {
@@ -45,13 +46,14 @@ export async function createNativeAdaptiveRunner(c) {
     sceneSnapshot:{triangleCount:renderer.config.triangleCount,bvhNodeCount:renderer.config.bvhNodeCount,
       displayQuality:renderer.config.displayQuality,accelerationBuildMode:renderer.config.accelerationBuildMode,
       maxDepth:renderer.config.maxDepth,maximumPathEvents:renderer.config.maximumPathEvents,opticalInterfaceBudget:renderer.config.opticalInterfaceBudget,samplesPerPixel:renderer.config.samplesPerPixel,camera:renderer.config.camera},
-    async run(mode,{diagnostics=false,profile=false,onProgress,fused=false,seed=7,sampler="legacy",opticalJournal=[]}={}){
+    async run(mode,{diagnostics=false,profile=false,onProgress,fused=false,seed=7,sampler="legacy",opticalJournal=[],opticalTraceEvents=0}={}){
       active();check(["fixed","uniform","radial"].includes(mode),"Invalid native mode");
       check(!c.guidePostprocess||(mode!=="fixed"&&!fused),'Guided denoise requires adaptive staged transport');
       check(["legacy","owen-sobol","independent-random","fixed-pattern","stable-pattern","stable-camera-random"].includes(sampler),"Invalid native sampler");
       check(sampler===(c.sampler??"legacy"),"Sampler source must be selected at renderer creation");
       check(Number.isSafeInteger(seed)&&seed>=0&&seed<=0xffffffff,"Invalid frame seed");
       const selections=validateOpticalSelections(opticalJournal,{width,height,maximumSpp:maximum}),opticalJournals=[];
+      check(Number.isInteger(opticalTraceEvents)&&opticalTraceEvents>=0&&opticalTraceEvents<=MAX_OPTICAL_TRACE_INTERFACES&&(!opticalTraceEvents||selections.length>0),'Invalid optical tail trace request');
       check(!selections.length||(mode==='uniform'&&diagnostics&&!fused&&!renderer.config.roughBounceSplitting?.enabled&&(renderer.config.transportExperimentFlags&16384)),"Selected optical journal requires uniform staged bounded transport diagnostics");
       const adaptive=mode!=="fixed",selected=mode==="radial"?plan:uniformPlan;
       c.setMode(diagnostics,adaptive&&fused);
@@ -128,10 +130,11 @@ export async function createNativeAdaptiveRunner(c) {
           });
           readbackMs+=performance.now()-readStarted;
         }
-        if(selections.length)opticalJournals.push(...await selectedOpticalJournals(c,{config,tile,ranges,selections,diagnostics,fused}));
+        if(selections.length)opticalJournals.push(...await selectedOpticalJournals(c,{config,tile,ranges,selections,diagnostics,fused,traceEvents:opticalTraceEvents,sampler}));
         tiles.push(trace);onProgress?.({mode,diagnostics,completedTiles:tileIndex+1,totalTiles:plan.length});
         }catch(error){
           throw await retainNativeFailure(error,trace,async()=>{const details={
+            ...(error.opticalTailTrace?{opticalTailTrace:error.opticalTailTrace}:{}),
             termination:await readWavefrontTerminationMetrics({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},counterBuffer:counters,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}),
             adaptiveControlWords:Array.from(new Uint32Array(await read(b.primaryControl,16))),
             failedNodes:await readFailedPathNodes(device,traceEntries.find(e=>e.binding===22).resource.buffer,wait),
@@ -156,6 +159,7 @@ export async function createNativeAdaptiveRunner(c) {
       check(opticalJournals.length===selections.length,'Missing selected optical journals');
       return {mode,sampler,maximumSpp:maximum,roughBounceSplitting:renderer.config.roughBounceSplitting,seed,fused:adaptive&&fused,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
         maximumPathEvents:config.maximumPathEvents??config.maxDepth,opticalInterfaceBudget:config.opticalInterfaceBudget,
+        opticalTraceEvents,
         ...(selections.length?{opticalJournals,timingScope:'includes selected-sample diagnostic replays; not performance'}:{}),
         diagnosticReadbackMs:diagnostics?readbackMs:null,diagnosticRenderIntervalsMs:diagnostics?elapsed-readbackMs:null,
         actualSamples:diagnostics?actualSamples:null,actualHistogram:diagnostics?actualHistogram:null,tiles,

@@ -4,7 +4,7 @@ import path from 'node:path';
 import {gunzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
-import {OPTICAL_ISOLATION as c,opticalIsolationPlan,validateOpticalFurnace} from '../tests/fixtures/optical-lighting-isolation.js';
+import {OPTICAL_ISOLATION as c,opticalIsolationPlan,validateOpticalFurnace,validateOpticalFurnacePixels} from '../tests/fixtures/optical-lighting-isolation.js';
 import {validateOpticalBudgetEvidence} from '../tests/fixtures/optical-budget-evidence.js';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 export function readOpticalLane(root,summary,lane){
@@ -32,9 +32,10 @@ export function readOpticalLane(root,summary,lane){
  if(png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||png.readUInt32BE(16)!==c.width||png.readUInt32BE(20)!==c.height)throw Error('Optical PNG extent failure');
  if(JSON.stringify(r.settings)!==JSON.stringify(summary.settings))throw Error('Optical lane settings changed');
  const opticalBudget=validateOpticalBudgetEvidence({settings:summary.settings,frame:r.frame,probe:summary.opticalPathSamplingProbe});
- let furnace,error;
+ let furnace,pixelFurnace,error;
  if(r.lane.furnace)try{furnace=validateOpticalFurnace({...r.frame,image},c.spp);}catch(e){error=e.message;}
- return {name:r.lane.name,receiptSha256:hash(bytes),pngSha256:hash(png),hdrSha256:r.hdrSha256,actualSamples:r.frame.actualSamples,opticalBudget,furnace,error,image};
+ if(r.lane.furnace&&!error)try{pixelFurnace=validateOpticalFurnacePixels({...r.frame,image},c.spp);}catch(e){error=e.message;}
+ return {name:r.lane.name,receiptSha256:hash(bytes),pngSha256:hash(png),hdrSha256:r.hdrSha256,actualSamples:r.frame.actualSamples,opticalBudget,furnace,pixelFurnace,error,image};
 }
 export function compareOpticalRows(a,b,width=c.width,height=c.height){
  if(a.length!==width*height*4||b.length!==a.length)throw Error('Optical reference extent mismatch');
@@ -60,7 +61,7 @@ export function verifyOpticalBatch(root,summaryFile,referenceDirectory){
  const reference=new Float32Array(referenceBytes.buffer,referenceBytes.byteOffset,referenceBytes.length/4);
  for(let i=0;i<reference.length;i++)if(!Number.isFinite(reference[i])||reference[i]<0||(i%4===3&&reference[i]!==1))throw Error('Invalid independent reference pixel');
  const comparison=compareOpticalRows(lanes.at(-1).image,reference);
- return {summarySha256:hash(bytes),sources:summary.provenance.sources,status:summary.status,failures:summary.failures,lanes:lanes.map(({image,...l})=>l),comparison,reference:referenceReceipt,
+ return {imageGateVersion:2,summarySha256:hash(bytes),sources:summary.provenance.sources,status:summary.status,failures:summary.failures,lanes:lanes.map(({image,...l})=>l),comparison,reference:referenceReceipt,
   qualification:'attribution only; any furnace failure keeps image/adaptive gates closed'};
 }
 export function opticalEvidenceExitCode(report){return report?.status==='controls-complete-image-review-pending'&&report.lanes?.length===4&&report.lanes.every(l=>!l.error)&&report.failures?.length===0?0:1;}

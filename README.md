@@ -34,10 +34,22 @@ The [optical-tail follow-up](docs/evidence/optical-roulette-2026-10-27.md) retai
 the corrections and failed empty/index-one furnace gates, with actual TIR tails
 reaching strict depth termination. All six before-budget native captures pass
 integrity checks; that does not reverse the failed furnace/image gates. New
-optical-budget qualification is in progress; adaptive work remains paused.
+optical-budget qualification is blocked by a reproduced filled-glass edge loss;
+adaptive work remains paused.
 The [optical-budget evidence](docs/evidence/optical-interface-budget-2026-10-27.md)
-records passing frozen furnace gates at both ordinary20/32 plus optical64,
-original tail identity/escape proof, added memory and pending native image review.
+records passing original central gates at ordinary20/32 plus optical64, but the
+additional all-pixel RGB gate fails. Three new1080p captures are retained;4K was
+stopped on that failure. Original tails, independent long-depth references and
+the bounded GPU streaming design are preserved; no band-removal claim is made.
+
+Diagnostic-only long tails: the furnace URL also accepts
+`opticalTraceEvents=4096` with an explicit `opticalJournal=u,v,s;...` selection
+(at most eight original samples). It traces only the filled lane, reusing the
+canonical camera/collision/optical functions and checking the saved prefix
+exactly. Its bounded private scratch does not commit image radiance/counts or
+change production interface admission. Default is off. The chain helper is not
+yet assembled into production transport; renderer memory/performance improvements
+are not claimed from this diagnostic.
 
 Optical furnace attribution accepts the same bounded `opticalJournal=u,v,s;...`
 selection as the room fixture. It replays canonical successful samples, retains
