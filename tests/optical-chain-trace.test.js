@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {analyzeWgslSource} from '@plasius/gpu-shader/node';
-import {opticalTraceEventsFromSearch,opticalChainTraceShader,decodeOpticalChainTrace,captureOpticalChainTrace,packOpticalTracePrimary} from './fixtures/optical-chain-trace.js';
+import {opticalTraceEventsFromSearch,opticalChainTraceShader,decodeOpticalChainTrace,captureOpticalChainTrace,packOpticalTracePrimary,assertCanonicalOpticalPrefix} from './fixtures/optical-chain-trace.js';
 test('long-tail diagnostics default off, validate before GPU access and reuse canonical transport',async()=>{
  assert.equal(opticalTraceEventsFromSearch(''),0);assert.equal(opticalTraceEventsFromSearch('?opticalTraceEvents=4096'),4096);
  for(const n of ['0','4097','','01','1.5','NaN','64&opticalTraceEvents=32'])assert.throws(()=>opticalTraceEventsFromSearch('?opticalTraceEvents='+n),/Invalid/);
@@ -22,6 +22,15 @@ test('tail diagnostic uploads the exact captured camera packet without renormali
  assert.equal(bytes.byteLength,96);assert.deepEqual([...u.slice(0,8)],[7654,0xffffffff,95974,2,0,0,0,0]);
  assert.deepEqual([...f.slice(12,15)],r.direction);assert.equal(f[11],1);assert.equal(f[15],0);
  for(const change of [{originW:undefined},{directionW:NaN},{sample:1},{origin:[0,0,Infinity]},{stage:'after-intersection'}])assert.throws(()=>packOpticalTracePrimary({...r,...change},selection),/original/);
+});
+test('streamed queue-boundary prefixes use physical ordinals, preserve their scope and reject an ordinary chain',()=>{
+ const records=Array.from({length:4},(_,bounce)=>({stage:'after-intersection',bounce,flags:0,pixel:1,sample:2,medium:0}));
+ const original={recordScope:'queue-boundaries',records:[records[0],records[3]]},result={records:structuredClone(records)};
+ assertCanonicalOpticalPrefix(original,result);assert.equal(result.canonicalPrefixRecords,2);assert.equal(result.canonicalPrefixScope,'queue-boundaries');
+ const changed=structuredClone(result);changed.records[3].medium=1;assert.throws(()=>assertCanonicalOpticalPrefix(original,changed),/mismatch/);
+ assert.equal(changed.canonicalPrefixExactlyEqual,false);assert.equal(changed.originalPrefix.length,2);
+ assert.throws(()=>assertCanonicalOpticalPrefix({records:[{...records[0],flags:1<<24}]},result),/mismatch/);
+ assert.throws(()=>assertCanonicalOpticalPrefix({records:[]},result),/Missing/);
 });
 test('bounded tail decoding rejects missing extents, ordinals and non-finite geometry',()=>{
  assert.throws(()=>decodeOpticalChainTrace(new ArrayBuffer(1),64),/extent/);

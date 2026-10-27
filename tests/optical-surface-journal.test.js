@@ -9,6 +9,8 @@ test('surface journal reads original post-surface PathNodes and retains exact ra
  assert.equal(analyzeWgslSource(code,'surface-journal').bindings.length,4);
  assert.doesNotMatch(code,/(?:rays|counters|nodes)\[[^\]]+\]\s*=/);
  assert.match(code,/ray.bounce\*16384u\+slot/);assert.match(code,/output\[ray.bounce\]=nodes\[node\]/);
+ const streamed=canonicalSurfaceJournalShader({pixel:100,sample:2,maxDepth:2068,tilePixels:16384,streamed:true});
+ assert.match(streamed,/\(ray.flags>>24u\)\*16384u\+slot/);assert.doesNotMatch(streamed,/select\(ray.bounce\*/);
  for(const value of [0,16385,1.5])assert.throws(()=>canonicalSurfaceJournalShader({pixel:100,sample:2,maxDepth:20,tilePixels:value}),/Invalid/);
  const bytes=new ArrayBuffer(128),u=new Uint32Array(bytes),f=new Float32Array(bytes);
  f.set([.125,.25,.5]);u[3]=1;f.set([2,3,4],4);u[7]=7;u[12]=100;u[13]=2;u[14]=19;

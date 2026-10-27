@@ -118,7 +118,7 @@ async function captureCanonicalJournal(c,{config,tile,ranges,selection,failureOn
   })};
   for(const entryPoint of ['before','after'])journal[entryPoint]=await wait(device.createComputePipelineAsync({layout:pipelineLayout,compute:{module,entryPoint}}));
   if(!failureOnly){
-   const surfaceModule=device.createShaderModule({label:'selected-surface-journal',code:canonicalSurfaceJournalShader({...selection,maxDepth,tilePixels:tile.width*tile.height})});
+   const surfaceModule=device.createShaderModule({label:'selected-surface-journal',code:canonicalSurfaceJournalShader({...selection,maxDepth,tilePixels:tile.width*tile.height,streamed:config.opticalInterfaceBudget?.storageMode==='streamed-linear-chain'})});
    await wait(assertShaderModuleCompiles(surfaceModule,'selected-surface-journal'));
    journal.surface=await wait(device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:surfaceModule,entryPoint:'surface'}}));
    journal.surfaceGroups=['activeNext','nextActive'].map(name=>{
@@ -135,6 +135,7 @@ async function captureCanonicalJournal(c,{config,tile,ranges,selection,failureOn
   device.queue.submit([encoder.finish()]);await wait(device.queue.onSubmittedWorkDone());
   const bytes=await read(buffer,size);
   return {status:'captured',scope:label+'-canonical-tile-sample; no accepted image or performance claim',allocatedBytes:size,
+   ...(config.opticalInterfaceBudget?.storageMode==='streamed-linear-chain'?{recordScope:'queue-boundaries; internal optical events are not separate queue records',surfaceNodeDepthDomain:'ordinary-logical'}:{}),
    pixel:selection.pixel,sample:selection.sample,records:decodeCanonicalJournal(bytes.slice(0,recordBytes)),
    ...(!failureOnly?{surfaceNodes:decodeSurfaceJournal(bytes.slice(recordBytes))}:{})};
  }finally{buffer.destroy();}

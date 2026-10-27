@@ -2,7 +2,7 @@ import {WAVEFRONT_CAMERA_RAY_RECORD_WGSL} from '../../src/wavefront-camera-share
 import {PATH_NODE_STRUCT_WGSL} from '../../src/wavefront-path-tree-shader.js';
 import {MAX_PHYSICAL_PATH_EVENTS} from '../../src/wavefront-optical-interface-budget.js';
 
-export function canonicalSurfaceJournalShader({pixel,sample,maxDepth,tilePixels}){
+export function canonicalSurfaceJournalShader({pixel,sample,maxDepth,tilePixels,streamed=false}){
  if(!Number.isSafeInteger(pixel)||pixel<0||pixel>0xffffffff||!Number.isInteger(sample)||sample<0||sample>255||
   !Number.isInteger(maxDepth)||maxDepth<1||maxDepth>MAX_PHYSICAL_PATH_EVENTS||!Number.isInteger(tilePixels)||tilePixels<1||tilePixels>16384)throw Error('Invalid surface journal selection');
  return `${WAVEFRONT_CAMERA_RAY_RECORD_WGSL}\n${PATH_NODE_STRUCT_WGSL}
@@ -13,7 +13,7 @@ export function canonicalSurfaceJournalShader({pixel,sample,maxDepth,tilePixels}
  @compute @workgroup_size(64)fn surface(@builtin(global_invocation_id)id:vec3<u32>){let slot=id.x;
   if(slot>=counters[0]||slot>=arrayLength(&rays)){return;}let ray=rays[slot];
   if(ray.sourcePixelId!=${pixel}u||ray.sampleId!=${sample}u||ray.bounce>=${maxDepth}u||ray.bounce>=arrayLength(&output)){return;}
-  let node=select(ray.bounce*${tilePixels}u+slot,ray.rayId,ray.bounce==0u);
+  let node=select(${streamed?'(ray.flags>>24u)':'ray.bounce'}*${tilePixels}u+slot,ray.rayId,${streamed?'(ray.flags>>24u)':'ray.bounce'}==0u);
   if(node>=arrayLength(&nodes)){return;}output[ray.bounce]=nodes[node];
  }`;
 }

@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Keep optional streamed optical journals explicit about queue boundaries and
+  ordinary logical-node depth. Address surface records by logical ownership and
+  compare sampled pure-chain prefixes by physical ordinal, not temporary array
+  position; reject ordinary-scattered histories rather than certifying them.
+
 - Bound optical diagnostic camera-sample submissions by the existing renderer
   pass ceiling, awaiting completion per chunk without resetting sample ordinals,
   phase state or count/radiance sums. Retain the2048-interface whole-tile timeout;

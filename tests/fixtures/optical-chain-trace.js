@@ -2,6 +2,17 @@ import {createWavefrontPathTracingComputeShaderSource} from '../../src/wavefront
 import {assertShaderModuleCompiles} from '../../src/wavefront-runtime-support.js';
 export const MAX_OPTICAL_TRACE_INTERFACES=4096;
 const VECTORS=13,WORDS=VECTORS*4,RECORD_BYTES=WORDS*4;
+export function assertCanonicalOpticalPrefix(original,result){
+ const fields=['stage','rayId','pixel','sample','bounce','medium','flags','mediumDepth','origin','direction','throughput','mediumStack','hit'];
+ const prefix=original.records.filter(r=>r.stage==='after-intersection');
+ for(const [i,record] of prefix.entries())if((record.flags>>>24)!==0||fields.some(k=>JSON.stringify(record[k])!==JSON.stringify(result.records[record.bounce]?.[k]))){
+  result.canonicalPrefixExactlyEqual=false;result.prefixMismatchIndex=i;result.originalPrefix=prefix;
+  const error=Error('Optical tail canonical prefix mismatch '+i);error.opticalTailTrace=result;throw error;
+ }
+ if(!prefix.length)throw Error('Missing canonical optical prefix');
+ result.canonicalPrefixRecords=prefix.length;result.canonicalPrefixExactlyEqual=true;
+ result.canonicalPrefixScope=original.recordScope??'per-physical-event';
+}
 export function packOpticalTracePrimary(record,selection){
  if(record?.stage!=='before-intersection'||record.bounce!==0||record.medium!==0||record.mediumDepth!==0||record.flags!==0||record.parentRayId!==0xffffffff||record.pixel!==selection.pixel||record.sample!==selection.sample||
   ![record.rayId,record.parentRayId,record.pixel,record.sample,record.bounce,record.medium,record.flags,record.mediumDepth,...(record.mediumStack??[])].every(v=>Number.isInteger(v)&&v>=0&&v<=0xffffffff)||
@@ -82,13 +93,8 @@ export async function captureOpticalChainTrace(c,{config,tile,selection,sampler,
   const pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group,[selection.sample*config.memory.configBufferStride]);pass.dispatchWorkgroups(1);pass.end();
   encoder.copyBufferToBuffer(buffer,0,staging,0,size);device.queue.submit([encoder.finish()]);await wait(staging.mapAsync(GPUMapMode.READ));
   const result=decodeOpticalChainTrace(staging.getMappedRange().slice(0),maximumInterfaces);staging.unmap();
-  const fields=['stage','rayId','pixel','sample','bounce','medium','flags','mediumDepth','origin','direction','throughput','mediumStack','hit'];
-  const prefix=original.records.filter(r=>r.stage==='after-intersection');
-  for(const [i,record] of prefix.entries())if(fields.some(k=>JSON.stringify(record[k])!==JSON.stringify(result.records[i]?.[k]))){
-   result.canonicalPrefixExactlyEqual=false;result.prefixMismatchIndex=i;result.originalPrefix=prefix;
-   const error=Error('Optical tail canonical prefix mismatch '+i);error.opticalTailTrace=result;throw error;
-  }
-  result.canonicalPrefixRecords=prefix.length;result.canonicalPrefixExactlyEqual=true;result.allocatedDiagnosticBytes=size*2+96;result.tile=tile;
+  assertCanonicalOpticalPrefix(original,result);
+  result.allocatedDiagnosticBytes=size*2+96;result.tile=tile;
   result.inputRaySha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',primary)),v=>v.toString(16).padStart(2,'0')).join('');
   result.shaderSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(code))),v=>v.toString(16).padStart(2,'0')).join('');
   return result;
