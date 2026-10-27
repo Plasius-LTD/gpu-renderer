@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createOpticalIsolationScene, opticalIsolationPlan, opticalIsolationBudgets, validateOpticalFurnace,OPTICAL_ISOLATION} from './fixtures/optical-lighting-isolation.js';
+import {createOpticalIsolationScene, opticalIsolationPlan, opticalIsolationBudgets, opticalIsolationDepth, validateOpticalFurnace,OPTICAL_ISOLATION} from './fixtures/optical-lighting-isolation.js';
 import {createAdaptiveTilePlan} from '../src/wavefront-adaptive-tile-plan.js';
 import {roomLightingRequest} from './fixtures/room-lighting-settings.js';
 import {readFileSync} from 'node:fs';
@@ -16,6 +16,10 @@ test('diagnostic budgets admit the canonical tile-plan contract and retain 256, 
  const budgets=opticalIsolationBudgets();assert(budgets instanceof Uint16Array);assert.equal(budgets[0],256);
  const plan=createAdaptiveTilePlan({enabled:true,...OPTICAL_ISOLATION,budgets});
  assert.equal(plan.reduce((n,t)=>n+t.expectedPrimaryRays,0),OPTICAL_ISOLATION.width*OPTICAL_ISOLATION.height*256);
+});
+test('diagnostic event-depth comparison is explicit and cannot silently alter room defaults',()=>{
+ assert.equal(opticalIsolationDepth(''),20);assert.equal(opticalIsolationDepth('?opticalDepth=32'),32);
+ for(const search of ['?opticalDepth=0','?opticalDepth=64','?opticalDepth=32&opticalDepth=20','?opticalDepth=NaN','?opticalDepth=32.0'])assert.throws(()=>opticalIsolationDepth(search));
 });
 
 test('optical isolation uses supplied package geometry without a second transport',()=>{

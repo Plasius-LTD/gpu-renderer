@@ -10,14 +10,19 @@ export function opticalIsolationPlan(){return [
  {name:'pedestal-contrast',mode:'filled',pedestal:.35,furnace:false},
  ];}
 export function opticalIsolationBudgets(){const c=OPTICAL_ISOLATION;return new Uint16Array(c.width*c.height).fill(c.spp);}
-export function createOpticalIsolationScene(withRoomGlass,receipt,lane){
+export function opticalIsolationDepth(search){
+ const values=new URLSearchParams(search).getAll('opticalDepth');
+ if(values.length>1||values.some(v=>!['20','32'].includes(v)))throw Error('Invalid optical diagnostic depth');
+ return values.length?Number(values[0]):OPTICAL_ISOLATION.depth;
+}
+export function createOpticalIsolationScene(withRoomGlass,receipt,lane,{depth=OPTICAL_ISOLATION.depth}={}){
  const {scene}=receipt??{};
- if(!scene?.camera||!Number.isFinite(scene.floorY)||!scene.glassWater?.settings||!opticalIsolationPlan().some(c=>JSON.stringify(c)===JSON.stringify(lane)))throw Error('Invalid optical isolation control');
+ if(![20,32].includes(depth)||!scene?.camera||!Number.isFinite(scene.floorY)||!scene.glassWater?.settings||!opticalIsolationPlan().some(c=>JSON.stringify(c)===JSON.stringify(lane)))throw Error('Invalid optical isolation control');
  const composed=withRoomGlass({scene:{meshes:[],camera:structuredClone(scene.camera)},evidence:{floorY:scene.floorY,roomBounds:{min:[-10,-10,-10],max:[10,10,10]},sceneTriangleCount:0}},
  {...scene.glassWater.settings,mode:lane.mode,...(lane.waterIor===undefined?{}:{waterIor:lane.waterIor})});
  composed.scene.camera=structuredClone(scene.camera); // Do not apply close-up twice.
  composed.scene.meshes[0]={...composed.scene.meshes[0],materialKind:'emissive',emission:[lane.pedestal,lane.pedestal,lane.pedestal,1]};
- composed.scene.probeDepth=OPTICAL_ISOLATION.depth;composed.scene.displayQuality=true;
+ composed.scene.probeDepth=depth;composed.scene.displayQuality=true;
  composed.scene.environmentLighting={horizonColor:[.75,.75,.75,1],zenithColor:[.75,.75,.75,1],sunColor:[0,0,0,1],intensity:1};
  return composed;
 }

@@ -2,6 +2,15 @@
 
 ## Optical reference and source isolation — 27 October
 
+Depth attribution follow-up (before implementation): retain the failed native
+20-event empty/index-one row gates. An independent Cycles empty furnace also
+fails the same row gate at20 (5.77%) and passes at64 (0.068%). Add a strictly
+validated development-only `opticalDepth=32` comparison, reusing the engine's
+existing32-event admission, without increasing room/UI defaults or changing
+transport. Same samples, camera, radiance and frozen thresholds; the20-event
+failure cannot be reclassified as a pass. Any32-event result is a separately
+labelled control, not permission to ignore optical events or claim convergence.
+
 Task234 remains assigned to zephod111r / In progress, under Story2291 and
 Feature2114. Preserve all six 4195618 native controls and the rejected offline
 startup. The installed Cycles reference now runs outside the sandbox with

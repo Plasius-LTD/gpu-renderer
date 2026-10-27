@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Retain independent optical-reference EXR/linear HDR and read-only row
+  comparison tooling; add an explicit32-event diagnostic beside the unchanged
+ 20-event controls. Failed furnace gates remain failures, not new baselines.
+
 - Add development-only automated known-radiance glass/water furnace and pedestal
   attribution controls, with frozen HDR/count gates, plus room sky-only/sun-only
   lighting isolation. These diagnostics do not qualify room banding or adaptive

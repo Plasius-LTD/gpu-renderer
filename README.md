@@ -10,6 +10,19 @@ full-scene convergence. Room lighting also offers explicit sky-only and sun-only
 isolation styles; original daylight remains unchanged. See the
 [correctness design](docs/design/renderer-contract-corrections.md).
 
+Independent offline attribution (requires an installed Blender, not a package
+dependency or fallback): `node scripts/prepare-optical-reference.mjs LIGHTING_ROOT
+COMPLETED_FILLED_CLOSEUP.json` emits the original procedural geometry as explicit
+shared interfaces. Pass that retained JSON to Blender with
+`--background --factory-startup --python scripts/optical-reference.py -- --input
+SCENE.json --output-dir EMPTY_EXISTING_DIRECTORY`. The configurable script retains
+full-float EXR, linear float32, PNG and provenance without overwriting evidence.
+`scripts/verify-optical-isolation.mjs WORKSPACE_ROOT SUMMARY.json REFERENCE_DIR`
+independently verifies chunks/counts and compares linear rows; it reports failed
+furnace gates rather than certifying a full scene. A separate diagnostic URL
+`?opticalDepth=32` tests the existing engine depth admission; default20 controls
+and their failures remain unchanged.
+
 Environment MIS correction (#234): continuations now carry their previous
 surface's actual competing light PDF, including hemisphere support and light-class
 selection. Strict sky MIS does not suppress unsampled sun glow. No record size,
