@@ -60,14 +60,15 @@ export function summarizeOpticalPaths(values){
  const count=OPTICAL_PATH_PROBE.samples*OPTICAL_PATH_PROBE.pixels;
  if(values.length!==count*OPTICAL_PATH_PROBE.cosines.length*4)throw Error('Optical path probe length mismatch');
  return OPTICAL_PATH_PROBE.cosines.map((cosine,lane)=>{
-  let sum=0,escaped=0,roulette=0,depth=0;
+  let sum=0,escaped=0,roulette=0,depth=0,escapedWeightError=0;
   for(let i=0;i<count;i++){
    const o=(lane*count+i)*4,r=values[o],e=values[o+1],q=values[o+2],d=values[o+3];
    if(!Number.isFinite(r)||r<0||![e,q,d].every(x=>x===0||x===1)||e+q+d!==1)throw Error('Invalid optical path sample');
    sum+=r;escaped+=e;roulette+=q;depth+=d;
+   if(e)escapedWeightError=Math.max(escapedWeightError,Math.abs(r-1));
   }
   const expected=opticalSlabReference(cosine),mean=sum/count,error=Math.abs(mean-expected);
-  return {cosine,mean,expected,error,passed:error<=OPTICAL_PATH_PROBE.meanTolerance,escaped,roulette,depth};
+  return {cosine,mean,expected,error,escapedWeightError,passed:error<=OPTICAL_PATH_PROBE.meanTolerance&&escapedWeightError<=.0001,escaped,roulette,depth};
  });
 }
 

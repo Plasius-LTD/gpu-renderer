@@ -10,18 +10,18 @@ import {rejectedFixedPatternWords} from './fixtures/rejected-renderer-contracts.
 
 // Independent closed-form planar slab, not a replacement renderer. Exercise the
 // actual scalar sequences and the same importance probabilities/roulette policy.
-function slabSamples(sampler){
+function slabSamples(sampler,legacyPolicy=false){
  const out=new Float32Array(P.cosines.length*P.samples*P.pixels*4);let offset=0;
  for(const ci of P.cosines)for(let pixel=0;pixel<P.pixels;pixel++)for(let sample=0;sample<P.samples;sample++){
   let weight=1,escaped=0,roulette=0,result=0;
   for(let b=0;b<P.maxInteractions;b++){
    const eta=b?P.ior:1/P.ior,cosine=b?Math.sqrt(1-(1-ci*ci)/P.ior**2):ci;
    const ct=Math.sqrt(1-eta*eta*(1-cosine*cosine));
-   const r=.5*(((eta*cosine-ct)/(eta*cosine+ct))**2+((cosine-eta*ct)/(cosine+eta*ct))**2),t=(1-r)*eta*eta,probability=r/(r+t);
+   const r=.5*(((eta*cosine-ct)/(eta*cosine+ct))**2+((cosine-eta*ct)/(cosine+eta*ct))**2),t=(1-r)*eta*eta,probability=legacyPolicy?r/(r+t):r;
    const reflection=(sampler==='rejected-fixed-pattern'?(rejectedFixedPatternWords(sample,b,D.transmissionSelector)[0]>>>8)/16777216:draw(pixel,sample,b,7,D.transmissionSelector,sampler))<probability;
    let w=reflection?r/probability:t/(1-probability);
    if(b>=2){const nextIor=reflection?P.ior:1;
-    const survival=Math.max(.05,Math.min(1,weight*w*nextIor**2));if((sampler==='rejected-fixed-pattern'?(rejectedFixedPatternWords(sample,b,D.russianRoulette)[0]>>>8)/16777216:draw(pixel,sample,b,7,D.russianRoulette,sampler))>survival){roulette=1;break;}w/=survival;}
+    const survival=legacyPolicy?Math.max(.05,Math.min(.95,w)):Math.max(.05,Math.min(1,weight*w*nextIor**2));if((sampler==='rejected-fixed-pattern'?(rejectedFixedPatternWords(sample,b,D.russianRoulette)[0]>>>8)/16777216:draw(pixel,sample,b,7,D.russianRoulette,sampler))>survival){roulette=1;break;}w/=survival;}
    weight*=w;if((b===0&&reflection)||(b>0&&!reflection)){result=weight;escaped=1;break;}
   }
   out.set([result,escaped,roulette,1-escaped-roulette],offset);offset+=4;
@@ -32,7 +32,9 @@ test('corrected fixed transport meets a finite-horizon optical slab mean while f
  const good=summarizeOpticalPaths(slabSamples('stable-camera-random'));
  assert(good.every(c=>c.passed),JSON.stringify(good));
  assert(summarizeOpticalPaths(slabSamples('fixed-pattern')).every(c=>c.passed));
- const fixed=summarizeOpticalPaths(slabSamples('rejected-fixed-pattern'));
+ // Keep the original estimator AND correlated pattern frozen as rejected;
+ // improved importance sampling must not retroactively certify its evidence.
+ const fixed=summarizeOpticalPaths(slabSamples('rejected-fixed-pattern',true));
  assert.equal(fixed.at(-1).passed,false,'retain known conditional bias instead of treating uniform scalar marginals as proof');
  assert(fixed.at(-1).error>.04);
  for(const c of P.cosines){assert(opticalSlabReference(c)<=1);assert(opticalSlabReference(c)>.9999);}

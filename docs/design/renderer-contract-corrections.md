@@ -21,6 +21,18 @@ furnace controls independently; a finite-depth loss is not fixed by roulette.
 Reference: PBRT4 section13.4, cumulative beta*etaScale roulette; the production
 policy here is deliberately restricted to the tracked smooth nested contract.
 
+Second controlled variance correction (after retaining016e8c1's failed32-event
+result, before implementation): the bounded optical branch selector also uses
+the reversible relative eta squared as if it were permanent attenuation.
+For nested interfaces with valid media, remove that factor from transmission
+importance only when selecting the branch; leave actual transmission weight and
+its selected PDF compensation intact. White lossless glass must select exactly
+Fresnel reflection on entry and exit, while tint/transmission loss still affects
+selection and TIR remains reflection1. Legacy/invalid-medium behavior is pinned.
+Add red canonical numeric tests, finite-horizon slab/device mean coverage and a
+zero-variance paired-interface oracle before recapture. Keep this distinct from
+the already measured roulette-only comparison. Do not silently extend depth.
+
 The user authorizes tracing/correcting the residual, adding regressions and
 automatically rerunning native1080p/4K; adaptive work remains paused. Task234
 retains owner zephod111r / In progress, Story2291 / Feature2114 and default-off

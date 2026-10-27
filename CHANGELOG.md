@@ -13,9 +13,14 @@ All notable changes to this project will be documented in this file.
 
 - Correct avoidable smooth bounded+nested optical roulette variance by using
   cumulative prospective throughput with outgoing-medium IOR compensation;
-  preserve radiance/BSDF/PDF, event horizons, sampling dimensions and ordinary/
+  preserve radiance/BSDF weights, event horizons, sampling dimensions and ordinary/
   split/rough behavior. Add canonical numerical and assembled physical slab
   regressions; image/adaptive qualification remains gated (#234).
+
+- Exclude reversible relative-IOR scaling from bounded nested optical branch
+  importance, retaining tint/transmission loss and reciprocal branch PDF
+  compensation. Require unit returned weight for every escaped lossless slab
+  path; preserve separate failed roulette-only image controls (#234).
 
 - Forward existing bounded canonical selected-sample journals into the optical
   furnace controls to isolate tails/roulette without changing image samples or

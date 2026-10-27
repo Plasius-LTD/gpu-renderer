@@ -20,9 +20,21 @@ product of radiance-mode relative IOR squares telescope to 1/eta_out^2; removing
 it only from roulette avoids treating reversible refraction as absorption.
 The existing priority-resolved outgoing medium supplies eta_out, including
 reflection/TIR (unchanged occupancy). Actual surviving radiance still divides
-by survival; BSDF, branch probabilities, PDFs and absorption are unchanged.
+by survival; BSDF radiance weights and absorption are unchanged.
 This follows the cumulative beta / etaScale distinction described in
 [PBRT4 section13.4](https://pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/A_Better_Path_Tracer).
+
+The separately retained016e8c1 roulette-only controls reduce noise, but still
+fail the empty32-event row gate (6.811%). The next controlled refinement removes
+the relative eta-squared factor from bounded valid-media transmission *selection
+importance*, not from its transported weight. White lossless interfaces select
+Fresnel reflection on entry and exit. Tint/transmission losses remain in the
+selection, TIR remains reflection1, and scatter.pdf tracks the changed branch
+probability. This removes paired-interface weight variance without changing the
+optical BSDF. The old local-weight/PDF estimator remains frozen in tests as a
+historical rejected control, not a production fallback. Canonical numerical and
+physical slab tests require unit returned weight for every escaped white path,
+alongside the unchanged finite-horizon mean tolerance.
 
 Keep the previous local [.05,.95] policy for non-optical, rough, unbounded/split
 or non-nested paths. Existing default-off boundedDielectricBranching and

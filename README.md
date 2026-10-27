@@ -2,6 +2,8 @@
 
 Smooth bounded+nested optical roulette now uses cumulative prospective throughput
 with outgoing IOR compensation, retaining the radiance weights themselves.
+Bounded nested branch selection likewise excludes reversible eta scaling from
+transmission importance; its selected PDF is compensated consistently.
 It no longer treats a reversible glass-entry radiance decrease as absorption.
 The supported camera starts in air; no camera-inside initialization, extra ray
 state, uncounted interactions, or longer depth limit is introduced. Other

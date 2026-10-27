@@ -107,7 +107,14 @@ fn dielectric_transmission_weight(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
 fn dielectric_reflection_probability(ray: RayRecord, hit: HitRecord) -> f32 {
   if (dielectric_cannot_refract(ray, hit)) { return 1.0; }
   let r = max_component(dielectric_reflection_weight(ray, hit));
-  let t = max_component(dielectric_transmission_weight(ray, hit));
+  var t = max_component(dielectric_transmission_weight(ray, hit));
+  if (nested_media_enabled() && medium_valid(hit.mediumRefId)) {
+    // Reversible radiance scaling is not transmission loss. For lossless white
+    // interfaces this recovers Fresnel branch probabilities; transported weights
+    // retain eta squared and are still divided by the selected branch PDF.
+    let eta = dielectric_ratio(ray, hit);
+    t /= eta * eta;
+  }
   if (r + t == 0.0) { return 1.0; }
   return r / (r + t);
 }
