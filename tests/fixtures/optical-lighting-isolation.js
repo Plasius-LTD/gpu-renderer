@@ -9,6 +9,7 @@ export function opticalIsolationPlan(){return [
  {name:'furnace-index-one',mode:'filled',waterIor:1,pedestal:.75,furnace:true},
  {name:'pedestal-contrast',mode:'filled',pedestal:.35,furnace:false},
  ];}
+export function opticalIsolationBudgets(){const c=OPTICAL_ISOLATION;return new Uint16Array(c.width*c.height).fill(c.spp);}
 export function createOpticalIsolationScene(withRoomGlass,receipt,lane){
  const {scene}=receipt??{};
  if(!scene?.camera||!Number.isFinite(scene.floorY)||!scene.glassWater?.settings||!opticalIsolationPlan().some(c=>JSON.stringify(c)===JSON.stringify(lane)))throw Error('Invalid optical isolation control');

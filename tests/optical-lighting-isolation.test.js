@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createOpticalIsolationScene, opticalIsolationPlan, validateOpticalFurnace} from './fixtures/optical-lighting-isolation.js';
+import {createOpticalIsolationScene, opticalIsolationPlan, opticalIsolationBudgets, validateOpticalFurnace,OPTICAL_ISOLATION} from './fixtures/optical-lighting-isolation.js';
+import {createAdaptiveTilePlan} from '../src/wavefront-adaptive-tile-plan.js';
 import {roomLightingRequest} from './fixtures/room-lighting-settings.js';
+
+test('diagnostic budgets admit the canonical tile-plan contract and retain 256, not uint8 zero',()=>{
+ const budgets=opticalIsolationBudgets();assert(budgets instanceof Uint16Array);assert.equal(budgets[0],256);
+ const plan=createAdaptiveTilePlan({enabled:true,...OPTICAL_ISOLATION,budgets});
+ assert.equal(plan.reduce((n,t)=>n+t.expectedPrimaryRays,0),OPTICAL_ISOLATION.width*OPTICAL_ISOLATION.height*256);
+});
 
 test('optical isolation uses supplied package geometry without a second transport',()=>{
  const receipt={scene:{floorY:-1.3,camera:{position:[3,-.4,.15],target:[2.85,-.6,-.1],fovYDegrees:52},glassWater:{settings:{mode:'filled',waterIor:1.333,closeup:true}}}};
