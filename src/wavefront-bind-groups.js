@@ -12,6 +12,7 @@ export function createWavefrontTraceBindGroup({
   counterBuffer,
   outputView,
   triangleBuffer,
+  instanceView,
   bvhNodeBuffer,
   radianceView,
   environmentPortalBuffer,
@@ -70,6 +71,7 @@ export function createWavefrontTraceBindGroup({
       { binding: 42, resource: extensionAtlasResources.iridescence.view },
       { binding: 43, resource: extensionAtlasResources.iridescenceThickness.view },
       { binding: 44, resource: extensionAtlasResources.anisotropy.view },
+      ...(instanceView ? [{binding:47, resource:instanceView}] : []),
     ],
   });
 }

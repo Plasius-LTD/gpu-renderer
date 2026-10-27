@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add opt-in shared mesh BLAS/TLAS instancing with affine transforms and renderer-owned GPU resource byte budgets, allocation diagnostics and failure cleanup.
+
 - **Added**
   - (placeholder)
 

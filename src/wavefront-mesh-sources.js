@@ -159,7 +159,7 @@ function chooseSplitAxis(triangles) {
   return extent[1] >= extent[2] ? 1 : 2;
 }
 
-function buildBvh(triangles, maxLeafTriangles = 4) {
+export function buildWavefrontBoundsBvh(triangles, maxLeafTriangles = 4) {
   if (triangles.length === 0) {
     return Object.freeze({ nodes: Object.freeze([]), triangles: Object.freeze([]) });
   }
@@ -217,7 +217,7 @@ export function createWavefrontMeshAcceleration(meshes = [], gpuMaterialSource =
   const source = Array.isArray(meshes) ? meshes : [meshes];
   const resolvedMaterialSource = gpuMaterialSource ?? createWavefrontGpuMaterialSource(source);
   const triangles = createMeshTriangleRecords(source, resolvedMaterialSource);
-  return buildBvh(triangles);
+  return buildWavefrontBoundsBvh(triangles);
 }
 
 export function estimateMeshSourceShape(meshes) {

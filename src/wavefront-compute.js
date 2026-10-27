@@ -1,3 +1,4 @@
+import { createGpuAllocationTracker, openGpuAllocationErrorScopes } from './gpu-allocation-budget.js';
 import { createWavefrontProgressiveResources } from './wavefront-progressive.js';
 import {
   createGpuParallelismCounters,
@@ -190,11 +191,16 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     throw new Error("Unable to acquire a WebGPU adapter for wavefront path tracing.");
   }
 
-  const device = await adapter.requestDevice(
+  const rawDevice = await adapter.requestDevice(
     createWavefrontDeviceDescriptor(adapter, options, initialConfig.memory)
   );
+  const allocationTracker = createGpuAllocationTracker(rawDevice, {budgetBytes:options.memoryBudgetBytes,storageUsage:constants.buffer.STORAGE});
+  const device = allocationTracker.device;
+  let context, finishAllocationScopes;
+  try {
+  finishAllocationScopes = openGpuAllocationErrorScopes(rawDevice);
   const gpuAdapterParallelism = createGpuAdapterParallelismDiagnostics(adapter, device);
-  const context = canvas.getContext("webgpu");
+  context = canvas.getContext("webgpu");
   if (!context || typeof context.configure !== "function") {
     throw new Error("Canvas WebGPU context does not support configure().");
   }
@@ -226,13 +232,23 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   canvas.width = config.width;
   canvas.height = config.height;
   context.configure({
-    device,
+    device: rawDevice,
     format,
     alphaMode: options.alpha === true ? "premultiplied" : "opaque",
   });
 
   const bufferUsage = constants.buffer.STORAGE | constants.buffer.COPY_DST;
   const memory = config.memory;
+  let instanceTexture = null, instanceView = null;
+  if(config.instancing) {
+    const count=config.instancing.instanceCount;
+    instanceTexture=device.createTexture({label:"plasius.wavefront.instances",size:{width:9,height:count},
+      format:"rgba32uint",usage:constants.texture.TEXTURE_BINDING|constants.texture.COPY_DST});
+    const upload=new Uint8Array(count*256),source=new Uint8Array(config.instancing.buffer);
+    for(let i=0;i<count;i++) upload.set(source.subarray(i*144,(i+1)*144),i*256);
+    device.queue.writeTexture({texture:instanceTexture},upload,{bytesPerRow:256,rowsPerImage:count},{width:9,height:count,depthOrArrayLayers:1});
+    instanceView=instanceTexture.createView();
+  }
   const activeQueue = createBuffer(device, bufferUsage, memory.queueBytes, "plasius.wavefront.activeQueue");
   const nextQueue = createBuffer(device, bufferUsage, memory.queueBytes, "plasius.wavefront.nextQueue");
   const hitBuffer = createBuffer(device, bufferUsage, memory.hitBytes, "plasius.wavefront.hitBuffer");
@@ -501,7 +517,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     },
     computePipelines: pipelines,
     presentPipeline,
-  } = await createWavefrontPipelineResources({ device, constants, format });
+  } = await createWavefrontPipelineResources({ device, constants, format, instanced:!!config.instancing });
 
   function createTraceBindGroups() {
     return createWavefrontTraceBindGroups({
@@ -516,6 +532,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       counterBuffer,
       outputView,
       triangleBuffer,
+      instanceView,
       bvhNodeBuffer,
       radianceView,
       environmentPortalBuffer,
@@ -1058,6 +1075,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       maxFramePassesPerSubmission: config.maxFramePassesPerSubmission,
       sceneObjectCount: config.sceneObjectCount,
       triangleCount: config.triangleCount,
+      instanceCount: config.instancing?.instanceCount ?? 0,
+      geometryCount: config.instancing?.geometryCount ?? config.gpuMeshSource.meshes.count,
       emissiveTriangleCount: config.emissiveTriangleCount,
       environmentPortalCount: config.environmentPortalCount,
       environmentPortalMode: config.environmentPortalMode,
@@ -1076,6 +1095,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       frameConfigSlots: frameConfigSlotCount,
       gpuParallelism: lastGpuParallelism,
       memory: config.memory,
+      allocations: allocationTracker.snapshot(),
     });
   }
 
@@ -1089,6 +1109,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     pathVertexBuffer.destroy?.();
     sceneObjectBuffer.destroy?.();
     triangleBuffer.destroy?.();
+    instanceTexture?.destroy?.();
     bvhNodeBuffer.destroy?.();
     meshVertexBuffer.destroy?.();
     meshIndexBuffer.destroy?.();
@@ -1133,12 +1154,14 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       }
     });
     context.unconfigure?.();
+    allocationTracker.destroy();
   }
 
+  await finishAllocationScopes();
   return Object.freeze({
     canvas,
     context,
-    device,
+    device: rawDevice,
     format,
     config,
     renderOnce,
@@ -1150,6 +1173,13 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     getSnapshot,
     destroy,
   });
+  } catch(error) {
+    try { await finishAllocationScopes?.(); } catch { /* Preserve the initiating failure. */ }
+    context?.unconfigure?.();
+    allocationTracker.destroy();
+    rawDevice.destroy?.();
+    throw error;
+  }
 }
 
 export async function renderWavefrontPathTracingComputeFrame(options = {}) {

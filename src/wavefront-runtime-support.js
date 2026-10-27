@@ -161,31 +161,33 @@ export function createWavefrontDeviceDescriptor(adapter, options = {}, memory = 
     ...descriptorRequiredLimits,
     ...(options.requiredLimits ?? {}),
   };
+  const traceStorageBindings = TRACE_STORAGE_BUFFER_BINDINGS;
+  const traceTextureBindings = TRACE_SAMPLED_TEXTURE_BINDINGS + (options.instances !== undefined ? 1 : 0);
   const exposedStorageBufferLimit = Number(adapter?.limits?.maxStorageBuffersPerShaderStage);
   if (Number.isFinite(exposedStorageBufferLimit)) {
-    if (exposedStorageBufferLimit < TRACE_STORAGE_BUFFER_BINDINGS) {
+    if (exposedStorageBufferLimit < traceStorageBindings) {
       throw new Error(
-        `Wavefront mesh tracing requires maxStorageBuffersPerShaderStage>=${TRACE_STORAGE_BUFFER_BINDINGS}, ` +
+        `Wavefront mesh tracing requires maxStorageBuffersPerShaderStage>=${traceStorageBindings}, ` +
           `but this adapter exposes ${exposedStorageBufferLimit}.`
       );
     }
     requiredLimits.maxStorageBuffersPerShaderStage = Math.max(
       Number(requiredLimits.maxStorageBuffersPerShaderStage ?? 0),
-      TRACE_STORAGE_BUFFER_BINDINGS
+      traceStorageBindings
     );
   }
 
   const exposedSampledTextureLimit = Number(adapter?.limits?.maxSampledTexturesPerShaderStage);
   if (Number.isFinite(exposedSampledTextureLimit)) {
-    if (exposedSampledTextureLimit < TRACE_SAMPLED_TEXTURE_BINDINGS) {
+    if (exposedSampledTextureLimit < traceTextureBindings) {
       throw new Error(
-        `Wavefront material tracing requires maxSampledTexturesPerShaderStage>=${TRACE_SAMPLED_TEXTURE_BINDINGS}, ` +
+        `Wavefront material tracing requires maxSampledTexturesPerShaderStage>=${traceTextureBindings}, ` +
           `but this adapter exposes ${exposedSampledTextureLimit}.`
       );
     }
     requiredLimits.maxSampledTexturesPerShaderStage = Math.max(
       Number(requiredLimits.maxSampledTexturesPerShaderStage ?? 0),
-      TRACE_SAMPLED_TEXTURE_BINDINGS
+      traceTextureBindings
     );
   }
 

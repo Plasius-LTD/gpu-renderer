@@ -1,3 +1,4 @@
+import { prepareWavefrontInstances, buildWavefrontInstances } from './wavefront-instances.js';
 import {
   ACCUMULATION_RECORD_BYTES,
   BVH_LEAF_REF_RECORD_BYTES,
@@ -357,6 +358,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   const progressiveBytes = options.progressive === true ? width * height * 16 + 16 : 0;
   const pathVertexBytes = tilePixelCapacity * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
   const sceneObjectBytes = sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES;
+  const instanceBytes = readNonNegativeInteger("instanceBytes", options.instanceBytes, 0);
   const triangleBytes = allocatedRecordBytes(triangleCapacity, TRIANGLE_RECORD_BYTES);
   const materialTableBytes = 0;
   const bvhNodeBytes = bvhNodeCapacity * BVH_NODE_RECORD_BYTES;
@@ -431,6 +433,7 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
     pathVertexBytes,
     sceneObjectBytes,
     triangleBytes,
+    instanceBytes,
     materialTableBytes,
     bvhNodeBytes,
     bvhCombinedBytes,
@@ -461,6 +464,7 @@ export function estimateWavefrontPathTracingMemoryForConfig(config, limits = {})
     maxDepth: config.maxDepth,
     sceneObjectCapacity: config.sceneObjectCapacity,
     triangleCapacity: config.triangleCapacity,
+    instanceBytes: config.instancing?.instanceBytes ?? 0,
     bvhNodeCapacity: config.bvhNodeCapacity,
     bvhLeafSortCapacity: config.bvhLeafSortCapacity,
     emissiveTriangleCapacity: config.emissiveTriangleCapacity,
@@ -482,6 +486,7 @@ export function estimateWavefrontPathTracingMemoryForConfig(config, limits = {})
 export function createWavefrontPathTracingComputeConfig(options = {}) {
   assertAnalyticDisplayQualityPolicy(options);
   const accelerationBuildMode = resolveAccelerationBuildMode(options);
+  if(options.instances !== undefined && accelerationBuildMode === "gpu") throw new Error("Instance BLAS construction currently requires cpu-upload acceleration.");
   const canvas = options.canvas;
   const width = readPositiveInteger("width", options.width, getCanvasDimension(canvas, "width", DEFAULT_WIDTH));
   const height = readPositiveInteger("height", options.height, getCanvasDimension(canvas, "height", DEFAULT_HEIGHT));
@@ -512,6 +517,12 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   );
   const meshes = normalizeMeshes(options);
   const meshSourceShape = estimateMeshSourceShape(meshes);
+  if(options.memoryBudgetBytes !== undefined) {
+    if(!Number.isSafeInteger(options.memoryBudgetBytes)||options.memoryBudgetBytes<=0) throw new Error("GPU memory budget must be a positive safe integer.");
+    const geometryMinimumBytes = meshSourceShape.triangleCount * TRIANGLE_RECORD_BYTES + (options.instances?.length ?? 0) * 144;
+    if(!Number.isSafeInteger(geometryMinimumBytes)||geometryMinimumBytes>options.memoryBudgetBytes) throw new Error("Unique geometry exceeds the GPU memory budget before acceleration construction.");
+  }
+  const instancePlan = options.instances === undefined ? null : prepareWavefrontInstances(meshes, options.instances);
   const gpuMaterialSource =
     meshes.length > 0
       ? createWavefrontGpuMaterialSource(meshes)
@@ -520,10 +531,11 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     meshes.length > 0
       ? createWavefrontGpuMeshSource(meshes, gpuMaterialSource)
       : createWavefrontGpuMeshSource([]);
-  const meshAcceleration =
+  const instancing = instancePlan ? buildWavefrontInstances(meshes, instancePlan, gpuMaterialSource) : null;
+  const meshAcceleration = instancing?.acceleration ?? (
     accelerationBuildMode === "cpu-upload"
       ? createWavefrontMeshAcceleration(meshes, gpuMaterialSource)
-      : Object.freeze({ nodes: Object.freeze([]), triangles: Object.freeze([]) });
+      : Object.freeze({ nodes: Object.freeze([]), triangles: Object.freeze([]) }));
   const emissiveTriangleIndices = createWavefrontEmissiveTriangleIndexSource(
     meshes,
     options.emissiveTriangleCapacity
@@ -625,6 +637,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     gpuAccelerationBuildRequired: accelerationBuildMode === "gpu" && triangleCount > 0,
     gpuMeshSource,
     gpuMaterialSource,
+    instancing,
     meshAcceleration,
     emissiveTriangleIndices,
     emissiveTriangleCount: emissiveTriangleIndices.count,
@@ -663,6 +676,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
       tilePixelCapacity,
       maxDepth,
       sceneObjectCapacity,
+      instanceBytes: instancing?.instanceBytes ?? 0,
       triangleCapacity,
       bvhNodeCapacity,
       bvhLeafSortCapacity,

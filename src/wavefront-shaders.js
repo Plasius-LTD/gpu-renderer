@@ -1,3 +1,4 @@
+import { WAVEFRONT_INSTANCE_SHADER_WGSL, WAVEFRONT_UNINSTANCED_SHADER_WGSL } from './wavefront-instance-shader.js';
 import { WAVEFRONT_COMPUTE_WORKGROUP_SIZE } from "./wavefront-workgroup.js";
 import { WAVEFRONT_SHADER_BVH_WGSL } from "./wavefront-shader-bvh.js";
 import { WAVEFRONT_SHADER_KERNELS_WGSL } from "./wavefront-shader-kernels.js";
@@ -22,6 +23,7 @@ export const WAVEFRONT_COMPUTE_WGSL = [
   WAVEFRONT_SHADER_MATERIALS_WGSL,
   WAVEFRONT_SHADER_LIGHTING_WGSL,
   WAVEFRONT_SHADER_BVH_WGSL,
+  WAVEFRONT_UNINSTANCED_SHADER_WGSL,
   WAVEFRONT_SHADER_KERNELS_WGSL,
 ].join("\n");
 
@@ -34,5 +36,7 @@ export function createWavefrontPathTracingComputeShaderSource(options = {}) {
   if (workgroupSize !== WAVEFRONT_COMPUTE_WORKGROUP_SIZE) {
     throw new Error(`wavefront mesh compute currently requires workgroupSize=${WAVEFRONT_COMPUTE_WORKGROUP_SIZE}`);
   }
-  return WAVEFRONT_COMPUTE_WGSL;
+  return options.instanced === true
+    ? WAVEFRONT_COMPUTE_WGSL.replace(WAVEFRONT_UNINSTANCED_SHADER_WGSL, WAVEFRONT_INSTANCE_SHADER_WGSL)
+    : WAVEFRONT_COMPUTE_WGSL;
 }
