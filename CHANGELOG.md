@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Forward existing bounded canonical selected-sample journals into the optical
+  furnace controls to isolate tails/roulette without changing image samples or
+  production transport (#234).
+
 - Preserve independent optical/lighting attribution: eight256-SPP controls and
   two native1080p source-isolation captures retain434,700,288 completed camera
   samples. The pedestal-reflection region reproduces independently, but empty/

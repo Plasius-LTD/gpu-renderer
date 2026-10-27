@@ -11,6 +11,13 @@ test('capture snapshots canvas before destroying its GPU device and retains fail
  assert.match(source,/report.failures.push\(lane.name\+': '\+retained.failure\)/);
  assert.match(source,/report.status=report.failures.length\?'failed'/);
 });
+test('optical furnace journals reuse the validated canonical selection path before GPU allocation',()=>{
+ const source=readFileSync(new URL('./fixtures/optical-lighting-isolation-runner.js',import.meta.url),'utf8');
+ assert.match(source,/opticalSelectionsFromSearch\(location.search/);
+ assert(source.indexOf('opticalSelectionsFromSearch(location.search')<source.indexOf('createPairedProbeRunner(composed.scene'));
+ assert.match(source,/diagnostics:true,opticalJournal/);
+ assert.doesNotMatch(source,/replayOpticalFailure|scatter_dielectric|sample_dimension/);
+});
 
 test('diagnostic budgets admit the canonical tile-plan contract and retain 256, not uint8 zero',()=>{
  const budgets=opticalIsolationBudgets();assert(budgets instanceof Uint16Array);assert.equal(budgets[0],256);

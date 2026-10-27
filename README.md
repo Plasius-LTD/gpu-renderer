@@ -1,5 +1,10 @@
 # @plasius/gpu-renderer
 
+Optical furnace attribution accepts the same bounded `opticalJournal=u,v,s;...`
+selection as the room fixture. It replays canonical successful samples, retains
+geometry/throughput and post-surface termination records, and does not commit
+additional image samples. Journal-inclusive timings are not performance evidence.
+
 Latest [independent optical/lighting attribution](docs/evidence/optical-lighting-isolation-2026-10-27.md):
 the broad pedestal-reflection region is reproduced independently, and native
 sky+sun HDR recombines to the retained daylight control. Localized empty/index-one

@@ -1,5 +1,25 @@
 # Collision, sampling and optical contract corrections
 
+## Optical tails and roulette — active 27 October follow-up
+
+The user authorizes tracing/correcting the residual, adding regressions and
+automatically rerunning native1080p/4K; adaptive work remains paused. Task234
+retains owner zephod111r / In progress, Story2291 / Feature2114 and default-off
+transport/sampling controls. Preserve both failed20/32 furnace batches and all
+independent references. Do not alter the5% row/2% mean thresholds.
+
+First forward the existing bounded, opt-in canonical selected-sample journal to
+the known-radiance fixture. Validate selections before GPU allocation, retain
+post-surface terminals, identify roulette/depth/absorption separately, and require
+unchanged accepted HDR versus the uninstrumented control. No new production
+transport, sample commits, geometry replay or performance claims from diagnostics.
+Trace the original worst row176 and neighbouring controls at the same ordinals.
+Any diagnosed correction needs a failing portable numerical regression and a
+canonical assembled-device regression before native recapture. Preserve energy,
+count/sibling accounting, optical collision/medium validity and disabled behavior.
+An optical-tail policy change needs explicit bounded design/tracked acceptance
+before implementation; no silently uncounted interactions or unbounded loops.
+
 ## Optical reference and source isolation — 27 October
 
 Depth attribution follow-up (before implementation): retain the failed native
