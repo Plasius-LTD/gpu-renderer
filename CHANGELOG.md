@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve independent optical/lighting attribution: eight256-SPP controls and
+  two native1080p source-isolation captures retain434,700,288 completed camera
+  samples. The pedestal-reflection region reproduces independently, but empty/
+  index-one furnace row gates still fail at20/32 events. Keep image/adaptive
+  gates closed; no production transport or performance claim changes (#234).
+
 - Retain independent optical-reference EXR/linear HDR and read-only row
   comparison tooling; add an explicit32-event diagnostic beside the unchanged
  20-event controls. Failed furnace gates remain failures, not new baselines.

@@ -1,5 +1,11 @@
 # @plasius/gpu-renderer
 
+Latest [independent optical/lighting attribution](docs/evidence/optical-lighting-isolation-2026-10-27.md):
+the broad pedestal-reflection region is reproduced independently, and native
+sky+sun HDR recombines to the retained daylight control. Localized empty/index-one
+furnace row gates still fail at20 and32 events. This is not a band-removal or
+adaptive-performance pass; no production transport was changed to hide it.
+
 Development optical attribution: the immutable room-reference server also serves
 `/tests/fixtures/optical-lighting-isolation.html`. Its explicit run action captures
 empty/filled/index-one constant-radiance controls and a contrasting pedestal at
