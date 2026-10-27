@@ -1,3 +1,4 @@
+import { uploadWavefrontBuffer } from './wavefront-upload.js';
 import { createGpuAllocationTracker, openGpuAllocationErrorScopes } from './gpu-allocation-budget.js';
 import { createWavefrontProgressiveResources } from './wavefront-progressive.js';
 import {
@@ -370,11 +371,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     packedBvhNodeFloats[nodeOffset + 2] = totalEmissiveWeight;
     packedBvhNodeUints[nodeOffset + 8] = triangleIndex;
   });
-  device.queue.writeBuffer(triangleBuffer, 0, packedTriangles.buffer);
-  device.queue.writeBuffer(bvhNodeBuffer, 0, packedBvhNodes.buffer);
-  device.queue.writeBuffer(meshVertexBuffer, 0, config.gpuMeshSource.vertices.buffer);
-  device.queue.writeBuffer(meshIndexBuffer, 0, config.gpuMeshSource.indices.buffer);
-  device.queue.writeBuffer(meshRangeBuffer, 0, config.gpuMeshSource.meshes.buffer);
+  await uploadWavefrontBuffer(device, triangleBuffer, packedTriangles.buffer);
+  await uploadWavefrontBuffer(device, bvhNodeBuffer, packedBvhNodes.buffer);
+  await uploadWavefrontBuffer(device, meshVertexBuffer, config.gpuMeshSource.vertices.buffer);
+  await uploadWavefrontBuffer(device, meshIndexBuffer, config.gpuMeshSource.indices.buffer);
+  await uploadWavefrontBuffer(device, meshRangeBuffer, config.gpuMeshSource.meshes.buffer);
   const packedEnvironmentPortals = packEnvironmentPortals(
     config.environmentPortals,
     Math.max(1, config.environmentPortalCapacity)

@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Stage large scene-buffer uploads in bounded sequential chunks to reduce temporary memory pressure during high-resolution initialization.
 
 - **Security**
   - (placeholder)

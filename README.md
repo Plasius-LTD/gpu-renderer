@@ -129,7 +129,8 @@ individual device limits. `getSnapshot().allocations` reports current/peak bytes
 and individual buffers/textures, including refinement and denoising resources.
 These are requested allocation sizes, not a measurement of free VRAM or driver
 residency. A larger instance count adds transforms and scene-index nodes without
-multiplying the underlying geometry. Recreate the runtime to replace instances.
+multiplying the underlying geometry. Large buffer uploads use bounded sequential
+staging to reduce temporary upload pressure. Recreate the runtime to replace instances.
 
 ## Choose a rendering API
 

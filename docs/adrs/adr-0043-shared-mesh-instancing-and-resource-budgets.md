@@ -52,3 +52,8 @@ backend rules control rollout and rollback. New byte budgets do not bypass those
 controls or permit local publishing. Release through approved main/production CD
 before consumers adopt the package. Scene changes currently recreate the runtime;
 this release does not implement animated instance refitting.
+
+Large buffer uploads are staged in sequential chunks of at most 8 MiB, with
+bounded GPU completion waits between chunks. Resource-byte accounting describes
+destination resources; transient browser/driver staging may add overhead, so avoid
+submitting hundreds of megabytes of staging work at once during initialization.

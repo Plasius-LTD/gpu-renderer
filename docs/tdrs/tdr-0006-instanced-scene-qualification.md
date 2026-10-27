@@ -36,3 +36,16 @@ measured physical VRAM. Immutable package/release evidence belongs on the issues
 The 800x500 crowd subsequently completed 64 progressive samples at six bounces
 with denoising in 29.4 seconds including loading/preparation, using the same shared
 geometry. Evidence: crowd-64spp-800.json and crowd-64spp-800.png.
+
+The 1920x1080 crowd completed 16 samples at six bounces with denoising in 26.7
+seconds, requesting 555,434,436 bytes. Native 3840x2160 initially lost the in-app
+browser's GPU device during initialization; its adapter subsequently became
+unavailable, including for a tiny scene. Do not report that run as successful.
+
+Large geometry uploads now use sequential <=8 MiB staging requests, each with a
+bounded completion wait. This avoids staging a complete 305 MB triangle buffer
+alongside UHD image resources. After this change Chrome completed the full crowd
+at 3840x2160, four progressive samples and twelve bounces with denoising in 39.8
+seconds. Evidence: chrome-4k-bounded-upload-ax.txt and
+chrome-4k-bounded-upload.png. A causal before/after comparison on the in-app
+browser remains pending its GPU recovery; do not claim a diagnosed driver cause.
