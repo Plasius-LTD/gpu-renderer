@@ -69,7 +69,7 @@ test('ordinary, split and rough roulette retain local policy and its secondary b
 test('canonical staged and fused surface code share the corrected policy without changing depth or sampling',()=>{
  assert.match(WAVEFRONT_COMPUTE_WGSL,/let survivalProbability = continuation_survival_probability\(ray, hit, continuationThroughput, secondaryThroughput, transmissionBranch\)/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/continuationThroughput = continuationThroughput \/ survivalProbability/);
- assert.match(WAVEFRONT_COMPUTE_WGSL,/ray.bounce \+ 1u >= config.maxDepth/);
+ assert.match(withoutOpticalBudget(WAVEFRONT_COMPUTE_WGSL),/ray.bounce \+ 1u >= config.maxDepth/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/SAMPLE_DIM_RUSSIAN_ROULETTE/);
  // Exact old source after reversing ONLY this intentional policy refinement.
  const prior=withoutOpticalBudget(WAVEFRONT_COMPUTE_WGSL).replace(functionSource('continuation_survival_probability')+'\n','')

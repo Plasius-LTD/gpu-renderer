@@ -60,3 +60,4 @@
 - [ADR 0064: Previous-vertex environment MIS density](adr-0064-previous-vertex-environment-mis.md)
 - [ADR 0065: IOR-compensated cumulative optical roulette](adr-0065-optical-roulette.md)
 - [ADR 0066: Separate capped optical-interface budget](adr-0066-separate-optical-interface-budget.md)
+- [ADR 0067: Stream bounded zero-direct optical chains](adr-0067-streamed-bounded-optical-chains.md)

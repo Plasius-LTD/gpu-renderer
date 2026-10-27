@@ -9,7 +9,7 @@ import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 import { readWavefrontTerminationMetrics } from '/src/wavefront-readbacks.js';
 import { retainNativeFailure,readFailedPathNodes } from './native-failure-evidence.js';
 import {validateOpticalSelections,selectedOpticalJournals} from './optical-selection.js';
-import {pathEventCapacity} from '../../src/wavefront-optical-interface-budget.js';
+import {pathQueueCapacity} from '../../src/wavefront-optical-interface-budget.js';
 import {MAX_OPTICAL_TRACE_INTERFACES} from './optical-chain-trace.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
@@ -80,7 +80,7 @@ export async function createNativeAdaptiveRunner(c) {
         stage("configPacking",()=>{
           const batch=new Uint8Array(samples*config.memory.configBufferStride);cpu?.recordAllocation(batch.byteLength);
           for(let ordinal=0;ordinal<samples;ordinal++){
-            const value=createConfigPayload(config,tile,seed,{sampleIndex:ordinal,sampleWeight:adaptive?1:1/maximum});
+            const value=createConfigPayload(config,tile,seed,{opticalTelemetry:diagnostics&&telemetry.opticalSegmentsAvailable,sampleIndex:ordinal,sampleWeight:adaptive?1:1/maximum});
             cpu?.recordAllocation(value.byteLength);batch.set(new Uint8Array(value),ordinal*config.memory.configBufferStride);
           }
           frameDevice.queue.writeBuffer(frame,0,batch);
@@ -113,7 +113,7 @@ export async function createNativeAdaptiveRunner(c) {
         await asyncStage("gpuWait",()=>wait(device.queue.onSubmittedWorkDone()));
         trace.renderIntervalMs=performance.now()-tileStarted;trace.parallelism=parallelism;
         if(diagnostics){const readStarted=performance.now();
-          const measured=await asyncStage("telemetryReadback",()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:samples*pathEventCapacity(config),waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())})));
+          const measured=await asyncStage("telemetryReadback",()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:samples*pathQueueCapacity(config),expectedOpticalSegmentRecords:config.opticalInterfaceBudget.enabled?samples:0,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())})));
           trace.telemetry=measured;trace.rawTimestampPair=timestampPairs.at(-1)??null;
           check(measured.rayCounts.status==="available",measured.rayCounts.reason);
           await asyncStage("outputReadback",async()=>{

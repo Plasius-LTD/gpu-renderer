@@ -41,7 +41,8 @@ export function validateRoomQualification(receipt,lane,source){
  if(budget.enabled){
   const capacity=lane.bounces+budget.maximumInterfaces,a=receipt.admission,b=a?.opticalInterfaceBudget;
   if(receipt.transportFlags?.[OPTICAL_INTERFACE_BUDGET_FLAG]!==true||b?.enabled!==true||b.maximumInterfaces!==budget.maximumInterfaces||
-   a.maximumPathEvents!==capacity||f.maximumPathEvents!==capacity||!Number.isSafeInteger(b.additionalPathBytes)||b.additionalPathBytes<=0||b.additionalPathBytes>b.maximumAdditionalBytes||
+   a.maximumPathEvents!==capacity||f.maximumPathEvents!==capacity||!Number.isSafeInteger(b.additionalPathBytes)||
+   (b.storageMode==='streamed-linear-chain'?b.additionalPathBytes!==0:b.storageMode!==undefined||b.additionalPathBytes!==128*128*budget.maximumInterfaces*64)||b.maximumAdditionalBytes<1||b.additionalPathBytes>b.maximumAdditionalBytes||
    receipt.opticalPathSamplingProbe?.opticalInterfaceBudgetProbe?.passed!==true)throw Error('Room qualification optical allowance evidence failed');
  }else if(receipt.transportFlags?.[OPTICAL_INTERFACE_BUDGET_FLAG]||receipt.admission?.opticalInterfaceBudget?.enabled||f.maximumPathEvents!==undefined&&f.maximumPathEvents!==lane.bounces)throw Error('Unexpected optical allowance in fixed control');
  return {resolution:lane.resolution,glass:lane.glass,focus:lane.focus,actualSamples:f.actualSamples,hdrSha256:receipt.linearImage.sha256,captureId:receipt.provenance.captureId,opticalInterfaceBudget:budget};

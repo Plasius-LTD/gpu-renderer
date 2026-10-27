@@ -14,7 +14,7 @@ import {GLASS_WATER_DEFAULTS,glassWaterSettings,withRoomGlass} from '/lighting/d
 import {createRoomDemoPresets,installRoomDemoUi,roomFocusSettings,revealInvalidControl,setRoomPreviewState,invalidateRoomCaptureUi} from './room-demo-ui.js';
 import {runRoomQualification,roomQualificationSettingsFromSearch} from './room-qualification.js';
 import {opticalSelectionsFromSearch} from './optical-selection.js';
-import {MAX_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG} from '../../src/wavefront-optical-interface-budget.js';
+import {MAX_OPTICAL_INTERFACES,DEFAULT_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG} from '../../src/wavefront-optical-interface-budget.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
@@ -27,7 +27,7 @@ function resetCoat(){el('clearcoat').value='off';el('wood-coat').value='off';el(
 function coatSelection(){return {enabled:el('wood-coat').value==='on',weight:el('coat-weight').valueAsNumber,roughness:el('coat-roughness').valueAsNumber};}
 resetCoat();
 const glassFields={'glass-fill':'fill','glass-x':'x','glass-z':'z','glass-radius':'radius','glass-height':'height','glass-ior':'glassIor','water-ior':'waterIor','glass-support-clearance':'supportClearance'};
-function resetGlass(){el('optical-interface-budget').value='off';el('optical-interface-limit').value=String(MAX_OPTICAL_INTERFACES);el('rough-dielectric').value='off';el('bounded-dielectric').value='off';el('nested-media').value='off';el('glass-mode').value=GLASS_WATER_DEFAULTS.mode;for(const [id,key] of Object.entries(glassFields))el(id).value=GLASS_WATER_DEFAULTS[key];}
+function resetGlass(){el('optical-interface-budget').value='off';el('optical-interface-limit').value=String(DEFAULT_OPTICAL_INTERFACES);el('rough-dielectric').value='off';el('bounded-dielectric').value='off';el('nested-media').value='off';el('glass-mode').value=GLASS_WATER_DEFAULTS.mode;for(const [id,key] of Object.entries(glassFields))el(id).value=GLASS_WATER_DEFAULTS[key];}
 function focusSettings(){return roomFocusSettings(el('focus-view').value,{room:ROOM_DEFAULTS,cloth:CLOTH_INSPECTION_DEFAULTS,glass:GLASS_WATER_DEFAULTS});}
 function glassSelection(){return glassWaterSettings({mode:el('glass-mode').value,...Object.fromEntries(Object.entries(glassFields).map(([id,key])=>[key,el(id).valueAsNumber])),...focusSettings().glass});}
 el('optical-interface-limit').min='1';el('optical-interface-limit').max=String(MAX_OPTICAL_INTERFACES);

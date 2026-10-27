@@ -1,5 +1,4 @@
 import {createWavefrontPathTracingComputeShaderSource} from '../../src/wavefront-shaders.js';
-import {OPTICAL_CHAIN_WGSL} from '../../src/wavefront-optical-chain-shader.js';
 import {assertShaderModuleCompiles} from '../../src/wavefront-runtime-support.js';
 export const MAX_OPTICAL_TRACE_INTERFACES=4096;
 const VECTORS=13,WORDS=VECTORS*4,RECORD_BYTES=WORDS*4;
@@ -32,8 +31,7 @@ export function opticalChainTraceShader({pixel,maximumInterfaces,sampler}){
   accumulation[o+10u]=vec4<f32>(hit.distance,hit.pad2,hit.occlusion,f32(hit.objectId));accumulation[o+11u]=hit.barycentric;
   accumulation[o+12u]=vec4<f32>(f32(ray.sourcePixelId),f32(ray.sampleId),f32(ray.rayId),f32(ordinary_path_events(ray)));
  }`;
- const chain=OPTICAL_CHAIN_WGSL.replace('fn record_optical_chain_step(ray: RayRecord, hit: HitRecord) {}',recorder);
- return createWavefrontPathTracingComputeShaderSource({progressiveSampling:sampler})+chain+`
+ return createWavefrontPathTracingComputeShaderSource({progressiveSampling:sampler}).replace('fn record_optical_chain_step(ray: RayRecord, hit: HitRecord) {}',recorder)+`
  @compute @workgroup_size(1)fn trace_optical_chain(){
   let x=${pixel}u%config.canvasWidth;let y=${pixel}u/config.canvasWidth;
   let root=(y-config.tileY)*config.tileWidth+x-config.tileX;

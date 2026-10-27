@@ -34,10 +34,10 @@ export function withRoughBounceSplitting(source,splitting,trace=false) {
   if(!splitting?.enabled)return source;
   if(![1,2].includes(splitting.splitDepth))throw new RangeError('Invalid rough splitting depth.');
   const factor=2**splitting.splitDepth,stride=`(config.tilePixelCount * ${factor}u)`;
-  source=replaceRequired(source,'input.bounce * config.tilePixelCount',`input.bounce * ${stride}`);
-  source=replaceRequired(source,'(ray.bounce + 1u) * config.tilePixelCount',`(ray.bounce + 1u) * ${stride}`);
+  source=replaceRequired(source,'depth * config.tilePixelCount',`depth * ${stride}`);
+  source=replaceRequired(source,'(path_logical_depth(ray) + 1u) * config.tilePixelCount',`(path_logical_depth(ray) + 1u) * ${stride}`);
   if(!trace)return source;
-  source=replaceRequired(source,'let ray = begin_path_node(activeQueue[index], index);',`let ray = begin_path_node(activeQueue[index], index);
+  source=replaceRequired(source,'var ray = begin_path_node(activeQueue[index], index);',`var ray = begin_path_node(activeQueue[index], index);
   rough_branch_key = ray.flags >> 8u;`);
   source=replaceRequired(source,'mix_seed(pixelId,', 'mix_seed(split_pixel_id(pixelId),');
   source=replaceRequired(source,'let scatter = scatter_direction(ray, hit);',`if (rough_split_eligible(ray, hit)) { spawn_rough_children(ray, hit, segmentTransmittance); return; }

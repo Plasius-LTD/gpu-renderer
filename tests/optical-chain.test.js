@@ -16,7 +16,7 @@ function trace(limit,kind=2){
    hit.geometricNormal=vec4<f32>(select(vec3<f32>(0,-sign(ray.direction.y),0),vec3<f32>(-sign(ray.direction.x),0,0),ray.bounce<40u),0);hit.shadingNormal=hit.geometricNormal;
    return NestedIntersection(ray,hit);}`)
   .replace(/fn sample_dimension_1d\([\s\S]*?\n}/,'fn sample_dimension_1d(pixelId:u32,sampleId:u32,bounce:u32,frameIndex:u32,dimension:u32)->f32{return 0.5;}')
-  +OPTICAL_CHAIN_WGSL+`
+  +`
  @compute @workgroup_size(1)fn chain_test(){config.transportExperimentFlags=180224u;config.samplesPerPixel=256u;
  var ray=RayRecord();ray.mediumRefId=1u;ray.mediumStack=vec4<u32>(1u,0,0,0);ray.mediumStackDepth=1u;
  ray.direction=vec4<f32>(.5,sqrt(.75),0,0);ray.throughput=vec4<f32>(vec3<f32>(1.0/2.25),1);

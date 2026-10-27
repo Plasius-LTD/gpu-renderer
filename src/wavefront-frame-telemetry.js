@@ -23,6 +23,13 @@ function freezeRayCountTelemetry(values = {}) {
     capturedRayCounts: values.capturedRayCounts ?? 0,
     expectedRayCounts: values.expectedRayCounts ?? 0,
     reason: values.reason ?? null,
+    ...(values.histogramDomain ? {
+      histogramDomain: values.histogramDomain,
+      queuePathSegments: values.queuePathSegments ?? null,
+      additionalOpticalSegments: values.additionalOpticalSegments ?? null,
+      capturedOpticalSegmentRecords: values.capturedOpticalSegmentRecords ?? 0,
+      expectedOpticalSegmentRecords: values.expectedOpticalSegmentRecords ?? 0,
+    } : {}),
   });
 }
 
@@ -63,6 +70,7 @@ export function createWavefrontFrameTelemetryResources({
   device,
   constants,
   maxRayCountRecords,
+  maxOpticalSegmentRecords = 0,
   // Internal diagnostic option. Default public-renderer descriptors stay unchanged.
   timestampPassPairs = false,
 }) {
@@ -70,14 +78,18 @@ export function createWavefrontFrameTelemetryResources({
   const timestampBufferBytes = timestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT;
   const rayRecordCapacity = Math.max(1, Math.trunc(Number(maxRayCountRecords) || 1));
   const rayBufferBytes = rayRecordCapacity * Uint32Array.BYTES_PER_ELEMENT;
+  if (!Number.isSafeInteger(maxOpticalSegmentRecords) || maxOpticalSegmentRecords < 0) throw new RangeError('Invalid optical telemetry capacity');
+  const opticalBufferBytes = maxOpticalSegmentRecords * Uint32Array.BYTES_PER_ELEMENT;
   const mapMode = constants.map;
   if (!mapMode || typeof mapMode.READ !== "number") {
     return Object.freeze({
       available: false,
+      opticalSegmentsAvailable: false,
       reason: "gpu-map-read-unavailable",
       memoryBytes: 0,
       beginFrame() {},
       recordActiveRayCount() {},
+      recordOpticalSegmentCount() {},
       decorateFirstPass(descriptor) {
         return descriptor;
       },
@@ -113,6 +125,15 @@ export function createWavefrontFrameTelemetryResources({
     rayBufferBytes,
     "plasius.wavefront.rayCounts.readback"
   );
+  let opticalCountBuffer = null, opticalReadbackBuffer = null;
+  try {
+    if (opticalBufferBytes) {
+      opticalCountBuffer = createBuffer(device, constants.buffer.COPY_DST | constants.buffer.COPY_SRC, opticalBufferBytes, 'plasius.wavefront.opticalSegments');
+      opticalReadbackBuffer = createBuffer(device, constants.buffer.COPY_DST | constants.buffer.MAP_READ, opticalBufferBytes, 'plasius.wavefront.opticalSegments.readback');
+    }
+  } catch (error) {
+    opticalCountBuffer?.destroy?.(); rayCountBuffer.destroy?.(); rayCountReadbackBuffer.destroy?.(); throw error;
+  }
 
   const timestampFeatureAvailable = hasGpuFeature(device?.features, "timestamp-query");
   const timestampApiAvailable =
@@ -169,18 +190,29 @@ export function createWavefrontFrameTelemetryResources({
   let timestampEnded = false;
   let rayReadbackMapped = false;
   let timestampReadbackMapped = false;
+  let opticalRecordCount = 0, opticalOverflow = false, opticalMapped = false;
 
   const memoryBytes =
-    rayBufferBytes * 2 +
+    rayBufferBytes * 2 + opticalBufferBytes * 2 +
     (timestampQuerySet ? timestampBufferBytes * 2 : 0);
 
   function beginFrame() {
     active = true;
     recordCount = 0;
     recordOverflow = false;
+    opticalRecordCount = 0;
+    opticalOverflow = false;
     bounceIndices = [];
     timestampStarted = false;
     timestampEnded = false;
+  }
+
+  function recordOpticalSegmentCount(encoder, counterBuffer) {
+    if (!active || !opticalCountBuffer) return;
+    if (opticalRecordCount >= maxOpticalSegmentRecords) { opticalOverflow = true; return; }
+    // The final reserved counter word is reset by primary generation/bootstrap.
+    encoder.copyBufferToBuffer(counterBuffer, 27 * 4, opticalCountBuffer, opticalRecordCount * 4, 4);
+    opticalRecordCount += 1;
   }
 
   function recordActiveRayCount(encoder, counterBuffer, bounceIndex) {
@@ -235,17 +267,18 @@ export function createWavefrontFrameTelemetryResources({
   async function readFrame({
     expectedPrimaryRays = 0,
     expectedRayCounts = recordCount,
+    expectedOpticalSegmentRecords = 0,
     waitForSubmittedGpuWork,
   } = {}) {
     active = false;
-    if (recordOverflow || recordCount !== expectedRayCounts) {
+    if (recordOverflow || recordCount !== expectedRayCounts || opticalOverflow || opticalRecordCount !== expectedOpticalSegmentRecords) {
       return Object.freeze({
         rayCounts: freezeRayCountTelemetry({
           status: "failed",
           expectedPrimaryRays,
           capturedRayCounts: recordCount,
           expectedRayCounts,
-          reason: recordOverflow
+          reason: opticalOverflow ? 'optical-segment-record-capacity-exceeded' : opticalRecordCount !== expectedOpticalSegmentRecords ? `optical-segment-record-mismatch:${opticalRecordCount}/${expectedOpticalSegmentRecords}` : recordOverflow
             ? "ray-count-record-capacity-exceeded"
             : `ray-count-record-mismatch:${recordCount}/${expectedRayCounts}`,
         }),
@@ -263,6 +296,7 @@ export function createWavefrontFrameTelemetryResources({
       recordCount * Uint32Array.BYTES_PER_ELEMENT
     );
     encoder.copyBufferToBuffer(rayCountBuffer, 0, rayCountReadbackBuffer, 0, rayCopyBytes);
+    if (opticalRecordCount) encoder.copyBufferToBuffer(opticalCountBuffer, 0, opticalReadbackBuffer, 0, opticalRecordCount * 4);
     const canResolveTimestamps =
       timestampQuerySet &&
       timestampStarted &&
@@ -300,6 +334,15 @@ export function createWavefrontFrameTelemetryResources({
       rayCountReadbackBuffer.unmap();
       rayReadbackMapped = false;
 
+      let additionalOpticalSegments = 0;
+      if (opticalRecordCount) {
+        await opticalReadbackBuffer.mapAsync(mapMode.READ);
+        opticalMapped = true;
+        const opticalCounts = new Uint32Array(opticalReadbackBuffer.getMappedRange().slice(0, opticalRecordCount * 4));
+        for (const count of opticalCounts) additionalOpticalSegments += count;
+        opticalReadbackBuffer.unmap(); opticalMapped = false;
+      }
+
       let maximumBounceIndex = 0;
       for (const bounceIndex of bounceIndices) {
         maximumBounceIndex = Math.max(maximumBounceIndex, bounceIndex);
@@ -320,6 +363,9 @@ export function createWavefrontFrameTelemetryResources({
         }
       }
       const primaryCountsMatch = observedPrimaryRays === expectedPrimaryRays;
+      const queuePathSegments = totalPathSegments;
+      totalPathSegments += additionalOpticalSegments;
+      secondaryRays += additionalOpticalSegments;
       const rayTelemetry = freezeRayCountTelemetry({
         status: primaryCountsMatch ? "available" : "failed",
         source: "gpu-active-queue-readback",
@@ -330,6 +376,8 @@ export function createWavefrontFrameTelemetryResources({
         bounceHistogram,
         capturedRayCounts: recordCount,
         expectedRayCounts,
+        ...(opticalBufferBytes ? {histogramDomain:'queue-iteration',queuePathSegments,additionalOpticalSegments,
+          capturedOpticalSegmentRecords:opticalRecordCount,expectedOpticalSegmentRecords} : {}),
         reason: primaryCountsMatch
           ? null
           : `primary-ray-count-mismatch:${observedPrimaryRays}/${expectedPrimaryRays}`,
@@ -371,6 +419,7 @@ export function createWavefrontFrameTelemetryResources({
         reason: timestampReason,
       });
     } catch (error) {
+      if (opticalMapped) { opticalReadbackBuffer.unmap(); opticalMapped = false; }
       if (rayReadbackMapped) {
         rayCountReadbackBuffer.unmap();
         rayReadbackMapped = false;
@@ -399,6 +448,8 @@ export function createWavefrontFrameTelemetryResources({
     active = false;
     rayCountBuffer.destroy?.();
     rayCountReadbackBuffer.destroy?.();
+    opticalCountBuffer?.destroy?.();
+    opticalReadbackBuffer?.destroy?.();
     timestampQuerySet?.destroy?.();
     timestampResolveBuffer?.destroy?.();
     timestampReadbackBuffer?.destroy?.();
@@ -406,10 +457,12 @@ export function createWavefrontFrameTelemetryResources({
 
   return Object.freeze({
     available: true,
+    opticalSegmentsAvailable: opticalBufferBytes > 0,
     reason: null,
     memoryBytes,
     beginFrame,
     recordActiveRayCount,
+    recordOpticalSegmentCount,
     decorateFirstPass,
     decorateFinalPass,
     readFrame,

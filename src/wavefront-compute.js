@@ -1,4 +1,4 @@
-import {pathEventCapacity} from './wavefront-optical-interface-budget.js';
+import {pathEventCapacity,pathQueueCapacity} from './wavefront-optical-interface-budget.js';
 import {
   createGpuParallelismCounters,
   createGpuParallelismDiagnostics,
@@ -605,7 +605,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         device,
         constants,
         maxRayCountRecords:
-          tiles.length * config.samplesPerPixel * pathEventCapacity(config),
+          tiles.length * config.samplesPerPixel * pathQueueCapacity(config),
+        maxOpticalSegmentRecords: config.opticalInterfaceBudget.enabled ? tiles.length * config.samplesPerPixel : 0,
       });
     }
     return frameTelemetryResources;
@@ -667,8 +668,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     }
     const offset = slot * configBufferStride;
     const payload = cpuProfile
-      ? cpuProfile.measure("configPacking", () => createConfigPayload(config, tile, frameIndex, buildRange))
-      : createConfigPayload(config, tile, frameIndex, buildRange);
+      ? cpuProfile.measure("configPacking", () => createConfigPayload(config, tile, frameIndex, {...buildRange,opticalTelemetry:activeFrameTelemetry?.opticalSegmentsAvailable===true}))
+      : createConfigPayload(config, tile, frameIndex, {...buildRange,opticalTelemetry:activeFrameTelemetry?.opticalSegmentsAvailable===true});
     cpuProfile?.recordAllocation(payload.byteLength);
     frameDevice.queue.writeBuffer(
       configBuffer,
@@ -941,10 +942,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     const expectedPrimaryRays =
       config.width * config.height * samplingPlan.renderedSamplesPerPixel;
     const expectedRayCounts =
-      tiles.length * samplingPlan.renderedSamplesPerPixel * pathEventCapacity(config);
+      tiles.length * samplingPlan.renderedSamplesPerPixel * pathQueueCapacity(config);
     const readTelemetry = () => telemetryResourcesForFrame.readFrame({
           expectedPrimaryRays,
           expectedRayCounts,
+          expectedOpticalSegmentRecords:config.opticalInterfaceBudget.enabled?tiles.length*samplingPlan.renderedSamplesPerPixel:0,
           waitForSubmittedGpuWork,
         });
     const telemetryReadback = telemetryCanRecord

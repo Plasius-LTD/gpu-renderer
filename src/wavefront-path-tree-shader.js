@@ -20,13 +20,18 @@ const PATH_NONE: u32 = 0xffffffffu;
 const PATH_INITIALIZED: u32 = 1u;
 const PATH_FAILED: u32 = 2u;
 
+fn path_logical_depth(ray: RayRecord) -> u32 {
+  return select(ray.bounce, ray.flags >> 24u, (config.transportExperimentFlags & 131072u) != 0u);
+}
+
 fn path_radiance_valid(value: vec3<f32>) -> bool {
   return all((bitcast<vec3<u32>>(value) & vec3<u32>(0x7f800000u)) < vec3<u32>(0x7f800000u)) && all(value >= vec3<f32>(0.0));
 }
 
 fn begin_path_node(input: RayRecord, queueIndex: u32) -> RayRecord {
   var ray = input;
-  let nodeId = select(input.bounce * config.tilePixelCount + queueIndex, input.rayId, input.bounce == 0u);
+  let depth = path_logical_depth(input);
+  let nodeId = select(depth * config.tilePixelCount + queueIndex, input.rayId, depth == 0u);
   ray.parentRayId = nodeId; // Local writer handle; incoming parent is preserved below.
   var node = PathNode();
   node.flags = PATH_INITIALIZED;
@@ -36,7 +41,7 @@ fn begin_path_node(input: RayRecord, queueIndex: u32) -> RayRecord {
   node.rootId = input.rayId;
   node.sourcePixelId = input.sourcePixelId;
   node.sampleId = input.sampleId;
-  node.depth = input.bounce;
+  node.depth = depth;
   pathNodes[nodeId] = node;
   return ray;
 }
@@ -58,7 +63,7 @@ fn record_path_terminal(ray: RayRecord, value: vec3<f32>, kind: u32) {
 }
 
 fn link_path_child(ray: RayRecord, childQueueIndex: u32, secondary: bool) {
-  let child = (ray.bounce + 1u) * config.tilePixelCount + childQueueIndex;
+  let child = (path_logical_depth(ray) + 1u) * config.tilePixelCount + childQueueIndex;
   if (secondary) { pathNodes[ray.parentRayId].secondChild = child; }
   else { pathNodes[ray.parentRayId].firstChild = child; }
 }

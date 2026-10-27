@@ -20,7 +20,7 @@ import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 import { createSharedSampleRanges, packSharedPhase, createSharedAdaptivePipelines, encodeSharedPhase, encodeSharedSample } from "/src/wavefront-adaptive-shared.js";
 import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continuations.js";
 import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
-import {pathEventCapacity} from '/src/wavefront-optical-interface-budget.js';
+import {pathQueueCapacity} from '/src/wavefront-optical-interface-budget.js';
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false,opticalInterfaceBudget={enabled:false}}={}) {
@@ -90,7 +90,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       "renderer.sampling.roughBounceSplitting.enabled":splitDepth>0,
       roughBounceSplitting:{splitDepth},
       navigator:{gpu:{requestAdapter:async()=>observedAdapter,getPreferredCanvasFormat:()=>navigator.gpu.getPreferredCanvasFormat()}} }));
-    const maxDepth=pathEventCapacity(renderer.config);
+    const maxDepth=pathQueueCapacity(renderer.config);
     const rendererBufferBytes=[...buffers.values()].reduce((sum,buffer)=>sum+buffer.size,0);
     const textureInventory=textures.map(item=>({format:item.format,size:item.size,mipLevelCount:item.mipLevelCount??1,sampleCount:item.sampleCount??1}));
     const get=name=>{const value=buffers.get(`plasius.wavefront.${name}`);check(value,`Missing ${name}`);return value;};
@@ -114,7 +114,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const preparedBindings={ bootstrapFrame:group(bootstrap.frameLayout,[[0,queue],[3,accumulation],[5,frame,320],[6,counters],[22,paths]]),
       bootstrapWorklist:group(bootstrap.worklistLayout,[[0,b.worklist],[1,b.primaryControl],[2,b.primaryConfig,32]]),
       cameraFrame:group(camera.rayLayout,[[0,queue],[5,frame,320]]),cameraWorklist:group(camera.worklistLayout,[[0,b.worklist],[1,b.primaryControl],[2,b.primaryConfig,32]]) };
-    telemetry=createWavefrontFrameTelemetryResources({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},maxRayCountRecords:256*maxDepth,timestampPassPairs:true});
+    telemetry=createWavefrontFrameTelemetryResources({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},maxRayCountRecords:256*maxDepth,maxOpticalSegmentRecords:renderer.config.opticalInterfaceBudget.enabled?256:0,timestampPassPairs:true});
     check(telemetry.available,"Ray telemetry unavailable");
     activeTelemetry=telemetry;
     let config=renderer.config;
@@ -196,7 +196,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
         stage("configPacking",()=>{
         const frameBatch=useShared?new Uint8Array(samples*config.memory.configBufferStride):null;
         if(frameBatch)cpuProfile?.recordAllocation(frameBatch.byteLength);
-        for(let ordinal=0;ordinal<samples;ordinal+=1) {const payload=createConfigPayload(config,tile,7,{sampleIndex:fault==="duplicate-ordinal"&&ordinal===1?0:ordinal,sampleWeight:mode==="fixed"?1/samples:fault==="weighted"?0.5:1});
+        for(let ordinal=0;ordinal<samples;ordinal+=1) {const payload=createConfigPayload(config,tile,7,{opticalTelemetry:telemetry.opticalSegmentsAvailable,sampleIndex:fault==="duplicate-ordinal"&&ordinal===1?0:ordinal,sampleWeight:mode==="fixed"?1/samples:fault==="weighted"?0.5:1});
           cpuProfile?.recordAllocation(payload.byteLength);
           if(frameBatch)frameBatch.set(new Uint8Array(payload),ordinal*config.memory.configBufferStride);
           else frameDevice.queue.writeBuffer(frame,ordinal*config.memory.configBufferStride,payload);}
@@ -254,7 +254,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
         const linearOutputJobMs=performance.now()-started;
         progress?.("readback",1);
         const sampleIterations=mode==="fixed"||useShared?samples:tiers.reduce((sum,value)=>sum+value,0);
-        const readTelemetry=()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:sampleIterations*maxDepth,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}));
+        const readTelemetry=()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:sampleIterations*maxDepth,expectedOpticalSegmentRecords:config.opticalInterfaceBudget.enabled?sampleIterations:0,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}));
         const measured=await(cpuProfile?cpuProfile.measureAsync("telemetryReadback",readTelemetry):readTelemetry());
         const readOutput=async()=>({image:new Float32Array(await read(budgets?b.resolvedRadiance:accumulation,pixels*16)),counts:budgets?new Uint32Array(await read(b.pixelState,pixels*4)):null});
         const {image,counts}=await(cpuProfile?cpuProfile.measureAsync("outputReadback",readOutput):readOutput());

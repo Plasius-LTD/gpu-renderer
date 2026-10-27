@@ -943,6 +943,7 @@ export interface WavefrontRoughBounceSplittingConfig {
 }
 
 export interface WavefrontOpticalInterfaceBudgetConfig {
+  readonly storageMode?: "fixed" | "streamed-linear-chain";
   readonly enabled: boolean;
   readonly maximumInterfaces: number;
   readonly maximumAdditionalBytes: number;
@@ -1353,6 +1354,11 @@ export interface WavefrontPathTracingComputeRenderer {
 }
 
 export interface WavefrontRayCountTelemetry {
+  readonly histogramDomain?: "queue-iteration";
+  readonly queuePathSegments?: number | null;
+  readonly additionalOpticalSegments?: number | null;
+  readonly capturedOpticalSegmentRecords?: number;
+  readonly expectedOpticalSegmentRecords?: number;
   readonly status: "not-requested" | "available" | "unavailable" | "failed";
   readonly source: "gpu-active-queue-readback" | null;
   readonly expectedPrimaryRays: number | null;

@@ -1,6 +1,6 @@
 // Air-entry-conditioned analytic wall chain: canonical BSDF/budget/roulette,
 // not a second collision implementation or a full-room correctness reference.
-import {MAX_OPTICAL_INTERFACES,MAX_PHYSICAL_PATH_EVENTS} from '../../src/wavefront-optical-interface-budget.js';
+import {DEFAULT_OPTICAL_INTERFACES,MAX_PHYSICAL_PATH_EVENTS} from '../../src/wavefront-optical-interface-budget.js';
 export const OPTICAL_TAIL_PROBE=Object.freeze({samples:16384,tirEvents:40,meanTolerance:.001,escapedWeightTolerance:.0001});
 export const OPTICAL_TAIL_PROBE_WGSL=`
 @compute @workgroup_size(64)fn optical_tail_budget_probe(@builtin(global_invocation_id)id:vec3<u32>){
@@ -33,7 +33,7 @@ export function summarizeOpticalTail(values){
  const c=OPTICAL_TAIL_PROBE;if(values.length!==c.samples*4)throw Error('Optical tail probe length');
  let sum=0,minimumEvents=Infinity,maximumEvents=0,escapedWeightError=0;
  for(let i=0;i<values.length;i+=4){const [r,n,ordinary,status]=values.slice(i,i+4);
-  if(![r,n,ordinary,status].every(Number.isFinite)||r<0||status!==1||ordinary!==0||!Number.isInteger(n)||n<=c.tirEvents||n>MAX_OPTICAL_INTERFACES)throw Error('Optical tail budget/termination mismatch');
+  if(![r,n,ordinary,status].every(Number.isFinite)||r<0||status!==1||ordinary!==0||!Number.isInteger(n)||n<=c.tirEvents||n>DEFAULT_OPTICAL_INTERFACES)throw Error('Optical tail budget/termination mismatch');
   sum+=r;minimumEvents=Math.min(minimumEvents,n);maximumEvents=Math.max(maximumEvents,n);escapedWeightError=Math.max(escapedWeightError,Math.abs(r-1));
  }
  const mean=sum/c.samples;

@@ -8,10 +8,16 @@ Keep `maxDepth` as the ordinary limit; configure
 independently. These are the defaults, not mandatory scene settings. Smooth fully
 transmitting valid-medium interfaces, including TIR, use the separate allowance;
 rough/partial and ordinary scattering do not. Rough-bounce splitting is rejected.
-All physical events still advance sampler ordinals and consume dispatch/storage.
-Snapshots/frame statistics expose `maximumPathEvents` and the bounded additional
-allocation. Disabled mode adds no path storage or dispatches. At a 128² tile,
-64 extra interfaces allocate 64 MiB of path nodes, not measured physical VRAM.
+All physical events still advance sampler ordinals. The streamed implementation
+([ADR 0067](docs/adrs/adr-0067-streamed-bounded-optical-chains.md)) handles eligible
+zero-direct chains on GPU inside the current logical path node. Ordinary queue
+iterations and node storage remain bounded by `maxDepth`; it adds no path nodes.
+The validated interface range is 1–2048, with default64 unchanged. Snapshots expose
+physical `maximumPathEvents` separately from ordinary capacity. Optional telemetry
+labels queue histograms and adds internal optical queries to segments/secondary
+rays. Capture plus staging uses eight bytes per admitted tile/sample record,
+not measured physical VRAM. Off mode adds no optical storage/copies/debug atomics.
+The prior64-MiB prototype and rejected images remain preserved evidence.
 
 For automated correctness captures use
 `native-room-reference.html?qualificationOrder=4k-first&opticalInterfaces=64`
@@ -47,9 +53,10 @@ Diagnostic-only long tails: the furnace URL also accepts
 (at most eight original samples). It traces only the filled lane, reusing the
 captured primary-ray packet and canonical collision/optical functions, checking the saved prefix
 exactly. Its bounded private scratch does not commit image radiance/counts or
-change production interface admission. Default is off. The chain helper is not
-yet assembled into production transport; renderer memory/performance improvements
-are not claimed from this diagnostic.
+change production interface admission. Default is off. All eight exact-primary
+prefix checks now pass; the six optical64-truncated samples escape at86–235
+interfaces. Production streaming reuses that helper; image, full-scene and
+performance qualification remain separate gates, with no improvement claim.
 
 Optical furnace attribution accepts the same bounded `opticalJournal=u,v,s;...`
 selection as the room fixture. It replays canonical successful samples, retains

@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Stream bounded smooth zero-direct optical chains on GPU within logical path
+  nodes, keeping physical sample ordinals and ordinary queue/storage limits.
+  Keep the optical flag off and default64; validate explicit limits up to2048.
+  Count internal queries with optional lazy telemetry and label queue histograms;
+  add ownership/normalization, memory, fail-closed readback and off-path tests.
+  Preserve failed controls; physical image qualification remains required
+  (#234, ADR0067). No adaptive/performance or band-removal claim is made.
+
 - Add a default-off, independently capped smooth optical-interface allowance
   without increasing ordinary scattering limits. Bound added tile storage and
   physical dispatch/telemetry; preserve disabled frame bytes and sample identity.

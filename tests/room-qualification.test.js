@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {roomQualificationPlan,runRoomQualification,roomQualificationSettingsFromSearch} from './fixtures/room-qualification.js';
+import {roomQualificationPlan,runRoomQualification,roomQualificationSettingsFromSearch,validateRoomQualification} from './fixtures/room-qualification.js';
 
 test('development order override changes order only, never the six required lanes or sample counts',()=>{
  for(const query of ['','?qualificationOrder=default','?unrelated=1'])assert.deepEqual(roomQualificationSettingsFromSearch(query),{});
@@ -58,6 +58,9 @@ test('optical qualification preserves all six lanes and requires the actual allo
  for(const mutate of [r=>r.admission.maximumPathEvents=20,r=>r.frame.maximumPathEvents=20,r=>r.admission.opticalInterfaceBudget.maximumInterfaces=32,r=>r.admission.opticalInterfaceBudget.additionalPathBytes=0,r=>r.admission.opticalInterfaceBudget.maximumAdditionalBytes=1,r=>delete r.opticalPathSamplingProbe.opticalInterfaceBudgetProbe,r=>r.transportFlags['renderer.transport.opticalInterfaceBudget.enabled']=false]){
   const r=qualified(plan[0]);mutate(r);assert.equal((await runRoomQualification({settings,configure:()=>{},capture:()=>r})).status,'failed');
  }
- for(const opticalInterfaceBudget of [{enabled:true,maximumInterfaces:65},{enabled:true,maximumInterfaces:0},{enabled:1,maximumInterfaces:64}])assert.throws(()=>roomQualificationPlan({opticalInterfaceBudget}),/Invalid/);
+ const streamed=qualified(plan[0]);streamed.admission.opticalInterfaceBudget.storageMode='streamed-linear-chain';streamed.admission.opticalInterfaceBudget.additionalPathBytes=0;
+ assert.equal(validateRoomQualification(streamed,plan[0]).actualSamples,plan[0].expectedSamples);
+ streamed.admission.opticalInterfaceBudget.additionalPathBytes=1;assert.throws(()=>validateRoomQualification(streamed,plan[0]),/evidence failed/);
+ for(const opticalInterfaceBudget of [{enabled:true,maximumInterfaces:2049},{enabled:true,maximumInterfaces:0},{enabled:1,maximumInterfaces:64}])assert.throws(()=>roomQualificationPlan({opticalInterfaceBudget}),/Invalid/);
  const r=qualified(plan[0]);assert.equal((await runRoomQualification({settings:{resolutions:['4k']},configure:()=>{},capture:()=>r})).status,'failed');
 });

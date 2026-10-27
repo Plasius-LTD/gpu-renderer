@@ -345,14 +345,14 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   const denoise = options.denoise !== false;
   const deferredPathResolve = options.deferredPathResolve !== false;
   const transport=resolveTransportExperiments(options);
-  const opticalBudget=resolveOpticalInterfaceBudget(options,{enabled:transport.effective.opticalInterfaceBudget,maxDepth,tilePixelCapacity,
+  resolveOpticalInterfaceBudget(options,{enabled:transport.effective.opticalInterfaceBudget,maxDepth,tilePixelCapacity,
     strict:resolveStrictPhysicalLowSppLighting(options),deferred:deferredPathResolve,roughSplitting:options.roughBounceSplitting?.enabled});
   roughSplitAdditionalBytes(tilePixelCapacity,maxDepth,options.roughBounceSplitting);
   const queueFactor = options.roughBounceSplitting?.enabled ? 2**options.roughBounceSplitting.splitDepth : 1;
   const queueBytes = tilePixelCapacity * queueFactor * RAY_RECORD_BYTES;
   const hitBytes = tilePixelCapacity * queueFactor * HIT_RECORD_BYTES;
   const accumulationBytes = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
-  const pathVertexBytes = tilePixelCapacity * queueFactor * (opticalBudget.maximumPathEvents + 1) * PATH_VERTEX_RECORD_BYTES;
+  const pathVertexBytes = tilePixelCapacity * queueFactor * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
   const sceneObjectBytes = sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES;
   const triangleBytes = allocatedRecordBytes(triangleCapacity, TRIANGLE_RECORD_BYTES);
   const materialTableBytes = 0;

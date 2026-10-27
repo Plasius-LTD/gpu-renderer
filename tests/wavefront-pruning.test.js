@@ -9,7 +9,7 @@ import { createWavefrontFrameEncoder } from "../src/wavefront-frame-encoder.js";
 import { createGpuParallelismCounters } from "../src/wavefront-frame-runtime.js";
 
 test("fixed shader bytes and transport bodies stay canonical; pruning flags are independent",()=>{
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),"c8ac9e819c7b6264df42d44cea8fad2627fec9d522e58161ee88807ec85a0c01"); // Task234 bounded optical budget; the regression reconstructs the unchanged prior shader.
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),"1679475a3e08f26ea681c7bb0ea056c640a315936b91e9dbb8e23c86de23b733"); // Task234 bounded optical budget; the regression reconstructs the unchanged prior shader.
   assert.equal(createPrunedContinuationShader(),WAVEFRONT_COMPUTE_WGSL);
   const fused=createPrunedContinuationShader({fusedHits:true});
   assert.ok(fused.includes(WAVEFRONT_SURFACE_BODY_WGSL));

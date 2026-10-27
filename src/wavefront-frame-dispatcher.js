@@ -1,5 +1,5 @@
 import { createGpuSubmissionBatcher } from "./wavefront-frame-runtime.js";
-import {pathEventCapacity} from './wavefront-optical-interface-budget.js';
+import {pathQueueCapacity} from './wavefront-optical-interface-budget.js';
 import {
   clamp,
   readNonNegativeInteger,
@@ -30,7 +30,7 @@ export function dispatchWavefrontFrame({
         sampleWeight: 1 / renderedSamplesPerPixel,
       });
       frameEncoder.encodeTileSample(
-        batch.reserve(pathEventCapacity(config) + 1),
+        batch.reserve(pathQueueCapacity(config) + 1),
         tile,
         configOffset,
         parallelism
@@ -66,7 +66,7 @@ export function dispatchWavefrontFrameAwaitingGpu({
   writeFrameConfigSlot,
   optionsForFrame = {},
 }) {
-  const samplePassesPerSample = pathEventCapacity(config) + 2;
+  const samplePassesPerSample = pathQueueCapacity(config) + 2;
   const denoisePassCount = config.denoise ? (renderedSamplesPerPixel < 4 ? 2 : 1) : 0;
   const tailPassCount = denoisePassCount + 1;
   const sampleBatchSize = Math.max(
@@ -124,7 +124,7 @@ export function dispatchWavefrontFrameAwaitingGpu({
         });
         slot += 1;
         frameEncoder.encodeTileSample(
-          batch.reserve(pathEventCapacity(config) + 1),
+          batch.reserve(pathQueueCapacity(config) + 1),
           tile,
           configOffset,
           parallelism

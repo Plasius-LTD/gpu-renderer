@@ -16,7 +16,7 @@ test('surface journal reads original post-surface PathNodes and retains exact ra
  assert.deepEqual(nodes[0],{directRadiance:[.125,.25,.5],terminalRadiance:[2,3,4],flags:1,terminalKind:7,pixel:100,sample:2,bounce:19});
  assert.throws(()=>decodeSurfaceJournal(new ArrayBuffer(3)),/Invalid/);
  assert.equal(decodeSurfaceJournal(new ArrayBuffer(96*64)).length,0);
- assert.throws(()=>decodeSurfaceJournal(new ArrayBuffer(97*64)),/Invalid/);
+ assert.throws(()=>decodeSurfaceJournal(new ArrayBuffer(2081*64)),/Invalid/);
 });
 
 test('selected surface journal dispatch is after canonical surface resolution and before queue swap',()=>{

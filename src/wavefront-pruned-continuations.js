@@ -23,7 +23,7 @@ fn intersectAndResolveActiveQueue(@builtin(global_invocation_id) globalId: vec3<
     input = result.ray;
     hit = result.hit;
   } else { hit = intersect_local_ray(input); }
-  let ray = begin_path_node(input, index);
+  var ray = begin_path_node(input, index);
 ${WAVEFRONT_SURFACE_BODY_WGSL}
 }
 `;

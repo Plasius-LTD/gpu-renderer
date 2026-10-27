@@ -136,6 +136,18 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (!path_budget_state_valid(ray))
     atomicAdd(&counters.terminatedCount, 1u);
     return;
   }
+  if (optical_interface_budget_enabled()) {
+    let chain = resolve_optical_chain(ray, hit, u32(config.cameraRight.w));
+    ray = chain.ray;
+    hit = chain.hit;
+    if (config.cameraForward.w == 1.0 && chain.additionalSegments > 0u) {
+      atomicAdd(&counters.termination.transportPad2, chain.additionalSegments);
+    }
+    if (chain.termination == 5u || chain.termination == 6u || chain.termination == 7u) {
+      terminate_optical_path(ray, chain.termination);
+      return;
+    }
+  }
   if (hit.hitType == 5u || medium_transition_invalid(ray, hit)) {
     fail_path_node(ray);
     pathNodes[ray.parentRayId].reserved = (hit.primitiveId << 4u) | max(u32(hit.pad2), medium_transition_failure(ray, hit));
@@ -1060,8 +1072,8 @@ fn resolveSurfaceRecords(@builtin(global_invocation_id) globalId: vec3<u32>) {
     return;
   }
 
-  let ray = begin_path_node(activeQueue[index], index);
-  let hit = hits[index];
+  var ray = begin_path_node(activeQueue[index], index);
+  var hit = hits[index];
 ${WAVEFRONT_SURFACE_BODY_WGSL}
 }
 

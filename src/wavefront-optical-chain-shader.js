@@ -1,5 +1,5 @@
-// Shared bounded linear-chain traversal. Not assembled into production yet;
-// first qualify the original-ray diagnostic against retained canonical prefixes.
+// Shared bounded zero-direct chain traversal, qualified first against retained
+// original-ray canonical prefixes. Physical ordinal and logical node differ.
 export const OPTICAL_CHAIN_WGSL=`
 struct OpticalChainResult {
   ray: RayRecord,
@@ -18,6 +18,9 @@ fn resolve_optical_chain(input: RayRecord, first: HitRecord, maximumInterfaces: 
     record_optical_chain_step(ray, hit);
     if (hit.hitType == 5u || medium_transition_invalid(ray, hit)) {
       return OpticalChainResult(ray, hit, 9u, additional);
+    }
+    if (hit.hitType == 1u || hit.hitType == 2u) {
+      return OpticalChainResult(ray, hit, 0u, additional);
     }
     if (!optical_interface_eligible(hit)) {
       return OpticalChainResult(ray, hit, 0u, additional);
