@@ -1,0 +1,349 @@
+{
+  "schema": 1,
+  "status": "furnace-passed-native-qualification-running-adaptive-paused",
+  "task": "https://github.com/Plasius-LTD/gpu-renderer/issues/234",
+  "pullRequest": "https://github.com/Plasius-LTD/gpu-renderer/pull/216",
+  "renderer": "62f23df28c4200e9483ccc7fe99b2625ce91e9c2",
+  "shaderSha256": "c8ac9e819c7b6264df42d44cea8fad2627fec9d522e58161ee88807ec85a0c01",
+  "dependencies": {
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "policy": {
+    "flag": "renderer.transport.opticalInterfaceBudget.enabled",
+    "defaultEnabled": false,
+    "ordinaryDepthRange": [
+      1,
+      32
+    ],
+    "maximumInterfacesRange": [
+      1,
+      64
+    ],
+    "defaultMaximumInterfaces": 64,
+    "maximumPhysicalEvents": 96,
+    "defaultMaximumAdditionalBytes": 134217728,
+    "additionalPathBytesAt128Tile": 67108864,
+    "temporalRadianceReuse": false,
+    "allPhysicalEventsCounted": true
+  },
+  "furnaceAcceptance": {
+    "meanRelativeError": 0.02,
+    "maximumRowRelativeError": 0.05,
+    "changed": false
+  },
+  "diagnosticCameraSamples": 301989888,
+  "controls": [
+    {
+      "ordinaryDepth": 20,
+      "opticalInterfaces": 64,
+      "summarySha256": "003413089305ad7ed268196518793837a40bea4cd63d0461b39ab20c509763a4",
+      "captureId": "room-reference-2026-10-27T15-54-28-675Z-2a48bce8-91f3-4acf-9d28-bfee9e686d3d",
+      "status": "controls-complete-image-review-pending",
+      "lanes": [
+        {
+          "name": "furnace-filled",
+          "receiptSha256": "ad101576a43a8e4b1f6ca1d3ec48fcdf3fe05cbf365cee7c03be64ed2a265b76",
+          "hdrSha256": "a1595985b3a229a28e3c8e25db5207329d51255dac8755159849007072822df1",
+          "actualSamples": 37748736,
+          "opticalBudget": {
+            "enabled": true,
+            "ordinary": 20,
+            "interfaces": 64,
+            "capacity": 84,
+            "additionalPathBytes": 67108864
+          },
+          "mean": 0.7499942795482574,
+          "relativeError": 0.000007627268990173519,
+          "maxRowError": 0.00036614139874779905
+        },
+        {
+          "name": "furnace-empty",
+          "receiptSha256": "8b53a3470914501f529a9214fca8b8b4bd60c7d40b9ec1961cacddf7da2d839a",
+          "hdrSha256": "303ee7bc26d56fc333ee25ec0c36ac89e86a731ba2978b512836c204f536ca0d",
+          "actualSamples": 37748736,
+          "opticalBudget": {
+            "enabled": true,
+            "ordinary": 20,
+            "interfaces": 64,
+            "capacity": 84,
+            "additionalPathBytes": 67108864
+          },
+          "mean": 0.749934893739116,
+          "relativeError": 0.00008680834784524638,
+          "maxRowError": 0.0039061754941940308
+        },
+        {
+          "name": "furnace-index-one",
+          "receiptSha256": "66288c2183b024d43c03e37e1678295a4e63fc65e1ae967bcb26c34d733e286d",
+          "hdrSha256": "9835ab75d73ff40211ad0a6848ab18861ca3d4b7077e90a71ddfb63f5b418c1b",
+          "actualSamples": 37748736,
+          "opticalBudget": {
+            "enabled": true,
+            "ordinary": 20,
+            "interfaces": 64,
+            "capacity": 84,
+            "additionalPathBytes": 67108864
+          },
+          "mean": 0.7499414922854116,
+          "relativeError": 0.00007801028611786887,
+          "maxRowError": 0.0039061754941940308
+        },
+        {
+          "name": "pedestal-contrast",
+          "receiptSha256": "480625037b56a4eacf58e1561ee8b9185d12fc1415a2004a16ab297077fe2fd9",
+          "hdrSha256": "843d2734176047e245266d8e4f58b8803583c9d05833502667fe8c934aebf956",
+          "actualSamples": 37748736,
+          "opticalBudget": {
+            "enabled": true,
+            "ordinary": 20,
+            "interfaces": 64,
+            "capacity": 84,
+            "additionalPathBytes": 67108864
+          }
+        }
+      ]
+    },
+    {
+      "ordinaryDepth": 32,
+      "opticalInterfaces": 64,
+      "summarySha256": "fb370a28c3235069ec437cf0439f7d18824d62a0cc91a97f2644ae9205769bb4",
+      "captureId": "room-reference-2026-10-27T15-59-31-842Z-1366a4e3-f1e6-4d75-8f61-a13d2bf1cefc",
+      "status": "controls-complete-image-review-pending",
+      "lanes": [
+        {
+          "name": "furnace-filled",
+          "receiptSha256": "0a9f2f0d9c88de6a80842f9646c9dec459ff9d11f072cf86e03d73937054f961",
+          "hdrSha256": "a1595985b3a229a28e3c8e25db5207329d51255dac8755159849007072822df1",
+          "actualSamples": 37748736,
+          "opticalBudget": {
+            "enabled": true,
+            "ordinary": 32,
+            "interfaces": 64,
+            "capacity": 96,
+            "additionalPathBytes": 67108864
+          },
+          "mean": 0.7499942795482574,
+          "relativeError": 0.000007627268990173519,
+          "maxRowError": 0.00036614139874779905
+        },
+        {
+          "name": "furnace-empty",
+          "receiptSha256": "4451aada467701c626427bc8d55f62360c9e17022fc31010b2ab77da71d5da3c",
+          "hdrSha256": "303ee7bc26d56fc333ee25ec0c36ac89e86a731ba2978b512836c204f536ca0d",
+          "actualSamples": 37748736,
+          "opticalBudget": {
+            "enabled": true,
+            "ordinary": 32,
+            "interfaces": 64,
+            "capacity": 96,
+            "additionalPathBytes": 67108864
+          },
+          "mean": 0.749934893739116,
+          "relativeError": 0.00008680834784524638,
+          "maxRowError": 0.0039061754941940308
+        },
+        {
+          "name": "furnace-index-one",
+          "receiptSha256": "7692162ae8dd7aac5e5f33963190ba77aec98829c40a6002ad95681eef94e12b",
+          "hdrSha256": "9835ab75d73ff40211ad0a6848ab18861ca3d4b7077e90a71ddfb63f5b418c1b",
+          "actualSamples": 37748736,
+          "opticalBudget": {
+            "enabled": true,
+            "ordinary": 32,
+            "interfaces": 64,
+            "capacity": 96,
+            "additionalPathBytes": 67108864
+          },
+          "mean": 0.7499414922854116,
+          "relativeError": 0.00007801028611786887,
+          "maxRowError": 0.0039061754941940308
+        },
+        {
+          "name": "pedestal-contrast",
+          "receiptSha256": "f0f6522ceee0725fdb0e4eb83a1ad7cfb4b608a6cad6dff8cfbf4fca257d28dd",
+          "hdrSha256": "843d2734176047e245266d8e4f58b8803583c9d05833502667fe8c934aebf956",
+          "actualSamples": 37748736,
+          "opticalBudget": {
+            "enabled": true,
+            "ordinary": 32,
+            "interfaces": 64,
+            "capacity": 96,
+            "additionalPathBytes": 67108864
+          }
+        }
+      ]
+    }
+  ],
+  "ordinary20and32AllHdrHashesEqual": true,
+  "originalTails": {
+    "scope": "original identities/geometry/throughput preserved; temporary atomic queue slots and parent node addresses deliberately excluded",
+    "rows": [
+      {
+        "sample": 32,
+        "pixel": 90374,
+        "oldTerminal": 7,
+        "newTerminal": 2,
+        "events": 35,
+        "terminalRadiance": [
+          0.7500001788139343,
+          0.7500001788139343,
+          0.7500001788139343
+        ],
+        "first20OpticalRecordsExactlyEqual": true,
+        "ordinaryEventCountAtExit": 0
+      },
+      {
+        "sample": 59,
+        "pixel": 90374,
+        "oldTerminal": 7,
+        "newTerminal": 2,
+        "events": 35,
+        "terminalRadiance": [
+          0.7500001192092896,
+          0.7500001192092896,
+          0.7500001192092896
+        ],
+        "first20OpticalRecordsExactlyEqual": true,
+        "ordinaryEventCountAtExit": 0
+      },
+      {
+        "sample": 88,
+        "pixel": 90374,
+        "oldTerminal": 7,
+        "newTerminal": 2,
+        "events": 35,
+        "terminalRadiance": [
+          0.7500001788139343,
+          0.7500001788139343,
+          0.7500001788139343
+        ],
+        "first20OpticalRecordsExactlyEqual": true,
+        "ordinaryEventCountAtExit": 0
+      },
+      {
+        "sample": 127,
+        "pixel": 90374,
+        "oldTerminal": 7,
+        "newTerminal": 1,
+        "events": 64,
+        "terminalRadiance": [
+          0.75,
+          0.75,
+          0.75
+        ],
+        "first20OpticalRecordsExactlyEqual": true,
+        "ordinaryEventCountAtExit": 0
+      },
+      {
+        "sample": 129,
+        "pixel": 90374,
+        "oldTerminal": 7,
+        "newTerminal": 2,
+        "events": 34,
+        "terminalRadiance": [
+          0.7500002384185791,
+          0.7500002384185791,
+          0.7500002384185791
+        ],
+        "first20OpticalRecordsExactlyEqual": true,
+        "ordinaryEventCountAtExit": 0
+      },
+      {
+        "sample": 159,
+        "pixel": 90374,
+        "oldTerminal": 7,
+        "newTerminal": 2,
+        "events": 34,
+        "terminalRadiance": [
+          0.7500001788139343,
+          0.7500001788139343,
+          0.7500001788139343
+        ],
+        "first20OpticalRecordsExactlyEqual": true,
+        "ordinaryEventCountAtExit": 0
+      },
+      {
+        "sample": 165,
+        "pixel": 90374,
+        "oldTerminal": 7,
+        "newTerminal": 2,
+        "events": 35,
+        "terminalRadiance": [
+          0.7500001788139343,
+          0.7500001788139343,
+          0.7500001788139343
+        ],
+        "first20OpticalRecordsExactlyEqual": true,
+        "ordinaryEventCountAtExit": 0
+      },
+      {
+        "sample": 239,
+        "pixel": 90374,
+        "oldTerminal": 7,
+        "newTerminal": 2,
+        "events": 35,
+        "terminalRadiance": [
+          0.7500004768371582,
+          0.7500004768371582,
+          0.7500004768371582
+        ],
+        "first20OpticalRecordsExactlyEqual": true,
+        "ordinaryEventCountAtExit": 0
+      }
+    ]
+  },
+  "gpuTailProbe": {
+    "samples": 16384,
+    "tirEvents": 40,
+    "mean": 1,
+    "minimumEvents": 41,
+    "maximumEvents": 44,
+    "escapedWeightError": 0,
+    "ordinaryEvents": 0,
+    "passed": true
+  },
+  "beforeBudgetNative": {
+    "renderer": "70e02d765ed085a8be4bc66a18af55dc7d0efc87",
+    "status": "all-six-integrity-pass",
+    "actualSamples": 995328000,
+    "hdrChunks": 120,
+    "totalPathSegments": 3473073413,
+    "bandRemovalClaim": false
+  },
+  "newNative": {
+    "status": "running",
+    "startedUtc": "2026-10-27T16:05:23Z",
+    "resolutions": [
+      "1080p",
+      "4k"
+    ],
+    "spp": 32,
+    "ordinaryDepth": 20,
+    "opticalInterfaces": 64,
+    "allSixComplete": false,
+    "imageReviewPassed": false
+  },
+  "validation": {
+    "testsPassed": 520,
+    "lineCoveragePercent": 96.43,
+    "branchCoveragePercent": 83.46,
+    "changedExecutableSourceFilesInLcov": 62,
+    "lint": true,
+    "typesAndCleanConsumer": true,
+    "build": true,
+    "package": true,
+    "zeroThree": true,
+    "runtimeAuditVulnerabilities": 0,
+    "ci": {
+      "run": 40535217735,
+      "head": "62f23df28c4200e9483ccc7fe99b2625ce91e9c2",
+      "conclusion": "success",
+      "allJobsAndStepsSucceeded": true
+    }
+  },
+  "adaptiveWorkPaused": true,
+  "performanceClaim": false,
+  "releasePerformed": false
+}

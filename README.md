@@ -32,8 +32,12 @@ is the only additional event allowance. Other
 roulette paths are unchanged. See [ADR 0065](docs/adrs/adr-0065-optical-roulette.md).
 The [optical-tail follow-up](docs/evidence/optical-roulette-2026-10-27.md) retains
 the corrections and failed empty/index-one furnace gates, with actual TIR tails
-reaching strict depth termination. Native recapture is in progress; image
-correctness has not passed and adaptive work remains paused.
+reaching strict depth termination. All six before-budget native captures pass
+integrity checks; that does not reverse the failed furnace/image gates. New
+optical-budget qualification is in progress; adaptive work remains paused.
+The [optical-budget evidence](docs/evidence/optical-interface-budget-2026-10-27.md)
+records passing frozen furnace gates at both ordinary20/32 plus optical64,
+original tail identity/escape proof, added memory and pending native image review.
 
 Optical furnace attribution accepts the same bounded `opticalJournal=u,v,s;...`
 selection as the room fixture. It replays canonical successful samples, retains

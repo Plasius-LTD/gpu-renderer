@@ -1,6 +1,7 @@
 # Optical roulette, branch importance and finite tails — 27 October 2026
 
-Status: **image correctness fails; adaptive work remains paused.** This is a
+Status at the before-budget 70e02d7 checkpoint: **image correctness fails;
+adaptive work remains paused.** This is a
 partial transport-variance correction and a traced remaining depth limitation,
 not a claim that water banding, native convergence or performance is solved.
 Task234 remains In progress; PR216 remains draft/open. No merge/release or local
@@ -91,12 +92,14 @@ physically present in independent controls; deleting it is not a valid correctio
 
 ## Native recapture and delivery gate
 
-The automated six-lane uniform32/event20 native sequence is running on clean
+The automated six-lane uniform32/event20 native sequence completed on clean
 70e02d7:4K then1080p, empty glass / filled glass / full room. Same354,246-triangle
 filled scene, unchanged assets/camera/lighting/flags, no denoise or ray splitting.
-The first4K-empty lane independently verifies8,294,400 pixels,265,420,800 camera
-samples,32 HDR chunks,510 tiles and all physical preflights. Remaining lanes are
-pending; there is **no six-lane completion or band-removal claim** at this point.
+All six lanes independently verify995,328,000 camera samples,120 HDR chunks,
+1,935 tiles and3,473,073,413 actual path segments. Counts, source identity,
+cleanup, physical optical/material/UV/parity preflights and all13 analytic MIS
+modes pass. This is native integrity, **not a band-removal/convergence pass**;
+the furnace failures above remain rejected before-budget controls.
 Native captures retain provenance, raw linear HDR and PNGs under
 `output/playwright/eames-environments/`; private models are not committed.
 

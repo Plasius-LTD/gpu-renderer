@@ -17,6 +17,11 @@ All notable changes to this project will be documented in this file.
   Add canonical TIR/counter/energy regressions and explicit automated room/furnace
   controls. Image/adaptive qualification remains gated (#234, ADR 0066).
 
+- Retain passing optical-budget furnace controls at ordinary20/32 plus64
+  interfaces:301,989,888 camera samples, unchanged mean/row tolerances and all4
+  HDR hashes identical between ordinary limits. Preserve failed off-controls and
+  original tail records; native1080p/4K recapture/image review remains pending.
+
 - Correct avoidable smooth bounded+nested optical roulette variance by using
   cumulative prospective throughput with outgoing-medium IOR compensation;
   preserve radiance/BSDF weights, event horizons, sampling dimensions and ordinary/

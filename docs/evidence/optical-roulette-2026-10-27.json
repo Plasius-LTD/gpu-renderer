@@ -55,8 +55,13 @@
     "remainingImageGatePassed": false
   },
   "native": {
-    "status": "running",
-    "allSixComplete": false,
+    "status": "all-six-integrity-pass-not-image-convergence",
+    "allSixComplete": true,
+    "actualSamples": 995328000,
+    "hdrChunks": 120,
+    "tiles": 1935,
+    "totalPathSegments": 3473073413,
+    "verification": "output/playwright/optical-roulette-2026-10-27-IWDgUV/native-all-six-before-budget-integrity.json",
     "firstVerifiedCapture": "room-reference-2026-10-27T14-48-21-157Z-105439d7-dfd3-4737-b571-c7880996dbaa",
     "firstVerifiedSamples": 265420800,
     "firstVerifiedHdr": "0a4b5884397fd43deacc3a0151dcd4f0964eead175345cc98da6def95f331d6c",
