@@ -83,6 +83,10 @@ The independent empty furnace also fails the frozen row gate at20 events:
 mean .748710, worst row5.767%. At64 events it gives mean .749981 and worst
 row.0680%. Its worst20-event row176 rises from .706747 to .749804. Thus a finite
 optical horizon can create local darkening in this geometry even independently.
+An additional matched32-event Cycles control gives mean .749193 and worst row
+4.890% (inside the frozen5% gate). Native32 still fails. Independent32's minimum
+roulette depth is32 whereas native roulette starts earlier; this comparison does
+not distinguish variance from geometry/normal differences by itself.
 
 Native32 still has row176=.689704 and row RMSE .013856 against independent64.
 Simply increasing20 to32 did **not** fix that residual. A progress update which

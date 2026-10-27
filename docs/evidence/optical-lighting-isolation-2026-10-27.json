@@ -33,7 +33,8 @@
   "linearReferences": [
     {"path": "optical-linear-2026-10-27-kvIzTi/reference.f32", "sha256": "fc5b2b8f149acf6b122d3e6c02f614d8a7184dbf29e1d98d4873154b0f532451", "mode": "filled-pedestal-contrast", "events": 20},
     {"path": "optical-empty-furnace-2026-10-27-iVicAo/reference.f32", "sha256": "27a01b2058e32d0fc3bb792e6882c6a6c4d48d0918cc07a0a0afd1c5fdc1f581", "mode": "empty-furnace", "events": 20, "maximumRowError": 0.05767056594292319},
-    {"path": "optical-empty64-2026-10-27-i9beE6/reference.f32", "sha256": "61a978855d977664aa040c78cc5434610cebcfd174361cab7be8148533f70e52", "mode": "empty-furnace", "events": 64, "maximumRowError": 0.0006800641616185876}
+    {"path": "optical-empty64-2026-10-27-i9beE6/reference.f32", "sha256": "61a978855d977664aa040c78cc5434610cebcfd174361cab7be8148533f70e52", "mode": "empty-furnace", "events": 64, "maximumRowError": 0.0006800641616185876},
+    {"path": "optical-empty32-2026-10-27-0qruv0/reference.f32", "sha256": "217f1876253d935ef8ddec32f0db44bb6865fddd08a376c787fcaf55d499b1de", "mode": "empty-furnace", "events": 32, "maximumRowError": 0.0489046648144722}
   ],
   "room1080": {
     "skyCapture": "room-reference-2026-10-27T13-18-04-623Z-20e78b7c-df56-430f-ac83-e84e517c1cac",
