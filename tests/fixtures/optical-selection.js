@@ -37,6 +37,7 @@ export async function selectedOpticalJournals(c,{config,tile,ranges,selections,d
     result.tailTrace=await captureOpticalChainTrace(c,{config,tile,selection,sampler,maximumInterfaces:traceEvents,original:result});}
    results.push({...result,selection});
   }
- }finally{c.setMode(diagnostics,fused);}
+ }catch(error){error.previousOpticalJournals=results;throw error;}
+ finally{c.setMode(diagnostics,fused);}
  return results;
 }

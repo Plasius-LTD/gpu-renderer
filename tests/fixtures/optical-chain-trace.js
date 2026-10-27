@@ -3,6 +3,16 @@ import {OPTICAL_CHAIN_WGSL} from '../../src/wavefront-optical-chain-shader.js';
 import {assertShaderModuleCompiles} from '../../src/wavefront-runtime-support.js';
 export const MAX_OPTICAL_TRACE_INTERFACES=4096;
 const VECTORS=13,WORDS=VECTORS*4,RECORD_BYTES=WORDS*4;
+export function packOpticalTracePrimary(record,selection){
+ if(record?.stage!=='before-intersection'||record.bounce!==0||record.medium!==0||record.mediumDepth!==0||record.flags!==0||record.parentRayId!==0xffffffff||record.pixel!==selection.pixel||record.sample!==selection.sample||
+  ![record.rayId,record.parentRayId,record.pixel,record.sample,record.bounce,record.medium,record.flags,record.mediumDepth,...(record.mediumStack??[])].every(v=>Number.isInteger(v)&&v>=0&&v<=0xffffffff)||
+  record.origin?.length!==3||record.direction?.length!==3||record.throughput?.length!==4||record.mediumStack?.length!==4||record.mediumStack.some(v=>v!==0)||
+  ![...record.origin,record.originW,...record.direction,record.directionW,...record.throughput].every(v=>Number.isFinite(Math.fround(v))))throw Error('Missing exact original primary ray');
+ const bytes=new ArrayBuffer(96),u=new Uint32Array(bytes),f=new Float32Array(bytes);
+ u.set([record.rayId,record.parentRayId,record.pixel,record.sample,record.bounce,record.medium,record.flags,record.mediumDepth]);
+ f.set([...record.origin,record.originW],8);f.set([...record.direction,record.directionW],12);f.set(record.throughput,16);u.set(record.mediumStack,20);
+ return bytes;
+}
 export function opticalTraceEventsFromSearch(search){
  const values=new URLSearchParams(search).getAll('opticalTraceEvents');
  if(!values.length)return 0;
@@ -27,7 +37,7 @@ export function opticalChainTraceShader({pixel,maximumInterfaces,sampler}){
  @compute @workgroup_size(1)fn trace_optical_chain(){
   let x=${pixel}u%config.canvasWidth;let y=${pixel}u/config.canvasWidth;
   let root=(y-config.tileY)*config.tileWidth+x-config.tileX;
-  let ray=make_ray(root);let first=intersect_nested_ray(ray);
+  let ray=activeQueue[0];let first=intersect_nested_ray(ray);
   let result=resolve_optical_chain(first.ray,first.hit,${maximumInterfaces}u);
   var radiance=vec3<f32>(0);let h=result.hit;let r=result.ray;
   if(result.termination==0u){
@@ -60,12 +70,16 @@ export async function captureOpticalChainTrace(c,{config,tile,selection,sampler,
  const code=opticalChainTraceShader({...selection,sampler,maximumInterfaces});
  if((config.transportExperimentFlags&49152)!==49152||(config.transportExperimentFlags&65536)||config.roughBounceSplitting?.enabled)throw Error('Optical tail trace requires smooth bounded nested transport');
  const {device,pipelines,descriptors,wait}=c,size=(maximumInterfaces+1)*RECORD_BYTES+32;
- const buffer=device.createBuffer({label:'optical-tail-private-scratch',size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
- const staging=device.createBuffer({label:'optical-tail-private-readback',size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+ const primary=packOpticalTracePrimary(original.records.find(r=>r.stage==='before-intersection'&&r.bounce===0),selection);
+ const owned=[],allocate=descriptor=>{const b=device.createBuffer(descriptor);owned.push(b);return b;};
  try{
+  const input=allocate({label:'optical-tail-original-primary',size:96,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+  const buffer=allocate({label:'optical-tail-private-scratch',size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
+  const staging=allocate({label:'optical-tail-private-readback',size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
   const module=device.createShaderModule({label:'optical-tail-diagnostic',code});await wait(assertShaderModuleCompiles(module,'optical-tail-diagnostic'));
   const layout=pipelines.intersectActiveQueue.getBindGroupLayout(0),pipeline=await wait(device.createComputePipelineAsync({layout:device.createPipelineLayout({bindGroupLayouts:[layout]}),compute:{module,entryPoint:'trace_optical_chain'}}));
-  const entries=descriptors.get('plasius.wavefront.bind.activeNext').entries.map(e=>e.binding===3?{binding:3,resource:{buffer}}:e);
+  device.queue.writeBuffer(input,0,primary);
+  const entries=descriptors.get('plasius.wavefront.bind.activeNext').entries.map(e=>e.binding===3?{binding:3,resource:{buffer}}:e.binding===0?{binding:0,resource:{buffer:input}}:e);
   const group=device.createBindGroup({layout,entries}),encoder=device.createCommandEncoder();encoder.clearBuffer(buffer);
   const pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group,[selection.sample*config.memory.configBufferStride]);pass.dispatchWorkgroups(1);pass.end();
   encoder.copyBufferToBuffer(buffer,0,staging,0,size);device.queue.submit([encoder.finish()]);await wait(staging.mapAsync(GPUMapMode.READ));
@@ -73,11 +87,12 @@ export async function captureOpticalChainTrace(c,{config,tile,selection,sampler,
   const fields=['stage','rayId','pixel','sample','bounce','medium','flags','mediumDepth','origin','direction','throughput','mediumStack','hit'];
   const prefix=original.records.filter(r=>r.stage==='after-intersection');
   for(const [i,record] of prefix.entries())if(fields.some(k=>JSON.stringify(record[k])!==JSON.stringify(result.records[i]?.[k]))){
-   result.canonicalPrefixExactlyEqual=false;result.prefixMismatchIndex=i;
+   result.canonicalPrefixExactlyEqual=false;result.prefixMismatchIndex=i;result.originalPrefix=prefix;
    const error=Error('Optical tail canonical prefix mismatch '+i);error.opticalTailTrace=result;throw error;
   }
-  result.canonicalPrefixRecords=prefix.length;result.canonicalPrefixExactlyEqual=true;result.allocatedDiagnosticBytes=size*2;result.tile=tile;
+  result.canonicalPrefixRecords=prefix.length;result.canonicalPrefixExactlyEqual=true;result.allocatedDiagnosticBytes=size*2+96;result.tile=tile;
+  result.inputRaySha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',primary)),v=>v.toString(16).padStart(2,'0')).join('');
   result.shaderSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(code))),v=>v.toString(16).padStart(2,'0')).join('');
   return result;
- }finally{buffer.destroy();staging.destroy();}
+ }finally{owned.forEach(buffer=>buffer.destroy());}
 }

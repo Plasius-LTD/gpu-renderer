@@ -26,6 +26,10 @@ test('selected journals use original tile samples only and restore modes on capt
   await assert.rejects(selectedOpticalJournals(c,{config,tile,ranges,selections,diagnostics:true,fused:false},async(_c,options)=>{const r=await capture(_c,options);change(r);return r;}),/Missing selected optical surface/);
  }
  const before=mode.length;assert.deepEqual(await selectedOpticalJournals(c,{config,tile,ranges,selections:[],diagnostics:true,fused:false},capture),[]);assert.equal(mode.length,before);
+ let seen=0;
+ await assert.rejects(selectedOpticalJournals(c,{config,tile,ranges,selections:[{pixel:0,sample:2},{pixel:1,sample:2}],diagnostics:true,fused:false},async(...args)=>{
+  if(seen++)throw Error('second capture failed');return capture(...args);
+ }),error=>error.message==='second capture failed'&&error.previousOpticalJournals.length===1&&error.previousOpticalJournals[0].selection.pixel===0);
  const runner=readFileSync(new URL('./fixtures/native-adaptive-runner.js',import.meta.url),'utf8');
  assert.match(runner,/if\(selections.length\)/);assert.match(runner,/opticalJournals/);
 });

@@ -53,7 +53,7 @@ export function decodeCanonicalJournal(bytes){
   const vector=(n,count=3)=>Array.from(f.slice(o+n,o+n+count));
   records.push({stage:u[o+2]?'after-intersection':'before-intersection',queueSlot:u[o+1],
    rayId:u[o+4],parentRayId:u[o+5],pixel:u[o+6],sample:u[o+7],bounce:u[o+8],medium:u[o+9],flags:u[o+10],mediumDepth:u[o+11],
-   origin:vector(12),direction:vector(16),throughput:vector(20,4),mediumStack:Array.from(u.slice(o+24,o+28)),
+   origin:vector(12),originW:f[o+15],direction:vector(16),directionW:f[o+19],throughput:vector(20,4),mediumStack:Array.from(u.slice(o+24,o+28)),
    hit:u[o+2]?{type:u[o+28],primitive:u[o+29],frontFace:u[o+30],medium:u[o+31],materialKind:u[o+32],object:u[o+33],
     distance:f[o+36],failure:u[o+28]===5?f[o+38]:0,positionError:u[o+28]===5?null:f[o+38],position:vector(40),geometricNormal:vector(44),shadingNormal:vector(48),material:vector(52,4),extension:vector(56,4),barycentric:vector(60)}:null});
  }

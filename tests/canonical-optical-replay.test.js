@@ -57,6 +57,7 @@ test('canonical journal decodes raw identities, medium stack and hit data withou
  assert.equal(records.length,1);assert.equal(records[0].pixel,2470753);
  assert.deepEqual(records[0].mediumStack,[92,93,0,0]);assert.equal(records[0].stage,'before-intersection');
  assert.equal(records[0].hit,null);assert.equal(records[0].queueSlot,7);
+ assert.equal(records[0].originW,1);assert.equal(records[0].directionW,0);
  u[2]=1;assert.equal(decodeCanonicalJournal(bytes)[0].hit.primitive,353336);
  f[38]=1e-7;let hit=decodeCanonicalJournal(bytes)[0].hit;
  assert.equal(hit.failure,0);assert.equal(hit.positionError,Math.fround(1e-7));

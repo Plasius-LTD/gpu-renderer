@@ -45,7 +45,7 @@ the bounded GPU streaming design are preserved; no band-removal claim is made.
 Diagnostic-only long tails: the furnace URL also accepts
 `opticalTraceEvents=4096` with an explicit `opticalJournal=u,v,s;...` selection
 (at most eight original samples). It traces only the filled lane, reusing the
-canonical camera/collision/optical functions and checking the saved prefix
+captured primary-ray packet and canonical collision/optical functions, checking the saved prefix
 exactly. Its bounded private scratch does not commit image radiance/counts or
 change production interface admission. Default is off. The chain helper is not
 yet assembled into production transport; renderer memory/performance improvements

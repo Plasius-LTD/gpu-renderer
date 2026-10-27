@@ -34,6 +34,11 @@ All notable changes to this project will be documented in this file.
   assignment interpreter litmus coverage; physical shaders are not rewritten to
   accommodate the interpreter. No renderer-memory or performance gain is claimed.
 
+- Preserve the rejected first long-tail trace: independently regenerating a
+  camera direction differed by one ULP. Reuse the exact captured96-byte primary
+  packet instead; retain the strict prefix gate, completed earlier diagnostics
+  on later failure, and cleanup on partial diagnostic allocation failure.
+
 - Correct avoidable smooth bounded+nested optical roulette variance by using
   cumulative prospective throughput with outgoing-medium IOR compensation;
   preserve radiance/BSDF weights, event horizons, sampling dimensions and ordinary/

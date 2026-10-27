@@ -135,6 +135,7 @@ export async function createNativeAdaptiveRunner(c) {
         }catch(error){
           throw await retainNativeFailure(error,trace,async()=>{const details={
             ...(error.opticalTailTrace?{opticalTailTrace:error.opticalTailTrace}:{}),
+            ...(error.previousOpticalJournals?{previousOpticalJournals:error.previousOpticalJournals}:{}),
             termination:await readWavefrontTerminationMetrics({device,constants:{buffer:GPUBufferUsage,map:GPUMapMode},counterBuffer:counters,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())}),
             adaptiveControlWords:Array.from(new Uint32Array(await read(b.primaryControl,16))),
             failedNodes:await readFailedPathNodes(device,traceEntries.find(e=>e.binding===22).resource.buffer,wait),
