@@ -24,13 +24,16 @@ el('run').addEventListener('click',async()=>{
    const image=frame.image;delete frame.image;
    const retained={lane,settings:c,provenance:report.provenance,scene:composed.evidence,frame,adapter:runner.adapter,hdrSha256:await hashBytes(image.buffer),chunks:[]};
    for await(const chunk of encodeLinearImageChunks(image))retained.chunks.push(await save(lane.name+'-hdr-'+retained.chunks.length,marker.toDataURL(),{chunk,provenance:report.provenance}));
+   const png=canvas.toDataURL();
    runner.destroy();runner=null;retained.cleanupPassed=true;
    try{if(lane.furnace)retained.furnace=validateOpticalFurnace({...frame,image},c.spp);}catch(error){retained.failure=error.message;}
-   const png=canvas.toDataURL();retained.artifact=await save(lane.name,png,retained);report.lanes.push(retained);
+   retained.artifact=await save(lane.name,png,retained);report.lanes.push(retained);
    el('preview').src=png;el('preview').hidden=false;
-   if(retained.failure)throw Error(retained.failure);
+   // Count/device/retention failures abort; a retained image-gate failure may
+   // continue attribution, but can never turn this batch into a pass.
+   if(retained.failure)report.failures.push(lane.name+': '+retained.failure);
   }
-  report.status='controls-complete-image-review-pending';
+  report.status=report.failures.length?'failed':'controls-complete-image-review-pending';
  }catch(error){report.status='failed';report.failures.push(error.message);if(error.captureFailure)report.captureFailure=error.captureFailure;}
  finally{
   try{runner?.destroy();}catch(error){report.status='failed';report.failures.push(error.message);}

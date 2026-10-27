@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import {createOpticalIsolationScene, opticalIsolationPlan, opticalIsolationBudgets, validateOpticalFurnace,OPTICAL_ISOLATION} from './fixtures/optical-lighting-isolation.js';
 import {createAdaptiveTilePlan} from '../src/wavefront-adaptive-tile-plan.js';
 import {roomLightingRequest} from './fixtures/room-lighting-settings.js';
+import {readFileSync} from 'node:fs';
+
+test('capture snapshots canvas before destroying its GPU device and retains failed image gates',()=>{
+ const source=readFileSync(new URL('./fixtures/optical-lighting-isolation-runner.js',import.meta.url),'utf8');
+ assert(source.indexOf('const png=canvas.toDataURL()')<source.indexOf('runner.destroy();runner=null'));
+ assert.match(source,/report.failures.push\(lane.name\+': '\+retained.failure\)/);
+ assert.match(source,/report.status=report.failures.length\?'failed'/);
+});
 
 test('diagnostic budgets admit the canonical tile-plan contract and retain 256, not uint8 zero',()=>{
  const budgets=opticalIsolationBudgets();assert(budgets instanceof Uint16Array);assert.equal(budgets[0],256);
