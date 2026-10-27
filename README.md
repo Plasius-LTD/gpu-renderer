@@ -84,6 +84,54 @@ unlit-capable rendering path; do not drop their markers or reinterpret them as l
 For an interactive model viewer with loading, integrity checks, camera gestures
 and quality controls, use the shared package's `model-inspection` entry.
 
+## Repeat geometry with instances
+
+Pass each mesh once and reference its ID from `instances`. This shares geometry,
+material textures and each mesh's acceleration structure across placements:
+
+```js
+import { createWavefrontPathTracingComputeRenderer } from "@plasius/gpu-renderer";
+
+const renderer = await createWavefrontPathTracingComputeRenderer({
+  canvas: "#scene",
+  meshes: [{
+    id: 1,
+    positions: [-0.4, 0, 0, 0.4, 0, 0, 0, 0.8, 0],
+    indices: [0, 1, 2],
+    color: [0.3, 0.6, 0.4, 1],
+  }],
+  instances: Array.from({ length: 100 }, (_, index) => ({
+    id: index + 1,
+    meshId: 1,
+    transform: [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      (index % 10) - 4.5, 0, Math.floor(index / 10) - 4.5, 1,
+    ],
+  })),
+  camera: { position: [12, 10, 16], target: [0, 0, 0] },
+  memoryBudgetBytes: 512 * 1024 * 1024,
+});
+await renderer.renderFrame();
+console.log(renderer.getSnapshot().allocations);
+renderer.destroy();
+```
+
+Transforms are invertible column-major affine matrices, including nonuniform
+scale and reflection. Every supplied mesh needs an instance; IDs must be unique
+within their respective mesh/instance lists. The initial instance path supports
+static non-emissive meshes with CPU acceleration construction. Unsupported
+emissive instances or GPU acceleration requests fail explicitly.
+
+`memoryBudgetBytes` limits renderer-owned resource storage. Admission also checks
+individual device limits. `getSnapshot().allocations` reports current/peak bytes
+and individual buffers/textures, including refinement and denoising resources.
+These are requested allocation sizes, not a measurement of free VRAM or driver
+residency. A larger instance count adds transforms and scene-index nodes without
+multiplying the underlying geometry. Large buffer uploads use bounded sequential
+staging to reduce temporary upload pressure. Recreate the runtime to replace instances.
+
 ## Choose a rendering API
 
 | API | Purpose |

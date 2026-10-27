@@ -459,6 +459,7 @@ fn no_candidate() -> Candidate {
     1u,
     0xffffffffu,
     0xffffffffu,
+    0xffffffffu,
     0u,
     0u
   );
@@ -485,6 +486,7 @@ fn surface_candidate(
     uv,
     frontFace,
     triangleIndex,
+    0xffffffffu,
     primitiveId,
     materialRefId,
     mediumRefId
@@ -546,7 +548,7 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
   );
 }
 
-fn intersect_bvh(ray: RayRecord, initialNearest: f32) -> Candidate {
+fn intersect_geometry_bvh(ray: RayRecord, initialNearest: f32, root: u32) -> Candidate {
   var nearest = initialNearest;
   var best = no_candidate();
   if (config.bvhNodeCount == 0u || config.triangleCount == 0u) {
@@ -555,7 +557,7 @@ fn intersect_bvh(ray: RayRecord, initialNearest: f32) -> Candidate {
 
   var stack = array<u32, 64>();
   var stackSize = 1u;
-  stack[0] = 0u;
+  stack[0] = root;
 
   loop {
     if (stackSize == 0u) {

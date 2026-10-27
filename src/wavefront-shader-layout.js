@@ -283,6 +283,7 @@ struct Candidate {
   uv: vec2<f32>,
   frontFace: u32,
   triangleIndex: u32,
+  instanceIndex: u32,
   primitiveId: u32,
   materialRefId: u32,
   mediumRefId: u32,

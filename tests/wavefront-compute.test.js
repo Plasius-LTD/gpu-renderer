@@ -3906,3 +3906,47 @@ test('camera-only config updates preserve projection validation and scene identi
   }
   assert.throws(()=>updateWavefrontCameraConfig(config,{fovYDegrees:NaN}),/finite/);
 });
+
+serialWebGpuTest('100 shared instances fit ten storage bindings and account for geometry once', async()=>{
+  await withWebGpuConstants(async()=>{
+    const device=new FakeWavefrontDevice();let descriptor;
+    const renderer=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),
+      navigator:createFakeWavefrontNavigator(device,{limits:{maxStorageBuffersPerShaderStage:10,maxSampledTexturesPerShaderStage:32},onRequestDevice:d=>{descriptor=d;}}),
+      width:32,height:32,displayQuality:true,progressive:true,memoryBudgetBytes:32*1024*1024,
+      meshes:[{id:7,positions:[-1,0,0,1,0,0,0,1,0],indices:[0,1,2]}],
+      instances:Array.from({length:100},(_,i)=>({id:i,meshId:7,transform:[1,0,0,0,0,1,0,0,0,0,1,0,i*3,0,0,1]}))});
+    assert.equal(descriptor.requiredLimits.maxStorageBuffersPerShaderStage,10);
+    assert.equal(descriptor.requiredLimits.maxSampledTexturesPerShaderStage,22);
+    const before=renderer.getSnapshot();
+    assert.equal(before.instanceCount,100);assert.equal(before.geometryCount,1);
+    assert.equal(before.memory.triangleBytes,576);
+    assert.equal(before.allocations.resources.find(r=>r.label==='plasius.wavefront.instances').bytes,14400);
+    assert.equal(before.allocations.resources.find(r=>r.label==='plasius.wavefront.instances').kind,'texture');
+    const config=renderer.config;renderer.updateCamera({position:[2,2,5],target:[0,0,0]});
+    assert.equal(renderer.config.instancing,config.instancing);
+    renderer.renderOnce();renderer.destroy();
+    assert.equal(renderer.getSnapshot().allocations.allocatedBytes,0);
+  });
+});
+serialWebGpuTest('allocation refusal destroys every partially created resource',async()=>{
+  await withWebGpuConstants(async()=>{
+    const device=new FakeWavefrontDevice();
+    await assert.rejects(createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),
+      navigator:createFakeWavefrontNavigator(device),width:32,height:32,memoryBudgetBytes:1024,
+      meshes:[{id:7,positions:[-1,0,0,1,0,0,0,1,0],indices:[0,1,2]}],
+      instances:[{id:1,meshId:7,transform:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]}]}),/budget/iu);
+    assert.ok(device.textures.every(t=>t.destroyed));assert.ok(device.buffers.every(b=>b.destroyed));
+  });
+});
+
+serialWebGpuTest('driver allocation errors pop both scopes and release the canvas and resources',async()=>{
+  await withWebGpuConstants(async()=>{
+    const device=new FakeWavefrontDevice(),canvas=createFakeWavefrontCanvas(),scopes=[];let popped=0;
+    device.pushErrorScope=kind=>scopes.push(kind);
+    device.popErrorScope=async()=>{popped++;return popped===1?{message:'simulated GPU out of memory'}:null;};
+    await assert.rejects(createWavefrontPathTracingComputeRenderer({canvas,navigator:createFakeWavefrontNavigator(device),width:32,height:32}),/simulated GPU out of memory/);
+    assert.deepEqual(scopes,['out-of-memory','validation']);assert.equal(popped,2);
+    assert.equal(canvas.context.configured,null);
+    assert.ok(device.buffers.every(b=>b.destroyed));assert.ok(device.textures.every(t=>t.destroyed));
+  });
+});

@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add opt-in shared mesh BLAS/TLAS instancing with affine transforms and renderer-owned GPU resource byte budgets, allocation diagnostics and failure cleanup.
+
 - **Added**
   - (placeholder)
 
@@ -18,7 +20,7 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Stage large scene-buffer uploads in bounded sequential chunks to reduce temporary memory pressure during high-resolution initialization.
 
 - **Security**
   - (placeholder)

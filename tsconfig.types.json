@@ -2,7 +2,10 @@
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false,
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmit": true,
@@ -13,6 +16,7 @@
     "src/index.d.ts",
     "tests/feedback-diagnostics.types.ts",
     "tests/native-surfaces.types.ts",
-    "tests/canonical-wavefront-meshes.types.ts"
+    "tests/canonical-wavefront-meshes.types.ts",
+    "tests/instancing.types.ts"
   ]
 }

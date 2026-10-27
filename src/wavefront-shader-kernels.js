@@ -245,7 +245,7 @@ fn intersectActiveQueue(@builtin(global_invocation_id) globalId: vec3<u32>) {
   if (meshCandidate.hit == 1u && meshCandidate.distance < nearest) {
     nearest = meshCandidate.distance;
     candidate = meshCandidate;
-    hitTriangle = triangles[meshCandidate.triangleIndex];
+    hitTriangle = triangle_for_candidate(meshCandidate);
   }
 
   if (candidate.hit == 0u) {

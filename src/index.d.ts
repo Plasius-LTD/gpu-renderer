@@ -899,6 +899,11 @@ export interface WavefrontPathTracingComputeConfig {
   readonly gpuAccelerationBuildRequired: boolean;
   readonly gpuMeshSource: WavefrontGpuMeshSource;
   readonly gpuMaterialSource: WavefrontGpuMaterialSource;
+  readonly instancing: Readonly<{
+    instanceCount: number; geometryCount: number; instanceBytes: number;
+    tlasNodeCount: number; blasNodeCount: number; buffer: ArrayBuffer;
+    acceleration: WavefrontMeshAcceleration;
+  }> | null;
   readonly meshAcceleration: WavefrontMeshAcceleration;
   readonly emissiveTriangleIndices: WavefrontEmissiveTriangleIndexSource;
   readonly emissiveTriangleCount: number;
@@ -1045,6 +1050,8 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly pathVertexBytes: number;
   readonly sceneObjectBytes: number;
   readonly triangleBytes: number;
+  /** Instance lookup texture bytes; separate from totalHotBufferBytes. */
+  readonly instanceBytes: number;
   readonly materialTableBytes: number;
   readonly bvhNodeBytes: number;
   readonly bvhCombinedBytes: number;
@@ -1102,6 +1109,21 @@ export interface WavefrontGpuParallelismDiagnostics {
   readonly coreUtilizationStatus: "not-exposed-by-webgpu";
 }
 
+/** Static column-major affine transform referencing a unique mesh. */
+export interface WavefrontMeshInstanceInput {
+  readonly id: number;
+  readonly meshId: number;
+  readonly transform: readonly number[] | Float32Array;
+}
+export interface WavefrontGpuAllocationSnapshot {
+  /** Requested resource storage; excludes driver overhead and externally owned resources. */
+  readonly accounting: "requested-resource-bytes";
+  readonly budgetBytes: number | null;
+  readonly allocatedBytes: number;
+  readonly peakAllocatedBytes: number;
+  readonly resources: readonly Readonly<{kind: string; label: string; bytes: number}>[];
+}
+
 export interface CreateWavefrontPathTracingComputeRendererOptions {
   /** Accumulate linear radiance between frames until camera/scene/reset changes. Default false. */
   readonly progressive?: boolean;
@@ -1127,6 +1149,10 @@ export interface CreateWavefrontPathTracingComputeRendererOptions {
   readonly mediums?: readonly WavefrontMediumInput[];
   readonly mesh?: WavefrontMeshInput;
   readonly meshes?: readonly WavefrontMeshInput[];
+  /** Opt-in shared BLAS/TLAS instances. Every mesh must be referenced. Static, non-emissive meshes; CPU BLAS construction. */
+  readonly instances?: readonly WavefrontMeshInstanceInput[];
+  /** Positive renderer-owned resource byte budget. Device limits apply independently. */
+  readonly memoryBudgetBytes?: number;
   readonly triangleCapacity?: number;
   readonly bvhNodeCapacity?: number;
   readonly bvhLeafSortCapacity?: number;
@@ -1203,6 +1229,8 @@ export interface WavefrontPathTracingComputeRenderer {
     maxFramePassesPerSubmission: number;
     sceneObjectCount: number;
     triangleCount: number;
+    instanceCount: number;
+    geometryCount: number;
     emissiveTriangleCount: number;
     environmentPortalCount: number;
     environmentPortalMode: 0 | 1 | 2;
@@ -1221,6 +1249,7 @@ export interface WavefrontPathTracingComputeRenderer {
     frameConfigSlots: number;
     gpuParallelism: WavefrontGpuParallelismDiagnostics;
     memory: WavefrontPathTracingMemoryEstimate;
+    allocations: WavefrontGpuAllocationSnapshot;
   }>;
   destroy(): void;
 }
@@ -1557,6 +1586,7 @@ export function renderWavefrontPathTracingComputeFrame(
   }
 ): Promise<WavefrontPathTracingComputeFrameStats>;
 export function createWavefrontPathTracingComputeShaderSource(options?: {
+  readonly instanced?: boolean;
   workgroupSize?: number;
   outputTextureFormat?: GPUTextureFormat | "rgba8unorm";
 }): string;

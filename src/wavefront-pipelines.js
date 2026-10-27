@@ -3,10 +3,10 @@ import {
   createComputePipeline,
   createRenderPipeline,
 } from "./wavefront-runtime-support.js";
-import { PRESENT_WGSL, WAVEFRONT_COMPUTE_WGSL } from "./wavefront-shaders.js";
+import { PRESENT_WGSL, createWavefrontPathTracingComputeShaderSource } from "./wavefront-shaders.js";
 import { CONFIG_BUFFER_BYTES } from "./wavefront-core.js";
 
-export function createWavefrontBindGroupLayouts(device, constants) {
+export function createWavefrontBindGroupLayouts(device, constants, instanced = false) {
   const trace = device.createBindGroupLayout({
     label: "plasius.wavefront.traceBindGroupLayout",
     entries: [
@@ -59,6 +59,7 @@ export function createWavefrontBindGroupLayouts(device, constants) {
       { binding: 42, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
       { binding: 43, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
       { binding: 44, visibility: constants.shader.COMPUTE, texture: { sampleType: "float" } },
+      ...(instanced ? [{binding:47, visibility:constants.shader.COMPUTE, texture:{sampleType:"uint"}}] : []),
     ],
   });
   const acceleration = device.createBindGroupLayout({
@@ -258,12 +259,12 @@ export async function createWavefrontPresentPipeline(device, presentBindGroupLay
   });
 }
 
-export async function createWavefrontPipelineResources({ device, constants, format }) {
-  const bindGroupLayouts = createWavefrontBindGroupLayouts(device, constants);
+export async function createWavefrontPipelineResources({ device, constants, format, instanced = false }) {
+  const bindGroupLayouts = createWavefrontBindGroupLayouts(device, constants, instanced);
   const pipelineLayouts = createWavefrontPipelineLayouts(device, bindGroupLayouts);
   const computeShader = device.createShaderModule({
     label: "plasius.wavefront.computeShader",
-    code: WAVEFRONT_COMPUTE_WGSL,
+    code: createWavefrontPathTracingComputeShaderSource({instanced}),
   });
   await assertShaderModuleCompiles(computeShader, "plasius.wavefront.computeShader");
 

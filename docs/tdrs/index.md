@@ -5,3 +5,5 @@
 - [TDR 0003: Ray-Tracing-First Render Graph Contract](./tdr-0003-ray-tracing-first-render-graph-contract.md)
 - [TDR 0004: Animation Adventure Skinned GLB Canvas Path](./tdr-0004-animation-adventure-skinned-glb-canvas.md)
 - [TDR 0005: Feedback Diagnostic Bucketing](./tdr-0005-feedback-diagnostic-bucketing.md)
+
+- [TDR 0006: Instanced scene qualification](tdr-0006-instanced-scene-qualification.md)
