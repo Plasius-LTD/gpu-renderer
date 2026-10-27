@@ -1,5 +1,13 @@
 # @plasius/gpu-renderer
 
+Latest [streamed optical checkpoint](docs/evidence/streamed-optical-budget-2026-10-27.md):
+explicit2048 interfaces/20 ordinary bounces passes the frozen optical furnace
+gates and all six full-fidelity1080p/4K uniform32 captures pass integrity checks.
+The worst furnace RGB loss falls89.06%→2.34%, below the unchanged5% limit.
+This is not full-room convergence, noise elimination or adaptive-performance
+qualification. Adaptive work remains paused; defaults remain off/64. Use64 only
+as the retained rejected filled-glass control, not the newly passing setting.
+
 Experimental separate optical-interface budget ([ADR 0066](docs/adrs/adr-0066-separate-optical-interface-budget.md)):
 set the remotely controllable `renderer.transport.opticalInterfaceBudget.enabled`
 flag with bounded+nested transport, strict physical lighting and deferred resolve.
@@ -1355,12 +1363,16 @@ console.log({
 });
 ```
 
-`primaryRays` is the exact number of camera samples. `secondaryRays` is the
-sum of active continuation records intersected after bounce zero, including
-bounded reflection/transmission branches, and `totalPathSegments` is their sum.
-The renderer copies the existing active-queue counter once per bounce into a
-lazily allocated telemetry buffer; it does not add diagnostic shader atomics or
-change WGSL transport. `rayCounts.status` distinguishes available,
+`primaryRays` is the exact number of camera samples. Without optical streaming,
+`secondaryRays` sums active continuation records intersected after bounce zero,
+including bounded reflection/transmission branches. With streaming it also adds
+the measured internal optical path segments; this is not a count of BVH tests or
+hidden-boundary retry queries. `totalPathSegments` is primary plus secondary.
+Fixed/off-mode telemetry copies existing queue counters without additional
+shader atomics. Streamed diagnostic mode adds one counter update per non-empty
+chain and a per-camera-sample copy; it labels the histogram `queue-iteration`
+and exposes `queuePathSegments` and `additionalOpticalSegments`. These additions
+are absent without statistics. `rayCounts.status` distinguishes available,
 unavailable, failed, and not-requested evidence. A mismatch between scheduled
 and observed primary rays fails the `ray-count-telemetry` transport guardrail.
 Ray-count reduction uses constant call-stack space, including the supported

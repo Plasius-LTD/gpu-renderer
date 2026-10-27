@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Retain streamed64 byte/segment equivalence and passing explicit2048 optical
+  controls at unchanged image tolerances. Complete and independently verify all
+  six native1080p/4K uniform32 captures (995,328,000 samples,120 HDR chunks), plus
+  the deep independent CPU contrast reference. Preserve failed setup/execution
+  attempts and distinguish expected pedestal contrast from missing-tail loss.
+  Adaptive performance, full-scene convergence and release remain gated (#234).
+
 - Keep optional streamed optical journals explicit about queue boundaries and
   ordinary logical-node depth. Address surface records by logical ownership and
   compare sampled pure-chain prefixes by physical ordinal, not temporary array

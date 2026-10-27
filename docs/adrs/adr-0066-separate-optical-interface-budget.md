@@ -3,6 +3,12 @@
 Status: accepted for experimental implementation; physical image qualification
 pending. Task #234, site Story #2291 / Feature #2114. 27 October 2026.
 
+Refinement: [ADR0067](adr-0067-streamed-bounded-optical-chains.md) supersedes
+the per-interface node/queue allocation, physical GPU maxDepth and1–64 range
+below. Retain this prototype decision/evidence historically; use0067 for current
+logical storage,1–2048 admission and physical-segment telemetry. The independent
+default-off policy and unchanged ordinary scattering budget remain in force.
+
 ## Context
 
 Canonical original-sample journals show valid thin-wall TIR paths terminating

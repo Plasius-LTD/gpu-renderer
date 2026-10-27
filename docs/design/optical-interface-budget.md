@@ -1,5 +1,11 @@
 # Separate capped optical-interface budget
 
+Historical prototype design. Its per-interface node/dispatch allocation and
+1–64 admission range are superseded by [ADR0067](../adrs/adr-0067-streamed-bounded-optical-chains.md)
+and the [streamed design](streamed-optical-interface-budget.md). Preserve this
+document to interpret the rejected prototype evidence, not as current allocation
+or queue-depth guidance. The default-off separate-budget policy remains current.
+
 27 October 2026. User approved the separate budget over raising every path's
 ordinary bounce ceiling. Task234 / Story2291 / Feature2114; adaptive remains
 paused. This design precedes implementation. Preserve the70e02d7 captures as
