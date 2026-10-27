@@ -21,6 +21,7 @@ import { createSharedSampleRanges, packSharedPhase, createSharedAdaptivePipeline
 import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continuations.js";
 import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 import {pathQueueCapacity} from '/src/wavefront-optical-interface-budget.js';
+import {observePipelineSetup} from './pipeline-setup-observer.js';
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false,opticalInterfaceBudget={enabled:false}}={}) {
@@ -33,6 +34,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
   if(native)check(Number.isSafeInteger(native.width)&&Number.isSafeInteger(native.height)&&native.width>=128&&native.height>=128&&native.width*native.height<=3840*2160,"Invalid native fixture dimensions");
   let device, renderer, owner, telemetry, guidePostprocess, lost = false, disposed = false;
   let tracePipelineLayout, activePreparedPipelines=null, activeTelemetry=null, presentPipeline;
+  let setupSnapshot=()=>[];
   const timestampPairs = [];
   const extras = [], errors = [], buffers = new Map(), bindings = new Map(), descriptors = new Map(), pipelines = {}, textures = [];
   const active = () => check(!signal.aborted && !lost && !disposed, "Probe cancelled or device lost");
@@ -48,6 +50,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const observedAdapter = { limits:adapter.limits, features:adapter.features, info:adapter.info,
       requestDevice: async descriptor => {
         device = await adapter.requestDevice(descriptor); if(disposed || signal.aborted)device.destroy();active();
+        setupSnapshot=observePipelineSetup(device);
         device.lost.then(({reason})=>{if(reason!=="destroyed") lost=true;});
         device.addEventListener("uncapturederror",event=>errors.push(event.error.message));
         device.pushErrorScope("validation");
@@ -278,5 +281,5 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       },
       destroy(){destroy();check(owner.snapshot().allocatedBytes===0,"Adaptive cleanup failed");},
     };
-  } catch(error){destroy();throw error;}
+  } catch(error){error.captureFailure??={stage:'runner-setup',pipelineSetup:setupSnapshot()};destroy();throw error;}
 }
