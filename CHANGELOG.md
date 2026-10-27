@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Bound optical diagnostic camera-sample submissions by the existing renderer
+  pass ceiling, awaiting completion per chunk without resetting sample ordinals,
+  phase state or count/radiance sums. Retain the2048-interface whole-tile timeout;
+  keep the30-second operation limit and image gates unchanged. Retain pipeline
+  setup-stage failures separately from submitted GPU execution (#234).
+
 - Stream bounded smooth zero-direct optical chains on GPU within logical path
   nodes, keeping physical sample ordinals and ordinary queue/storage limits.
   Keep the optical flag off and default64; validate explicit limits up to2048.

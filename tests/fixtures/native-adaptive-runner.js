@@ -11,6 +11,7 @@ import { retainNativeFailure,readFailedPathNodes } from './native-failure-eviden
 import {validateOpticalSelections,selectedOpticalJournals} from './optical-selection.js';
 import {pathQueueCapacity} from '../../src/wavefront-optical-interface-budget.js';
 import {MAX_OPTICAL_TRACE_INTERFACES} from './optical-chain-trace.js';
+import {nativeSampleChunks,nativePhaseRanges} from './native-sample-chunks.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 export async function createNativeAdaptiveRunner(c) {
@@ -91,26 +92,35 @@ export async function createNativeAdaptiveRunner(c) {
         });
         if(diagnostics)telemetry.beginFrame();
         const parallelism=createGpuParallelismCounters(),lastOffset=(samples-1)*config.memory.configBufferStride;
+        const chunks=nativeSampleChunks(samples,pathQueueCapacity(config),config.maxFramePassesPerSubmission,config.opticalInterfaceBudget.enabled);
+        trace.submissions=[];
+        for(const [chunkIndex,chunk] of chunks.entries()){
+        active();const finalChunk=chunkIndex===chunks.length-1;
         const encoder=stage("commandEncoding",()=>{
           const encoder=diagnostics?createTimestampSpanEncoder(frameDevice.createCommandEncoder(),telemetry):frameDevice.createCommandEncoder();
-          if(!adaptive){for(let ordinal=0;ordinal<maximum;ordinal++){
+          if(!adaptive){for(let ordinal=chunk.firstSample;ordinal<chunk.sampleLimit;ordinal++){
             frameEncoder.encodeTileSample(encoder,tile,ordinal*config.memory.configBufferStride,parallelism);
             if(ordinal===maximum-1&&diagnostics)encoder.closeNextPass();
             frameEncoder.encodeTileOutput(encoder,tile,ordinal*config.memory.configBufferStride,parallelism);
           }}else{
             const request={pipelines:shared,bindGroup:sharedGroup,phaseBindGroup:sharedPhaseGroup,tile,dispatchBuffer:b.dispatch,counterBuffer:counters,frameEncoder,parallelism};
-            for(const [i,range] of ranges.entries()){
-              encodeSharedPhase(encoder,{...request,frameOffset:range.firstSample*config.memory.configBufferStride,phaseOffset:i*256});
-              for(let ordinal=range.firstSample;ordinal<range.sampleLimit;ordinal++)encodeSharedSample(encoder,{...request,frameOffset:ordinal*config.memory.configBufferStride,phaseOffset:i*256});
+            for(const range of nativePhaseRanges(chunk,ranges)){
+              if(range.initialize)encodeSharedPhase(encoder,{...request,frameOffset:range.firstSample*config.memory.configBufferStride,phaseOffset:range.phaseIndex*256});
+              for(let ordinal=range.firstSample;ordinal<range.sampleLimit;ordinal++)encodeSharedSample(encoder,{...request,frameOffset:ordinal*config.memory.configBufferStride,phaseOffset:range.phaseIndex*256});
             }
+            if(finalChunk){
             const resolve=encoder.beginComputePass({label:"native-adaptive-resolve"});resolve.setPipeline(shared.resolve);resolve.setBindGroup(0,sharedGroup,[lastOffset,(ranges.length-1)*256]);resolve.dispatchWorkgroups(groups);resolve.end();
             if(diagnostics)encoder.closeNextPass();
             const publish=encoder.beginComputePass({label:"native-adaptive-output"});publish.setPipeline(output.output);publish.setBindGroup(0,outputGroup,[lastOffset]);publish.dispatchWorkgroups(groups);publish.end();
+            }
           }
           return encoder;
         });
-        frameDevice.queue.submit([encoder.finish()]);
+        const submitted=performance.now();
+        frameDevice.queue.submit([diagnostics?encoder.finish({continuation:!finalChunk}):encoder.finish()]);
         await asyncStage("gpuWait",()=>wait(device.queue.onSubmittedWorkDone()));
+        trace.submissions.push({...chunk,completed:true,awaitedMs:performance.now()-submitted});
+        }
         trace.renderIntervalMs=performance.now()-tileStarted;trace.parallelism=parallelism;
         if(diagnostics){const readStarted=performance.now();
           const measured=await asyncStage("telemetryReadback",()=>wait(telemetry.readFrame({expectedPrimaryRays,expectedRayCounts:samples*pathQueueCapacity(config),expectedOpticalSegmentRecords:config.opticalInterfaceBudget.enabled?samples:0,waitForSubmittedGpuWork:()=>wait(device.queue.onSubmittedWorkDone())})));

@@ -11,6 +11,6 @@ export function createTimestampSpanEncoder(encoder, telemetry) {
     },
     copyBufferToBuffer(...args){return encoder.copyBufferToBuffer(...args);},
     clearBuffer(...args){return encoder.clearBuffer(...args);},
-    finish(){if(!closed)throw new Error("Timestamp span incomplete");return encoder.finish();},
+    finish({continuation=false}={}){if(closed===continuation)throw new Error("Timestamp span incomplete or closed before continuation");return encoder.finish();},
   };
 }
