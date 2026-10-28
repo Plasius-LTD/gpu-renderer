@@ -1,5 +1,23 @@
 # @plasius/gpu-renderer
 
+Native room convergence prequalification is now automated in the local scene
+lab: **Laboratory diagnostics → Capture room convergence references** resets
+the original full-fidelity filled room and captures uniform32/128/256 SPP with
+transport seeds7/19 at1080p and4K, sequentially with cancellation and per-lane
+HDR/provenance retention. It uses20 ordinary bounces/2048 optical interfaces;
+no production defaults or transport shaders change. Use the explicit development
+query `?convergenceResolution=1080p` (or `4k`) for a labelled partial batch.
+All existing evidence is preserved. Captures alone do not certify convergence.
+
+Analyse a completed aggregate with
+`node scripts/verify-room-convergence.mjs WORKSPACE_ROOT LIGHTING_CHECKOUT SUMMARY_JSON`.
+The read-only verifier reuses commit-checked gpu-lighting HDR metrics, checks
+actual seeds/counts and scene/source/assets/camera/transport identity, reconstructs
+lossless chunks and reports reference convergence, independent32-SPP errors,
+energy drift and signed row differences. A failed or partial screen exits nonzero;
+even a full pass is not production image, adaptive-performance or60Hz acceptance.
+See the [frozen protocol](docs/design/room-convergence-qualification.md).
+
 Latest [streamed optical checkpoint](docs/evidence/streamed-optical-budget-2026-10-27.md):
 explicit2048 interfaces/20 ordinary bounces passes the frozen optical furnace
 gates and all six full-fidelity1080p/4K uniform32 captures pass integrity checks.

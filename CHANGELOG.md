@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Automate native full-room convergence prequalification at uniform32/128/256
+  SPP and independent transport seeds7/19. Preserve per-lane HDR/count/source
+  evidence and successful setup observations; add a read-only verifier reusing
+  gpu-lighting metrics with frozen convergence/energy screens. Partial/failed
+  evidence cannot qualify; transport and adaptive defaults are unchanged (#234).
+
 - Retain streamed64 byte/segment equivalence and passing explicit2048 optical
   controls at unchanged image tolerances. Complete and independently verify all
   six native1080p/4K uniform32 captures (995,328,000 samples,120 HDR chunks), plus

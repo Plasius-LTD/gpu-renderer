@@ -13,12 +13,13 @@ import {ROOM_COAT_DEFAULTS,withRoomWoodCoat} from './room-clearcoat-settings.js'
 import {GLASS_WATER_DEFAULTS,glassWaterSettings,withRoomGlass} from '/lighting/demo/eames-environments/glass-water-reference.js';
 import {createRoomDemoPresets,installRoomDemoUi,roomFocusSettings,revealInvalidControl,setRoomPreviewState,invalidateRoomCaptureUi} from './room-demo-ui.js';
 import {runRoomQualification,roomQualificationSettingsFromSearch} from './room-qualification.js';
+import {runRoomConvergence,roomConvergenceSettingsFromSearch} from './room-convergence.js';
 import {opticalSelectionsFromSearch} from './optical-selection.js';
 import {MAX_OPTICAL_INTERFACES,DEFAULT_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG} from '../../src/wavefront-optical-interface-budget.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
-const controls=[...el("controls").querySelectorAll("input,select:not(#response-view)"),el("benchmark"),el('cloth-response'),el('qualification')];
+const controls=[...el("controls").querySelectorAll("input,select:not(#response-view)"),el("benchmark"),el('cloth-response'),el('qualification'),el('convergence')];
 function lightingSelection(){return {style:el('lighting-style').value,intensity:el('lighting-intensity').valueAsNumber};}
 function resetLighting(){el('lighting-style').value=ROOM_LIGHTING_DEFAULTS.style;el('lighting-intensity').value=ROOM_LIGHTING_DEFAULTS.intensity;}
 el('lighting-intensity').min=String(ROOM_LIGHTING_DEFAULTS.minimumIntensity);el('lighting-intensity').max=String(ROOM_LIGHTING_DEFAULTS.maximumIntensity);
@@ -58,7 +59,7 @@ for(const control of controls){
  control.addEventListener("change",invalidateCapture);
  control.addEventListener("input",invalidateCapture);
 }
-reset.addEventListener("click",()=>{
+function resetRoomControls(){
  resetGlass();
  el('max-depth').value=String(ROOM_CAPTURE_DEPTH_LIMITS.default);
  resetCoat();
@@ -69,8 +70,10 @@ reset.addEventListener("click",()=>{
  el('models').value='all';
  el('spp').value=String(RADIAL_SAMPLING_DEFAULTS.maximumSpp);
  el("chair-x").value=ROOM_DEFAULTS.x;el("chair-z").value=ROOM_DEFAULTS.z;el("chair-yaw").value=ROOM_DEFAULTS.yaw;
+ el('capture-seed').value='7';
  el("resolution").value="1080p";el("sampler").value="fixed-pattern";el("splitting").value="0";el('denoise').value='off';invalidateCapture();
-});
+}
+reset.addEventListener("click",resetRoomControls);
 cancel.addEventListener("click",()=>cancellation?.abort());
 export async function loadAssets(receipt,signal){
  const sourceKey=JSON.stringify([receipt.provenance.sources,receipt.provenance.assets]);
@@ -182,8 +185,8 @@ async function captureRoomReference({qualification=false}={}){
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
   runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,boundedDielectricBranching,nestedMediaRefraction,roughDielectricTransport,opticalInterfaceBudget,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===settings.maxDepth&&runner.sceneSnapshot.samplesPerPixel===settings.maximumSpp&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
-  receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;
-  const frame=await runner.run(distribution,{sampler:settings.sampler,seed:7,diagnostics:true,profile:true,opticalJournal,onProgress:p=>{
+  receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;receipt.pipelineSetup=runner.pipelineSetup;
+  const frame=await runner.run(distribution,{sampler:settings.sampler,seed:el('capture-seed').valueAsNumber,diagnostics:true,profile:true,opticalJournal,onProgress:p=>{
    status.textContent=`Rendering room · ${p.completedTiles}/${p.totalTiles} tiles completed`;
   }});
   if(distribution==='radial')validateRoomFrame(frame,plan,settings);
@@ -248,34 +251,42 @@ async function captureRoomReference({qualification=false}={}){
 }
 run.addEventListener('click',captureRoomReference);
 
-el('qualification').addEventListener('click',async()=>{
+for(const batch of [
+ {id:'qualification',settings:roomQualificationSettingsFromSearch,run:runRoomQualification,label:'Qualification'},
+ {id:'convergence',settings:roomConvergenceSettingsFromSearch,run:runRoomConvergence,label:'Convergence',reset:true},
+])el(batch.id).addEventListener('click',async()=>{
  if(qualificationRunning||run.disabled)return;
  let qualificationSettings;
- try{qualificationSettings=roomQualificationSettingsFromSearch(location.search);}
+ try{qualificationSettings=batch.settings(location.search);}
  catch(error){status.textContent=error.message;return;}
  for(const control of controls)if(!control.checkValidity()){revealInvalidControl(control);status.textContent='Invalid qualification settings. Check the highlighted field.';return;}
  qualificationRunning=true;run.disabled=true;reset.disabled=true;controls.forEach(c=>c.disabled=true);cancel.disabled=false;
  const snapshot=[...el('controls').querySelectorAll('input,select')].map(control=>[control,control.value]);
  const abort=new AbortController(),stop=()=>{abort.abort();cancellation?.abort();};
  cancel.addEventListener('click',stop);
+ const batchId=crypto.randomUUID();
+ const retainBatch=async(payload,name)=>{
+  const marker=document.createElement('canvas');marker.width=1;marker.height=1;
+  const path=`output/playwright/eames-environments/room-${batch.id}-${batchId}/${name}.png`;
+  const response=await fetch('/__plasius-capture',{method:'POST',headers:{'content-type':'application/json'},signal:AbortSignal.timeout(30000),body:JSON.stringify({path,dataUrl:marker.toDataURL(),result:payload})});
+  check(response.ok,'Qualification summary retention failed');
+ };
  let report;
  try{
-  report=await runRoomQualification({signal:abort.signal,settings:qualificationSettings,
-   configure:values=>{for(const [id,value] of Object.entries(values)){const control=el(id);check(control,'Missing qualification control: '+id);control.value=value;}demoUi.refresh();},
+  report=await batch.run({signal:abort.signal,settings:qualificationSettings,
+   configure:values=>{if(batch.reset)resetRoomControls();else el('capture-seed').value='7';for(const [id,value] of Object.entries(values)){const control=el(id);check(control,'Missing qualification control: '+id);control.value=value;}demoUi.refresh();},
    capture:()=>captureRoomReference({qualification:true}),
-   onLane:(lane,index,total)=>{status.textContent=`Qualification ${index+1}/${total}: ${lane.resolution}, ${lane.glass}, ${lane.focus}, uniform ${lane.spp} SPP`;},
+   onCheckpoint:partial=>retainBatch(partial,'checkpoint-'+partial.lanes.length),
+   onLane:(lane,index,total)=>{status.textContent=`${batch.label} ${index+1}/${total}: ${lane.resolution}, ${lane.glass}, ${lane.focus}, uniform ${lane.spp} SPP${lane.seed!==undefined?', seed '+lane.seed:''}`;},
   });
   report.initialControls=Object.fromEntries(snapshot.map(([control,value])=>[control.id,value]));
-  const marker=document.createElement('canvas');marker.width=1;marker.height=1;
-  const path=`output/playwright/eames-environments/room-qualification-${crypto.randomUUID()}/summary.png`;
-  const response=await fetch('/__plasius-capture',{method:'POST',headers:{'content-type':'application/json'},signal:AbortSignal.timeout(30000),body:JSON.stringify({path,dataUrl:marker.toDataURL(),result:report})});
-  check(response.ok,'Qualification summary retention failed');
+  await retainBatch(report,'summary');
  }catch(error){report??={status:'failed',failures:[]};report.status='failed';report.failures.push(error.message);}
  finally{
   cancel.removeEventListener('click',stop);for(const [control,value] of snapshot)control.value=value;
   qualificationRunning=false;run.disabled=false;reset.disabled=false;controls.forEach(c=>c.disabled=false);cancel.disabled=true;
   invalidateCapture();
-  status.textContent=report?.status==='captures-complete-image-review-pending'?'Qualification captures retained · image review pending':`Qualification failed: ${report?.failures?.join('; ')}`;
+  status.textContent=report?.status?.startsWith('captures-complete-')?`${batch.label} captures retained · image analysis pending`:`${batch.label} failed: ${report?.failures?.join('; ')}`;
   result.textContent=JSON.stringify(report,null,2);
  }
 });

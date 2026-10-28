@@ -140,11 +140,13 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       const {createGuidedRoomPostprocess}=await import('./native-guided-postprocess.js');
       guidePostprocess=await wait(createGuidedRoomPostprocess({device,native,b,frame,counters,queue,descriptors,frameEncoder,makeBuffer,read,wait,active}));
     }
-    if(native)return await createNativeAdaptiveRunner({native,sampler,guidePostprocess,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
+    if(native){const nativeRunner=await createNativeAdaptiveRunner({native,sampler,guidePostprocess,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
       tracePipelineLayout,pipelines,variants,telemetry,timestampPairs,read,makeBuffer,group,descriptors,wait,active,destroy,errors,owner,
       setMode(diagnostic,fused){activeTelemetry=diagnostic?telemetry:null;activePreparedPipelines=fused?variants.fused:null;},
       setConfig(value){config=value;},adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
       memory:{rendererBufferBytes,textureInventory,adaptiveBufferBytes:resources.allocatedBytes,telemetryBufferBytes:telemetry.memoryBytes,fixtureStagingBytes:extras.reduce((sum,item)=>sum+item.size,0)}});
+      return {...nativeRunner,pipelineSetup:setupSnapshot()};
+    }
     // Fixture adapter only: publish adaptive linear output into the same textures
     // as fixed output. Reuse the exact fixed tone-map function, not a new transfer.
     const toneMap=WAVEFRONT_SHADER_KERNELS_WGSL.slice(WAVEFRONT_SHADER_KERNELS_WGSL.indexOf("fn tone_map_radiance"),WAVEFRONT_SHADER_KERNELS_WGSL.indexOf("fn present_radiance"));
