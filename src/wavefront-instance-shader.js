@@ -9,17 +9,19 @@ struct MeshInstance {
 };
 @group(0) @binding(47) var meshInstances: texture_2d<u32>;
 fn read_mesh_instance(index: u32) -> MeshInstance {
-  let y = i32(index);
-  let metadata = textureLoad(meshInstances, vec2<i32>(8, y), 0);
+  let recordsPerRow = textureDimensions(meshInstances).x / 9u;
+  let x = i32((index % recordsPerRow) * 9u);
+  let y = i32(index / recordsPerRow);
+  let metadata = textureLoad(meshInstances, vec2<i32>(x + 8, y), 0);
   return MeshInstance(
-    mat4x4<f32>(bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(0, y), 0)),
-      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(1, y), 0)),
-      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(2, y), 0)),
-      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(3, y), 0))),
-    mat4x4<f32>(bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(4, y), 0)),
-      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(5, y), 0)),
-      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(6, y), 0)),
-      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(7, y), 0))),
+    mat4x4<f32>(bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(x, y), 0)),
+      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(x + 1, y), 0)),
+      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(x + 2, y), 0)),
+      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(x + 3, y), 0))),
+    mat4x4<f32>(bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(x + 4, y), 0)),
+      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(x + 5, y), 0)),
+      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(x + 6, y), 0)),
+      bitcast<vec4<f32>>(textureLoad(meshInstances, vec2<i32>(x + 7, y), 0))),
     metadata.x, metadata.y, bitcast<f32>(metadata.z), 0u);
 }
 

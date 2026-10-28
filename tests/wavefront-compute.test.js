@@ -3928,6 +3928,25 @@ serialWebGpuTest('100 shared instances fit ten storage bindings and account for 
     assert.equal(renderer.getSnapshot().allocations.allocatedBytes,0);
   });
 });
+serialWebGpuTest('30,000 instances use packed rows on a device with 8,192-texel limits', async()=>{
+  await withWebGpuConstants(async()=>{
+    const device=new FakeWavefrontDevice();
+    device.limits.maxTextureDimension2D=8192;
+    const renderer=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),
+      navigator:createFakeWavefrontNavigator(device),width:32,height:32,memoryBudgetBytes:64*1024*1024,
+      meshes:[{id:7,positions:[-1,0,0,1,0,0,0,1,0],indices:[0,1,2]}],
+      instances:Array.from({length:30000},(_,i)=>({id:i,meshId:7,transform:[1,0,0,0,0,1,0,0,0,0,1,0,i%200,0,Math.floor(i/200),1]}))});
+    const snapshot=renderer.getSnapshot();
+    assert.equal(snapshot.instanceCount,30000);
+    assert.equal(snapshot.geometryCount,1);
+    assert.equal(snapshot.memory.triangleBytes,576);
+    assert.equal(snapshot.memory.instanceTextureBytes,8190*33*16);
+    assert.equal(snapshot.allocations.resources.find(r=>r.label==='plasius.wavefront.instances').bytes,8190*33*16);
+    renderer.renderOnce();renderer.destroy();
+    assert.equal(renderer.getSnapshot().allocations.allocatedBytes,0);
+  });
+});
+
 serialWebGpuTest('allocation refusal destroys every partially created resource',async()=>{
   await withWebGpuConstants(async()=>{
     const device=new FakeWavefrontDevice();

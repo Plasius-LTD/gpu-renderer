@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Pack shared instance records across device-bounded texture rows with bounded uploads, padded storage diagnostics and early TLAS byte-budget checks.
+
 - **Added**
   - (placeholder)
 

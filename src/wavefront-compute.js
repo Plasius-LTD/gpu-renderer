@@ -1,4 +1,5 @@
 import { uploadWavefrontBuffer } from './wavefront-upload.js';
+import { planInstanceTexture, uploadInstanceTexture } from './wavefront-instance-texture.js';
 import { createGpuAllocationTracker, openGpuAllocationErrorScopes } from './gpu-allocation-budget.js';
 import { createWavefrontProgressiveResources } from './wavefront-progressive.js';
 import {
@@ -242,12 +243,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   const memory = config.memory;
   let instanceTexture = null, instanceView = null;
   if(config.instancing) {
-    const count=config.instancing.instanceCount;
-    instanceTexture=device.createTexture({label:"plasius.wavefront.instances",size:{width:9,height:count},
+    const layout=planInstanceTexture(config.instancing.instanceCount,device.limits?.maxTextureDimension2D);
+    instanceTexture=device.createTexture({label:"plasius.wavefront.instances",size:{width:layout.width,height:layout.height},
       format:"rgba32uint",usage:constants.texture.TEXTURE_BINDING|constants.texture.COPY_DST});
-    const upload=new Uint8Array(count*256),source=new Uint8Array(config.instancing.buffer);
-    for(let i=0;i<count;i++) upload.set(source.subarray(i*144,(i+1)*144),i*256);
-    device.queue.writeTexture({texture:instanceTexture},upload,{bytesPerRow:256,rowsPerImage:count},{width:9,height:count,depthOrArrayLayers:1});
+    await uploadInstanceTexture(device,instanceTexture,config.instancing.buffer,layout);
     instanceView=instanceTexture.createView();
   }
   const activeQueue = createBuffer(device, bufferUsage, memory.queueBytes, "plasius.wavefront.activeQueue");

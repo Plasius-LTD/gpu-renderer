@@ -1050,8 +1050,10 @@ export interface WavefrontPathTracingMemoryEstimate {
   readonly pathVertexBytes: number;
   readonly sceneObjectBytes: number;
   readonly triangleBytes: number;
-  /** Instance lookup texture bytes; separate from totalHotBufferBytes. */
+  /** Logical 144-byte records, separate from totalHotBufferBytes and before texture row padding. */
   readonly instanceBytes: number;
+  /** Requested instance texture storage including row padding. */
+  readonly instanceTextureBytes: number;
   readonly materialTableBytes: number;
   readonly bvhNodeBytes: number;
   readonly bvhCombinedBytes: number;
@@ -1417,6 +1419,8 @@ export function estimateWavefrontPathTracingMemory(options?: {
   maxDepth?: number;
   sceneObjectCapacity?: number;
   triangleCapacity?: number;
+  instanceBytes?: number;
+  instanceTextureBytes?: number;
   materialCapacity?: number;
   bvhNodeCapacity?: number;
   bvhLeafSortCapacity?: number;

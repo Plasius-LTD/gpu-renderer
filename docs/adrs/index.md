@@ -38,3 +38,5 @@
 - [ADR 0042: Canonical unlit refusal](adr-0042-canonical-unlit-refusal.md)
 
 - [ADR 0043: Shared mesh instancing and resource budgets](adr-0043-shared-mesh-instancing-and-resource-budgets.md)
+
+- [ADR 0044: Scalable instance texture storage](./adr-0044-scalable-instance-textures.md)
