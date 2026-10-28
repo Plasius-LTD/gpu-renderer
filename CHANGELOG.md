@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Replace the obsolete development-only brace-expansion override with the
+  patched5.0.12 range, clearing nine propagated tooling audit findings without
+  changing the production dependency graph. Add dependency-graph and benign
+  glob/expansion regression tests (#234).
+
 - Automate native full-room convergence prequalification at uniform32/128/256
   SPP and independent transport seeds7/19. Preserve per-lane HDR/count/source
   evidence and successful setup observations; add a read-only verifier reusing

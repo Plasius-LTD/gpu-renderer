@@ -69,3 +69,20 @@ scratch, and runs on CPU offline; it is not renderer frame cost or VRAM.
 No runtime shader, sampler, material transport or production API changes are
 required. Cancel stops after pending bounded GPU work and retains completed
 lanes; disable the existing experiment flags for GPU-native rollback.
+
+## Narrow developer dependency correction
+
+The remaining nine high tooling audit findings trace to the repository override
+forcing brace-expansion5.0.9. Registry/advisory inspection before implementation
+confirms patched5.0.12 is available and satisfies minimatch's existing
+brace-expansion5.x requirement. `fixAvailable:false` in npm's audit response does not
+mean no patched package exists when an override blocks resolution. Replace only
+that override with `^5.0.12` and regenerate the affected lock node with npm. Do
+not churn unrelated dependencies, renderer sources or qualification inputs.
+Require the full and production audits to pass, ordinary expansion/matching
+smoke tests, full local quality/Zero-Three gates and post-push CI. Captures remain
+pinned to their immutable pre-tooling-change source; this is not an image fix.
+
+Primary patched-version references:
+[nested recursion advisory](https://github.com/advisories/GHSA-qhr7-859c-m2p7)
+and [rewrite-complexity advisory](https://github.com/advisories/GHSA-q2hr-2g5m-vwhr).
