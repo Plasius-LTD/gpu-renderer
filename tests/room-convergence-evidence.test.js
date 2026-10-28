@@ -36,6 +36,8 @@ test('row attribution retains signed spatial changes; missing/failed reports nev
  assert.equal(convergenceEvidenceExitCode({status:'reference-screen-passed',completeness:'both-native-resolutions',resolutions:[{referenceGate:{passed:true}},{referenceGate:{passed:true}}]}),0);
 });
 function receipt(lane){return {status:'captured-reference-not-qualified',failures:[],cleanupPassed:true,
+ referenceSampling:{mode:'frame-indexed-transport-v1',seed:lane.seed,sources:['plasius.wavefront.computeShader','wavefront-adaptive-camera','adaptive-shared-rounds'].map(label=>({label,sha256:'f'.repeat(64)}))},
+ referenceSamplingProbe:{status:'passed',mode:'frame-indexed-transport-v1',seeds:[0,7,19],cameraInvariant:true,transportSeedDifferentiated:true,sourceSha256:'e'.repeat(64)},
  settings:{width:lane.width,height:lane.height,maximumSpp:lane.spp,maxDepth:lane.bounces,sampler:'fixed-pattern',denoise:false},
  frame:{seed:lane.seed,mode:'uniform',diagnostics:true,fused:false,validationErrors:0,visibilityBefore:'visible',visibilityAfter:'visible',actualSamples:lane.expectedSamples,actualHistogram:{[lane.spp]:lane.width*lane.height},maximumPathEvents:2068},
  pipelineSetup:[{status:'complete',elapsedMs:2}],inspection:{distribution:'uniform'},splitDepth:0,lighting:{style:'daylight'},materialFlags:{sheen:false},referenceMaterialMaps:[{assetSha256:'c'.repeat(64)},{assetSha256:'d'.repeat(64)}],opticalInterfaceBudget:lane.opticalInterfaceBudget,
@@ -44,13 +46,15 @@ function receipt(lane){return {status:'captured-reference-not-qualified',failure
  scene:{proxyGeometry:false,referenceModels:[{asset:{sha256:'c'.repeat(64)}},{asset:{sha256:'d'.repeat(64)}}],camera:{position:[0,0,0]},room:{sha256:'b'.repeat(64)},glassWater:{settings:{mode:'filled',closeup:false}}},
  admission:{maximumPathEvents:2068,opticalInterfaceBudget:{enabled:true,maximumInterfaces:2048,storageMode:'streamed-linear-chain',additionalPathBytes:0,maximumAdditionalBytes:134217728}},
  eamesSource:{manifest:{files:[{sha256:'e'.repeat(64)}]}},
- linearImage:{sha256:'hdr',chunks:[{}]},provenance:{sources:Object.fromEntries(['renderer','lighting','shared','site'].map(k=>[k,'a'.repeat(40)])),assets:{models:[{sha256:'c'.repeat(64)},{sha256:'d'.repeat(64)}]},captureId:'retained'},adapter:{isFallbackAdapter:false}};}
+ linearImage:{sha256:hash(lane.spp+':'+lane.seed),chunks:[{}]},provenance:{sources:Object.fromEntries(['renderer','lighting','shared','site'].map(k=>[k,'a'.repeat(40)])),assets:{models:[{sha256:'c'.repeat(64)},{sha256:'d'.repeat(64)}]},captureId:'retained'},adapter:{isFallbackAdapter:false}};}
 test('successful capture batch remains unqualified and rejects actual seed, scene or asset changes',async()=>{
  const settings={resolutions:['1080p']},plan=roomConvergencePlan(settings);let index=0;const checkpoints=[];
  const r=await runRoomConvergence({settings,configure:()=>{},capture:()=>receipt(plan[index++]),onCheckpoint:c=>checkpoints.push(c)});assert.equal(r.status,'captures-complete-convergence-pending');assert.equal(r.lanes.length,6);assert.equal(r.completeness,'partial-single-resolution');
  assert.deepEqual(checkpoints.map(c=>c.lanes.length),[0,1,2,3,4,5,6]);assert(checkpoints.every(c=>c.status==='running'));
  const baseline=receipt(plan[0]),identity=convergenceSceneIdentity(baseline);
- for(const change of [r=>r.frame.seed++,r=>r.scene.camera.position[0]++,r=>r.provenance.assets.models.push('changed'),r=>r.materialFlags.sheen=true,r=>r.frame.visibilityAfter='hidden',r=>r.scene.proxyGeometry=true,r=>r.scene.referenceModels.pop(),r=>r.frame.fused=true,r=>r.pipelineSetup=[],r=>r.pipelineSetup[0].status='pending',r=>r.referenceMaterialMaps[0].assetSha256='f'.repeat(64)]){
+ for(const change of [r=>r.frame.seed++,r=>r.scene.camera.position[0]++,r=>r.provenance.assets.models.push('changed'),r=>r.materialFlags.sheen=true,r=>r.frame.visibilityAfter='hidden',r=>r.scene.proxyGeometry=true,r=>r.scene.referenceModels.pop(),r=>r.frame.fused=true,r=>r.pipelineSetup=[],r=>r.pipelineSetup[0].status='pending',r=>r.referenceMaterialMaps[0].assetSha256='f'.repeat(64),r=>delete r.referenceSampling,r=>r.referenceSampling.seed++,r=>r.referenceSamplingProbe.transportSeedDifferentiated=false]){
   const copy=structuredClone(baseline);change(copy);assert.throws(()=>validateConvergenceCapture(copy,plan[0],baseline.provenance.sources,identity));
  }
+ index=0;const duplicates=await runRoomConvergence({settings,configure:()=>{},capture:()=>{const r=receipt(plan[index++]);r.linearImage.sha256='same-image';return r;}});
+ assert.equal(duplicates.status,'failed');assert.equal(index,2);assert.match(duplicates.failures[0],/Duplicate/);
 });

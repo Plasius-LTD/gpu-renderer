@@ -4,7 +4,12 @@ Native room convergence prequalification is now automated in the local scene
 lab: **Laboratory diagnostics → Capture room convergence references** resets
 the original full-fidelity filled room and captures uniform32/128/256 SPP with
 transport seeds7/19 at1080p and4K, sequentially with cancellation and per-lane
-HDR/provenance retention. It uses20 ordinary bounces/2048 optical interfaces;
+HDR/provenance retention. Its explicit fixture-only `frame-indexed-transport-v1`
+specialization uses the recorded seed for transport while preserving fixed
+camera points. A CPU/GPU probe must prove distinct transport draws and unchanged
+camera words; ordinary stable rendering still ignores frame index. Earlier
+frame-index-only duplicate captures are rejected as independent evidence.
+It uses20 ordinary bounces/2048 optical interfaces;
 no production defaults or transport shaders change. Use the explicit development
 query `?convergenceResolution=1080p` (or `4k`) for a labelled partial batch.
 All existing evidence is preserved. Captures alone do not certify convergence.

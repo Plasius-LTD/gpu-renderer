@@ -111,7 +111,7 @@ export async function loadAssets(receipt,signal){
 }
 export function roomCompositionControls(source){return {placement:{x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view:focusSettings().view,fovYDegrees:focusSettings().fovYDegrees,centralReference:el('central-reference').value,referenceModels:el('models').value==='all'?source.referenceModels:[]};}
 function closeupControls(){return focusSettings().cloth;}
-async function captureRoomReference({qualification=false}={}){
+async function captureRoomReference({qualification=false,referenceTransportSampling=false}={}){
  if(qualificationRunning&&!qualification)return;
  for(const control of controls)if(!control.checkValidity()){revealInvalidControl(control);status.textContent="Invalid settings. Check the highlighted field.";return;}
  const settings=roomReferenceSettings(el("resolution").value,el("sampler").value,el('spp').valueAsNumber,el('max-depth').valueAsNumber),view=focusSettings().view;
@@ -156,6 +156,11 @@ async function captureRoomReference({qualification=false}={}){
   status.textContent="Loading original room and Eames assets";
   const response=await fetch("/__provenance",{signal:AbortSignal.timeout(10000)});check(response.ok,"Missing provenance");receipt.provenance=await response.json();
   const source=withRoomWoodCoat(await loadAssets(receipt,cancellation.signal),receipt,woodCoat);
+  if(referenceTransportSampling){
+   status.textContent='Checking independent reference transport keys and unchanged camera samples';
+   const {probeReferenceTransportSampling}=await import('./reference-transport-sampling.js');
+   receipt.referenceSamplingProbe=await probeReferenceTransportSampling(cancellation.signal);
+  }
   let composed=composeRoomEamesScene({...source,...roomCompositionControls(source)});
   composed=withRoomGlass(composed,glass);receipt.scene=composed.evidence;
   composed.scene.probeDepth=settings.maxDepth;
@@ -183,9 +188,10 @@ async function captureRoomReference({qualification=false}={}){
   const plan=selectInspectionPlan(distribution,createRadialSamplingPlan(settings.width,settings.height,settings.maximumSpp),settings.maximumSpp);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
-  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,boundedDielectricBranching,nestedMediaRefraction,roughDielectricTransport,opticalInterfaceBudget,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
+  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,boundedDielectricBranching,nestedMediaRefraction,roughDielectricTransport,opticalInterfaceBudget,referenceTransportSampling,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===settings.maxDepth&&runner.sceneSnapshot.samplesPerPixel===settings.maximumSpp&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;receipt.pipelineSetup=runner.pipelineSetup;
+  if(referenceTransportSampling)receipt.referenceSampling={...runner.referenceSampling,seed:el('capture-seed').valueAsNumber};
   const frame=await runner.run(distribution,{sampler:settings.sampler,seed:el('capture-seed').valueAsNumber,diagnostics:true,profile:true,opticalJournal,onProgress:p=>{
    status.textContent=`Rendering room · ${p.completedTiles}/${p.totalTiles} tiles completed`;
   }});
@@ -275,7 +281,7 @@ for(const batch of [
  try{
   report=await batch.run({signal:abort.signal,settings:qualificationSettings,
    configure:values=>{if(batch.reset)resetRoomControls();else el('capture-seed').value='7';for(const [id,value] of Object.entries(values)){const control=el(id);check(control,'Missing qualification control: '+id);control.value=value;}demoUi.refresh();},
-   capture:()=>captureRoomReference({qualification:true}),
+   capture:()=>captureRoomReference({qualification:true,referenceTransportSampling:batch.id==='convergence'}),
    onCheckpoint:partial=>retainBatch(partial,'checkpoint-'+partial.lanes.length),
    onLane:(lane,index,total)=>{status.textContent=`${batch.label} ${index+1}/${total}: ${lane.resolution}, ${lane.glass}, ${lane.focus}, uniform ${lane.spp} SPP${lane.seed!==undefined?', seed '+lane.seed:''}`;},
   });

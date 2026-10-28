@@ -78,6 +78,7 @@ export async function verifyRoomConvergence(root,lightingRoot,summaryFile){
  for(let i=0;i<plan.length;i++){
   const lane=plan[i],file=captureFile(root,s.lanes[i].captureId),{receipt:r,evidence:e}=readRoomHdr(root,file);
   const verified=validateConvergenceCapture(r,lane,s.sources,identity);identity??=verified.identity;
+  if(evidence.some(previous=>previous.resolution===lane.resolution&&previous.spp===lane.spp&&previous.hdrSha256===e.hdrSha256))throw Error('Duplicate same-budget full-room reference image');
   if(JSON.stringify(verified)!==JSON.stringify({...s.lanes[i],identity:verified.identity})||identity!==s.identity)throw Error('Retained convergence lane changed');
   validateOpticalBudgetEvidence({settings:{...r.settings,opticalInterfaceBudget:r.opticalInterfaceBudget},frame:r.frame,probe:r.opticalPathSamplingProbe});
   let primary=0;const seen=new Set();

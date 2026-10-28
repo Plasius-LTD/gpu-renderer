@@ -86,3 +86,27 @@ pinned to their immutable pre-tooling-change source; this is not an image fix.
 Primary patched-version references:
 [nested recursion advisory](https://github.com/advisories/GHSA-qhr7-859c-m2p7)
 and [rewrite-complexity advisory](https://github.com/advisories/GHSA-q2hr-2g5m-vwhr).
+
+## Rejected replication and corrected reference experiment
+
+The first two completed32-SPP lanes at6e89e32 have different recorded frame
+indices7/19 but the same HDR hash. Source review confirms stablePatternWgsl(true)
+deliberately keys transport with frame zero. Preserve them as duplicate stable
+controls, **not independent replications**. The batch was cancelled before4K.
+Do not alter that intentional production stability to make the protocol pass.
+
+Before another expensive batch, add a fixture-only, explicitly named
+`frame-indexed-transport-v1` reference specialization. Reuse the exact existing
+fixed-pattern WGSL, replacing only its transport mix_seed zero frame key with
+the existing config.frameIndex. Camera dimension1, pixel/sample/bounce/dimension
+keys, distributions, PDFs, transport and sample counts remain unchanged. The
+regular renderer and ordinary capture keep byte-identical stable shaders.
+Apply the specialization coherently at shader-module construction, retaining
+source hashes and the actual seed. A portable CPU oracle reuses
+progressiveSampleWords; an assembled physical probe must compare exact u32
+draws for multiple seeds, pixels, dimensions, high sample/bounce ordinals and
+prove transport differences plus unchanged camera words. Require that probe and
+specialization evidence before admitting any convergence lane; reject duplicate
+same-budget full-room images. Existing unqualified receipts must fail admission.
+Keep all image thresholds unchanged. This experiment is a reference estimator
+for uncertainty, not a new production sampler or adaptive performance result.

@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Reject duplicate stable-sampler frame indices as independent convergence
+  evidence. Add a fixture-only frame-indexed transport reference specialization,
+  exact CPU/GPU draw probe and coherent source hashes; retain fixed camera
+  points and byte-identical production stable sampling. Preserve and reject the
+  initial duplicate reference batch rather than claiming zero noise (#234).
+
 - Replace the obsolete development-only brace-expansion override with the
   patched5.0.12 range, clearing nine propagated tooling audit findings without
   changing the production dependency graph. Add dependency-graph and benign

@@ -22,9 +22,11 @@ import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continu
 import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 import {pathQueueCapacity} from '/src/wavefront-optical-interface-budget.js';
 import {observePipelineSetup} from './pipeline-setup-observer.js';
+import {withReferenceTransportSampling,REFERENCE_TRANSPORT_MODE} from './reference-transport-sampling.js';
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false,opticalInterfaceBudget={enabled:false}}={}) {
+export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false,opticalInterfaceBudget={enabled:false},referenceTransportSampling=false}={}) {
+  check(!referenceTransportSampling||(native&&sampler==='fixed-pattern'&&!splitDepth&&!pruningVariants),'Reference transport requires native fixed-camera sampling without splitting/pruning');
   check(!opticalInterfaceBudget.enabled||(boundedDielectricBranching&&nestedMediaRefraction&&!splitDepth),'Optical interface budget requires bounded+nested transport without rough splitting');
   check(!guidedDenoise||(native&&!pruningVariants),"Guided denoise requires native staged transport");
   check([0,1,2].includes(splitDepth)&&(!splitDepth||sampler==="stable-pattern"),"Splitting requires stable-pattern and depth 1 or 2");
@@ -35,7 +37,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
   let device, renderer, owner, telemetry, guidePostprocess, lost = false, disposed = false;
   let tracePipelineLayout, activePreparedPipelines=null, activeTelemetry=null, presentPipeline;
   let setupSnapshot=()=>[];
-  const timestampPairs = [];
+  const timestampPairs = [],referenceHashes=[];
   const extras = [], errors = [], buffers = new Map(), bindings = new Map(), descriptors = new Map(), pipelines = {}, textures = [];
   const active = () => check(!signal.aborted && !lost && !disposed, "Probe cancelled or device lost");
   const destroy = () => { disposed=true;guidePostprocess?.destroy();telemetry?.destroy(); owner?.destroy(); renderer?.destroy(); extras.forEach(buffer=>buffer.destroy()); device?.destroy(); };
@@ -62,9 +64,16 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
             }
             return result;};
         }
-        if(sampler==="stable-camera-random"){
+        if(sampler==="stable-camera-random"||referenceTransportSampling){
           const createModule=device.createShaderModule.bind(device);
-          device.createShaderModule=descriptor=>createModule(descriptor.label==="plasius.wavefront.computeShader"?{...descriptor,code:createWavefrontPathTracingComputeShaderSource({progressiveSampling:sampler})}:descriptor);
+          device.createShaderModule=descriptor=>{
+            let code=sampler==='stable-camera-random'&&descriptor.label==='plasius.wavefront.computeShader'?createWavefrontPathTracingComputeShaderSource({progressiveSampling:sampler}):descriptor.code;
+            if(referenceTransportSampling&&code.includes('fn stable_pattern_words(')){
+              code=withReferenceTransportSampling(code,true);
+              referenceHashes.push(crypto.subtle.digest('SHA-256',new TextEncoder().encode(code)).then(bytes=>({label:descriptor.label,sha256:Array.from(new Uint8Array(bytes),v=>v.toString(16).padStart(2,'0')).join('')})));
+            }
+            return createModule({...descriptor,code});
+          };
         }
         const createTexture=device.createTexture.bind(device);
         device.createTexture=descriptor=>{textures.push(descriptor); return createTexture(descriptor);};
@@ -145,7 +154,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       setMode(diagnostic,fused){activeTelemetry=diagnostic?telemetry:null;activePreparedPipelines=fused?variants.fused:null;},
       setConfig(value){config=value;},adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},
       memory:{rendererBufferBytes,textureInventory,adaptiveBufferBytes:resources.allocatedBytes,telemetryBufferBytes:telemetry.memoryBytes,fixtureStagingBytes:extras.reduce((sum,item)=>sum+item.size,0)}});
-      return {...nativeRunner,pipelineSetup:setupSnapshot()};
+      return {...nativeRunner,pipelineSetup:setupSnapshot(),referenceSampling:referenceTransportSampling?{mode:REFERENCE_TRANSPORT_MODE,sources:await Promise.all(referenceHashes)}:undefined};
     }
     // Fixture adapter only: publish adaptive linear output into the same textures
     // as fixed output. Reuse the exact fixed tone-map function, not a new transfer.

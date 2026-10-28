@@ -1,6 +1,7 @@
 // Capture integrity and reference convergence are deliberately separate gates.
 import {roomQualificationPlan,validateRoomQualification} from './room-qualification.js';
 import {MAX_OPTICAL_INTERFACES} from '../../src/wavefront-optical-interface-budget.js';
+import {REFERENCE_TRANSPORT_MODE} from './reference-transport-sampling.js';
 
 export const ROOM_CONVERGENCE_SCREEN=Object.freeze({normalizedRmse:0.03,absoluteEnergyDrift:0.01});
 export function roomConvergenceSettingsFromSearch(search){
@@ -24,13 +25,18 @@ export function convergenceSceneIdentity(receipt){
  for(let i=0;i<2;i++)if(!(/^[a-f0-9]{64}$/).test(r.referenceMaterialMaps[i]?.assetSha256)||r.referenceMaterialMaps[i].assetSha256!==r.scene.referenceModels[i]?.asset?.sha256||
   r.referenceMaterialMaps[i].assetSha256!==r.provenance.assets.models?.[i]?.sha256)throw Error('Reference model/map identity mismatch');
  return JSON.stringify({sources:r.provenance.sources,assets:r.provenance.assets,scene:r.scene,lighting:r.lighting,
-  eamesManifest:r.eamesSource.manifest,materialFlags:r.materialFlags,transportFlags:r.transportFlags,referenceMaterialMaps:r.referenceMaterialMaps,opticalInterfaceBudget:r.opticalInterfaceBudget});
+  eamesManifest:r.eamesSource.manifest,materialFlags:r.materialFlags,transportFlags:r.transportFlags,referenceMaterialMaps:r.referenceMaterialMaps,opticalInterfaceBudget:r.opticalInterfaceBudget,
+  referenceSources:r.referenceSampling?.sources,referenceProbeSource:r.referenceSamplingProbe?.sourceSha256});
 }
 export function validateConvergenceCapture(receipt,lane,sources,identity){
  const evidence=validateRoomQualification(receipt,lane,sources);
  if(receipt.frame.seed!==lane.seed||receipt.frame.mode!=='uniform'||receipt.frame.diagnostics!==true||receipt.frame.fused!==false||
   receipt.frame.validationErrors!==0||receipt.frame.visibilityBefore!=='visible'||receipt.frame.visibilityAfter!=='visible')throw Error('Convergence seed/mode/visibility failed');
  if(!receipt.pipelineSetup?.length||receipt.pipelineSetup.some(p=>p.status!=='complete'||!Number.isFinite(p.elapsedMs)||p.elapsedMs<0))throw Error('Missing/incomplete setup observation');
+ const reference=receipt.referenceSampling,probe=receipt.referenceSamplingProbe;
+ if(reference?.mode!==REFERENCE_TRANSPORT_MODE||reference.seed!==lane.seed||reference.sources?.length<3||!reference.sources?.some(s=>s.label==='plasius.wavefront.computeShader')||
+  reference.sources.some(s=>!(/^[a-f0-9]{64}$/).test(s.sha256))||probe?.status!=='passed'||probe.mode!==REFERENCE_TRANSPORT_MODE||probe.cameraInvariant!==true||probe.transportSeedDifferentiated!==true||
+  JSON.stringify(probe.seeds)!=='[0,7,19]'||!(/^[a-f0-9]{64}$/).test(probe.sourceSha256))throw Error('Missing independent transport reference evidence');
  if(Object.values(receipt.materialFlags??{}).some(Boolean))throw Error('Unexpected material experiment');
  const current=convergenceSceneIdentity(receipt);
  if(identity&&current!==identity)throw Error('Convergence scene/camera/assets/transport changed');
@@ -47,6 +53,7 @@ export async function runRoomConvergence({configure,capture,signal,onLane=()=>{}
    const receipt=await capture();report.failedCaptureId=receipt?.provenance?.captureId??null;
    if(signal?.aborted)throw Error('Room convergence cancelled');
    const verified=validateConvergenceCapture(receipt,lane,report.sources,report.identity);
+   if(report.lanes.some((l,i)=>l.resolution===lane.resolution&&plan[i].spp===lane.spp&&l.hdrSha256===verified.hdrSha256))throw Error('Duplicate same-budget full-room reference image');
    report.lanes.push({...verified,identity:undefined});report.sources??=receipt.provenance.sources;report.identity??=verified.identity;delete report.failedCaptureId;
    await onCheckpoint(structuredClone(report));
   }
