@@ -7,7 +7,7 @@ const mesh = { id: 7, positions: [-1,-1,0, 1,-1,0, 0,1,0], indices: [0,1,2], col
 const matrix = (x=0) => [1,0,0,0, 0,1,0,0, 0,0,1,0, x,0,0,1];
 const instances = n => Array.from({length:n}, (_,i)=>({id:i+100,meshId:7,transform:matrix(i*3)}));
 
-for (const count of [1,50,100]) test(`${count} instances retain one geometry and one BLAS`, () => {
+for (const count of [1,50,100,1000,5000,10000,30000]) test(`${count} instances retain one geometry and one BLAS`, () => {
   const config = createWavefrontPathTracingComputeConfig({meshes:[mesh],instances:instances(count)});
   assert.equal(config.triangleCount,1);
   assert.equal(config.instancing.instanceCount,count);
@@ -41,8 +41,8 @@ test('instanced emissive sources are refused until per-instance light sampling i
 });
 
 test('unique resource bytes, not logical triangles, determine early admission',()=>{
-  const config=createWavefrontPathTracingComputeConfig({meshes:[mesh],instances:instances(100),memoryBudgetBytes:576+14400});
+  const config=createWavefrontPathTracingComputeConfig({meshes:[mesh],instances:instances(100),memoryBudgetBytes:576+14400+199*48});
   assert.equal(config.triangleCount,1);
-  assert.throws(()=>createWavefrontPathTracingComputeConfig({meshes:[mesh],instances:instances(100),memoryBudgetBytes:576+14400-1}),/budget/iu);
+  assert.throws(()=>createWavefrontPathTracingComputeConfig({meshes:[mesh],instances:instances(100),memoryBudgetBytes:576+14400+199*48-1}),/budget/iu);
   assert.throws(()=>createWavefrontPathTracingComputeConfig({meshes:[mesh],instances:instances(1),accelerationBuildMode:'gpu'}),/cpu-upload/iu);
 });

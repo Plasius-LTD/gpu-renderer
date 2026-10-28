@@ -132,6 +132,15 @@ residency. A larger instance count adds transforms and scene-index nodes without
 multiplying the underlying geometry. Large buffer uploads use bounded sequential
 staging to reduce temporary upload pressure. Recreate the runtime to replace instances.
 
+Instance records pack across both texture dimensions, so the texture height is
+not an instance-count ceiling. The granted device texture dimensions, buffer
+binding limits and `memoryBudgetBytes` determine admission. The memory snapshot
+reports logical `instanceBytes` and padded `instanceTextureBytes`; allocation
+diagnostics include the actual requested texture size and TLAS buffer. Instance
+texture uploads also use sequential chunks no larger than 8 MiB. More instances
+still require ray traversal and shading work: qualify performance at your target
+resolution, sampling and material complexity.
+
 ## Choose a rendering API
 
 | API | Purpose |
