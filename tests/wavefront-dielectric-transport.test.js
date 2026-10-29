@@ -1,0 +1,114 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {resolveTransportExperiments} from '../src/wavefront-core.js';
+import {createWavefrontPathTracingComputeConfig} from '../src/wavefront-config.js';
+import {WAVEFRONT_COMPUTE_WGSL} from '../src/wavefront-shaders.js';
+import {createMediumTextureResource,mediumTablesEqual} from '../src/wavefront-gpu-resources.js';
+import {analyzeWgslSource} from '@plasius/gpu-shader/node';
+import {dielectricProbeShader,DIELECTRIC_PROBE_TOLERANCES,DIELECTRIC_PROBE_CASES,assertCorrectedContractsProbe} from './fixtures/dielectric-transport-probe.js';
+import {readFileSync} from 'node:fs';
+import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
+import {OpticalWgslExec as Exec,OpticalWgslParser as Parser} from './fixtures/optical-wgsl-executor.js';
+
+test('dielectric fixes are independent, explicit default-off remote flags',()=>{
+ for(const name of ['boundedDielectricBranching','nestedMediaRefraction']){
+  assert.equal(resolveTransportExperiments().effective[name],false);
+  for(const options of [{[`renderer.transport.${name}.enabled`]:true},{featureFlags:{renderer:{transport:{[name]:{enabled:true}}}}}]){
+   const flags=resolveTransportExperiments(options);
+   assert.equal(flags.effective[name],true);
+   assert.equal(flags.bitmask,name==='boundedDielectricBranching'?16384:32768);
+  }
+ }
+});
+test('medium optical metadata is validated, inherited and independently updateable',()=>{
+ const mesh={positions:[0,0,0,1,0,0,0,1,0],indices:[0,1,2],ior:1.5,mediumRefId:1,medium:{id:1,priority:2}};
+ const config=createWavefrontPathTracingComputeConfig({meshes:[mesh]});
+ assert.equal(config.mediums[1].ior,1.5);assert.equal(config.mediums[1].priority,2);
+ const referenced=createWavefrontPathTracingComputeConfig({meshes:[{...mesh,medium:undefined,ior:1.333}]});
+ assert.equal(referenced.mediums[1].ior,1.333);
+ assert.equal(mediumTablesEqual(config.mediums,config.mediums.map(m=>({...m,ior:1.333}))),false);
+ assert.equal(mediumTablesEqual(config.mediums,config.mediums.map(m=>({...m,priority:3}))),false);
+ for(const medium of [{ior:0},{ior:Infinity},{priority:-1},{priority:1.5},{priority:2049}]){
+  assert.throws(()=>createWavefrontPathTracingComputeConfig({mediums:[{id:1,...medium}]}),/medium/);
+ }
+});
+test('nested optical metadata adds only an opt-in texture row, never a larger ray',()=>{
+ const sizes=[],device={createTexture:d=>{sizes.push(d.size);return{createView:()=>({})};},queue:{writeTexture(){}}};
+ const constants={texture:{TEXTURE_BINDING:1,COPY_DST:2}};
+ const media=[{id:0,ior:1},{id:1,ior:1.5,priority:2}];
+ assert.equal(createMediumTextureResource(device,constants,media).height,2);
+ const nested=createMediumTextureResource(device,constants,media,true);
+ assert.equal(nested.height,3);assert.equal(nested.allocatedBytes,2*3*8);
+ assert.deepEqual(sizes,[{width:2,height:2},{width:2,height:3}]);
+ const records=analyzeWgslSource(WAVEFRONT_COMPUTE_WGSL,'dielectric').records;
+ assert.equal(records.find(r=>r.name==='RayRecord').byteSize,96);
+});
+test('bounded dielectric mode compensates probability and prevents secondary emission',()=>{
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/splitDielectric = dielectric_event\(hit\) && !totalInternalReflection && !bounded_dielectric_enabled\(\)/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/continuationThroughput \/= scatter.pdf/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/fail_path_node\(ray\)/);
+});
+test('physical probe executes canonical dielectric sampling with frozen error tolerances',()=>{
+ const analysis=analyzeWgslSource(dielectricProbeShader(),'optics');
+ assert(analysis.bindings.some(e=>e.binding===32));
+ assert.equal(DIELECTRIC_PROBE_TOLERANCES.samples,16384);
+ assert.match(dielectricProbeShader(),/let scatter=scatter_dielectric\(ray,hit\)/);
+});
+test('new physical preflight cases execute canonical corrections and reject regressed outputs',()=>{
+ const source=dielectricProbeShader()
+  .replace(functionSource('transport_experiment_enabled'),'fn transport_experiment_enabled(flag:u32)->bool{return (flag & 49152u)!=0u;}')
+  .replace(functionSource('medium_valid'),'fn medium_valid(id:u32)->bool{return id==1u;}')
+  .replace(functionSource('medium_optics'),'fn medium_optics(id:u32)->vec2<f32>{return select(vec2<f32>(1.5,2.0),vec2<f32>(1,0),id==0u);}')
+  .replace('if(id.x>=23u){','if(id.x<23u){return;}\n if(id.x>=23u){');
+ const output=new Float32Array(DIELECTRIC_PROBE_CASES*16);
+ new Exec(new Parser().parse(source)).dispatchWorkgroups('dielectric_probe',DIELECTRIC_PROBE_CASES,{0:{3:output}});
+ assert.doesNotThrow(()=>assertCorrectedContractsProbe(output,{bounded:true,nested:true}));
+ assert.doesNotThrow(()=>assertCorrectedContractsProbe([],{bounded:false,nested:false}));
+ for(const index of [23*16,23*16+1,23*16+2,23*16+3,24*16,24*16+1,24*16+2,24*16+3,25*16,25*16+1,25*16+2]){
+  const bad=output.slice();bad[index]=NaN;
+  assert.throws(()=>assertCorrectedContractsProbe(bad,{bounded:true,nested:true}),/Corrected contract mismatch/);
+  bad[index]=output[index]+.01;
+  assert.throws(()=>assertCorrectedContractsProbe(bad,{bounded:true,nested:true}),/Corrected contract mismatch/);
+ }
+});
+test('nested traversal protects occupancy and sample identity without consuming bounces',()=>{
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/position = optical_triangle_position\(hitTriangle, candidate.barycentric\)/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/fn optical_triangle_position/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/if \(medium_transition_invalid\(ray, hit\)\) \{ return ray.mediumStack; \}/);
+ const nested=WAVEFRONT_COMPUTE_WGSL.split('fn intersect_nested_ray')[1].split('fn emission_power')[0];
+ assert.match(nested,/crossing < 32u/);assert.match(nested,/hit.hitType = 5u/);
+ assert.doesNotMatch(nested,/ray\.(bounce|sampleId|sourcePixelId|parentRayId)\s*=/);
+ assert.match(nested,/medium_transmittance/);
+ assert.match(nested,/recoverable_optical_entry\(ray, hit\)/);
+ assert.match(nested,/trace_material_after\(ray, minimumDistance\)/);
+ assert.doesNotMatch(nested,/ray.origin\s*=/);
+ assert.match(nested,/minimumDistance = hit.distance;/);
+ assert.doesNotMatch(nested,/next_optical_distance/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/nested_media_enabled\(\) && exit <= transport_ray_minimum\(\)/);
+ assert.match(nested,/hit.distance - travelled/);
+ assert.match(nested,/hit.distance -= travelled/);
+ const query=WAVEFRONT_COMPUTE_WGSL.split('fn trace_material_after')[1].split('fn trace_material_hit(')[0];
+ assert.match(query,/optical_query_minimum = minimumDistance;[\s\S]*trace_material_hit_raw\(ray\);[\s\S]*optical_query_minimum = 0.0;[\s\S]*return hit;/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/nested_media_enabled\(\) && \(triangle.materialKind == 2u \|\| triangle.materialKind == 3u\)/);
+ assert.match(WAVEFRONT_COMPUTE_WGSL,/let normal = optical_shading_normal\(ray, hit\)/);
+});
+test('ordinary local hit reconstruction remains barycentric independently of nested error metadata',()=>{
+ const local=functionSource('trace_material_hit_raw');
+ assert.match(local,/var position = ray\.origin\.xyz \+ ray\.direction\.xyz \* candidate\.distance;\s*if \(candidate\.triangleIndex != 0xffffffffu\) \{ position = optical_triangle_position\(hitTriangle, candidate\.barycentric\); \}\s*var positionError = 0\.0;/);
+ assert.equal((local.match(/position = optical_triangle_position/g)||[]).length,1);
+ assert.match(local,/if \(nested_media_enabled\(\)\) \{\s*if \(candidate.triangleIndex != 0xffffffffu\) \{\s*if \(hitTriangle.mediumRefId != 0u && all\(candidate.barycentric > vec3<f32>\(0.0\)\)\) \{[\s\S]*?\}\s*positionError = optical_triangle_error/);
+});
+test('room transport controls reset off and forward independent flag receipts and GPU preflight',()=>{
+ const read=f=>readFileSync(new URL('./fixtures/'+f,import.meta.url),'utf8');
+ const html=read('native-room-reference.html'),js=read('native-room-reference.js');
+ for(const id of ['bounded-dielectric','nested-media','rough-dielectric']){
+  assert(html.includes(`label for="${id}"`));assert(js.includes(`el('${id}').value='off'`));
+ }
+ assert.match(js,/receipt.transportFlags=/);assert.match(js,/runDielectricTransportProbe\(cancellation.signal\)/);
+ assert.match(js,/runRoughDielectricTransportProbe\(cancellation.signal\)/);
+ assert.match(js,/roughDielectricTransport&&!nestedMediaRefraction/);
+ assert.match(js,/createPairedProbeRunner[\s\S]*boundedDielectricBranching,nestedMediaRefraction/);
+ assert.match(html,/label for="max-depth">Maximum bounces/);
+ assert.match(js,/el\('max-depth'\)\.value=String\(ROOM_CAPTURE_DEPTH_LIMITS\.default\)/);
+ assert.match(js,/composed.scene.probeDepth=settings.maxDepth/);
+});

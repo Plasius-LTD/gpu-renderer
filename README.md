@@ -1,5 +1,465 @@
 # @plasius/gpu-renderer
 
+Native room convergence prequalification is now automated in the local scene
+lab: **Laboratory diagnostics → Capture room convergence references** resets
+the original full-fidelity filled room and captures uniform32/128/256 SPP with
+transport seeds7/19 at1080p and4K, sequentially with cancellation and per-lane
+HDR/provenance retention. Its explicit fixture-only `frame-indexed-transport-v1`
+specialization uses the recorded seed for transport while preserving fixed
+camera points. A CPU/GPU probe must prove distinct transport draws and unchanged
+camera words; ordinary stable rendering still ignores frame index. Earlier
+frame-index-only duplicate captures are rejected as independent evidence.
+It uses20 ordinary bounces/2048 optical interfaces;
+no production defaults or transport shaders change. Use the explicit development
+query `?convergenceResolution=1080p` (or `4k`) for a labelled partial batch.
+All existing evidence is preserved. Captures alone do not certify convergence.
+
+Analyse a completed aggregate with
+`node scripts/verify-room-convergence.mjs WORKSPACE_ROOT LIGHTING_CHECKOUT SUMMARY_JSON`.
+The read-only verifier reuses commit-checked gpu-lighting HDR metrics, checks
+actual seeds/counts and scene/source/assets/camera/transport identity, reconstructs
+lossless chunks and reports reference convergence, independent32-SPP errors,
+energy drift and signed row differences. A failed or partial screen exits nonzero;
+even a full pass is not production image, adaptive-performance or60Hz acceptance.
+See the [frozen protocol](docs/design/room-convergence-qualification.md).
+Reference-probe cancellation preserves any original GPU failure or timeout;
+successful waits check cancellation before advancing, with unconditional cleanup
+and the unchanged30-second operation limit.
+
+Latest [streamed optical checkpoint](docs/evidence/streamed-optical-budget-2026-10-27.md):
+explicit2048 interfaces/20 ordinary bounces passes the frozen optical furnace
+gates and all six full-fidelity1080p/4K uniform32 captures pass integrity checks.
+The worst furnace RGB loss falls89.06%→2.34%, below the unchanged5% limit.
+This is not full-room convergence, noise elimination or adaptive-performance
+qualification. Adaptive work remains paused; defaults remain off/64. Use64 only
+as the retained rejected filled-glass control, not the newly passing setting.
+
+Experimental separate optical-interface budget ([ADR 0066](docs/adrs/adr-0066-separate-optical-interface-budget.md)):
+set the remotely controllable `renderer.transport.opticalInterfaceBudget.enabled`
+flag with bounded+nested transport, strict physical lighting and deferred resolve.
+Keep `maxDepth` as the ordinary limit; configure
+`opticalInterfaceBudget: {maximumInterfaces: 64, maximumAdditionalBytes: 134217728}`
+independently. These are the defaults, not mandatory scene settings. Smooth fully
+transmitting valid-medium interfaces, including TIR, use the separate allowance;
+rough/partial and ordinary scattering do not. Rough-bounce splitting is rejected.
+All physical events still advance sampler ordinals. The streamed implementation
+([ADR 0067](docs/adrs/adr-0067-streamed-bounded-optical-chains.md)) handles eligible
+zero-direct chains on GPU inside the current logical path node. Ordinary queue
+iterations and node storage remain bounded by `maxDepth`; it adds no path nodes.
+The validated interface range is 1–2048, with default64 unchanged. Snapshots expose
+physical `maximumPathEvents` separately from ordinary capacity. Optional telemetry
+labels queue histograms and adds internal optical queries to segments/secondary
+rays. Capture plus staging uses eight bytes per admitted tile/sample record,
+not measured physical VRAM. Off mode adds no optical storage/copies/debug atomics.
+The prior64-MiB prototype and rejected images remain preserved evidence.
+
+For automated correctness captures use
+`native-room-reference.html?qualificationOrder=4k-first&opticalInterfaces=64`
+or `optical-lighting-isolation.html?opticalDepth=20&opticalInterfaces=64`.
+The room's Advanced settings exposes the same independent switch and limit;
+reset/presets turn it off. Preserved off-controls are not recertified. Physical
+image qualification is pending; adaptive performance work remains paused.
+
+Smooth bounded+nested optical roulette now uses cumulative prospective throughput
+with outgoing IOR compensation, retaining the radiance weights themselves.
+Bounded nested branch selection likewise excludes reversible eta scaling from
+transmission importance; its selected PDF is compensated consistently.
+It no longer treats a reversible glass-entry radiance decrease as absorption.
+The supported camera starts in air; no camera-inside initialization, extra ray
+state, uncounted interactions, or longer depth limit is introduced by those
+roulette/importance corrections themselves. The separate opt-in policy above
+is the only additional event allowance. Other
+roulette paths are unchanged. See [ADR 0065](docs/adrs/adr-0065-optical-roulette.md).
+The [optical-tail follow-up](docs/evidence/optical-roulette-2026-10-27.md) retains
+the corrections and failed empty/index-one furnace gates, with actual TIR tails
+reaching strict depth termination. All six before-budget native captures pass
+integrity checks; that does not reverse the failed furnace/image gates. New
+optical-budget qualification is blocked by a reproduced filled-glass edge loss;
+adaptive work remains paused.
+The [optical-budget evidence](docs/evidence/optical-interface-budget-2026-10-27.md)
+records passing original central gates at ordinary20/32 plus optical64, but the
+additional all-pixel RGB gate fails. Three new1080p captures are retained;4K was
+stopped on that failure. Original tails, independent long-depth references and
+the bounded GPU streaming design are preserved; no band-removal claim is made.
+
+Diagnostic-only long tails: the furnace URL also accepts
+`opticalTraceEvents=4096` with an explicit `opticalJournal=u,v,s;...` selection
+(at most eight original samples). It traces only the filled lane, reusing the
+captured primary-ray packet and canonical collision/optical functions, checking the saved prefix
+exactly. Its bounded private scratch does not commit image radiance/counts or
+change production interface admission. Default is off. All eight exact-primary
+prefix checks now pass; the six optical64-truncated samples escape at86–235
+interfaces. Production streaming reuses that helper; image, full-scene and
+performance qualification remain separate gates, with no improvement claim.
+
+Optical furnace attribution accepts the same bounded `opticalJournal=u,v,s;...`
+selection as the room fixture. It replays canonical successful samples, retains
+geometry/throughput and post-surface termination records, and does not commit
+additional image samples. Journal-inclusive timings are not performance evidence.
+
+Latest [independent optical/lighting attribution](docs/evidence/optical-lighting-isolation-2026-10-27.md):
+the broad pedestal-reflection region is reproduced independently, and native
+sky+sun HDR recombines to the retained daylight control. Localized empty/index-one
+furnace row gates still fail at20 and32 events. This is not a band-removal or
+adaptive-performance pass; no production transport was changed to hide it.
+
+Development optical attribution: the immutable room-reference server also serves
+`/tests/fixtures/optical-lighting-isolation.html`. Its explicit run action captures
+empty/filled/index-one constant-radiance controls and a contrasting pedestal at
+a diagnostic extent, using canonical GPU transport and package geometry. It
+retains linear HDR and provenance and rejects incomplete samples or failed
+furnace checks. It is not a native-resolution performance benchmark or proof of
+full-scene convergence. Room lighting also offers explicit sky-only and sun-only
+isolation styles; original daylight remains unchanged. See the
+[correctness design](docs/design/renderer-contract-corrections.md).
+
+Independent offline attribution (requires an installed Blender, not a package
+dependency or fallback): `node scripts/prepare-optical-reference.mjs LIGHTING_ROOT
+COMPLETED_FILLED_CLOSEUP.json` emits the original procedural geometry as explicit
+shared interfaces. Pass that retained JSON to Blender with
+`--background --factory-startup --python scripts/optical-reference.py -- --input
+SCENE.json --output-dir EMPTY_EXISTING_DIRECTORY`. The configurable script retains
+full-float EXR, linear float32, PNG and provenance without overwriting evidence.
+`scripts/verify-optical-isolation.mjs WORKSPACE_ROOT SUMMARY.json REFERENCE_DIR`
+independently verifies chunks/counts and compares linear rows; it reports failed
+furnace gates rather than certifying a full scene. A separate diagnostic URL
+`?opticalDepth=32` tests the existing engine depth admission; default20 controls
+and their failures remain unchanged.
+
+Environment MIS correction (#234): continuations now carry their previous
+surface's actual competing light PDF, including hemisphere support and light-class
+selection. Strict sky MIS does not suppress unsampled sun glow. No record size,
+persistent renderer buffer, transport pass, geometry or camera-sampling change;
+see [ADR 0064](docs/adrs/adr-0064-previous-vertex-environment-mis.md).
+Portable regressions and mandatory assembled GPU preflight pass. The
+[MIS native rerun](docs/evidence/environment-mis-correction-2026-10-21.md) completes
+and independently verifies all six1080p/4K uniform32/depth20 captures:995,328,000
+camera samples and120 HDR chunks. The broad water band remains at both resolutions.
+Image/energy correctness is not cleared; adaptive work and improvement claims stay
+paused. All before/failed evidence is preserved; no release is claimed.
+
+Before-MIS checkpoint: the [normal-correction native follow-up](docs/evidence/room-normal-followup-2026-10-21.md)
+completes all six 1080p/4K uniform32/depth20 captures, with independently verified
+HDR/counts/preflights and physical absent-map identity. The water band remains
+visible, and a separate secondary environment MIS PDF mismatch now has a retained
+scalar counterexample. Image/energy correctness and adaptive performance remain
+gated. Implementation notes below include source-bound historical results; the
+latest evidence ledger governs qualification, not an earlier pending/success note.
+
+The four findings in the [20 October correctness review](docs/evidence/renderer-first-principles-2026-10-20.md)
+now have numerical corrections and automated regressions. The original review,
+rejected implementations and physical captures remain retained. Nested optical
+collisions admit the tested small/grazing hits, retain their correct normals and
+use geometry-error-aware continuation origins. Smooth partial transmission
+includes its transmission fraction and diffuse remainder without enabling rough
+sampling. Successful-hit error metadata reuses existing storage; no record or
+buffer size increases. See [ADR 0063](docs/adrs/adr-0063-optical-contract-corrections.md)
+and the [correction evidence and open gates](docs/evidence/renderer-contract-corrections-2026-10-20.md).
+
+The first automated physical qualification on 21 October exposed another origin
+rounding case before completing the empty-glass lane. The tiny-component regression
+is now covered: clear the same projected error on the dominant normal axis, keeping
+other coordinates unchanged so a near-bottom exit is not rounded away. The
+[physical follow-up](docs/evidence/optical-origin-corner-2026-10-21.md) retains the
+failed capture and separates the numerical correction from pending full images.
+
+The [earlier qualification attempt](docs/evidence/room-qualification-2026-10-21.md)
+retains three successful native 1080p/uniform-32-SPP/20-bounce images, each with all
+66,355,200 camera samples, verified HDR and cleanup. The reported horizontal
+water band is still visible. The 4K empty-glass lane rejects a different rim
+hit-point reconstruction case; the remaining 4K lanes stop without running.
+Browser access is working, but optical/image qualification is **not complete**.
+
+The [rim follow-up](docs/evidence/room-qualification-rim-followup-2026-10-21.md)
+now completes all six native 1080p/4K uniform-32/depth-20 captures on 665e2bd, with
+independently verified HDR, exact counts and cleanup. The broad water band remains
+visible; correctness and adaptive-performance gates stay open. The selected-ray
+physical run now completes all 66,355,200 camera samples with all eight journals
+([selected-path evidence](docs/evidence/selected-optical-paths-2026-10-21.md));
+raw HDR and PNG exactly match the retained control. Histories show pedestal
+visibility and base internal reflection, not full-band correctness. They also
+expose an absent-normal-map packing defect: the quantised fallback tilts normals
+without an authored map. Missing maps now use zero normal strength in every mesh
+packing path; authored maps/scales remain unchanged. New-source native image
+qualification remains required; no band-removal or performance claim is made.
+
+The next rim correction interpolates the small triangle-edge offsets before
+adding the large base coordinate. The frozen 4K case and its sign/axis/vertex-order
+variants retain their nearby exit with fused and non-fused interpolation, without
+widening any hit/count threshold. A new canonical device preflight checks both
+the camera-derived and captured barycentrics. This is a numerical correction,
+not yet a new full-scene or band-removal result; the preceding failed captures
+remain unchanged. See [correction evidence](docs/evidence/rim-reconstruction-correction-2026-10-21.md).
+
+A broader near-edge sweep requires a stronger nested-volume guard: certify the
+projected triangle interior and, when necessary, select the closest certified
+point among the eight adjacent binary32 neighbours. The dominant normal coordinate
+does not move; exact barycentric edges/vertices and non-volume/default paths bypass
+this guard. If no point is resolvable, fail explicitly with reason 8 rather than
+accepting a missed interface. The normal error contract, hit/count thresholds and
+allocated record sizes remain unchanged. Canonical device preflight now has 30
+cases. This remains experimental pending the new immutable native matrix and
+separate image/banding review; no adaptive performance claim is made.
+
+The next physical 4K control passed the original rim but stopped on a rounded
+point across an internal wall diagonal. An unresolved-only BVH lookup now checks
+the same local representable neighbourhood against exact coplanar, reverse-edge
+neighbours with matching mesh/medium/material ownership. It does not certify real
+creases or external edges. See the [frozen shared-diagonal case](docs/evidence/rim-shared-diagonal-2026-10-21.json).
+For development, `?qualificationOrder=4k-first` changes the automated sequence's
+order only; all six native captures and all count/preflight/image gates remain
+required. The default order is unchanged. Existing evidence is never replaced.
+
+The local room fixture additionally accepts `opticalJournal=u,v,sample;…` for at
+most eight explicitly selected successful samples, with finite UVs in `[0,1)`.
+Use uniform sampling, bounded+nested staged transport and no splitting. This
+default-off diagnostic reuses the original compiled camera/bounce pipelines,
+retains per-bounce geometry/medium records, and does not commit samples or image
+radiance. Unsupported selections fail; buffers are freed and modes restored.
+Captures with journals include replay costs and are not performance results.
+The successful-sample journal also reads original post-surface path-node direct
+and terminal radiance plus termination reasons, before queue swap. Its bounded
+private tail is 64 bytes per configured depth; no lighting is re-evaluated.
+
+The opt-in `renderer.sampling.fixedPattern.enabled` path now uses the existing
+independently keyed transport draws with the exact previous camera coordinates,
+including pixel centre at 1 SPP. Its room label is **Fixed camera · corrected transport**;
+`stable-camera-random` remains the equivalent comparison selection. The rejected
+correlated transport pattern exists only in test fixtures and Git history, not
+as a runtime fallback. All production feature flags remain default off. The
+corrected sampler must pass both conditional slab means and CPU/GPU sampling
+parity before a room capture; those gates do not establish full-scene quality.
+
+Run `node scripts/review-renderer-contracts.mjs` to check the four contracts
+(exit 2 means a reproduced defect). In the local room fixture, **Lab → Run scene
+qualification** captures empty glass, filled glass and the whole room sequentially
+at 1080p and 4K, uniform 32 SPP and 20 bounces, with denoise/splitting off and
+bounded/nested transport on. It retains separate HDR/PNG/count/provenance receipts,
+stops without retry on failure or cancellation, restores controls, and writes a
+summary with image review explicitly pending. Geometry and lighting retain the
+session's configuration and are recorded in each receipt. The underlying plan
+accepts validated resolution/SPP/depth variables. Native uniform captures can take
+considerable time. The latest attempt and exact remaining failure are documented
+above; full-scene image convergence, band removal, memory cost and matched-quality
+performance remain unqualified. Adaptive performance work stays gated.
+
+The independent lane exposed a near-rim false collision: projected rounding
+admitted a ray outside the opening, creating invalid glass occupancy. The
+experimental nested-media collision path now re-evaluates near-cancellation
+edges using integer arithmetic on the original binary32 ray/vertex bits. This
+replaces split high/low arithmetic that failed on the physical device under
+permitted floating-point reassociation. Coverage still uses strict signs, not
+a wider tolerance; count and medium failures remain fatal.
+The GPU preflight includes the captured outside ray, its valid adjacent ray and
+the real far-wall entry. No added render buffers or passes; the fallback adds
+bounded per-invocation private scratch and integer work. Physical image and
+incremental GPU-cost qualification are pending
+([ADR 0062](docs/adrs/adr-0062-integer-optical-edge-predicates.md)).
+
+The local glass/water diagnostic has default-off transport experiments:
+bounded dielectric branching, nested-media refraction and rough optical transmission. The
+legacy split control still overflows; the combined corrected empty-glass capture
+now completes at 1080p/uniform 32 SPP. Full image/performance qualification remains
+open. See the
+[retained evidence and transport follow-up](docs/glass-water-transport-follow-up.md).
+
+The experimental nested-media path now separates shared-edge coverage from
+triangle-plane distance evaluation to preserve very close exit/re-entry order
+at grazing glass corners (#234, [ADR 0058](docs/adrs/adr-0058-optical-intersection-distance-ordering.md)).
+The first physical plane-distance probe retained the order but exposed a
+contracted-dot rounding error. Split-product plane dots now preserve its small
+remainder, with explicit fused/non-fused numerical regressions and unchanged
+20 nm acceptance ([ADR 0059](docs/adrs/adr-0059-optical-plane-dot-precision.md)).
+The device preflight checks both candidate orders and successive exclusive-cursor
+queries against the frozen distance references (not cross-call-site bit equality),
+retaining both records on failure. Physical revalidation, full high-SPP recapture
+and timing qualification remain pending. No added buffers or relaxed failure gates.
+
+Physical preflight now passes the earlier ordering cases, but the high-SPP frame
+exposed an interior wall hit rounding onto the glass bottom. Nested hit-position
+reconstruction preserves a representable interior coordinate when available,
+so the next real bottom exit can be traced. Exact edge/vertex hits and failure
+guards remain unchanged; the new corner probe and full-frame recapture still
+require physical qualification ([ADR 0060](docs/adrs/adr-0060-optical-interior-hit-rounding.md)).
+
+Material colour no longer inherits a brightness floor from ambient illumination
+(Task #226). Authored dark/saturated texture channels remain material properties;
+ambient light remains a radiance source. This affects fixed and adaptive rendering
+equally, without additional rays, passes or buffers. Existing approximate terminal
+lighting and AO policy are otherwise unchanged; full material conformance and
+cloth photo-equivalence are not claimed. See the
+[colour correction and qualification design](docs/design/authored-material-colour.md).
+Local room captures now audit authored versus decoded model texture slots,
+including UVs, transforms, strengths, dimensions and pixel hashes. Missing slots
+fail capture; factors without authored texture maps are not reported as missing.
+The [map audit and physical colour-correction evidence](docs/evidence/authored-colour-2026-10-05.md)
+confirm all three fabric maps are present and the corrected GPU response passes
+independent analytic checks. Matched 4K lighting-only and 1080p full-render captures
+show a modest change, not a complete solution for the remaining fine-cloth detail.
+
+### Local cloth close-up diagnostics
+
+The native room fixture offers a sofa close-up, uniform camera
+SPP, and opt-in same-frame base-colour/mapped-normal views (#225). Select all
+reference models, **Sofa cloth close-up**, **Uniform**, guided denoising and
+**Capture colour and normals**. The compact Focus panel uses configured close-up
+defaults; distance, elevation and target are not UI fields. The model's proportions
+and authored texture scales are unchanged.
+Inspect **Show base colour**, **Show mapped normals**, **Show raw input** and
+**Show cleaned result** after capture. Colour includes the authored tint without
+lighting or tone mapping; normals are world-space, with magenta marking missing
+or protected guides. The guide views are quantized single-camera-sample data,
+not antialiased beauty renders. Reset restores the unchanged room/radial path.
+
+These local diagnostics do not establish photo equivalence or performance
+improvement. See [the comparison design and QA inventory](docs/design/cloth-closeup-inspection.md).
+The [retained 1080p/128-SPP comparison](docs/evidence/cloth-closeup-2026-09-29.md)
+shows fine signal in the colour/normal guides but does not yet match the reference
+application's lit fabric response; denoising alone does not explain the gap.
+
+**Diagnose cloth normal detail** (#226) isolates four combinations: normal maps
+on/off, each at pixel centres or averaged stable camera samples. Select the
+cloth close-up and SPP ceiling, then adjust diagnostic light elevation/intensity.
+The same canonical GPU material code is evaluated under one unoccluded white
+directional light, with no shadows, indirect transport or denoising. This is a
+diagnostic, **not** the full renderer or a speed benchmark. It retains native
+PNGs/HDR and reports normal-correction angles and map-detail signal; the authored
+material and ordinary Render path are unchanged. See the
+[experiment and QA criteria](docs/design/cloth-response-diagnostic.md).
+The [retained 1080p/4K lighting-only experiment](docs/evidence/cloth-response-2026-10-05.md)
+finds that camera averaging retains about 93–94.5% of measured fine normal-map
+signal; light direction changes its response much more. This narrows the
+investigation but does not qualify the full renderer or establish photo equivalence.
+
+Cloth fidelity (experimental, Task #224): texture inputs accept per-slot
+`transform: {offset, scale, rotation}` and glTF `wrapS/wrapT`. Keep original
+pixels; UV transforms run on GPU, including the normal-map tangent frame.
+Requires the coordinated gpu-shared transform-preservation loader. A bounded
+832-byte/material metadata texture adds one sampled binding, not per-ray state.
+
+Set `renderer.materials.sheen.enabled` in the renderer feature-flag snapshot to
+test independent Charlie sheen (default off). The local room's **Cloth sheen
+model** control records the override and checks assembled material shaders before
+capture. No extra rays are generated by sheen. Guided reconstruction now retains
+mapped-normal cloth detail and no longer enforces 25% high-SPP smoothing.
+Internal coordinator options `guidedSpatialDenoise.strength` (default 2) and
+`minimumBlend` (default 0) are configurable; raw HDR stays available.
+See [ADR0053](docs/adrs/adr-0053-cloth-material-fidelity.md) and the
+[physical checks and 1080p/4K captures](docs/evidence/cloth-material-2026-09-29.md).
+Material response is visibly clearer; fine-weave equivalence, converged quality
+and performance remain unqualified. The 4K high-sample diagnostic is slower,
+not evidence of a speedup.
+
+Experimental clearcoat (#232): set `renderer.materials.layeredClearcoat.enabled`
+in the same feature-flag snapshot (default **false**). Corrected coating has an
+independent normal/roughness and attenuates the whole base before adding its
+reflection. Hit-record stride and allocated memory are unchanged; no extra
+surface, bounce or camera sample is introduced. Coated emissive-light evaluation
+adds conditional material-sampling work. This is not a performance claim.
+
+In the local room choose **Layered clearcoat renderer → On**, then **Seat wood
+material variant → Add adjustable clear varnish**. Strength and roughness are
+editable in [0,1], initially 1 and 0.18. Only the verified Eames wood and seating
+frame change. Source models, textures, geometry and cached materials are preserved;
+capture receipts record each override. Both switches reset off. Use the same
+camera, lighting and sample budget for comparisons. The cloth diagnostic and
+benchmark are separate controls and do not apply this authoring variant.
+See [ADR0054](docs/adrs/adr-0054-layered-clearcoat.md). This thin clear layer does
+not model tinted absorption or change water/glass transport; coated delta-metal
+and transmissive cases are not qualified. No photo-equivalence or speedup claim.
+See the [physical checks and room capture evidence](docs/evidence/layered-clearcoat-2026-10-07.md)
+for retained source/image hashes, unchanged allocations and measurement limits.
+
+Glass/water diagnostic (#233): in the local room choose **Glass of water reference
+→ Empty tumbler / Tumbler with water**. Fill fraction, dimensions, placement and
+both refractive indices are adjustable. **Focus → Glass and water
+close-up** uses the configured glass camera defaults. A neutral
+pedestal is added explicitly; no room or seating assets are rewritten. Reset/off
+restores the original scene. Other diagnostic buttons do not apply this object.
+The geometry comes from `gpu-lighting/demo/eames-environments/glass-water-reference.js`.
+Advanced glass settings include **Pedestal clearance m (diagnostic)**, default 0.
+A positive value lowers only the support, leaving glass/water and camera fixed.
+Receipts record the value/heights and filenames identify nonzero clearance.
+Reset or select a scene recipe to restore zero. This intentionally floating
+comparison isolates contact; it is not a realism fix. For depth isolation, use
+Uniform reference at 32 SPP, 1080p, raw output and unchanged optical switches,
+comparing six/eight bounces before changing clearance.
+The maximum-bounces field now reads its 1..20 range and six-bounce default from
+lighting's shared capture configuration. For an 8/12/16/20 path-length comparison,
+keep rough-bounce splitting Off. Incompatible deeper splitting is rejected before
+asset loading/GPU work, with no silent clamp or toggle change. All other optical,
+lighting and sampling controls remain independent; higher depth is not signoff.
+Its small recorded contact overlap is not an air gap. Enable **Bounded glass
+branching** and **Nested glass / water refraction** to test actual incident and
+outgoing media; the disabled refraction control still assumes air on one side.
+Image quality, rough transmission, caustics and long-path convergence remain
+**not qualified**. **Maximum bounces** is configurable from one to eight, default
+six; a finite limit may cut off longer paths. Both transport flags default off.
+
+Choose **Centre reference → Sofa — upholstery inspection** in the local room
+page to exchange sofa/spacesuit floor positions while keeping their rotations,
+materials, 1.5 m seating scale and camera unchanged. Reset restores the previous
+spacesuit-centre layout. It is ignored in Eames-only mode; selecting it never
+changes SPP. Choose the sampling ceiling separately, then Render room. Raw/clean
+comparison remains available; non-default capture names include seating-centre.
+The [sofa-centred 4K inspection](docs/evidence/sofa-centre-2026-09-29.md) retains
+raw/cleaned evidence with 394,813,440 completed camera samples. Fine cloth detail
+remains a material-fidelity concern; the layout change is not a rendering fix.
+
+The local room reference has a numeric **SPP ceiling**, default 32, accepting
+integers 1–256 (the packed count limit). Radial tiers derive by halving that
+ceiling, rounding upwards with a one-sample floor, preserving the existing
+5/10/15/20/25/25% screen areas. A 256 ceiling gives 256/128/64/32/16/8 and
+47.6 mean SPP. This is a slow quality-reference capture, not a real-time claim.
+Reset and the splitting benchmark retain the default ceiling. Evidence checks
+every completed count; non-default filenames include the ceiling. Host budgets
+widen only when needed; GPU queues remain tile-bounded. See the
+[capture design](docs/design/high-spp-room-reference.md).
+The [retained 4K/256-centre result](docs/evidence/high-spp-room-2026-09-28.md)
+verified 394,813,440 camera samples in a 447.960-second diagnostic render job;
+raw/cleaned native captures remain local. This is quality-reference evidence only.
+
+Meshes are single-sided by default: set `doubleSided: true` explicitly for
+two-sided sheets. glTF material sidedness is forwarded by gpu-shared. Rejected
+back faces are skipped during traversal, not treated as a black hit or bounce.
+An occupied matching transmissive medium can still resolve its exit boundary.
+Mesh/triangle flag bit 30 is reserved for this policy. Geometry record sizes and
+dispatch counts are unchanged (ADR0051).
+
+Normal maps use a handed orthonormal triangle-derived frame. Invalid reflected
+directions are repaired once at hit construction; all BSDF/PDF consumers use
+the same corrected normal. This bounded view-dependent approximation is not a
+claim of exact bump-map reciprocity, complete MikkTSpace support or noise-free
+rendering. The room fixture checks sidedness, medium exits, tangent frames and
+normal validity on physical WebGPU before capturing the unchanged sample plan.
+
+Meshes accept optional `uvs1` (TEXCOORD_1). Existing textures select `texCoord: 0`
+or `1` independently, including normal-map tangent construction. Invalid UV1
+references reject. CPU/GPU geometry records keep their existing byte sizes;
+reserved lanes now carry UV1 and slot selectors (ADR0050). The native room page
+uses the configured 52° vertical-FOV default, local reference models,
+and a mandatory physical dual-UV probe before capture. No production flag changes.
+
+The room fixture offers **Room lighting style** (original daylight or a cooler
+evening colour study) and adjustable **Environment intensity**. Changes apply on
+Render without recolouring materials; Reset restores original daylight. Captures
+retain the request and resolved gpu-lighting snapshot, including after cached
+asset reuse. This is not solar-position simulation or a colour-accuracy claim;
+the separate cloth white-light diagnostic is unchanged. See the
+[lighting design and QA](docs/design/room-lighting-styles.md).
+
+The room fixture now defaults to the exchanged Eames/standing-reference positions.
+The comparison camera target stays fixed; Reset uses the same lighting-owned
+defaults. The first local seating model has an explicit **uniform** 1.5 m width
+override: height and depth scale proportionally, without changing source assets
+or materials. Capture evidence records the factor and source/display dimensions.
+
+The native room reference fixture accepts the lighting server's checksum-bound
+room manifest, including an explicitly supplied local-only room GLB. Model-specific
+triangle admission replaces the old fixture constant; original Eames geometry,
+materials, sampling and GPU denoising remain unchanged. Private models and their
+captures are not published automatically (renderer#219, lighting#102).
+
 [![npm version](https://img.shields.io/npm/v/@plasius/gpu-renderer.svg)](https://www.npmjs.com/package/@plasius/gpu-renderer)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Plasius-LTD/gpu-renderer/ci.yml?branch=main&label=build&style=flat)](https://github.com/Plasius-LTD/gpu-renderer/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/codecov/c/github/Plasius-LTD/gpu-renderer)](https://codecov.io/gh/Plasius-LTD/gpu-renderer)
@@ -9,6 +469,160 @@
 [![Changelog](https://img.shields.io/badge/changelog-md-blue.svg)](./CHANGELOG.md)
 
 Framework-agnostic WebGPU renderer runtime for Plasius projects.
+
+The local native room reference now has an independent **Guided denoising**
+control (off by default). It captures existing first-hit surface data, filters
+rough opaque non-metal surfaces on the GPU, and offers raw/cleaned images from
+the same camera samples. Glossy, emissive, transparent and environment pixels
+are deliberately protected. No temporal reuse or transport changes.
+
+The internal coordinator accepts the host-evaluated snapshot key
+`renderer.denoise.guidedSpatial.enabled`. This is not a released site control
+or a replacement for the existing public `denoise` boolean. With the control
+off, no new denoise resources/pipelines are created. Added allocation is bounded
+by a separate 192 MiB cap; native 4K adds about 158.2 MiB using existing scratch.
+Raw HDR, filtered HDR and separate pass/job timings are retained. Spatial
+smoothing can lose detail; it does not establish convergence or real-time speed.
+See [design and acceptance](docs/design/guided-spatial-denoise.md) and ADR 0049.
+
+Rough opaque nonmetallic cloth with sheen has its own guided class: mapped-normal
+guidance and bounded colour demodulation preserve authored texture while
+reconstructing noisy lighting. It uses the same passes and allocation, not more
+rays. This is a biased presentation approximation, **not complete velvet/sheen
+qualification**; fine lighting/normal detail can still soften. Independent
+default-off sheen layering is now implemented; texture-minification and matched
+convergence qualification remain separate work. See
+[current cloth scope and tests](docs/design/cloth-material-fidelity.md) and ADR 0053.
+
+Experimental `renderer.sampling.roughBounceSplitting.enabled` (default false)
+adds two independently keyed continuations at eligible rough non-metal surfaces.
+Set `roughBounceSplitting: { splitDepth: 1 }` for **2/1/1/...** or `splitDepth: 2`
+for **2/2/1/...**. These are absolute bounce indices, not repeated splitting at
+every diffuse encounter. Requires `renderer.sampling.stablePattern.enabled`,
+`deferredPathResolve: true`, `strictPhysicalLowSppLighting: true` and depth <=8.
+Supply flags directly or through the existing remote `featureFlags` snapshot;
+recreate to change them. The additional queue/path allocation cap defaults to
+128 MiB (`roughBounceSplitting.maximumAdditionalBytes`); over-cap settings throw
+before allocation. Siblings keep one completed camera sample and share energy.
+Perfect mirrors, glass and rough metals are not newly split. Existing glass
+splitting can still overflow the hard queue bound, which invalidates the frame.
+Disable the child flag for unchanged allocations and shaders. See
+[design](docs/design/rough-bounce-splitting.md) and [ADR 0048](docs/adrs/adr-0048-bounded-rough-bounce-splitting.md).
+The room page offers explicit depth controls and a rotated off/first/first-two
+comparison using the same stable sampler, analytic energy checks, native
+1080p/4K images, completed counts, ray totals and timing-only render jobs.
+It is not a production setting, a converged-quality result or a speedup claim.
+
+`tests/fixtures/native-room-reference.html` composes the original Eames inside
+the user-approved room GLB owned by gpu-lighting. The companion lighting
+`room-reference-server.mjs` serves the commit-pinned scene and source dependencies.
+Choose a **Room overview**, **Upholstery study** or **Glass and water** setup,
+an adaptive/uniform/high-detail sampling preset and native 1080p/4K, then Render.
+Only a compact **Focus / How to navigate** panel sits beside the scene. Focus
+selects room viewpoints or sofa/glass close-ups; changes apply on the next render,
+not live orbit. FOV, close-up distance/elevation and target coordinates use package
+defaults and are not exposed as camera fields. The last image remains visible but is marked out of date after
+edits, with stale downloads disabled. Advanced settings retain individual material,
+optical, sampling and placement controls; laboratory diagnostics are separate.
+Glass/water explicitly enables bounded/nested transport, not rough transmission;
+upholstery enables sheen and guided denoise. Reset restores the original raw room
+and turns experiments off. Presets are local recipes, not qualification claims.
+See [scene-first controls and QA](docs/design/room-demo-controls.md).
+Controls apply between renders, not as live moving-mesh transport. Six bounces,
+5.95-average-SPP radial budgets, count/HDR evidence and original material transport
+are retained. No old studio enclosure/panel is added; external daylight is explicit.
+This is an experimental visual reference with known sampler artifacts, not
+performance, collision or production qualification. See the
+[design and QA inventory](docs/design/room-eames-reference.md).
+
+`tests/fixtures/native-stable-reference.html` captures original Eames at native
+3840x2160, a six-bounce ceiling and the prescribed
+5.95-average-SPP circular tiers. It retains a clean PNG, full HDR and provenance,
+checks actual counts and static repeatability, and leaves denoise off. This is
+visual reference material, not performance or converged-quality qualification.
+The separate four-bounce comparison and production defaults are unchanged.
+Its local default is now the fast `fixed-pattern` working experiment; the
+slower `stable-pattern` remains selectable for comparison. Neither is qualified.
+The fast path retains known brightness/structured-artifact defects. Selection
+is locked during capture and encoded in filenames, settings and validation.
+See [restoration and investigation](docs/design/fast-pattern-restoration.md).
+The [retained six-bounce image and receipt](https://github.com/Plasius-LTD/gpu-lighting/blob/6c12346e4cc32382d50fce18da4c733541c06c0f/docs/evidence/stable-reference-4k-2026-09-28.md)
+verify all 49351680 camera samples and bit-identical repeated HDR. Low-SPP grain
+and the performance/production qualification gates remain.
+
+`renderer.sampling.stablePattern.enabled` is the default-off correction candidate:
+centre-first fixed camera points, with fast, pixel/event/bounce-keyed lighting
+permutations that remain stable across frames. It is mutually exclusive with all
+other sampler flags and requires renderer recreation. No new buffers or passes
+are added. This is a pixel-local scrambled pair, not a full multidimensional
+Sobol construction or a guarantee of clean 1-SPP rendering. Run
+`tests/fixtures/native-stable-pattern.html` and see the
+[correction protocol](docs/design/stable-pattern-correction.md). It is not yet
+the production default; disable sampler flags and recreate for rollback.
+The [native Eames correction evidence](https://github.com/Plasius-LTD/gpu-lighting/blob/03d1cc2d28195777c49e2dbeb5406aabdb82abfa/docs/evidence/stable-pattern-2026-09-27.md)
+passes brightness and static-repeatability screens at 1080p/4K, but retains
+low-SPP grain and loses the old fixed pattern's speed advantage. Adaptive jobs
+measure 5226.73 / 17777.60 ms, versus random 5197.27 / 17658.67 ms. Use it as
+the primary experimental fixed-camera optimization lane, retaining random as
+the comparison control; this is not production or matched-quality approval.
+
+`renderer.sampling.fixedPattern.enabled` is a separate default-off experiment:
+fixed relative camera and lighting points shared across pixels and frames, with
+the first camera ray at the pixel centre. It replaces both 1D and 2D sampling,
+is mutually exclusive with every other sampler flag, and requires renderer
+recreation. It does not add resources or passes. Temporal repeatability can
+conceal coherent lighting error; this is not production-qualified. See the
+[fixed-pattern design](docs/design/fixed-pattern-experiment.md) and run
+`tests/fixtures/native-fixed-pattern.html` for the source-pinned Eames comparison.
+
+Experimental sampling flags (both default off):
+`renderer.sampling.owenSobol.enabled` selects pixel-local 2D Sobol with
+24-bit hash-driven nested Owen scrambling; `renderer.sampling.independentRandom.enabled`
+selects a separately keyed random control. Supply either through the existing
+`featureFlags` snapshot or direct dotted option. Enabling both throws. Neither
+changes 1D selectors, transport, PDFs, sample counts, buffers or denoising.
+All sampler flags off retains the legacy sequence. The feature remains experimental and must
+not be treated as quality/performance qualified.
+Sampler flags are renderer-creation snapshots: recreate the renderer to change
+them. Off uses the original shader bytes, not dormant experimental shader code.
+
+`tests/fixtures/native-sampler-experiment.html` runs the source-pinned, full
+Eames 1080p three-seed comparison and 4K Sobol follow-up. See the
+[frozen experiment design](docs/design/progressive-sampling-experiment.md);
+independent-random results distinguish prefix coverage from Sobol-specific gains.
+
+`tests/fixtures/native-eames-trace.html` uses the original Eames source asset
+through the shared Product Studio loader and mesh builder, with lighting-owned
+hash/geometry/texture/material admission. It retains loading/BVH setup separately
+from native fixed32/radial frame costs. It is not full site/application or quality
+qualification. The six-triangle results below remain synthetic diagnostics only.
+`tests/fixtures/native-adaptive-trace.html` is the opt-in full-frame radial
+diagnostic: native 1080p/4K, centred area shares 5/10/15/20/25/25% at
+32/16/8/4/2/1 SPP. It reuses shared rounds and canonical material transport, omits
+absent tile tiers, retains CPU/GPU/count/HDR traces separately from timing-only
+frames, and checks uniform32 identity. Fixed32 is the reference; the real-time
+target applies to adaptation. This is not public integration or qualification.
+The optional fused-hit variant is disabled for this native trace: its 4K
+uniform32 identity control failed while the ordinary adaptive control matched.
+The [retained native radial results](https://github.com/Plasius-LTD/gpu-lighting/blob/11730c4203e30ff8ae009a991916a332f5c38920/docs/evidence/native-radial-2026-09-26.md)
+verify exact 5.95 mean SPP and 81.40625% fewer primary rays. Timing-only jobs
+average 722.93 / 2,996.97 ms at 1080p/4K, versus same-run fixed32
+2,281.60 / 8,904.07 ms. Visible reduced-SPP brightness boundaries/noise remain;
+these lower-work timings establish neither matched quality nor real-time success.
+The minimum real-time acceptance target is native **1920×1080 at sustained 60 Hz
+on the M2 Max MacBook Pro**; native **3840×2160 at 60 Hz** is the ideal target.
+128×128 fixtures are correctness diagnostics, not full-frame performance evidence.
+`tests/fixtures/native-frame-screen.html` measures actual native fixed32 frames
+with the existing tiled renderer, including presentation commands. Its short-run
+results cannot establish sustained application/display or image-quality success.
+The older paired runner remains single-tile by default; the explicit native
+diagnostic extends it to full frames. Public tiled adaptive integration and
+matched-quality native-resolution qualification remain required.
+The [retained M2 Max native screen](https://github.com/Plasius-LTD/gpu-lighting/blob/43c216d0d7f263ed432ae0f44d510b9389778320/docs/evidence/native-resolution-2026-09-26.md)
+measured 2,342.07 ms at 1080p and 8,966.80 ms at 4K in the fixed32 simple scene.
+The current fixed path fails the real-time target. Each resolution now requests
+an independent adapter/device; the failed adapter-reuse attempt is also retained.
+
 This package is intended to replace Three.js-dependent render orchestration with
 an explicit WebGPU-first runtime that can be consumed from React, vanilla, or
 worker-driven app surfaces.
@@ -18,6 +632,108 @@ runtime line (`^1.1.1`), and validates its development tooling against the
 current ESLint 10 and TypeScript 7 baselines.
 
 Apache-2.0. ESM + CJS builds.
+
+The paired adaptive diagnostic uses an internal opt-in four-query timestamp span
+on actual first/final compute work. Normal renderer telemetry retains its existing
+two-query descriptors and allocation; unavailable/invalid timestamps never become
+GPU performance evidence. See the lighting-owned paired diagnostic protocol.
+
+## CPU attribution diagnostics
+
+Opt in per render without enabling adaptive sampling:
+
+```js
+const frame = await renderer.renderFrame({
+  cpuProfiling: { enabled: true, userTiming: false },
+  readStats: true, // Independent opt-in GPU timestamps/ray readback.
+  readOutputProbe: false,
+});
+console.log(frame.cpuProfile);
+```
+
+`cpuProfile` is absent by default. It reports host elapsed packing, upload,
+encoding, finish and submission intervals; nested `exclusiveMs` avoids counting
+child intervals twice. `gpuWait`, `telemetryReadback` and `outputReadback` are
+asynchronous elapsed time, **not CPU busy time**. GPU/job timing boundaries and
+rendering commands remain unchanged. Post-job readback commands are excluded
+from API counts. Explicit temporary buffer bytes are not total heap allocation,
+GC, driver memory, residency or a memory-saving claim. Setup/updateSceneObjects
+and browser UI work are outside this per-render profile.
+
+`userTiming: true` emits at most 128 named browser timing spans per frame,
+clearing their timeline entries after emission; aggregate counters retain every
+call. CPU profiling itself adds overhead; compare on/off before interpreting
+numbers. Use a separate browser CPU/GC trace for active CPU attribution.
+
+The source-bound [replay setup](https://github.com/Plasius-LTD/gpu-lighting/blob/b23af8d4c79ce23c28c5134886569b84a73c9079/docs/paired-adaptive-replay.md)
+can open `tests/fixtures/adaptive-cpu-profile.html` at the profiling commit.
+Choose **Measure CPU breakdown** for alternating off/on fixed/shared/fused runs,
+identity checks, raw receipts and median/p95 summaries. These 128×128 experiments
+do not activate the GPU tab or qualify adaptive quality/performance.
+See the [measurement contract](docs/design/cpu-render-profiling.md).
+
+## Completion-driven frames (opt-in)
+
+`renderFrame()` already returns a GPU-completion promise by default. Waiting on
+it yields JavaScript; it is not a busy wait. The optional loop starts the next
+frame after that promise and completion observers settle, with a browser-task
+yield rather than waiting for an additional display tick:
+
+```js
+import { createWavefrontFrameLoop } from "@plasius/gpu-renderer";
+
+const loop = createWavefrontFrameLoop({
+  enabled: remoteFlags["renderer.sampling.adaptivePerPixel.enabled"] === true,
+  renderFrame: (options) => renderer.renderFrame(options),
+  targetFrameTimeMs: 1000 / 60, // Observation only; does not reduce SPP.
+  getRenderOptions: () => ({
+    samplesPerPixel: budgetAdapter.getCurrentBudget().samplesPerPixel,
+    frameTimeBudgetMs: 0, // Explicitly fixed ceiling; no frame-budget reduction.
+  }),
+  onFrameComplete: (frame, progress) => {
+    recordFrameMeasurements(frame, progress); // Feed existing gpu-performance policy.
+  },
+});
+const finished = loop.start(); // Do not await here if independent work should continue.
+finished.catch(reportRenderFailure); // Failures stop the loop; never silently restart.
+
+// From a UI/telemetry callback, as often as the application needs:
+const progress = loop.getProgress();
+// progress.elapsedMs, budgetRatio, overBudgetMs, completedTileFraction
+
+// On shutdown / remote disable, from outside a loop callback:
+await loop.stop(); // Drain current frame and readbacks before destroying resources.
+renderer.destroy();
+```
+
+Only one owner may call/render/update/destroy this renderer. Apply camera/scene
+updates at `getRenderOptions`, not during a tile wait. Independent simulation,
+input, networking or worker tasks may run while waiting, but long main-thread
+tasks can delay GPU completion callbacks. Do not await `stop()` inside the loop's
+own callbacks (request stop there; await the run promise outside). Custom render
+adapters must genuinely await completion with bounded timeouts; a submit-only
+callback is not sufficient. Stop does not cancel already submitted GPU commands.
+After a timeout/device failure, do not reuse the failed renderer in another loop;
+dispose it and recover through the application's device-recreation path.
+
+Progress is on-demand, with no GPU polling/readbacks. `budgetRatio` is elapsed
+wall time divided by the observational target; zero/omitted target returns null.
+Elapsed time includes preparation and requested readback, not CPU utilization.
+`completedTileFraction` counts queue-confirmed tiles, **not GPU-time completion**;
+`gpuCompletionFraction` is always null. Single-tile jobs remain 0 until the queue
+completes. The standalone renderer also accepts `onProgress(event)` with stages
+and confirmed counts; observer errors reject after draining, not during a wait.
+
+The loop forces GPU completion, defaults diagnostic readbacks off, and applies
+new budgets only on the next frame. It changes no transport, budgets, shaders or
+GPU allocations. It is disabled by default, inherits the parent remote flag,
+and is not enabled in the site. Rollback stops/drains it and resumes the existing
+GPU-native caller. The legacy display-paced runtime is unchanged. This throughput
+loop is not a guarantee of display pacing, idle CPU capacity or a GPU speedup.
+
+Open `tests/fixtures/frame-loop.html` on the source-bound replay server for
+fixed/shared/fused identity and independent-heartbeat verification. See the
+[design and acceptance contract](docs/design/completion-driven-frames.md).
 
 ## Privacy-Safe Feedback Diagnostics
 
@@ -59,6 +775,58 @@ diagnostic capture or network/storage operation, and never registers
 reporting.
 
 ## Adaptive per-pixel implementation status
+
+This experimental integration branch combines the separately tracked split-path
+ownership and primary-visibility MIS fixes with adaptive scheduling infrastructure.
+Its fixed shader matches PR 214's corrected baseline, **not** the earlier released
+shader. The earlier receipts below remain evidence for their stated revisions.
+No prerequisite PR, public renderer option or site flag is enabled by this branch.
+
+An internal complete-camera-sample producer now reduces the canonical branch tree
+into the existing sample record before selected-tier count commit. Unweighted
+radiance is normalized by actual completed samples; sibling branches cannot count
+as separate camera samples. Invalid worklists, pending paths, overflow, bad lineage
+or stale identities reject completion. It reuses capped buffers without new GPU
+storage. Bootstrap uses the 64-byte PathNode ABI and invalidates selected roots;
+the shared bounce code owns initialization of every child node.
+See [integration design](docs/design/adaptive-complete-sample-integration.md) and
+[ADR 0039](docs/adrs/adr-0039-adaptive-complete-camera-sample-integration.md).
+The physical probe is `tests/fixtures/adaptive-complete-sample.html`; it connects
+real transport with unequal-budget count/resolve, not a synthetic radiance source.
+On Apple Metal-3, 14 small-scene/order cases passed, including diffuse same-sample
+prefix agreement with the fixed dispatcher, plus 11 fail-closed cases. These are
+not matched-quality performance or site qualification. See the
+[dated publication-readiness ledger](docs/evidence/adaptive-publication-readiness-2026-09-20.md)
+for source-bound receipts, actual sample counts and outstanding claim gates.
+
+The additional `tests/fixtures/adaptive-paired.html` diagnostic connects the same
+real pipeline to the lighting-owned paired protocol and image metrics. It compares
+fixed32, equal-budget adaptive32 and preassigned 2/8/32 budgets, with 128/256-SPP
+references, two warmups, ten rotated timing rounds, native queue/timestamp telemetry
+and retained linear pixels/previews. It requires the pinned lighting fixture
+modules under `/lighting/` and the existing loopback capture bridge. It is not a
+live adaptive importance policy, Eames benchmark, or public site integration.
+
+The internal [shared-round scheduler](docs/design/adaptive-shared-rounds.md) adds
+an independently selectable comparison in `tests/fixtures/adaptive-shared.html`.
+It shares absolute sampling rounds across tiers, batches immutable uploads, and
+prepares/commits only compacted pixels around the unchanged bounce pipeline.
+For 2/8/32 budgets at four bounces, rounds fall from 42 to 32 and compute passes
+from 389 to 206. `tests/fixtures/adaptive-shared-safety.html` checks analytic
+images, split paths, 128 SPP and malformed-state rejection. These are internal
+diagnostics, not a public adaptive option. See [ADR 0040](docs/adrs/adr-0040-shared-adaptive-sampling-rounds.md)
+and the [source-bound results](docs/evidence/shared-adaptive-rounds-2026-09-20.md)
+for measured trade-offs and outstanding quality/confidence gates.
+
+`tests/fixtures/adaptive-pruning.html` independently compares zero-work empty
+queues, immediate hit consumption, and both together against the shared-round
+baseline. Internal default-off options omit the global hit-record round-trip
+and/or guarded empty workgroups; they add no temporal cache and preserve the
+fixed shader and command trace. Allocation capacity is retained, so this is not
+a memory-saving claim. See [ADR 0041](docs/adrs/adr-0041-immediate-hit-consumption-and-empty-queue-pruning.md)
+and [pruning evidence](docs/evidence/adaptive-pruning-2026-09-20.md). Physical image,
+ray and count identity passes these bounded scenes; timing confidence and the
+preassigned budgets' image-quality gates still do not qualify a public rollout.
 
 Per-pixel adaptive rendering is not yet exposed by the public renderer API.
 An internal [primary-worklist stage](docs/design/adaptive-primary-worklist.md)
@@ -126,13 +894,14 @@ retains the dense internal commit mode. Final resolve still covers the whole
 tile. The 48-byte payload fits the same 256-byte slots; allocated memory and
 fixed transport are unchanged. See [ADR 0035](docs/adrs/adr-0035-tier-qualified-camera-sample-commit.md).
 
-The fixed renderer and its whole-frame budget adjustment are unchanged. The new
-stage is not wired to transport or exposed through package exports. Race-free
-split-path production, compact primary scheduling, foveation and shared
-integration remain prerequisites for a site comparison. The validation fixtures
-under `tests/fixtures/adaptive-*.html` test arithmetic/ABI and resource ownership,
-not adaptive images, transport correctness, performance or net memory savings.
-Physical execution status is recorded in the [Task 168 evidence](docs/evidence/task-168-adaptive-count-resolve.md).
+The earlier metadata/count-resolve foundation did not connect to transport; its
+physical execution is recorded in [Task 168 evidence](docs/evidence/task-168-adaptive-count-resolve.md).
+The experimental integration described above now connects real transport in a
+physical fixture, while the public renderer remains fixed-dispatch only. Its
+whole-frame budget policy is unchanged. The separate prerequisite transport fixes,
+production adaptive scheduler/presentation, importance controllers and shared/site
+integration still require qualification before a site comparison. No fixture here
+establishes matched-quality performance, full-scene noise or net memory savings.
 See [ADR 0029](docs/adrs/adr-0029-reflected-adaptive-metadata-admission.md) and
 [ADR 0030](docs/adrs/adr-0030-complete-camera-sample-resolve.md).
 
@@ -319,11 +1088,9 @@ requirement and route segment. The current surface establishes the WebGPU
 lifecycle and validation boundary for the PBR animation path; shader-level
 textured character and environment drawing builds on this boundary.
 
-The production transport rollout remains gated by
-`renderer.transport.physicalEstimator`. With the flag enabled, deferred
-continuation vertices carry sanitized physical throughput segments instead of a
-heuristic material-response tint, while the older fallback path remains the
-rollback route during validation.
+The physical material functions are shared by both resolve modes. Transport
+rollout controls do not permit the former sibling-address race to return:
+rollback requires a separately qualified GPU-native release.
 Low-SPP physical lighting hardening is separately controlled by the boolean
 `renderer.transport.strictPhysicalLowSppLighting` flag, passed either as
 `strictPhysicalLowSppLighting: true` or through `featureFlags`. When enabled,
@@ -498,16 +1265,42 @@ separate shadow/direct-light pass: the active ray still has to hit emissive
 geometry or miss into the environment before radiance is committed. Guided
 emissive hits carry a bounded estimator weight so finite light guidance does not
 over-expose low-sample renders before full material PDFs/MIS are implemented.
-By default, `deferredPathResolve` records
-per-bounce material responses in a tile-bounded path buffer and records the
-terminal emissive/HDRI/environment source in the final path slot. The output
-pass then resolves that recorded path backward and adds the weighted sample to
-the pixel accumulation, so unresolved continuation light is still deferred until
-a terminal source is known. Surface resolution may still add a small
-shadow-tested direct-light term immediately when it has an explicit source and
-visibility result, which keeps true occlusion shadows possible without falling
-back to broad per-bounce ambient fill. Set `deferredPathResolve: false` only
-for legacy forward-accumulation comparison.
+Both resolve modes now retain branch-owned direct and terminal radiance in
+64-byte, tile/depth-bounded path nodes. After the bounce passes, one root
+invocation reduces the complete sibling tree and commits one weighted camera
+sample. Fixed rendering still uses a weight of `1 / renderedSamplesPerPixel`;
+this is not yet per-pixel adaptive normalization. The
+`deferredPathResolve: false` comparison retains its terminal-policy differences,
+but no longer performs unsafe concurrent writes to pixel accumulation.
+
+`renderFrame({ readStats: true })` reports `pathCompletionValid`: `true` for
+complete lineage, `false` when any sample failed, and `null` when integrity was
+not read back. Reject false/unknown results for qualification. Overflow or
+invalid lineage is sticky for the frame; affected pixels carry invalid alpha
+and a magenta diagnostic, including through denoise. A new frame resets the
+failure state. Full-screen refractive scenes can still exceed bounded queue
+capacity and are rejected, not silently rendered with missing siblings.
+
+At a 128 × 128 tile and depth eight, the actual node allocation is 9 MiB
+(eight usable depth levels plus the retained guard level), versus 2.25 MiB for
+the former shared-chain storage. This is allocated buffer memory, not physical
+VRAM residency. The [ownership design](docs/design/split-path-ownership.md) and
+[evidence ledger](docs/evidence/task-210-path-ownership.md) distinguish focused
+physical checks from the outstanding image, variance, stress and release gates.
+
+Primary camera visibility of environment and emissive sources now bypasses
+terminal MIS: no competing next-event sample exists at bounce zero. Non-delta
+secondary rays retain the existing PDF/weight calculation; delta paths retain
+unit MIS weight. This narrow fixed-renderer correction adds no buffers or
+dispatches. The [Task 212 design](docs/design/primary-terminal-mis.md) and
+[evidence status](docs/evidence/task-212-primary-terminal-mis.md) separate local
+checks from bounded physical evidence and outstanding full-scene qualification.
+All 24 controlled 1/32/128-SPP lanes passed on Apple Metal-3 on 2026-09-14.
+Serve the repository's `src/` and
+`tests/fixtures/` paths on loopback and open
+`tests/fixtures/primary-terminal-mis.html` to run the focused linear-HDR probes.
+This does not enable adaptive sampling or establish a new quality baseline.
+
 When an `environmentMap` is provided, the wavefront trace shader samples it as
 an equirectangular radiance source for environment misses and uses the same
 mapped radiance for terminal residuals before falling back to static ambient.
@@ -596,12 +1389,16 @@ console.log({
 });
 ```
 
-`primaryRays` is the exact number of camera samples. `secondaryRays` is the
-sum of active continuation records intersected after bounce zero, including
-bounded reflection/transmission branches, and `totalPathSegments` is their sum.
-The renderer copies the existing active-queue counter once per bounce into a
-lazily allocated telemetry buffer; it does not add diagnostic shader atomics or
-change WGSL transport. `rayCounts.status` distinguishes available,
+`primaryRays` is the exact number of camera samples. Without optical streaming,
+`secondaryRays` sums active continuation records intersected after bounce zero,
+including bounded reflection/transmission branches. With streaming it also adds
+the measured internal optical path segments; this is not a count of BVH tests or
+hidden-boundary retry queries. `totalPathSegments` is primary plus secondary.
+Fixed/off-mode telemetry copies existing queue counters without additional
+shader atomics. Streamed diagnostic mode adds one counter update per non-empty
+chain and a per-camera-sample copy; it labels the histogram `queue-iteration`
+and exposes `queuePathSegments` and `additionalOpticalSegments`. These additions
+are absent without statistics. `rayCounts.status` distinguishes available,
 unavailable, failed, and not-requested evidence. A mismatch between scheduled
 and observed primary rays fails the `ray-count-telemetry` transport guardrail.
 Ray-count reduction uses constant call-stack space, including the supported
@@ -793,3 +1590,57 @@ there is no npm write-token fallback. CD remains disabled until the npm trusted
 publisher binding and protected-branch-only production environment are
 independently verified.
 <!-- END PLASIUS RELEASE INTEGRITY -->
+## Experimental glass/water transport
+
+Rejected room captures retain failure-only canonical ray/hit journals when a
+single-continuation failed sample's original tile phase remains available.
+These use the already-compiled camera and transport, with 512 temporary bytes
+per configured bounce, destroyed after readback. They never publish an image or
+commit samples; unsupported branch histories are reported explicitly. The
+4K/256-SPP missing-exit investigation remains open (#234), not qualified transport.
+
+Nested mode uses consistent ray-aligned shared-edge triangle tests to avoid
+dropping a glass exit at a mesh seam. This adds arithmetic, not ray allocations;
+flag-off retains the legacy intersection path. Captured-ray GPU regression and
+full-frame quality/timing qualification are separate gates. See
+[ADR 0057](docs/adrs/adr-0057-optical-shared-edge-intersections.md).
+
+Two independent, default-off renderer options / remote feature flags are available:
+`renderer.transport.boundedDielectricBranching.enabled` and
+`renderer.transport.nestedMediaRefraction.enabled`. Enable both for bounded
+glass/water experiments. Medium inputs accept `ior` (1..4, inherited from the
+surface) and `priority` (integer 0..2048, higher wins). Glass should outrank water
+where the meshes overlap. Camera-inside-volume initialization is not supported.
+The local room reference exposes both switches; Reset disables them. Captures
+retain their flag values and run the analytic GPU optics probe before rendering.
+Hidden overlap crossings retain the original ray line; a bounded distance cursor
+advances traversal without extra bounces or spatial offsets. The 4K failure
+regression and image-quality qualification remain open until physical recapture.
+These are not a claim of photographic quality or real-time performance. See
+[ADR 0055](docs/adrs/adr-0055-bounded-nested-dielectrics.md) and
+[qualification status](docs/glass-water-transport-follow-up.md).
+
+### Experimental rough / partially transmitting volumes
+
+`renderer.transport.roughDielectricTransport.enabled` adds a bounded GGX
+reflection/refraction model and a non-transmitted diffuse component. It requires
+`renderer.transport.nestedMediaRefraction.enabled`; it selects one weighted
+continuation even if the older bounded-branching flag is off. The room diagnostic
+exposes an independent switch, resets it off, retains the flag and runs its GPU
+preflight. Authored material values are not automatically changed.
+
+Use `materialKind: "dielectric"`, explicit `transmission` (0..1), `roughness`
+(0..1), `opacity: 1`, opaque base-colour alpha and a valid non-air `mediumRefId`
+with IOR/priority metadata. Higher roughness spreads optical transmission; it
+does not turn the surface into a participating medium. Missing metadata or alpha
+coverage is rejected instead of skipping the surface. Entry and occupied exit
+faces remain ray intersections; reflection does not pop the medium stack.
+Shadow checks retain the current medium and cannot ignore a refractive exit.
+
+This remains experimental. CPU execution of the numerical WGSL and independent
+angular integration are not physical GPU or image-quality qualification.
+Subsurface scattering, thin-sheet/alpha coverage, delta-light caustic sampling,
+and camera-inside initialization are not implemented by this experiment. Mixed
+metallic/clearcoat optical materials are rejected, not silently approximated.
+Disable the new flag to restore the prior transport. See
+[design and remaining tests](docs/rough-dielectric-transport.md).

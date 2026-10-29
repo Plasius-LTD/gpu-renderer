@@ -2,10 +2,11 @@ import { ADAPTIVE_CAMERA_WGSL } from "./wavefront-adaptive-camera-shader.js";
 import { CONFIG_BUFFER_BYTES, RAY_RECORD_BYTES } from "./wavefront-core.js";
 import { ADAPTIVE_PRIMARY_CONFIG_BYTE_SIZE, ADAPTIVE_PRIMARY_CONTROL_BYTE_SIZE } from "./wavefront-adaptive-primary-constants.js";
 import { assertShaderModuleCompiles, createComputePipeline } from "./wavefront-runtime-support.js";
+import { withProgressiveSampling } from "./wavefront-sampling-dimensions.js";
 
-export async function createAdaptiveCameraRayPipeline(device, shaderStage, { enabled = false } = {}) {
+export async function createAdaptiveCameraRayPipeline(device, shaderStage, { enabled = false, progressiveSampling = false } = {}) {
   if (!enabled) return null;
-  const shader = device.createShaderModule({ label: "wavefront-adaptive-camera", code: ADAPTIVE_CAMERA_WGSL });
+  const shader = device.createShaderModule({ label: "wavefront-adaptive-camera", code: withProgressiveSampling(ADAPTIVE_CAMERA_WGSL,progressiveSampling) });
   await assertShaderModuleCompiles(shader, "wavefront-adaptive-camera");
   const entry = (binding, type, minBindingSize) => ({ binding, visibility: shaderStage.COMPUTE,
     buffer: { type, minBindingSize, ...(type === "uniform" ? { hasDynamicOffset: true } : {}) },

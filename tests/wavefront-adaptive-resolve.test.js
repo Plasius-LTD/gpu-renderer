@@ -211,6 +211,6 @@ test("pipeline compilation failures propagate without returning partial pipeline
   }
 });
 
-test("the fixed assembled transport remains byte-identical", () => {
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0");
+test("the Task 232 opt-in material-corrected fixed shader remains canonical", () => {
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "1679475a3e08f26ea681c7bb0ea056c640a315936b91e9dbb8e23c86de23b733"); // Task234 bounded optical budget; the regression reconstructs the unchanged prior shader.
 });

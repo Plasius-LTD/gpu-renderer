@@ -91,7 +91,9 @@ function readExtensionNumber(input, extensionName, key, fallback) {
 
 function resolveExtensionTexture(input, extensionName, key) {
   const extension = resolveExtension(input, extensionName);
-  return extension[key] ?? null;
+  const slot = key.replace(/Texture$/, "");
+  return input?.[key] ?? input?.material?.[key] ?? input?.extensionTextures?.[slot] ??
+    input?.materialExtensions?.textures?.[slot] ?? extension[key] ?? null;
 }
 
 export function normalizeWavefrontMaterialExtensions(input = {}) {
@@ -111,7 +113,8 @@ export function normalizeWavefrontMaterialExtensions(input = {}) {
     transmission: clamp(readFiniteNumber("transmission", transmission.transmissionFactor, input.transmission ?? input.material?.transmission ?? 0), 0, 1),
     volumeThickness: Math.max(0, readFiniteNumber("volume.thicknessFactor", volume.thicknessFactor, input.thickness ?? input.material?.thickness ?? 0)),
     sheenColor: Object.freeze(asColor(sheen.sheenColorFactor ?? input.sheenColor ?? input.material?.sheenColor, [0, 0, 0, 1])),
-    sheenRoughness: clamp(readFiniteNumber("sheenRoughness", sheen.sheenRoughnessFactor, 0), 0, 1),
+    sheenRoughness: clamp(readFiniteNumber("sheenRoughness", sheen.sheenRoughnessFactor,
+      input.sheenRoughness ?? input.material?.sheenRoughness ?? input.materialExtensions?.sheenRoughness ?? 0), 0, 1),
     specular: clamp(readFiniteNumber("specular", specular.specularFactor, input.specular ?? input.material?.specular ?? 1), 0, 1),
     specularColor: Object.freeze(asColor(specular.specularColorFactor ?? input.specularColor ?? input.material?.specularColor, [1, 1, 1, 1])),
     iridescence: clamp(readFiniteNumber("iridescence", iridescence.iridescenceFactor, 0), 0, 1),
@@ -170,6 +173,7 @@ export function deriveWavefrontTransportMedium(input, fallbackId = 1) {
     return normalizeWavefrontMedium(
       {
         ...input.medium,
+        ior: input.medium.ior ?? input.ior ?? input.material?.ior,
       id: input.medium.id ?? input.medium.mediumId ?? resolvedId,
       },
       fallbackId
@@ -182,6 +186,7 @@ export function deriveWavefrontTransportMedium(input, fallbackId = 1) {
   return normalizeWavefrontMedium(
     {
       id: resolvedId,
+      ior: input.ior ?? input.material?.ior,
       phaseModel: volume.phaseModel,
       density: volume.density,
       attenuationColor: volume.attenuationColor,
@@ -195,6 +200,10 @@ export function deriveWavefrontTransportMedium(input, fallbackId = 1) {
 
 function normalizeWavefrontMedium(input = {}, index = 0) {
   const id = readNonNegativeInteger("medium id", input.id ?? input.mediumId, index);
+  const ior = readFiniteNumber("medium ior", input.ior, id === 0 ? 1 : 1.5);
+  const priority = readNonNegativeInteger("medium priority", input.priority, 0);
+  if (ior < 1 || ior > 4) throw new Error("medium ior must be between 1 and 4.");
+  if (priority > 2048) throw new Error("medium priority must be between 0 and 2048.");
   const density = Math.max(0, readFiniteNumber("medium density", input.density, 1));
   const attenuationColor = asColor(
     input.attenuationColor ?? input.color ?? input.medium?.attenuationColor,
@@ -221,6 +230,8 @@ function normalizeWavefrontMedium(input = {}, index = 0) {
   ).map((value) => Math.max(0, Number(value) || 0));
   return Object.freeze({
     id,
+    ior,
+    priority,
     phaseModel: readMediumPhaseModel(input.phaseModel ?? input.medium?.phaseModel),
     density,
     attenuationColor: Object.freeze(attenuationColor),
@@ -236,6 +247,8 @@ export function collectWavefrontMediums(options, meshes, sceneObjects = []) {
     0,
     Object.freeze({
       id: 0,
+      ior: 1,
+      priority: 0,
       phaseModel: DEFAULT_MEDIUM_PHASE_MODEL,
       density: 0,
       attenuationColor: Object.freeze([1, 1, 1, 1]),
@@ -268,7 +281,7 @@ export function collectWavefrontMediums(options, meshes, sceneObjects = []) {
   }
   for (const mesh of meshes) {
     if ((mesh.mediumRefId ?? 0) > 0 && !mediumsById.has(mesh.mediumRefId)) {
-      register({ id: mesh.mediumRefId });
+      register({ id: mesh.mediumRefId, ior: mesh.ior });
     }
   }
   for (const object of sceneObjects) {
@@ -276,7 +289,7 @@ export function collectWavefrontMediums(options, meshes, sceneObjects = []) {
   }
   for (const object of sceneObjects) {
     if ((object.mediumRefId ?? 0) > 0 && !mediumsById.has(object.mediumRefId)) {
-      register({ id: object.mediumRefId });
+      register({ id: object.mediumRefId, ior: object.ior });
     }
   }
 

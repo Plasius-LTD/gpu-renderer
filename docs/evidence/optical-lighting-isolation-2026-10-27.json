@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "status": "attribution-complete-image-gates-failed",
+  "task": "Plasius-LTD/gpu-renderer#234",
+  "feature": "Plasius-LTD/plasius-ltd-site#2114",
+  "adaptivePerformanceGate": "closed",
+  "productionRuntimeChanged": false,
+  "runtimeMatchesNativeBeforeControl": "419561858b40b92d11e17cac45bec54aeba2e023",
+  "sources": {
+    "native20": "787c86ccda409e4bd96517b9a9079ac7b0388092",
+    "native32": "0b9493e524373b04c0e10d57cf2cb45dec06ca34",
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "localArtifactRoot": "output/playwright/",
+  "native20": {
+    "summary": "eames-environments/room-reference-2026-10-27T13-14-42-816Z-9be36103-8074-45e7-ae58-d2c10b090a79/summary.json",
+    "sha256": "379c678bbb033daff2c122a2223f5b60b917150ea760815bf33f239611e2c352",
+    "status": "failed",
+    "cameraSamples": 150994944,
+    "failedFurnaces": ["empty", "index-one"],
+    "contrastRowRmse": 0.012863574042802728
+  },
+  "native32": {
+    "summary": "eames-environments/room-reference-2026-10-27T13-28-57-211Z-0309fbbc-cac3-42f7-b057-c070060f6af7/summary.json",
+    "sha256": "3d74c8cafcdda3dfc59f665fbdfe055e6463ebacf19c9f142853e2bf4eff353d",
+    "status": "failed",
+    "cameraSamples": 150994944,
+    "failedFurnaces": ["empty", "index-one"],
+    "contrastRowRmse": 0.012943741153801754
+  },
+  "linearReferences": [
+    {"path": "optical-linear-2026-10-27-kvIzTi/reference.f32", "sha256": "fc5b2b8f149acf6b122d3e6c02f614d8a7184dbf29e1d98d4873154b0f532451", "mode": "filled-pedestal-contrast", "events": 20},
+    {"path": "optical-empty-furnace-2026-10-27-iVicAo/reference.f32", "sha256": "27a01b2058e32d0fc3bb792e6882c6a6c4d48d0918cc07a0a0afd1c5fdc1f581", "mode": "empty-furnace", "events": 20, "maximumRowError": 0.05767056594292319},
+    {"path": "optical-empty64-2026-10-27-i9beE6/reference.f32", "sha256": "61a978855d977664aa040c78cc5434610cebcfd174361cab7be8148533f70e52", "mode": "empty-furnace", "events": 64, "maximumRowError": 0.0006800641616185876},
+    {"path": "optical-empty32-2026-10-27-0qruv0/reference.f32", "sha256": "217f1876253d935ef8ddec32f0db44bb6865fddd08a376c787fcaf55d499b1de", "mode": "empty-furnace", "events": 32, "maximumRowError": 0.0489046648144722}
+  ],
+  "room1080": {
+    "skyCapture": "room-reference-2026-10-27T13-18-04-623Z-20e78b7c-df56-430f-ac83-e84e517c1cac",
+    "sunCapture": "room-reference-2026-10-27T13-23-37-514Z-a8050af9-10a3-425e-9939-c44c670f8a1e",
+    "cameraSamples": 132710400,
+    "attributionReport": "optical-reference-2026-10-27-RKCQpv/source-isolation-1080.json",
+    "sha256": "d969513a0257d5ac9719822aa593a2fd18ab2bb55e8ea6ddee562a69fb1c47ef",
+    "relativeRgbRmse": 1.0886470501262222e-7,
+    "attributionTolerance": 0.00001,
+    "imageConvergenceQualified": false
+  },
+  "preservedRejectedAttempts": [
+    {"capture": "room-reference-2026-10-27T09-44-37-670Z-fdaea9e0-8727-47e6-b0dc-250746543677", "reason": "inadmissible diagnostic budget array; no accepted image"},
+    {"capture": "room-reference-2026-10-27T09-45-34-857Z-1315dd4b-9686-49a3-a2eb-1e186b2931b3", "reason": "failed furnace and device-destroyed canvas; HDR retained, PNG not an image control"},
+    {"path": "optical-linear-2026-10-27-bF1UiI", "reason": "independent PNG rendered but missing internal linear buffer; rejected for HDR comparison"}
+  ],
+  "claims": {
+    "pedestalReflectionRegionReproducedIndependently": true,
+    "allRemainingWaterBandingFixed": false,
+    "new4kSourceIsolationRun": false,
+    "adaptiveImprovementMeasured": false,
+    "memoryReductionMeasured": false,
+    "releaseCompleted": false
+  }
+}

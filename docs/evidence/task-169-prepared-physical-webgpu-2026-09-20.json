@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "9c9e330989cbac35a18d5a8d0c8c57a915449828",
+  "provenance": {
+    "source": "immutable-git-objects",
+    "fixtureUrl": "http://127.0.0.1:5195/tests/fixtures/adaptive-prepared-sample.html",
+    "observation": "Browser-visible receipt served from the clean stated commit; values transcribed without rounding. This recaptures the corrected PathNode transport; earlier source-bound receipts remain historical."
+  },
+  "receipt": {
+    "status": "passed",
+    "timestamp": "2026-09-20T07:49:32.748Z",
+    "scope": "primary-miss-continuation-equivalence-only",
+    "fixedShaderSha256": "c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb",
+    "fixtureSha256": "dd34b2606f75dbe7adcc61af3269bd6a22376fab058105b7904c30d426b950fd",
+    "coordinatorSha256": "0c9e6c9721bb839d1bf4b50995f0198563467df8e4292d374c3076bb9edb9ea8",
+    "results": [
+      {
+        "name": "depth-1-ordinal-0",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 65,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 3,
+          "directWorkgroups": 9,
+          "directShaderInvocations": 513,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 3,
+          "estimatedIndirectWorkgroupsUpperBound": 12,
+          "estimatedIndirectShaderInvocationsUpperBound": 768,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 3,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "depth-1-ordinal-31",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 65,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 3,
+          "directWorkgroups": 9,
+          "directShaderInvocations": 513,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 3,
+          "estimatedIndirectWorkgroupsUpperBound": 12,
+          "estimatedIndirectShaderInvocationsUpperBound": 768,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 3,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "depth-1-ordinal-127",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 65,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 3,
+          "directWorkgroups": 9,
+          "directShaderInvocations": 513,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 3,
+          "estimatedIndirectWorkgroupsUpperBound": 12,
+          "estimatedIndirectShaderInvocationsUpperBound": 768,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 3,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "depth-4-ordinal-0",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 65,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 6,
+          "directWorkgroups": 12,
+          "directShaderInvocations": 516,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 9,
+          "estimatedIndirectWorkgroupsUpperBound": 36,
+          "estimatedIndirectShaderInvocationsUpperBound": 2304,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 9,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "depth-4-ordinal-31",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 65,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 6,
+          "directWorkgroups": 12,
+          "directShaderInvocations": 516,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 9,
+          "estimatedIndirectWorkgroupsUpperBound": 36,
+          "estimatedIndirectShaderInvocationsUpperBound": 2304,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 9,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "depth-4-ordinal-127",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 65,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 6,
+          "directWorkgroups": 12,
+          "directShaderInvocations": 516,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 9,
+          "estimatedIndirectWorkgroupsUpperBound": 36,
+          "estimatedIndirectShaderInvocationsUpperBound": 2304,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 9,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "depth-8-ordinal-0",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 65,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 10,
+          "directWorkgroups": 16,
+          "directShaderInvocations": 520,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 17,
+          "estimatedIndirectWorkgroupsUpperBound": 68,
+          "estimatedIndirectShaderInvocationsUpperBound": 4352,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 17,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "depth-8-ordinal-31",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 65,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 10,
+          "directWorkgroups": 16,
+          "directShaderInvocations": 520,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 17,
+          "estimatedIndirectWorkgroupsUpperBound": 68,
+          "estimatedIndirectShaderInvocationsUpperBound": 4352,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 17,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "depth-8-ordinal-127",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 65,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 10,
+          "directWorkgroups": 16,
+          "directShaderInvocations": 520,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 17,
+          "estimatedIndirectWorkgroupsUpperBound": 68,
+          "estimatedIndirectShaderInvocationsUpperBound": 4352,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 17,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "empty",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 0,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 10,
+          "directWorkgroups": 16,
+          "directShaderInvocations": 520,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 17,
+          "estimatedIndirectWorkgroupsUpperBound": 68,
+          "estimatedIndirectShaderInvocationsUpperBound": 4352,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 17,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      },
+      {
+        "name": "failed",
+        "denseTerminatedPaths": 195,
+        "compactedTerminatedPaths": 0,
+        "selectedPathRecordsBitwiseEqual": true,
+        "unselectedAndPaddingUntouched": true,
+        "commandCounts": {
+          "directDispatches": 10,
+          "directWorkgroups": 16,
+          "directShaderInvocations": 520,
+          "multiWorkgroupDispatches": 2,
+          "largestDirectWorkgroupsPerDispatch": 4,
+          "indirectDispatches": 17,
+          "estimatedIndirectWorkgroupsUpperBound": 68,
+          "estimatedIndirectShaderInvocationsUpperBound": 4352,
+          "indirectDispatchesWithMultiWorkgroupCapacity": 17,
+          "largestEstimatedIndirectWorkgroupsPerDispatch": 4
+        }
+      }
+    ],
+    "adapter": {
+      "vendor": "apple",
+      "architecture": "metal-3",
+      "isFallbackAdapter": false
+    },
+    "validationErrors": 0,
+    "unexpectedDeviceLoss": false,
+    "adaptiveAllocatedBytes": 202272,
+    "productionAllocatedBufferBytes": 17457816,
+    "testReadbackBufferBytes": 224768,
+    "adaptiveBytesAfterCleanup": 0
+  }
+}

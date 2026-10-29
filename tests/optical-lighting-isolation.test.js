@@ -1,0 +1,83 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createOpticalIsolationScene, opticalIsolationPlan, opticalIsolationBudgets, opticalIsolationDepth, validateOpticalFurnace,OPTICAL_ISOLATION} from './fixtures/optical-lighting-isolation.js';
+import {createAdaptiveTilePlan} from '../src/wavefront-adaptive-tile-plan.js';
+import {roomLightingRequest} from './fixtures/room-lighting-settings.js';
+import {readFileSync} from 'node:fs';
+
+test('capture snapshots canvas before destroying its GPU device and retains failed image gates',()=>{
+ const source=readFileSync(new URL('./fixtures/optical-lighting-isolation-runner.js',import.meta.url),'utf8');
+ assert(source.indexOf('const png=canvas.toDataURL()')<source.indexOf('runner.destroy();runner=null'));
+ assert.match(source,/report.failures.push\(lane.name\+': '\+retained.failure\)/);
+ assert.match(source,/report.status=report.failures.length\?'failed'/);
+});
+test('optical furnace journals reuse the validated canonical selection path before GPU allocation',()=>{
+ const source=readFileSync(new URL('./fixtures/optical-lighting-isolation-runner.js',import.meta.url),'utf8');
+ assert.match(source,/opticalSelectionsFromSearch\(location.search/);
+ assert(source.indexOf('opticalSelectionsFromSearch(location.search')<source.indexOf('createPairedProbeRunner(composed.scene'));
+ assert.match(source,/diagnostics:true,opticalJournal/);
+ assert.match(source,/report.opticalPathSamplingProbe=await runOpticalPathSamplingProbe/);
+ assert.doesNotMatch(source,/replayOpticalFailure|scatter_dielectric|sample_dimension/);
+});
+
+test('diagnostic budgets admit the canonical tile-plan contract and retain 256, not uint8 zero',()=>{
+ const budgets=opticalIsolationBudgets();assert(budgets instanceof Uint16Array);assert.equal(budgets[0],256);
+ const plan=createAdaptiveTilePlan({enabled:true,...OPTICAL_ISOLATION,budgets});
+ assert.equal(plan.reduce((n,t)=>n+t.expectedPrimaryRays,0),OPTICAL_ISOLATION.width*OPTICAL_ISOLATION.height*256);
+});
+test('diagnostic event-depth comparison is explicit and cannot silently alter room defaults',()=>{
+ assert.equal(opticalIsolationDepth(''),20);assert.equal(opticalIsolationDepth('?opticalDepth=32'),32);
+ for(const search of ['?opticalDepth=0','?opticalDepth=64','?opticalDepth=32&opticalDepth=20','?opticalDepth=NaN','?opticalDepth=32.0'])assert.throws(()=>opticalIsolationDepth(search));
+});
+
+test('optical isolation uses supplied package geometry without a second transport',()=>{
+ const receipt={scene:{floorY:-1.3,camera:{position:[3,-.4,.15],target:[2.85,-.6,-.1],fovYDegrees:52},glassWater:{settings:{mode:'filled',waterIor:1.333,closeup:true}}}};
+ const calls=[],mesh={id:1,positions:[0,0,0],indices:[],normalScale:0};
+ const compose=(input,settings)=>{calls.push({input,settings});return {scene:{...input.scene,meshes:[{...mesh,materialKind:'diffuse'}, {...mesh,id:2,materialKind:'dielectric'}, {...mesh,id:3,materialKind:'dielectric'}]},evidence:{...input.evidence,glassWater:{settings}}};};
+ for(const lane of opticalIsolationPlan()){
+  const c=createOpticalIsolationScene(compose,receipt,lane);
+  assert.deepEqual(c.scene.camera,receipt.scene.camera);assert.equal(c.scene.probeDepth,20);
+  assert.equal(c.scene.meshes[0].materialKind,'emissive');
+  assert.equal(c.scene.meshes[0].emission[0],lane.pedestal);
+  assert.equal(c.scene.meshes[1].materialKind,'dielectric');
+  assert.deepEqual(c.scene.environmentLighting.sunColor,[0,0,0,1]);
+  assert.equal(c.scene.environmentLighting.horizonColor[0],.75);
+  assert.equal(c.scene.environmentLighting.zenithColor[0],.75);
+ }
+ assert.equal(calls.length,4);assert.equal(calls[2].settings.waterIor,1);
+ assert.equal(receipt.scene.glassWater.settings.waterIor,1.333);
+ assert.throws(()=>createOpticalIsolationScene(compose,{},opticalIsolationPlan()[0]));
+});
+
+test('furnace acceptance rejects biased bands, missing samples and nonfinite evidence',()=>{
+ const width=64,height=36,image=new Float32Array(width*height*4);
+ for(let i=0;i<image.length;i+=4)image.set([.75,.75,.75,1],i);
+ const f={image,width,height,actualSamples:width*height*256,validationErrors:0};
+ assert.equal(validateOpticalFurnace(f,256).passed,true);
+ for(const value of [NaN,-1]){const bad=image.slice();bad[0]=value;assert.throws(()=>validateOpticalFurnace({...f,image:bad},256));}
+ assert.throws(()=>validateOpticalFurnace({...f,actualSamples:f.actualSamples-1},256));
+ const band=image.slice();for(let y=18;y<23;y++)for(let x=29;x<35;x++)band[(y*width+x)*4]=.1;
+ assert.throws(()=>validateOpticalFurnace({...f,image:band},256),/furnace/);
+});
+test('a dark glass edge outside the historical row ROI cannot pass whole-pixel qualification',async()=>{
+ const {validateOpticalFurnacePixels}=await import('./fixtures/optical-lighting-isolation.js');
+ const width=64,height=36,image=new Float32Array(width*height*4);
+ for(let i=0;i<image.length;i+=4)image.set([.75,.75,.75,1],i);
+ const f={image,width,height,actualSamples:width*height*256,validationErrors:0};
+ assert.equal(validateOpticalFurnacePixels(f,256).passed,true);
+ const edge=image.slice();edge.set([.082,.082,.082,1],(23*width+28)*4);
+ assert.equal(validateOpticalFurnace({...f,image:edge},256).passed,true,'preserve the historical ROI gate, do not mislabel it as whole-glass proof');
+ assert.throws(()=>validateOpticalFurnacePixels({...f,image:edge},256),/pixel/);
+ const color=image.slice();color.set([.3,.88309,.75,1],0);
+ assert.throws(()=>validateOpticalFurnacePixels({...f,image:color},256),/pixel/,'RGB errors must not cancel in luminance');
+ assert.throws(()=>validateOpticalFurnacePixels({...f,actualSamples:0},256),/Invalid/);
+});
+
+test('room source isolation zeros only the selected source and retains daylight camera direction',()=>{
+ const original=roomLightingRequest(),sky=roomLightingRequest({style:'sky-only'}),sun=roomLightingRequest({style:'sun-only'});
+ assert.deepEqual(sky.options.sunColor,[0,0,0,1]);
+ assert.deepEqual(sun.options.horizonColor,[0,0,0,1]);assert.deepEqual(sun.options.zenithColor,[0,0,0,1]);
+ assert.deepEqual(sun.options.ambientColor,[0,0,0,1]);assert.deepEqual(sun.options.sunColor,original.options.sunColor);
+ assert.deepEqual(sky.options.sunDirection,original.options.sunDirection);
+ assert.deepEqual(sun.options.sunDirection,original.options.sunDirection);
+});

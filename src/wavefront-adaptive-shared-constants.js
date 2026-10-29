@@ -1,0 +1,13 @@
+// Generated from final shared-round WGSL; checked by tests.
+// Source SHA-256: e6a587bba9f6acbea95eef052907a754c578d8951ca7f9929e25802337183f36
+export const SHARED_PHASE_ALIGNMENT = 4;
+export const SHARED_PHASE_BYTE_SIZE = 32;
+export const SHARED_PHASE_MINIMUM_BYTE_SIZE = 32;
+export const SHARED_PHASE_CANVAS_WIDTH_OFFSET = 0;
+export const SHARED_PHASE_CANVAS_HEIGHT_OFFSET = 4;
+export const SHARED_PHASE_TILE_X_OFFSET = 8;
+export const SHARED_PHASE_TILE_Y_OFFSET = 12;
+export const SHARED_PHASE_TILE_WIDTH_OFFSET = 16;
+export const SHARED_PHASE_TILE_HEIGHT_OFFSET = 20;
+export const SHARED_PHASE_FIRST_SAMPLE_OFFSET = 24;
+export const SHARED_PHASE_SAMPLE_LIMIT_OFFSET = 28;
