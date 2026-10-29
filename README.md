@@ -22,6 +22,9 @@ lossless chunks and reports reference convergence, independent32-SPP errors,
 energy drift and signed row differences. A failed or partial screen exits nonzero;
 even a full pass is not production image, adaptive-performance or60Hz acceptance.
 See the [frozen protocol](docs/design/room-convergence-qualification.md).
+Reference-probe cancellation preserves any original GPU failure or timeout;
+successful waits check cancellation before advancing, with unconditional cleanup
+and the unchanged30-second operation limit.
 
 Latest [streamed optical checkpoint](docs/evidence/streamed-optical-budget-2026-10-27.md):
 explicit2048 interfaces/20 ordinary bounces passes the frozen optical furnace

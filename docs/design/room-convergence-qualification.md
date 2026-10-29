@@ -110,3 +110,17 @@ specialization evidence before admitting any convergence lane; reject duplicate
 same-budget full-room images. Existing unqualified receipts must fail admission.
 Keep all image thresholds unchanged. This experiment is a reference estimator
 for uncertainty, not a new production sampler or adaptive performance result.
+
+## Approved diagnostic cancellation correction — 29 October 2026
+
+The user approved the scoped CI correction after `no-unsafe-finally` rejected
+the reference probe. A cancellation throw in cleanup can mask the original GPU
+failure. Keep cleanup unconditional, check cancellation only after a successful
+await, and propagate the exact original rejection otherwise. Retain the30000ms
+deadline, timer disposal and device cleanup; do not change lint rules, sampling,
+shader bytes, feature flags or image thresholds. Tests must fail first for
+simultaneous GPU failure/cancellation and timeout/cancellation, then verify
+successful-operation cancellation stops subsequent GPU work and ordinary
+success still advances. Use portable deterministic GPU/timer adapters, not
+platform-specific timing assumptions. Preserve all captures and run the full
+quality gates and exact-head CI; this fix alone does not qualify rendering.

@@ -15,7 +15,13 @@ export function withReferenceTransportSampling(source,enabled=false){
 export async function probeReferenceTransportSampling(signal){
  const adapter=await navigator.gpu.requestAdapter();if(!adapter||adapter.info.isFallbackAdapter)throw Error('Physical reference sampling adapter required');
  const device=await adapter.requestDevice(),buffers=[];
- const wait=async p=>{let timer;try{return await Promise.race([p,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Reference sampling probe timeout')),30000);})]);}finally{clearTimeout(timer);if(signal?.aborted)throw Error('Reference sampling probe cancelled');}};
+ const wait=async p=>{
+  let timer,result;
+  try{result=await Promise.race([p,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Reference sampling probe timeout')),30000);})]);}
+  finally{clearTimeout(timer);}
+  if(signal?.aborted)throw Error('Reference sampling probe cancelled');
+  return result;
+ };
  try{
   device.pushErrorScope('validation');
   const dimensions=listWavefrontSampleDimensions().map(d=>d.dimension),seeds=[0,7,19],pixels=[0,1,0xfedcba98],ordinals=[0,1,31,127,255],bounces=[0,1,19,235,2047];

@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve the original reference-probe GPU failure or timeout when cancellation
+  occurs concurrently. Check cancellation after successful waits, retaining
+  unconditional timer/device cleanup and the30-second operation bound. Add
+  portable error-precedence and cancellation regressions; sampling is unchanged
+  (#234).
+
 - Reject duplicate stable-sampler frame indices as independent convergence
   evidence. Add a fixture-only frame-indexed transport reference specialization,
   exact CPU/GPU draw probe and coherent source hashes; retain fixed camera
