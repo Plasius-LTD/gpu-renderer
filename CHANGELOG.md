@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.59] - 2026-11-02
+
 - Update build-tool glob and minimatch to their patched versions, with cancellation and bounded-pattern regressions.
 
 - Add an optional inspection camera to the canvas animation renderer, projecting skinned vertices and scene anchors through shared camera matrices while preserving animation and follow-camera reset.
@@ -1368,3 +1382,4 @@ All notable changes to this project will be documented in this file.
 [0.2.56]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.56
 [0.2.57]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.57
 [0.2.58]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.58
+[0.2.59]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.59
