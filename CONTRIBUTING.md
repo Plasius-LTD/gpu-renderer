@@ -43,6 +43,7 @@ Never report security issues in public issues or PRs. Follow `SECURITY.md` for p
 ### Prerequisites
 
 - Node.js 24 (see `.nvmrc`).
+- Bash and jq for the executable release-workflow regression tests.
 - A browser with WebGPU support for demo validation.
 
 ### Install
