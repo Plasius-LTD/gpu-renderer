@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.60] - 2026-11-02
+
 - Fix canvas-animation pause/resume for inspection and reduced-motion hosts:
   expose `stop()`, cancel stale frame callbacks, and resume without a timeline jump
   (Task #272, site Story #2357).
@@ -1387,3 +1401,4 @@ All notable changes to this project will be documented in this file.
 [0.2.57]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.57
 [0.2.58]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.58
 [0.2.59]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.59
+[0.2.60]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.60
