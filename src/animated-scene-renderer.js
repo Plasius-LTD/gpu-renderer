@@ -1,3 +1,4 @@
+import { createInspectionProjection, copyInspectionCamera } from './animated-inspection-camera.js';
 import { resolveCameraRigFrame } from "@plasius/gpu-camera";
 import { createAnimatedGltfModel } from "./animated-gltf-model.js";
 
@@ -311,6 +312,7 @@ function resolveCanvas(canvas) {
 }
 
 function project(position, cameraPosition, width, height) {
+  if (cameraPosition.project) return cameraPosition.project(position);
   const x = position[0] - cameraPosition[0];
   const depth = Math.max(0.2, cameraPosition[2] - (position[2] ?? 0));
   const scale = clamp(34 + 150 / (depth + 1.2), 34, 104);
@@ -336,6 +338,7 @@ function drawGroundShadow(ctx, scale) {
 
 function drawProp(ctx, prop, cameraPosition, width, height) {
   const projected = project(prop.position, cameraPosition, width, height);
+  if (!projected.visible) return projected;
   const { x, y, scale } = projected;
   ctx.save();
   ctx.translate(x, y);
@@ -499,13 +502,22 @@ function modelFillForHeight(vertex, sample) {
   return "#5e4636";
 }
 
-function drawSkinnedGltfCharacter(ctx, model, snapshot, width, height) {
-  const projection = project(snapshot.characterPosition, snapshot.cameraPosition, width, height);
+function drawSkinnedGltfCharacter(ctx, model, snapshot, width, height, cameraView) {
+  const projection = project(snapshot.characterPosition, cameraView, width, height);
   const sample = model.sample(snapshot.activeClipId, snapshot.clipTimeMs);
   const maxTriangles = 12000;
   const triangleCount = Math.floor(sample.indices.length / 3);
   const stride = Math.max(1, Math.ceil(triangleCount / maxTriangles));
   const triangles = [];
+  const inspectVertex = vertex => {
+    const bounds = sample.bindBounds;
+    const scale = 1.3 / Math.max(.1,bounds.size[1] || 1);
+    return cameraView.project([
+      snapshot.characterPosition[0] + (vertex[0]-(bounds.min[0]+bounds.max[0])/2)*scale,
+      snapshot.characterPosition[1] + (vertex[1]-bounds.min[1])*scale,
+      snapshot.characterPosition[2] + (vertex[2]-(bounds.min[2]+bounds.max[2])/2)*scale,
+    ]);
+  };
   for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex += stride) {
     const base = triangleIndex * 3;
     const a = sample.vertices[sample.indices[base]];
@@ -514,22 +526,27 @@ function drawSkinnedGltfCharacter(ctx, model, snapshot, width, height) {
     if (!a || !b || !c) {
       continue;
     }
+    const screen = cameraView.project ? [a,b,c].map(inspectVertex) : null;
+    if (screen?.some(point=>!point.inFront)) continue;
     triangles.push({
+      screen,
       a,
       b,
       c,
-      depth: (a[2] + b[2] + c[2]) / 3,
+      depth: screen ? screen.reduce((sum,point)=>sum+point.depth,0)/3 : -(a[2] + b[2] + c[2]) / 3,
       fill: modelFillForHeight(a, sample),
     });
   }
-  triangles.sort((left, right) => left.depth - right.depth);
+  triangles.sort((left, right) => right.depth - left.depth);
 
   ctx.save();
-  drawGroundShadow(ctx, projection.scale);
+  if (cameraView.project) {
+    if (projection.visible) { ctx.save(); ctx.translate(projection.x,projection.y); drawGroundShadow(ctx,projection.scale); ctx.restore(); }
+  } else drawGroundShadow(ctx, projection.scale);
   for (const triangle of triangles) {
-    const [ax, ay] = pointForModelVertex(triangle.a, projection, sample);
-    const [bx, by] = pointForModelVertex(triangle.b, projection, sample);
-    const [cx, cy] = pointForModelVertex(triangle.c, projection, sample);
+    const [ax, ay] = triangle.screen ? [triangle.screen[0].x,triangle.screen[0].y] : pointForModelVertex(triangle.a, projection, sample);
+    const [bx, by] = triangle.screen ? [triangle.screen[1].x,triangle.screen[1].y] : pointForModelVertex(triangle.b, projection, sample);
+    const [cx, cy] = triangle.screen ? [triangle.screen[2].x,triangle.screen[2].y] : pointForModelVertex(triangle.c, projection, sample);
     ctx.fillStyle = triangle.fill;
     ctx.beginPath();
     ctx.moveTo(ax, ay);
@@ -549,6 +566,7 @@ function drawSkinnedGltfCharacter(ctx, model, snapshot, width, height) {
 function renderScene(canvas, ctx, snapshot, props, characterModel) {
   const width = canvas.width || 1;
   const height = canvas.height || 1;
+  const cameraView = snapshot.inspectionCamera ? createInspectionProjection(snapshot.inspectionCamera,width,height) : snapshot.cameraPosition;
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#d8e8d0";
   ctx.fillRect(0, 0, width, height);
@@ -565,13 +583,13 @@ function renderScene(canvas, ctx, snapshot, props, characterModel) {
     .map((prop, index) => ({
       prop,
       id: propIdentity(prop, index),
-      projected: project(prop.position, snapshot.cameraPosition, width, height),
+      projected: project(prop.position, cameraView, width, height),
     }))
     .sort((a, b) => b.projected.depth - a.projected.depth);
 
   const propGroundAnchors = [];
   for (const { prop, id } of projectedProps) {
-    const projected = drawProp(ctx, prop, snapshot.cameraPosition, width, height);
+    const projected = drawProp(ctx, prop, cameraView, width, height);
     propGroundAnchors.push({
       id,
       kind: prop.kind,
@@ -591,7 +609,7 @@ function renderScene(canvas, ctx, snapshot, props, characterModel) {
   let activeClipRenderable = false;
 
   if (characterModel) {
-    const drawn = drawSkinnedGltfCharacter(ctx, characterModel, snapshot, width, height);
+    const drawn = drawSkinnedGltfCharacter(ctx, characterModel, snapshot, width, height, cameraView);
     characterProjection = drawn.projection;
     modelRenderable = true;
     fallbackProxyActive = false;
@@ -605,7 +623,7 @@ function renderScene(canvas, ctx, snapshot, props, characterModel) {
     characterProjection = drawCharacter(
       ctx,
       snapshot.characterPosition,
-      snapshot.cameraPosition,
+      cameraView,
       width,
       height,
       snapshot.clipTimeMs / 900,
@@ -664,6 +682,8 @@ export function createAnimatedSceneRenderer(options = {}) {
   const cancelFrame = options.cancelAnimationFrame ?? globalThis.cancelAnimationFrame?.bind(globalThis);
   let frameHandle;
   let running = false;
+  let destroyed = false;
+  let inspectionCamera = null;
   let frame = 0;
   let startedAtMs;
   let lastTimestamp;
@@ -736,6 +756,7 @@ export function createAnimatedSceneRenderer(options = {}) {
   };
 
   function renderOnce(timestamp = nowMs()) {
+    if (destroyed) return snapshot;
     if (startedAtMs === undefined) {
       startedAtMs = timestamp;
     }
@@ -828,9 +849,10 @@ export function createAnimatedSceneRenderer(options = {}) {
       blendProgress,
       clipTimeMs: beatTimeMs,
       characterPosition,
-      cameraPosition: [...cameraPosition],
+      cameraPosition: [...(inspectionCamera?.position ?? cameraPosition)],
       cameraViewMode,
-      cameraTransform: cameraRigFrame.transform,
+      cameraTransform: inspectionCamera ? {position:[...inspectionCamera.position],target:[...inspectionCamera.target],up:[0,1,0]} : cameraRigFrame.transform,
+      inspectionCamera: copyInspectionCamera(inspectionCamera),
       targetDistance: cameraRigFrame.targetDistance,
       headLook,
       characterGroundY: 0,
@@ -881,6 +903,7 @@ export function createAnimatedSceneRenderer(options = {}) {
 
   return {
     start() {
+      if (destroyed) return;
       if (running) {
         return;
       }
@@ -893,6 +916,7 @@ export function createAnimatedSceneRenderer(options = {}) {
       }
     },
     resize(width, height, devicePixelRatio = 1) {
+      if (destroyed) return;
       const ratio = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
       canvas.width = Math.max(1, Math.floor(width * ratio));
       canvas.height = Math.max(1, Math.floor(height * ratio));
@@ -910,6 +934,7 @@ export function createAnimatedSceneRenderer(options = {}) {
     getSnapshot() {
       return {
         ...snapshot,
+        inspectionCamera: copyInspectionCamera(inspectionCamera),
         characterPosition: [...snapshot.characterPosition],
         cameraPosition: [...snapshot.cameraPosition],
         cameraTransform: {
@@ -927,6 +952,15 @@ export function createAnimatedSceneRenderer(options = {}) {
         },
         propGroundAnchors: snapshot.propGroundAnchors.map((anchor) => ({ ...anchor })),
       };
+    },
+    setInspectionCamera(pose) {
+      if (destroyed) return;
+      inspectionCamera = copyInspectionCamera(pose);
+      snapshot = { ...snapshot, inspectionCamera: copyInspectionCamera(inspectionCamera),
+        cameraPosition: [...(inspectionCamera?.position ?? cameraPosition)],
+        cameraTransform: inspectionCamera ? {position:[...inspectionCamera.position],target:[...inspectionCamera.target],up:[0,1,0]} : cameraRigFrame.transform,
+      };
+      if (!running) snapshot = { ...snapshot, ...renderScene(canvas,ctx,snapshot,props,characterModel) };
     },
     setCamera(nextCamera = {}) {
       camera = { ...camera, ...nextCamera };
@@ -947,6 +981,7 @@ export function createAnimatedSceneRenderer(options = {}) {
       activeCameraControl = options.activeControl !== false;
     },
     destroy() {
+      destroyed = true;
       running = false;
       if (frameHandle !== undefined && cancelFrame) {
         cancelFrame(frameHandle);

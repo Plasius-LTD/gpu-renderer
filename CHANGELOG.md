@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Update build-tool glob and minimatch to their patched versions, with cancellation and bounded-pattern regressions.
+
+- Add an optional inspection camera to the canvas animation renderer, projecting skinned vertices and scene anchors through shared camera matrices while preserving animation and follow-camera reset.
+
 - **Added**
   - (placeholder)
 

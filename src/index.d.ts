@@ -182,6 +182,7 @@ export interface CreateProfessionalAnimatedSceneRendererOptions extends Omit<Cre
 }
 
 export interface AnimatedSceneSnapshot {
+  readonly inspectionCamera?: AnimatedInspectionCamera | null;
   readonly frame: number;
   readonly running: boolean;
   readonly activeClipId: string;
@@ -255,7 +256,14 @@ export interface ProfessionalAnimatedSceneSnapshot extends Omit<AnimatedSceneSna
   };
 }
 
+export interface AnimatedInspectionCamera {
+  readonly position: readonly [number, number, number];
+  readonly target: readonly [number, number, number];
+  readonly fovYDegrees: number;
+}
 export interface AnimatedSceneRenderer {
+  /** Inspect the scene without advancing animation; null resumes the follow rig. */
+  setInspectionCamera(camera: AnimatedInspectionCamera | null): void;
   start(): void;
   resize(width: number, height: number, devicePixelRatio?: number): void;
   renderOnce(timestamp?: number): AnimatedSceneSnapshot;

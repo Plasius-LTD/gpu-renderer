@@ -249,3 +249,32 @@ there is no npm write-token fallback. CD remains disabled until the npm trusted
 publisher binding and protected-branch-only production environment are
 independently verified.
 <!-- END PLASIUS RELEASE INTEGRITY -->
+
+
+### Inspecting an animated canvas scene
+
+The canvas animation preview supports an optional inspection pose. Camera
+orientation and vertical field of view affect projected skinned vertices and
+scene anchors. Input bindings remain the host's responsibility.
+
+```js
+import { createAnimatedSceneRenderer } from '@plasius/gpu-renderer';
+
+const canvas = document.createElement('canvas');
+document.body.append(canvas);
+const animationRenderer = createAnimatedSceneRenderer({
+  canvas, route: [{ id: 'origin', position: [0, 0, 0], arriveMs: 0 }],
+});
+animationRenderer.resize(800, 500);
+animationRenderer.renderOnce(0);
+animationRenderer.setInspectionCamera({
+  position: [3, 2, 5], target: [0, 1, 0], fovYDegrees: 45,
+});
+// Resume the existing follow rig without restarting the animation timeline.
+animationRenderer.setInspectionCamera(null);
+```
+
+Positions and targets must be finite three-component arrays with distinct
+positions; vertical field of view is 12–90 degrees. This additive API belongs to
+`createAnimatedSceneRenderer` (the canvas preview). It does not change the
+separate professional WebGPU animation API.
