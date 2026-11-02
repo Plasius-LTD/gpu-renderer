@@ -1,0 +1,472 @@
+{
+  "schemaVersion": 1,
+  "status": "descriptive-attribution-not-qualified",
+  "resolution": "1080p",
+  "sources": {
+    "renderer": "969f6de0ddd35972215da747f7113f7bfae0f573",
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "summarySha256": "8febf93e9634a7f77a94434b370833f96d048fb387b143f0f11cc8e749994b95",
+  "metricsSourceSha256": "7d26bd7a71164e09aba27ee1e9bead5b88064206e2d6deb2d0a4d557b7b6d994",
+  "sameSeedContinuationCountsMatch": true,
+  "counterScope": "Camera and continuation segments only; shadow/BVH queries and total GPU time are not counted here.",
+  "assessment": {
+    "withinModePairMseRatio": 0.9977690425671575,
+    "energyScreen": true,
+    "energyLimit": 0.01,
+    "claim": "Two-replicate descriptive attribution only; no confidence bound, converged reference, unbiasedness proof, adaptive/performance or memory acceptance."
+  },
+  "comparisons": [
+    {
+      "candidate": {
+        "seed": 7,
+        "importance": false
+      },
+      "reference": {
+        "seed": 19,
+        "importance": false
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.08158930274455639,
+        "normalizedRmse": 0.17434851508675853,
+        "maxAbsoluteError": 6.192424297332764,
+        "p95LocalError": 0.1811981052160263,
+        "p99LocalError": 0.283205509185791,
+        "meanLuminanceAbsoluteError": 0.05439459758293451,
+        "maxLuminanceAbsoluteError": 4.281744945935905,
+        "meanLuminance": 0.4139139801138763,
+        "referenceMeanLuminance": 0.41385383223784755,
+        "relativeEnergyDrift": 0.00014533603737231778
+      }
+    },
+    {
+      "candidate": {
+        "seed": 7,
+        "importance": true
+      },
+      "reference": {
+        "seed": 19,
+        "importance": true
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.08149824079666625,
+        "normalizedRmse": 0.17415537195831035,
+        "maxAbsoluteError": 6.187013246119022,
+        "p95LocalError": 0.18126234412193298,
+        "p99LocalError": 0.28467389941215515,
+        "meanLuminanceAbsoluteError": 0.05416802054217012,
+        "maxLuminanceAbsoluteError": 4.314328955391049,
+        "meanLuminance": 0.4138877998793693,
+        "referenceMeanLuminance": 0.4138518420372134,
+        "relativeEnergyDrift": 0.00008688578496805653
+      }
+    },
+    {
+      "candidate": {
+        "seed": 7,
+        "importance": true
+      },
+      "reference": {
+        "seed": 7,
+        "importance": false
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.01912356249860747,
+        "normalizedRmse": 0.040858597116336826,
+        "maxAbsoluteError": 0.7987852096557617,
+        "p95LocalError": 0.04374111443758011,
+        "p99LocalError": 0.062297046184539795,
+        "meanLuminanceAbsoluteError": 0.013216041226036984,
+        "maxLuminanceAbsoluteError": 0.779730092704296,
+        "meanLuminance": 0.4138877998793693,
+        "referenceMeanLuminance": 0.4139139801138763,
+        "relativeEnergyDrift": -0.00006325042343300217
+      }
+    },
+    {
+      "candidate": {
+        "seed": 19,
+        "importance": true
+      },
+      "reference": {
+        "seed": 19,
+        "importance": false
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.01911167900108078,
+        "normalizedRmse": 0.04083982510655215,
+        "maxAbsoluteError": 0.7900785207748413,
+        "p95LocalError": 0.043749839067459106,
+        "p99LocalError": 0.06221824884414673,
+        "meanLuminanceAbsoluteError": 0.01321818698741863,
+        "maxLuminanceAbsoluteError": 0.6032342984199525,
+        "meanLuminance": 0.4138518420372134,
+        "referenceMeanLuminance": 0.41385383223784755,
+        "relativeEnergyDrift": -0.000004808945765617072
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "capture": "room-reference-2026-11-02T14-15-56-776Z-6a9cbc30-9ef7-4b1c-8b82-5160afd1e6d8",
+      "receiptSha256": "1f66dcca6144d4c7db1d70ccba026b8c818f46c8a3bee605a54c80bd61af0024",
+      "hdrSha256": "159faf44b31bd911b410dd8447859c3c8d576757d90f6665afc89713905b3d0f",
+      "pngSha256": "35ee1c5c994bd4152196b32fa0e779570e259db0b2981051c61bad757183b9ac",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8
+    },
+    {
+      "capture": "room-reference-2026-11-02T14-20-11-870Z-68e98175-a671-42ca-9049-b0df5f74093d",
+      "receiptSha256": "f8b1b29ff7e6e9ce3a014306f2191cac13abbb34840786b2ed862b300a383a51",
+      "hdrSha256": "2f9ebc555f00a07460a875c84f666520eb4e3a95acae33ba51bf4895a6054602",
+      "pngSha256": "e6d1824aa11e579abd6ddbeb939d198690893a14635c40b7ba93b1454ecd48d2",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8
+    },
+    {
+      "capture": "room-reference-2026-11-02T14-24-25-850Z-e0dc8e93-ed51-4af0-ba69-df4b6c93132a",
+      "receiptSha256": "f31cae80d1a1457048c2fb0e4a56e7d21194549ab7990b47c4db292e5dd90121",
+      "hdrSha256": "ba6a286ddb9b4b75979b0ebbb9c421cec1fb9fa1e9e9a886bbbfcfd1f3ea57c1",
+      "pngSha256": "5925aaf2d1ae5a47e8e2dddac4ffcee5da84c82379aa58ac2f9b16d0dfbb265c",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8
+    },
+    {
+      "capture": "room-reference-2026-11-02T14-28-42-090Z-f9f931bf-2d26-497e-8b74-0558d9c72024",
+      "receiptSha256": "d8644677b066e9d3f032163918742b76e53da78dc0d94a3f8e2210c1f5aa17f1",
+      "hdrSha256": "55d4846bcb54ec2d91ab05cc340f2bdbf124ee291d3bdd833014bf7e0519f583",
+      "pngSha256": "254954e8db9faa04b1921ae0323e99ab9a29f52088b16fc9d3604fa326687c0f",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8
+    }
+  ],
+  "opticalIsolation": {
+    "status": "controls-complete-image-review-pending",
+    "failures": [],
+    "imageGateVersion": 2,
+    "summarySha256": "f536e9b6203ee7f377436173ed810ef27a319d7954b686494fcf743b1a7727fe",
+    "sources": {
+      "renderer": "969f6de0ddd35972215da747f7113f7bfae0f573",
+      "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+      "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+      "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+    },
+    "lanes": [
+      {
+        "name": "furnace-filled",
+        "receiptSha256": "e0771cce8dbeaabf7eee9aefc4fb68446ffb594d3f5d8c74df727f1735e8a460",
+        "pngSha256": "28c3a73acc0ca9a5e4df6c69e6eae45e5e8cac675eb1e7da6f8ffef81eb8e5b8",
+        "hdrSha256": "58202ec914f1f20eab0b22b0fc5a9b65043e8b0a495e2f914432921141c6d807",
+        "actualSamples": 37748736,
+        "opticalBudget": {
+          "enabled": true,
+          "ordinary": 20,
+          "interfaces": 2048,
+          "capacity": 2068,
+          "additionalPathBytes": 0,
+          "storageMode": "streamed-linear-chain",
+          "queueCapacity": 20
+        },
+        "furnace": {
+          "passed": true,
+          "mean": 0.7500000531441188,
+          "relativeError": 7.08588250297737e-8,
+          "maxRowError": 7.947285962650597e-8,
+          "region": {
+            "x0": 0.47,
+            "x1": 0.53,
+            "y0": 0.34,
+            "y1": 0.72
+          },
+          "expected": 0.75,
+          "meanTolerance": 0.02,
+          "rowTolerance": 0.05
+        },
+        "pixelFurnace": {
+          "passed": true,
+          "maximumRgbRelativeError": 0.0234375,
+          "worstPixel": 82211,
+          "x": 291,
+          "y": 160,
+          "expected": 0.75,
+          "pixelTolerance": 0.05,
+          "scope": "all pixels and RGB channels, not only central rows",
+          "gateVersion": 2
+        },
+        "error": null
+      },
+      {
+        "name": "furnace-empty",
+        "receiptSha256": "f188e389cbf4ef1451f2997cb60d1f2c61a56029b91c8b04d53ef2a641817352",
+        "pngSha256": "28c3a73acc0ca9a5e4df6c69e6eae45e5e8cac675eb1e7da6f8ffef81eb8e5b8",
+        "hdrSha256": "80080b65f64b32392eb08129eb3f2b1f4625f0682c90db97fae9890306fdd510",
+        "actualSamples": 37748736,
+        "opticalBudget": {
+          "enabled": true,
+          "ordinary": 20,
+          "interfaces": 2048,
+          "capacity": 2068,
+          "additionalPathBytes": 0,
+          "storageMode": "streamed-linear-chain",
+          "queueCapacity": 20
+        },
+        "furnace": {
+          "passed": true,
+          "mean": 0.7500000528756294,
+          "relativeError": 7.050083916659844e-8,
+          "maxRowError": 7.947285962650597e-8,
+          "region": {
+            "x0": 0.47,
+            "x1": 0.53,
+            "y0": 0.34,
+            "y1": 0.72
+          },
+          "expected": 0.75,
+          "meanTolerance": 0.02,
+          "rowTolerance": 0.05
+        },
+        "pixelFurnace": {
+          "passed": true,
+          "maximumRgbRelativeError": 0.0234375,
+          "worstPixel": 82211,
+          "x": 291,
+          "y": 160,
+          "expected": 0.75,
+          "pixelTolerance": 0.05,
+          "scope": "all pixels and RGB channels, not only central rows",
+          "gateVersion": 2
+        },
+        "error": null
+      },
+      {
+        "name": "furnace-index-one",
+        "receiptSha256": "7d9fd8a7c996e33252b6ef9c7e83b6c0f37cfcf2ef5646f83c6a1cf82ba9f8e1",
+        "pngSha256": "28c3a73acc0ca9a5e4df6c69e6eae45e5e8cac675eb1e7da6f8ffef81eb8e5b8",
+        "hdrSha256": "bdd7ecdecb555948594382858c79ebb0c6042bd2483c49042d8069241ded93f6",
+        "actualSamples": 37748736,
+        "opticalBudget": {
+          "enabled": true,
+          "ordinary": 20,
+          "interfaces": 2048,
+          "capacity": 2068,
+          "additionalPathBytes": 0,
+          "storageMode": "streamed-linear-chain",
+          "queueCapacity": 20
+        },
+        "furnace": {
+          "passed": true,
+          "mean": 0.7500000530266547,
+          "relativeError": 7.070220631177904e-8,
+          "maxRowError": 7.947285962650597e-8,
+          "region": {
+            "x0": 0.47,
+            "x1": 0.53,
+            "y0": 0.34,
+            "y1": 0.72
+          },
+          "expected": 0.75,
+          "meanTolerance": 0.02,
+          "rowTolerance": 0.05
+        },
+        "pixelFurnace": {
+          "passed": true,
+          "maximumRgbRelativeError": 0.0234375,
+          "worstPixel": 82211,
+          "x": 291,
+          "y": 160,
+          "expected": 0.75,
+          "pixelTolerance": 0.05,
+          "scope": "all pixels and RGB channels, not only central rows",
+          "gateVersion": 2
+        },
+        "error": null
+      },
+      {
+        "name": "pedestal-contrast",
+        "receiptSha256": "bd811323363e2c9eaea02591a5b1ad77b6ae8bbf1120243100e5c32272c843e4",
+        "pngSha256": "7ad7d6801df5571f4ac35807f949782c78ca28c5fb6b608138ed9ac37d03f0a0",
+        "hdrSha256": "779363d47c99658e879e4dbb8bd73364a5dc5fc18430a8b4f105061ed0965215",
+        "actualSamples": 37748736,
+        "opticalBudget": {
+          "enabled": true,
+          "ordinary": 20,
+          "interfaces": 2048,
+          "capacity": 2068,
+          "additionalPathBytes": 0,
+          "storageMode": "streamed-linear-chain",
+          "queueCapacity": 20
+        },
+        "furnace": null,
+        "pixelFurnace": null,
+        "error": null
+      }
+    ],
+    "comparison": {
+      "rowRmse": 0.009292930595710378,
+      "nativeMean": 0.5672720384842775,
+      "referenceMean": 0.5665202470378833,
+      "scope": "linear row attribution over frozen central glass region; not full-room accuracy or convergence"
+    },
+    "reference": {
+      "status": "rendered-attribution-not-full-scene-qualified",
+      "linearSha256": "8c561f178465ed991a1cdbc5b40d420761d4482b15b7e3a66597afb8d3388555",
+      "scriptSha256": "11ccf4d7a137b0d6702a2c4bd27258087f1976a6a6d797371998c1c24d769366",
+      "inputSha256": "5f20161aa9d3197b0b96e45d1b02b47f4c6e68b6958a2a032ac476224fcd76ff",
+      "supportedDepthLimit": 1024,
+      "actualDepthPolicy": {
+        "max_bounces": 1024,
+        "transmission_bounces": 1024,
+        "glossy_bounces": 1024,
+        "transparent_max_bounces": 1024,
+        "min_light_bounces": 1024
+      },
+      "engine": "CYCLES",
+      "device": "CPU",
+      "differences": [
+        "explicit shared interfaces instead of priority overlaps",
+        "independent random sampling and roulette",
+        "different bounce-limit semantics",
+        "no room, floor or checker geometry",
+        "PNG uses independent display transform"
+      ]
+    },
+    "qualification": "attribution only; any furnace failure keeps image/adaptive gates closed",
+    "allHdrHashesMatchPreservedOpticalControl": true,
+    "coreOpticalSourceDiffFromControl": "none"
+  },
+  "glassPair": {
+    "status": "glass-pair-integrity-passed-not-optical-reference-qualification",
+    "sources": {
+      "renderer": "969f6de0ddd35972215da747f7113f7bfae0f573",
+      "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+      "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+      "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+    },
+    "onlyControlledSceneChange": "water state; same camera/assets/lighting/material/sampling/transport settings",
+    "claim": "Differences between filled and empty glass are physical scene changes, not an error against ground truth. Broad bands remain visible; no band-removal, convergence or adaptive claim.",
+    "evidence": [
+      {
+        "mode": "filled",
+        "captureId": "room-reference-2026-11-02T14-56-09-920Z-ccd67222-b807-4019-b5e9-87ac3cb61763",
+        "receiptSha256": "2671ef0ba8f01a3703e587e68104b6cf85a544eecf60ea0d4bf0c7d9daa0894a",
+        "hdrSha256": "50ccf9ddb81ccc988fa2828c12142477df8b9486268c75587e1a08bc610eac7b",
+        "pngSha256": "c5a8b25f01c84afae119fcd92d11aa81224c51bf24542e69fd676b69094fde8b",
+        "verifiedPixels": 2073600,
+        "verifiedChunks": 8,
+        "primary": 66355200,
+        "secondary": 125930192,
+        "segments": 192285392,
+        "verifiedTiles": 135
+      },
+      {
+        "mode": "empty",
+        "captureId": "room-reference-2026-11-02T15-06-07-722Z-5c853480-c4c4-4556-87df-392b2f16eb48",
+        "receiptSha256": "0b21b8214ef266dca128af22509c022474027aaae1363da80073f97c9801e24b",
+        "hdrSha256": "e84aceea6d23a07f0632fc8c97d38ae164a9e2b90cc1e6dbf4d99f637df2fb24",
+        "pngSha256": "386f8cf8c2d8787d6506adb8d8d81b37d9b143e49ef972c0afffdf37c92190c0",
+        "verifiedPixels": 2073600,
+        "verifiedChunks": 8,
+        "primary": 66355200,
+        "secondary": 116550566,
+        "segments": 182905766,
+        "verifiedTiles": 135
+      }
+    ],
+    "rowAttribution": {
+      "maximumAbsoluteMeanDifference": 0.03830347070354284,
+      "scope": "signed row attribution, not proof of absence of local banding"
+    }
+  },
+  "native4k": {
+    "status": "native-4k-production-control-integrity-passed-not-convergence",
+    "captureId": "room-reference-2026-11-02T14-39-41-545Z-a88eff47-7f95-4f15-b98b-fb17faad23fb",
+    "primary": 265420800,
+    "secondary": 360922545,
+    "segments": 626343345,
+    "verifiedTiles": 510,
+    "sceneIdentityMatches1080p": true,
+    "productionSampling": true,
+    "independentReferenceSampling": false,
+    "evidence": {
+      "receiptSha256": "8b53698b1cc8d72e2e171463cb68a5e389040cdb34207b72778ca8b29059eaf0",
+      "hdrSha256": "2a46a7d8fbc4dd7e6005bb04c232bc702e65319ae1763ab02a162c3321a251f4",
+      "pngSha256": "b8add7871032a96c639621e7d57e5b3d722c98f619fef6dde926efcbecaa83a2",
+      "verifiedPixels": 8294400,
+      "verifiedChunks": 32
+    },
+    "bsdfProposal": {
+      "passed": true,
+      "cases": [
+        {
+          "name": "ordinary-ggx",
+          "mean": 1.000000069261176,
+          "expectedMean": 1,
+          "nullFraction": 0.5,
+          "expectedNullFraction": 0.5,
+          "passed": true
+        },
+        {
+          "name": "coated-ggx",
+          "mean": 1.0000000872704993,
+          "expectedMean": 1,
+          "nullFraction": 0.5,
+          "expectedNullFraction": 0.5,
+          "passed": true
+        },
+        {
+          "name": "rotated-ggx",
+          "mean": 1.0000002021823158,
+          "expectedMean": 1,
+          "nullFraction": 0.5,
+          "expectedNullFraction": 0.5,
+          "passed": true
+        },
+        {
+          "name": "rotated-coated-ggx",
+          "mean": 1.000000222594599,
+          "expectedMean": 1,
+          "nullFraction": 0.5,
+          "expectedNullFraction": 0.5,
+          "passed": true
+        },
+        {
+          "name": "diffuse",
+          "mean": 1.0000000409336467,
+          "expectedMean": 1,
+          "nullFraction": 0,
+          "expectedNullFraction": 0,
+          "passed": true
+        },
+        {
+          "name": "emissive-metadata",
+          "mean": 1.000000069261176,
+          "expectedMean": 1,
+          "nullFraction": 0.5,
+          "expectedNullFraction": 0.5,
+          "passed": true
+        },
+        {
+          "name": "portal-metadata",
+          "mean": 1.000000069261176,
+          "expectedMean": 1,
+          "nullFraction": 0.5,
+          "expectedNullFraction": 0.5,
+          "passed": true
+        }
+      ],
+      "settings": {
+        "samples": 512,
+        "meanTolerance": 0.0001,
+        "nullTolerance": 0.002
+      },
+      "scope": "production BSDF sampler/PDF analytic quadrature; not full-scene convergence or performance"
+    },
+    "claim": "Native uniform32 count/source/scene/probe/HDR/cleanup integrity only; not high-SPP convergence, universal band removal, adaptive gain or timing qualification."
+  }
+}
