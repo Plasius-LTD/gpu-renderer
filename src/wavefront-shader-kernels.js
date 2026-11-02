@@ -163,8 +163,7 @@ export const WAVEFRONT_SURFACE_BODY_WGSL = `  if (!path_budget_state_valid(ray))
   let arrivingThroughput = ray.throughput.xyz * segmentTransmittance;
 
   if (hit.hitType == 1u) {
-    let guidedLightWeight = select(1.0, 0.24, (ray.flags & RAY_FLAG_GUIDED_EMISSIVE) != 0u);
-    var sourceRadiance = max(hit.emission.xyz, hit.color.xyz) * guidedLightWeight;
+    var sourceRadiance = max(hit.emission.xyz, hit.color.xyz);
     if (layered_clearcoat_active(hit)) {
       sourceRadiance *= 1.0 - coating_fresnel(hit.materialResponse.w, surface_clearcoat_normal(hit), -ray.direction.xyz);
     }
@@ -913,57 +912,8 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
     return scatter_dielectric(ray, hit);
   }
 
-  let guidedEmissiveAvailable = config.emissiveTriangleCount > 0u;
-  let guidedPortalAvailable =
-    config.environmentPortalCount > 0u && config.environmentPortalMode != 0u;
-  let guidedSelector = sample_dimension_1d(
-    ray.sourcePixelId,
-    ray.sampleId,
-    ray.bounce,
-    config.frameIndex,
-    SAMPLE_DIM_GUIDED_LIGHT_SELECTOR
-  );
-  if (guidedEmissiveAvailable && guidedSelector < 0.18) {
-    let guidedDirection = sample_emissive_triangle_direction(
-      hit,
-      ray.sourcePixelId,
-      ray.sampleId,
-      ray.bounce,
-      config.frameIndex,
-      normal
-    );
-    if (dot(normal, guidedDirection) > 0.000001) {
-      let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
-      return ScatterResult(
-        vec4<f32>(guidedDirection, 0.0),
-        guidedPdf,
-        ray.mediumRefId,
-        RAY_FLAG_GUIDED_EMISSIVE,
-        SCATTER_LOBE_DIFFUSE,
-      );
-    }
-  }
-  if (guidedPortalAvailable && guidedSelector < 0.32) {
-    let guidedDirection = sample_environment_portal_direction(
-      hit,
-      ray.sourcePixelId,
-      ray.sampleId,
-      ray.bounce,
-      config.frameIndex,
-      normal
-    );
-    if (dot(normal, guidedDirection) > 0.000001) {
-      let guidedPdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, guidedDirection), 0.000001);
-      return ScatterResult(
-        vec4<f32>(guidedDirection, 0.0),
-        guidedPdf,
-        ray.mediumRefId,
-        0u,
-        SCATTER_LOBE_DIFFUSE
-      );
-    }
-  }
-
+  // Continue with the BSDF mixture whose density is evaluated below. Explicit
+  // light/portal NEE remains separate; unreported guided proposals bias MIS.
   let weights = surface_bsdf_sampling_weights(hit);
   let selector = sample_dimension_1d(
     ray.sourcePixelId,
@@ -1018,30 +968,16 @@ fn scatter_direction(ray: RayRecord, hit: HitRecord) -> ScatterResult {
       max(clamp(hit.materialExtension.x, 0.0, 1.0), 0.02),
       surface_clearcoat_normal(hit)
     );
-    if (layered_clearcoat_active(hit) && dot(viewDirection, halfVector) <= 0.0) {
+    if (dot(viewDirection, halfVector) <= 0.0) {
       return ScatterResult(vec4<f32>(normal, 0.0), 0.0, ray.mediumRefId, 0u, SCATTER_LOBE_CLEARCOAT);
     }
     lightDirection = safe_normalize(reflect(-viewDirection, halfVector), normal);
     lobeKind = SCATTER_LOBE_CLEARCOAT;
   }
   if (dot(normal, lightDirection) <= 0.000001) {
-    // A rejected GGX proposal is a null event, not a different cosine proposal.
-    if (layered_clearcoat_active(hit)) {
-      return ScatterResult(vec4<f32>(lightDirection, 0.0), 0.0, ray.mediumRefId, 0u, lobeKind);
-    }
-    let fallbackSample = sample_dimension_2d(
-      ray.sourcePixelId,
-      ray.sampleId,
-      ray.bounce,
-      config.frameIndex,
-      SAMPLE_DIM_FALLBACK_HEMISPHERE,
-      config.samplesPerPixel
-    );
-    lightDirection = cosine_sample_hemisphere(
-      fallbackSample,
-      normal
-    );
-    lobeKind = SCATTER_LOBE_DIFFUSE;
+    // Null events retain their probability mass. Resampling into another lobe
+    // without adding that density would change the estimator and its MIS PDF.
+    return ScatterResult(vec4<f32>(lightDirection, 0.0), 0.0, ray.mediumRefId, 0u, lobeKind);
   }
   let pdf = max(evaluate_surface_bsdf_pdf(hit, viewDirection, lightDirection), 0.000001);
   return ScatterResult(vec4<f32>(lightDirection, 0.0), pdf, ray.mediumRefId, 0u, lobeKind);

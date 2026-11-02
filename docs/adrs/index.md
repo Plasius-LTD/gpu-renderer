@@ -61,3 +61,4 @@
 - [ADR 0065: IOR-compensated cumulative optical roulette](adr-0065-optical-roulette.md)
 - [ADR 0066: Separate capped optical-interface budget](adr-0066-separate-optical-interface-budget.md)
 - [ADR 0067: Stream bounded zero-direct optical chains](adr-0067-streamed-bounded-optical-chains.md)
+- [ADR 0068: Match ordinary continuation proposals and densities](adr-0068-bsdf-proposal-density.md)

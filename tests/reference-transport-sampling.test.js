@@ -18,6 +18,6 @@ test('stable production ignores frame index; explicit reference experiment decor
    assert.notDeepEqual(referenceTransportWords(pixel,sample,bounce,dimension,7),referenceTransportWords(pixel,sample,bounce,dimension,19));
   }
  }
- assert.equal(createHash('sha256').update(createWavefrontPathTracingComputeShaderSource()).digest('hex'),'1679475a3e08f26ea681c7bb0ea056c640a315936b91e9dbb8e23c86de23b733');
+ assert.equal(createHash('sha256').update(createWavefrontPathTracingComputeShaderSource()).digest('hex'),'b50d988d92d0af5867fc3355cadad89ad8b1affe9c88bf051298df2c8acaf7b4');
  assert.equal(FIXED_PATTERN_WGSL.includes('config.frameIndex'),false);
 });

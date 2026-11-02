@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {restoreRejectedBsdfProposal} from './fixtures/rejected-bsdf-proposal.js';
 import assert from 'node:assert/strict';
 import {createWavefrontPathTracingComputeConfig as config,estimateWavefrontPathTracingMemory as memory} from '../src/wavefront-config.js';
 import {resolveTransportExperiments} from '../src/wavefront-core.js';
@@ -97,7 +98,7 @@ test('partial, rough and unsupported optical surfaces retain ordinary limits; ma
  assert.equal(budget({bounce:0,ordinary:0,enabled:false})[2],2);
 });
 test('assembled off shader reconstructs exact pre-budget transport and payload',()=>{
- assert.equal(createHash('sha256').update(withoutOpticalBudget(WAVEFRONT_COMPUTE_WGSL)).digest('hex'),'c276c550b87b16f800f6e4953446b7d1ccc57db95f2281ba5bcd8e88f01844a2');
+ assert.equal(createHash('sha256').update(withoutOpticalBudget(restoreRejectedBsdfProposal(WAVEFRONT_COMPUTE_WGSL))).digest('hex'),'c276c550b87b16f800f6e4953446b7d1ccc57db95f2281ba5bcd8e88f01844a2');
  const a=config({...options,[flag]:false}),b=config({...options,[flag]:undefined});
  assert.deepEqual(createConfigPayload(a,{x:0,y:0,width:128,height:128},7),createConfigPayload(b,{x:0,y:0,width:128,height:128},7));
  assert.equal(a.memory.pathVertexBytes,b.memory.pathVertexBytes);

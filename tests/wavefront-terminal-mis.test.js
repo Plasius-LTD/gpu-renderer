@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {restoreRejectedBsdfProposal} from './fixtures/rejected-bsdf-proposal.js';
 import { createHash } from "node:crypto";
 import { WAVEFRONT_COMPUTE_WGSL } from "../src/wavefront-shaders.js";
 
@@ -16,7 +17,7 @@ test("primary terminal MIS is excluded by one shared assembled predicate", () =>
 });
 
 test("MIS eligibility remains pinned alongside the Task 232 opt-in coating correction", () => {
-  const prior = WAVEFRONT_COMPUTE_WGSL.replace(
+  const prior = restoreRejectedBsdfProposal(WAVEFRONT_COMPUTE_WGSL).replace(
     "// Camera visibility has no competing next-event sample. Preserve the existing\n// terminal MIS only for non-delta secondary rays.\nfn terminal_mis_enabled(ray: RayRecord) -> bool {\n  return ray.bounce > 0u && (ray.flags & (RAY_FLAG_DELTA_SAMPLE | RAY_FLAG_NO_COMPETING_NEE)) == 0u;\n}\n\n", "")
     .replaceAll("if (terminal_mis_enabled(ray)) {", "if ((ray.flags & RAY_FLAG_DELTA_SAMPLE) == 0u) {")
     // Reverse the colour-floor/MIS corrections; the re-pinned Task 232 hash

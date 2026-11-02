@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Correct ordinary BSDF proposal/PDF consistency: keep rejected glossy draws as
+  null events, remove unreported emissive/portal continuation guidance and its
+  arbitrary emissive discount, and retain explicit light NEE. Add production-WGSL
+  quadrature/physical probes, preserve exact historical shader reconstructions,
+  and require a new fixed baseline. No adaptive/performance claim (#271).
+
 - Patch only the affected minimatch/glob development-tool overrides following
   the30-October advisories. Add portable lock-graph, coverage-pattern and
   pre-aborted-directory-traversal regressions; runtime dependencies and renderer

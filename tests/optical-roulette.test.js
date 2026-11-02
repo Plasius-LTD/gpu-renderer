@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {restoreRejectedBsdfProposal} from './fixtures/rejected-bsdf-proposal.js';
 import assert from 'node:assert/strict';
 import {functionSource} from './fixtures/rough-dielectric-numerical-harness.js';
 import {OpticalWgslExec as Exec,OpticalWgslParser as Parser} from './fixtures/optical-wgsl-executor.js';
@@ -72,7 +73,7 @@ test('canonical staged and fused surface code share the corrected policy without
  assert.match(withoutOpticalBudget(WAVEFRONT_COMPUTE_WGSL),/ray.bounce \+ 1u >= config.maxDepth/);
  assert.match(WAVEFRONT_COMPUTE_WGSL,/SAMPLE_DIM_RUSSIAN_ROULETTE/);
  // Exact old source after reversing ONLY this intentional policy refinement.
- const prior=withoutOpticalBudget(WAVEFRONT_COMPUTE_WGSL).replace(functionSource('continuation_survival_probability')+'\n','')
+ const prior=withoutOpticalBudget(restoreRejectedBsdfProposal(WAVEFRONT_COMPUTE_WGSL)).replace(functionSource('continuation_survival_probability')+'\n','')
   .replace(functionSource('dielectric_reflection_probability'),`fn dielectric_reflection_probability(ray: RayRecord, hit: HitRecord) -> f32 {
   if (dielectric_cannot_refract(ray, hit)) { return 1.0; }
   let r = max_component(dielectric_reflection_weight(ray, hit));

@@ -1098,18 +1098,17 @@ test("wavefront shader source keeps shared low-discrepancy helpers single-define
   assert.equal(radicalInverseMatches.length, 1);
 });
 
-test("wavefront compute guides active continuation rays toward emissive triangles", () => {
+test("wavefront compute retains emissive NEE without an unreported guided continuation", () => {
   const source = readRendererSource();
 
   assert.match(source, /emissiveTriangleIndices/);
   assert.match(source, /sample_emissive_triangle_direction/);
   assert.match(source, /config\.emissiveTriangleCount/);
   assert.match(source, /RAY_FLAG_GUIDED_EMISSIVE/);
-  assert.match(source, /guidedLightWeight/);
-  assert.match(source, /guidedEmissiveAvailable/);
+  assert.doesNotMatch(source, /guidedLightWeight|guidedEmissiveAvailable/);
   assert.match(source, /SAMPLE_DIM_GUIDED_EMISSIVE_SELECTION/);
   assert.match(source, /SAMPLE_DIM_GUIDED_EMISSIVE_SURFACE/);
-  assert.match(source, /sample_emissive_triangle_direction\(\s+hit,\s+ray\.sourcePixelId,/);
+  assert.match(source, /sample_emissive_direct_light\(hit, ray, environmentSelectionProbability\)/);
   assert.match(source, /RAY_FLAG_GUIDED_EMISSIVE/);
   assert.match(source, /\(pixelId \* 747796405u\) \^/);
   assert.match(
@@ -1139,10 +1138,10 @@ test("wavefront compute guides and gates environment lighting through portals", 
   assert.match(source, /fn environment_portal_radiance_scale/);
   assert.match(source, /fn gated_environment_radiance/);
   assert.match(source, /fn sample_environment_portal_direction/);
-  assert.match(source, /guidedPortalAvailable/);
+  assert.doesNotMatch(source, /guidedPortalAvailable/);
   assert.match(source, /SAMPLE_DIM_GUIDED_PORTAL_SELECTION/);
   assert.match(source, /SAMPLE_DIM_GUIDED_PORTAL_SURFACE/);
-  assert.match(source, /sample_environment_portal_direction\(\s*hit,\s*ray\.sourcePixelId,/);
+  assert.match(source, /environment_portal_radiance_scale/);
   assert.match(source, /gated_environment_radiance\(ray\.origin\.xyz, ray\.direction\.xyz\)/);
 });
 

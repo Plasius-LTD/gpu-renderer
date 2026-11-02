@@ -9,6 +9,7 @@ import {assertShaderModuleCompiles} from '/src/wavefront-runtime-support.js';
 import {runAuthoredColourProbe} from './authored-colour-probe.js';
 import {runClearcoatProbe} from './clearcoat-probe.js';
 import {runEnvironmentMisProbe} from './environment-mis-probe.js';
+import {runBsdfProposalProbe} from './bsdf-proposal-probe.js';
 
 // Execute real atlas lookup and the assembled sheen BSDF, not a mock renderer.
 export async function runMaterialFidelityProbe(signal){
@@ -112,8 +113,9 @@ export async function runMaterialFidelityProbe(signal){
   const authoredColour=await runAuthoredColourProbe(device,wait);
   const clearcoat=await runClearcoatProbe(device,wait);
   const environmentMis=await runEnvironmentMisProbe(device,wait);
+  const bsdfProposal=await runBsdfProposalProbe(device,wait);
   return {passed:true,cases:cases.length,slots:17,maxTextureError,maxSheenRelativeError,sheenFlagIndependent:true,
    normalIdentity:{passed:true,cases:normalCases.length,maxNormalError,tolerance:1e-6,expectedNormals,actualNormals:Array.from(normalValues.slice(0,normalCases.length*4))},
-   authoredColour,clearcoat,environmentMis,scope:'assembled-material-correctness-not-performance'};
+   authoredColour,clearcoat,environmentMis,bsdfProposal,scope:'assembled-material-correctness-not-performance'};
  }finally{owned.forEach(r=>r.destroy());device.destroy();}
 }

@@ -14,7 +14,7 @@ test("bootstrap reuses canonical declarations and clearing without changing the 
     assert.ok(ADAPTIVE_BOOTSTRAP_WGSL.includes(fragment));
   }
   assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"),
-    "1679475a3e08f26ea681c7bb0ea056c640a315936b91e9dbb8e23c86de23b733"); // Task234 bounded optical budget; the regression reconstructs the unchanged prior shader.
+    "b50d988d92d0af5867fc3355cadad89ad8b1affe9c88bf051298df2c8acaf7b4"); // Task271 intentional BSDF correction; the rejected prior shader is separately reconstructed.
   assert.match(ADAPTIVE_BOOTSTRAP_WGSL, /pathNodes\[localPixelId\] = PathNode\(\)/u);
   assert.doesNotMatch(ADAPTIVE_BOOTSTRAP_WGSL, /pathVertices|clear_deferred_path/u);
   assert.doesNotMatch(ADAPTIVE_BOOTSTRAP_WGSL, /fn make_ray\(|bsdf|textureSample/u);

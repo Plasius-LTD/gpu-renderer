@@ -1,5 +1,13 @@
 # @plasius/gpu-renderer
 
+Ordinary continuation sampling now retains rejected glossy proposals as null
+events instead of replacing them with unreported diffuse draws. Unaccounted
+emissive/portal continuation guidance is removed; explicit next-event lighting
+remains. An actual-WGSL quadrature and physical material preflight check the
+sampling law. This correctness fix changes radiance/secondary counts and needs
+a new qualified fixed baseline; it is not an adaptive performance result. See
+[ADR0068](docs/adrs/adr-0068-bsdf-proposal-density.md) and Task#271.
+
 The room lab also offers **Laboratory diagnostics → Compare sky lighting
 samples**. It retains four native1080p uniform32-SPP captures, comparing the
 existing default-off `renderer.environment.productStudioImportance.enabled`
