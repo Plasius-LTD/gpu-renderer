@@ -1947,3 +1947,31 @@ test("renderer.bindXrManager detaches previous binding and destroy detaches acti
   assert.equal(detachedA, 1);
   assert.equal(detachedB, 1);
 });
+
+
+test("animated inspection changes drawn skinned vertices without advancing time and releases after destroy", () => {
+  const canvas=createFakeCanvas2d();
+  const renderer=createAnimatedSceneRenderer({canvas,modelAsset:createSkinnedTriangleGlb(),
+    route:[{id:'start',position:[0,0,0],arriveMs:0}],props:[{id:'tree',kind:'small-tree',position:[2,0,0]}]});
+  renderer.resize(800,500);renderer.renderOnce(1000);
+  const initial=renderer.getSnapshot();
+  const pose={position:[0,1,5],target:[0,1,0],fovYDegrees:45};
+  const draw=pose=>{canvas.context.calls.length=0;renderer.setInspectionCamera(pose);return JSON.stringify(canvas.context.calls.filter(c=>['moveTo','lineTo'].includes(c[0])));};
+  const baseline=draw(pose);
+  for(const change of [{position:[5,1,0]},{position:[1,1,5],target:[1,1,0]},{target:[1,1,0]},{position:[0,1,3]},{fovYDegrees:25}])
+    assert.notEqual(draw({...pose,...change}),baseline);
+  assert.equal(renderer.getSnapshot().clipTimeMs,initial.clipTimeMs);
+  assert.equal(renderer.getSnapshot().frame,initial.frame);
+  assert.throws(()=>renderer.setInspectionCamera({...pose,fovYDegrees:NaN}),/Invalid inspection camera/);
+  renderer.setInspectionCamera(pose);const snapshot=renderer.getSnapshot();snapshot.inspectionCamera.position[0]=123;
+  assert.equal(renderer.getSnapshot().inspectionCamera.position[0],0);
+  assert.equal(draw(pose),baseline);
+  renderer.renderOnce(1000);assert.deepEqual(renderer.getSnapshot().cameraTransform.position,pose.position);
+  renderer.setInspectionCamera(null);assert.equal(renderer.getSnapshot().inspectionCamera,null);
+  assert.deepEqual(renderer.getSnapshot().cameraTransform.position,renderer.getSnapshot().cameraPosition);
+  renderer.setInspectionCamera({...pose,position:[0,1,-5],target:[0,1,-10]});
+  assert.equal(renderer.getSnapshot().characterVisible,false);
+  renderer.destroy();const count=canvas.context.calls.length;
+  renderer.setInspectionCamera(pose);renderer.renderOnce();renderer.resize(1,1);renderer.start();
+  assert.equal(canvas.context.calls.length,count);assert.equal(renderer.getSnapshot().frameState,'destroyed');
+});

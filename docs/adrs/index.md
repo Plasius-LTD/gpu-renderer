@@ -40,3 +40,5 @@
 - [ADR 0043: Shared mesh instancing and resource budgets](adr-0043-shared-mesh-instancing-and-resource-budgets.md)
 
 - [ADR 0044: Scalable instance texture storage](./adr-0044-scalable-instance-textures.md)
+
+- [ADR 0045: Animated inspection camera](adr-0045-animated-inspection-camera.md)
