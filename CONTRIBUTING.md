@@ -43,6 +43,9 @@ Never report security issues in public issues or PRs. Follow `SECURITY.md` for p
 ### Prerequisites
 
 - Node.js 24 (see `.nvmrc`).
+- Bash and jq for the executable release-workflow regression tests.
+  CI installs jq 1.8.2 into the job's temporary directory after verifying its
+  pinned SHA-256; no system package changes or elevated permissions are needed.
 - A browser with WebGPU support for demo validation.
 
 ### Install

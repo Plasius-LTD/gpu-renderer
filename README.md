@@ -250,6 +250,11 @@ publisher binding and protected-branch-only production environment are
 independently verified.
 <!-- END PLASIUS RELEASE INTEGRITY -->
 
+Release CI discovery queries the exact main commit and validates the returned
+run's branch, push event, completion and success locally. It does not rely on
+GitHub's remote status index. See [release CI discovery](docs/design/release-ci-discovery.md)
+for the failure mode and unchanged publication gates.
+
 
 ### Inspecting an animated canvas scene
 

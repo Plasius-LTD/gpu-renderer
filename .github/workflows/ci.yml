@@ -51,6 +51,18 @@ jobs:
       - name: Build
         run: npm run build --if-present
 
+      - name: Install verified jq for workflow regression tests
+        run: |
+          set -euo pipefail
+          JQ_DIR="$(mktemp -d "${RUNNER_TEMP}/jq-tests.XXXXXX")"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64 \
+            --output "${JQ_DIR}/jq"
+          printf '%s  %s\n' b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f "${JQ_DIR}/jq" | sha256sum --check --strict -
+          chmod 700 "${JQ_DIR}/jq"
+          "${JQ_DIR}/jq" --version
+          echo "${JQ_DIR}" >> "$GITHUB_PATH"
+
       - name: Test with coverage
         run: |
           set -euo pipefail
