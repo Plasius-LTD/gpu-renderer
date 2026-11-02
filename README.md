@@ -8,6 +8,26 @@ sampling law. This correctness fix changes radiance/secondary counts and needs
 a new qualified fixed baseline; it is not an adaptive performance result. See
 [ADR0068](docs/adrs/adr-0068-bsdf-proposal-density.md) and Task#271.
 
+The next prescribed-radial adaptive image screen is available offline:
+
+```sh
+node scripts/verify-room-adaptive-images.mjs WORKSPACE_ROOT LIGHTING_CHECKOUT REFERENCE_SUMMARY_JSON RADIAL_1080P_CAPTURE_ID RADIAL_4K_CAPTURE_ID
+```
+
+It first reconstructs and revalidates the complete native convergence references.
+Incomplete, partial or failing references block candidate admission. It then
+checks original scene/source/camera/assets, actual per-tile primary counts and
+SPP histograms, optical telemetry, HDR integrity and cleanup. Global and each
+SPP tier are compared to both independent256-SPP references and the uniform32
+baseline using pinned gpu-lighting quality metrics and unchanged limits. Local
+reference uncertainty remains a failing check even when global means look good.
+The command reads existing captures; it neither starts GPU work nor changes flags.
+It reports camera/continuation work and the retained allocation inventory, not
+time saved, exact VRAM residency or a zero-allocation disabled-path comparison.
+Even a passing screen leaves silhouette/temporal review, matched-quality timing,
+cold-start and release gates open. See the [screen protocol](docs/design/room-adaptive-image-screen.md)
+and Task#174. The current reference capture and all earlier evidence remain intact.
+
 The room lab also offers **Laboratory diagnostics → Compare sky lighting
 samples**. It retains four native1080p uniform32-SPP captures, comparing the
 existing default-off `renderer.environment.productStudioImportance.enabled`

@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Prepare a read-only native adaptive image screen that revalidates complete
+  corrected references before admitting radial captures. Check exact scene and
+  source identity, native tile/sample/histogram accounting, optical telemetry and
+  retained allocations; compare global and every SPP tier against both independent
+  references using existing lighting metrics and frozen quality limits. Incomplete
+  references and uncertain/failing tiers remain blocked/red. No renderer, GPU pass,
+  flag rollout or adaptive-performance claim changes (#174).
+
 - Preserve underlying capture/device failures before checking unavailable
   sky-comparison flag metadata; add a failure-first error-precedence regression
   without changing GPU setup bounds (#234).
