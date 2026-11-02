@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Patch only the affected minimatch/glob development-tool overrides following
+  the30-October advisories. Add portable lock-graph, coverage-pattern and
+  pre-aborted-directory-traversal regressions; runtime dependencies and renderer
+  shaders are unchanged (#234).
+
 - Add a laboratory-only fixed32-SPP uniform/cosine sky-NEE comparison using the
   existing default-off environment-importance flag. Retain actual resolved bits,
   independent reference keys, all HDR/probe/count evidence and same-seed

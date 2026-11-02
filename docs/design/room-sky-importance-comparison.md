@@ -65,3 +65,15 @@ Zero-Three/audits and exact-head CI. No main/CD, local publishing or release.
 
 Rollback is simply leaving the laboratory comparison or disabling the existing
 importance flag; it is always GPU-native and does not alter sampling defaults.
+
+## Tooling admission — 2 November 2026
+
+Fresh audit reports two development-only advisories published after the prior
+zero-finding audit: minimatch GHSA-g3hv-75wg-m249 (patched11.0.1) and glob
+GHSA-3g3m-2fjr-6pw4 (patched14.0.2), propagated through ESLint and c8. The
+production graph has zero findings. Replace only the affected forced tooling
+nodes, retaining Node24 and the brace-expansion patch. Portable tests must first
+reject affected installed/locked versions, then exercise glob/brace matching and
+pre-aborted traversal without filesystem work. Re-run lint, full coverage,
+types/build/package/Zero-Three and both audits. No runtime dependency or shader
+change, quality-rule waiver, broad dependency refresh or release is included.

@@ -90,7 +90,8 @@
   "overrides": {
     "brace-expansion": "^5.0.12",
     "esbuild": "^0.28.1",
-    "minimatch": "^10.2.1"
+    "minimatch": "^11.0.1",
+    "glob": "^14.0.2"
   },
   "engines": {
     "node": ">=24"
