@@ -12,3 +12,9 @@ draws. Runtime input qualification belongs to `gpu-shared` and the host browser.
 Maintain package coverage, changed-source LCOV, type/build, lint, security and
 public artifact gates. Publish through approved `cd.yml` on main and qualify the
 published dependency in the site before closing the parent Story.
+
+Live workspace qualification exposed a missing playback method in 0.2.59: site
+tests had mocked `stop()` although the actual renderer did not export it. The
+follow-up requires actual renderer tests for pause, resume without elapsed-time
+jumps, repeated calls, inspection while stopped, and cancelled callbacks delivered
+after a restart. A public type consumer must compile `stop()` and `start()`.

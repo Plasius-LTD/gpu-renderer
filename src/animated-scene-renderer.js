@@ -687,6 +687,8 @@ export function createAnimatedSceneRenderer(options = {}) {
   let frame = 0;
   let startedAtMs;
   let lastTimestamp;
+  let resumePending = false;
+  let playbackGeneration = 0;
   let pendingCameraControl = null;
   let activeCameraControl = false;
   let headLookWeight = 0;
@@ -757,6 +759,11 @@ export function createAnimatedSceneRenderer(options = {}) {
 
   function renderOnce(timestamp = nowMs()) {
     if (destroyed) return snapshot;
+    if (resumePending && startedAtMs !== undefined && lastTimestamp !== undefined) {
+      startedAtMs = timestamp - Math.max(0, lastTimestamp - startedAtMs);
+      lastTimestamp = timestamp;
+    }
+    resumePending = false;
     if (startedAtMs === undefined) {
       startedAtMs = timestamp;
     }
@@ -891,13 +898,19 @@ export function createAnimatedSceneRenderer(options = {}) {
     return snapshot;
   }
 
-  function tick(timestamp) {
-    if (!running) {
+  function scheduleFrame() {
+    const generation = playbackGeneration;
+    frameHandle = requestFrame(timestamp => tick(timestamp, generation));
+  }
+
+  function tick(timestamp, generation) {
+    if (!running || generation !== playbackGeneration) {
       return;
     }
+    frameHandle = undefined;
     renderOnce(timestamp);
     if (running && requestFrame) {
-      frameHandle = requestFrame(tick);
+      scheduleFrame();
     }
   }
 
@@ -908,12 +921,22 @@ export function createAnimatedSceneRenderer(options = {}) {
         return;
       }
       running = true;
+      playbackGeneration += 1;
       snapshot = { ...snapshot, running: true, frameState: "running" };
       if (requestFrame) {
-        frameHandle = requestFrame(tick);
+        scheduleFrame();
       } else {
         renderOnce();
       }
+    },
+    stop() {
+      if (destroyed || !running) return;
+      running = false;
+      playbackGeneration += 1;
+      resumePending = true;
+      if (frameHandle !== undefined && cancelFrame) cancelFrame(frameHandle);
+      frameHandle = undefined;
+      snapshot = { ...snapshot, running: false, frameState: "paused" };
     },
     resize(width, height, devicePixelRatio = 1) {
       if (destroyed) return;

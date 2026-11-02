@@ -237,7 +237,7 @@ export interface AnimatedSceneSnapshot {
     readonly loopCount: number;
     readonly footSlideWarning?: string | null;
   };
-  readonly frameState: "initialized" | "running" | "rendered-once" | "destroyed";
+  readonly frameState: "initialized" | "running" | "paused" | "rendered-once" | "destroyed";
 }
 
 export interface ProfessionalAnimatedSceneSnapshot extends Omit<AnimatedSceneSnapshot, "cameraViewMode" | "headLook" | "targetDistance" | "characterGroundY" | "characterVisible" | "propGroundAnchors"> {
@@ -265,6 +265,8 @@ export interface AnimatedSceneRenderer {
   /** Inspect the scene without advancing animation; null resumes the follow rig. */
   setInspectionCamera(camera: AnimatedInspectionCamera | null): void;
   start(): void;
+  /** Pause scheduling and preserve the displayed timeline; start() resumes without a time jump. */
+  stop(): void;
   resize(width: number, height: number, devicePixelRatio?: number): void;
   renderOnce(timestamp?: number): AnimatedSceneSnapshot;
   getSnapshot(): AnimatedSceneSnapshot;

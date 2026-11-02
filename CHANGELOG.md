@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Fix canvas-animation pause/resume for inspection and reduced-motion hosts:
+  expose `stop()`, cancel stale frame callbacks, and resume without a timeline jump
+  (Task #272, site Story #2357).
+
 - **Added**
   - (placeholder)
 

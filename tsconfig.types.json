@@ -14,6 +14,7 @@
   },
   "include": [
     "src/index.d.ts",
+    "tests/animated-playback.types.ts",
     "tests/feedback-diagnostics.types.ts",
     "tests/native-surfaces.types.ts",
     "tests/canonical-wavefront-meshes.types.ts",
