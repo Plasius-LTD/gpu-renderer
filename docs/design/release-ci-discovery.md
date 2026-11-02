@@ -22,3 +22,9 @@ response exhibiting the index failure. Verify all four boundaries and reject
 each mismatched field. Release the already-prepared 0.2.60 only through reviewed
 main `cd.yml`, with successful CI for its final source commit; do not publish
 locally or increment the version to get around the failed discovery.
+
+CI provisions jq 1.8.2 from its upstream release into a job-local temporary
+directory, verifies the pinned SHA-256 before execution, and makes it available
+before coverage tests. This removes dependence on self-hosted runner images
+without changing system packages. The test also fails explicitly if jq is
+missing, so rejected-evidence cases cannot pass because their parser was absent.

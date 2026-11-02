@@ -7,6 +7,8 @@ const workflow = readFileSync(new URL("../.github/workflows/cd.yml", import.meta
 const discoveries = [...workflow.matchAll(/RUNS="\$\([\s\S]*?MATCHES="\$\([\s\S]*?<<<"\$\{RUNS\}"\s*\)"/gu)].map(match => match[0]);
 const sha = "a".repeat(40);
 const passed = { head_sha: sha, head_branch: "main", event: "push", status: "completed", conclusion: "success" };
+const jq = spawnSync("jq", ["--version"], { encoding: "utf8" });
+assert.equal(jq.status, 0, "jq is required: missing tools must not masquerade as rejected CI evidence");
 
 function discover(script, response) {
   // Exercise the workflow's actual shell query and jq predicate. Only gh is
