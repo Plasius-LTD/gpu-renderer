@@ -12,13 +12,14 @@ export function roomSkyImportancePlan({resolution='1080p'}={}){
  return [[7,false],[7,true],[19,true],[19,false]].map(([seed,environmentImportance])=>({...controls.find(l=>l.seed===seed),environmentImportance}));
 }
 export function validateSkyImportanceCapture(receipt,lane,sources,identity,baseFlags){
+ // Preserve capture/device errors before checking metadata absent on failure.
+ const transportFlags={...receipt?.transportFlags};delete transportFlags[SKY_IMPORTANCE_FLAG];
+ const verified=validateConvergenceCapture({...receipt,transportFlags},lane,sources,identity);
  const bits=receipt?.admission?.transportExperimentFlags;
  if(typeof lane.environmentImportance!=='boolean'||receipt?.transportFlags?.[SKY_IMPORTANCE_FLAG]!==lane.environmentImportance||
   !Number.isSafeInteger(bits)||bits<0||bits>0xffffffff||Boolean(bits&SKY_IMPORTANCE_BIT)!==lane.environmentImportance||
   baseFlags!==undefined&&(bits&~SKY_IMPORTANCE_BIT)!==baseFlags)throw Error('Sky importance requested/resolved flag mismatch');
  // Only this explicitly controlled flag is removed from the common identity.
- const transportFlags={...receipt.transportFlags};delete transportFlags[SKY_IMPORTANCE_FLAG];
- const verified=validateConvergenceCapture({...receipt,transportFlags},lane,sources,identity);
  const tiles=receipt.frame.tiles,columns=Math.ceil(lane.width/128),rows=Math.ceil(lane.height/128);
  if(!Array.isArray(tiles)||tiles.length!==columns*rows)throw Error('Sky importance missing native tile coverage');
  const counts=tiles.map((t,i)=>{

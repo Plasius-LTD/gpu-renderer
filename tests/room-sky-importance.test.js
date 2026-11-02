@@ -31,6 +31,7 @@ test('sky comparison uses four native fixed32 controls, bounded query and unchan
  assert.throws(()=>roomSkyImportancePlan({resolution:'128'}));assert.equal(roomConvergencePlan().length,12);
 });
 test('sky evidence requires actual bit, coherent controls and full same-seed continuation counts',()=>{
+ assert.throws(()=>validateSkyImportanceCapture({status:'failed',failures:['original GPU timeout']},roomSkyImportancePlan()[0]),/original GPU timeout/);
  const [off,on]=roomSkyImportancePlan(),a=receipt(off),b=receipt(on),baseline=validateSkyImportanceCapture(a,off);
  assert.equal(validateSkyImportanceCapture(b,on,a.provenance.sources,baseline.identity,baseline.baseFlags).baseFlags,8);
  for(const mutate of [r=>delete r.admission.transportExperimentFlags,r=>r.admission.transportExperimentFlags=8,r=>r.admission.transportExperimentFlags|=32,r=>delete r.transportFlags[SKY_IMPORTANCE_FLAG],r=>r.frame.seed++,r=>r.scene.camera.position[0]++,r=>r.referenceSampling.sources[0].sha256='0'.repeat(64),r=>r.uvProbe.passed=false,r=>r.frame.tiles.pop(),r=>r.frame.tiles[0].tile.x=128,r=>r.frame.tiles[0].telemetry.rayCounts.secondaryRays=NaN,r=>r.frame.tiles[0].telemetry.rayCounts.totalPathSegments++,r=>r.cleanupPassed=false]){

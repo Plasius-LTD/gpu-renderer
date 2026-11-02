@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Preserve underlying capture/device failures before checking unavailable
+  sky-comparison flag metadata; add a failure-first error-precedence regression
+  without changing GPU setup bounds (#234).
+
 - Correct ordinary BSDF proposal/PDF consistency: keep rejected glossy draws as
   null events, remove unreported emissive/portal continuation guidance and its
   arbitrary emissive discount, and retain explicit light NEE. Add production-WGSL
