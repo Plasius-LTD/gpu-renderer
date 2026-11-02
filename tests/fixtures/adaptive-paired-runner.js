@@ -25,7 +25,8 @@ import {observePipelineSetup} from './pipeline-setup-observer.js';
 import {withReferenceTransportSampling,REFERENCE_TRANSPORT_MODE} from './reference-transport-sampling.js';
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
-export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false,opticalInterfaceBudget={enabled:false},referenceTransportSampling=false}={}) {
+export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false,opticalInterfaceBudget={enabled:false},referenceTransportSampling=false,environmentImportance=false}={}) {
+  check(typeof environmentImportance==='boolean','Environment importance must be boolean');
   check(!referenceTransportSampling||(native&&sampler==='fixed-pattern'&&!splitDepth&&!pruningVariants),'Reference transport requires native fixed-camera sampling without splitting/pruning');
   check(!opticalInterfaceBudget.enabled||(boundedDielectricBranching&&nestedMediaRefraction&&!splitDepth),'Optical interface budget requires bounded+nested transport without rough splitting');
   check(!guidedDenoise||(native&&!pruningVariants),"Guided denoise requires native staged transport");
@@ -90,6 +91,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       'renderer.transport.opticalInterfaceBudget.enabled':opticalInterfaceBudget.enabled,
       opticalInterfaceBudget:opticalInterfaceBudget.enabled?{maximumInterfaces:opticalInterfaceBudget.maximumInterfaces,maximumAdditionalBytes:opticalInterfaceBudget.maximumAdditionalBytes}:undefined,
       samplesPerPixel:native?maximum:ADAPTIVE_MAX_SAMPLES,denoise:false,deferredPathResolve:true,strictPhysicalLowSppLighting:true,
+      'renderer.environment.productStudioImportance.enabled':environmentImportance,
       "renderer.materials.sheen.enabled":sheen,
       "renderer.materials.layeredClearcoat.enabled":layeredClearcoat,
       "renderer.transport.boundedDielectricBranching.enabled":boundedDielectricBranching,

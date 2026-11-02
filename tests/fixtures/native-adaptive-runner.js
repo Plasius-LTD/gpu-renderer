@@ -45,6 +45,7 @@ export async function createNativeAdaptiveRunner(c) {
       return runClothResponse(c,options);
     },
     sceneSnapshot:{triangleCount:renderer.config.triangleCount,bvhNodeCount:renderer.config.bvhNodeCount,
+      transportExperimentFlags:renderer.config.transportExperimentFlags,
       displayQuality:renderer.config.displayQuality,accelerationBuildMode:renderer.config.accelerationBuildMode,
       maxDepth:renderer.config.maxDepth,maximumPathEvents:renderer.config.maximumPathEvents,opticalInterfaceBudget:renderer.config.opticalInterfaceBudget,samplesPerPixel:renderer.config.samplesPerPixel,camera:renderer.config.camera},
     async run(mode,{diagnostics=false,profile=false,onProgress,fused=false,seed=7,sampler="legacy",opticalJournal=[],opticalTraceEvents=0}={}){

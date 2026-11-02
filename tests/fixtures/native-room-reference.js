@@ -14,12 +14,13 @@ import {GLASS_WATER_DEFAULTS,glassWaterSettings,withRoomGlass} from '/lighting/d
 import {createRoomDemoPresets,installRoomDemoUi,roomFocusSettings,revealInvalidControl,setRoomPreviewState,invalidateRoomCaptureUi} from './room-demo-ui.js';
 import {runRoomQualification,roomQualificationSettingsFromSearch} from './room-qualification.js';
 import {runRoomConvergence,roomConvergenceSettingsFromSearch} from './room-convergence.js';
+import {runRoomSkyImportance,roomSkyImportanceSettingsFromSearch,SKY_IMPORTANCE_FLAG} from './room-sky-importance.js';
 import {opticalSelectionsFromSearch} from './optical-selection.js';
 import {MAX_OPTICAL_INTERFACES,DEFAULT_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG} from '../../src/wavefront-optical-interface-budget.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
-const controls=[...el("controls").querySelectorAll("input,select:not(#response-view)"),el("benchmark"),el('cloth-response'),el('qualification'),el('convergence')];
+const controls=[...el("controls").querySelectorAll("input,select:not(#response-view)"),el("benchmark"),el('cloth-response'),el('qualification'),el('convergence'),el('sky-importance')];
 function lightingSelection(){return {style:el('lighting-style').value,intensity:el('lighting-intensity').valueAsNumber};}
 function resetLighting(){el('lighting-style').value=ROOM_LIGHTING_DEFAULTS.style;el('lighting-intensity').value=ROOM_LIGHTING_DEFAULTS.intensity;}
 el('lighting-intensity').min=String(ROOM_LIGHTING_DEFAULTS.minimumIntensity);el('lighting-intensity').max=String(ROOM_LIGHTING_DEFAULTS.maximumIntensity);
@@ -111,7 +112,7 @@ export async function loadAssets(receipt,signal){
 }
 export function roomCompositionControls(source){return {placement:{x:el('chair-x').valueAsNumber,z:el('chair-z').valueAsNumber,yaw:el('chair-yaw').valueAsNumber},view:focusSettings().view,fovYDegrees:focusSettings().fovYDegrees,centralReference:el('central-reference').value,referenceModels:el('models').value==='all'?source.referenceModels:[]};}
 function closeupControls(){return focusSettings().cloth;}
-async function captureRoomReference({qualification=false,referenceTransportSampling=false}={}){
+async function captureRoomReference({qualification=false,referenceTransportSampling=false,environmentImportance=false}={}){
  if(qualificationRunning&&!qualification)return;
  for(const control of controls)if(!control.checkValidity()){revealInvalidControl(control);status.textContent="Invalid settings. Check the highlighted field.";return;}
  const settings=roomReferenceSettings(el("resolution").value,el("sampler").value,el('spp').valueAsNumber,el('max-depth').valueAsNumber),view=focusSettings().view;
@@ -144,6 +145,7 @@ async function captureRoomReference({qualification=false,referenceTransportSampl
  receipt.materialFlags={'renderer.materials.sheen.enabled':sheen,'renderer.materials.layeredClearcoat.enabled':layeredClearcoat};
  receipt.transportFlags={'renderer.transport.boundedDielectricBranching.enabled':boundedDielectricBranching,'renderer.transport.nestedMediaRefraction.enabled':nestedMediaRefraction,'renderer.transport.roughDielectricTransport.enabled':roughDielectricTransport};
  receipt.transportFlags[OPTICAL_INTERFACE_BUDGET_FLAG]=opticalInterfaceBudget.enabled;receipt.opticalInterfaceBudget=opticalInterfaceBudget;
+ receipt.transportFlags[SKY_IMPORTANCE_FLAG]=environmentImportance;
  receipt.inspection={closeup,distribution,materialViews:materialInspection};
  const lightingIdentity=lightingSelection().style+(layeredClearcoat?'-layered-coat':'')+(woodCoat.enabled?`-varnish${woodCoat.weight}-rough${woodCoat.roughness}`:'')+(glass.mode==='off'?'':'-glass-'+glass.mode+'-fill'+glass.fill+(glass.closeup?'-glass-closeup':'')+(glass.supportClearance>0?'-support-clearance'+glass.supportClearance:''));
  const stem=`room-eames-${settings.width}x${settings.height}-${settings.sampler}-${settings.maxDepth}-bounces${splitDepth?'-split'+splitDepth:''}${settings.maximumSpp!==RADIAL_SAMPLING_DEFAULTS.maximumSpp?'-spp'+settings.maximumSpp:''}${el('central-reference').value==='seating'&&el('models').value==='all'?'-seating-centre':''}${sheen?'-sheen':''}${closeup.enabled?'-closeup':''}${distribution==='uniform'?'-uniform':''}-${lightingIdentity}`,marker=document.createElement("canvas");marker.width=32;marker.height=32;
@@ -188,7 +190,7 @@ async function captureRoomReference({qualification=false,referenceTransportSampl
   const plan=selectInspectionPlan(distribution,createRadialSamplingPlan(settings.width,settings.height,settings.maximumSpp),settings.maximumSpp);
   receipt.budgets={bands:plan.bands,meanSpp:plan.meanSpp,totalSamples:plan.totalSamples,sha256:await hashBytes(plan.budgets.buffer)};
   canvas.width=settings.width;canvas.height=settings.height;status.textContent="Preparing the composed room renderer";
-  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,boundedDielectricBranching,nestedMediaRefraction,roughDielectricTransport,opticalInterfaceBudget,referenceTransportSampling,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
+  runner=await createPairedProbeRunner(composed.scene,cancellation.signal,{splitDepth,guidedDenoise,sheen,layeredClearcoat,boundedDielectricBranching,nestedMediaRefraction,roughDielectricTransport,opticalInterfaceBudget,referenceTransportSampling,environmentImportance,sampler:settings.sampler,native:{width:settings.width,height:settings.height,maximumSpp:settings.maximumSpp,canvas,budgets:plan.budgets}});
   check(runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount&&runner.sceneSnapshot.maxDepth===settings.maxDepth&&runner.sceneSnapshot.samplesPerPixel===settings.maximumSpp&&runner.sceneSnapshot.bvhNodeCount>0&&runner.sceneSnapshot.displayQuality===true,"Composed GPU scene admission failed");
   receipt.admission=runner.sceneSnapshot;receipt.adapter=runner.adapter;receipt.memory=runner.memory;receipt.pipelineSetup=runner.pipelineSetup;
   if(referenceTransportSampling)receipt.referenceSampling={...runner.referenceSampling,seed:el('capture-seed').valueAsNumber};
@@ -260,6 +262,7 @@ run.addEventListener('click',captureRoomReference);
 for(const batch of [
  {id:'qualification',settings:roomQualificationSettingsFromSearch,run:runRoomQualification,label:'Qualification'},
  {id:'convergence',settings:roomConvergenceSettingsFromSearch,run:runRoomConvergence,label:'Convergence',reset:true},
+ {id:'sky-importance',settings:roomSkyImportanceSettingsFromSearch,run:runRoomSkyImportance,label:'Sky importance',reset:true},
 ])el(batch.id).addEventListener('click',async()=>{
  if(qualificationRunning||run.disabled)return;
  let qualificationSettings;
@@ -281,7 +284,7 @@ for(const batch of [
  try{
   report=await batch.run({signal:abort.signal,settings:qualificationSettings,
    configure:values=>{if(batch.reset)resetRoomControls();else el('capture-seed').value='7';for(const [id,value] of Object.entries(values)){const control=el(id);check(control,'Missing qualification control: '+id);control.value=value;}demoUi.refresh();},
-   capture:()=>captureRoomReference({qualification:true,referenceTransportSampling:batch.id==='convergence'}),
+   capture:lane=>captureRoomReference({qualification:true,referenceTransportSampling:batch.id==='convergence'||batch.id==='sky-importance',environmentImportance:batch.id==='sky-importance'&&lane.environmentImportance}),
    onCheckpoint:partial=>retainBatch(partial,'checkpoint-'+partial.lanes.length),
    onLane:(lane,index,total)=>{status.textContent=`${batch.label} ${index+1}/${total}: ${lane.resolution}, ${lane.glass}, ${lane.focus}, uniform ${lane.spp} SPP${lane.seed!==undefined?', seed '+lane.seed:''}`;},
   });

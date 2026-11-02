@@ -1,5 +1,23 @@
 # @plasius/gpu-renderer
 
+The room lab also offers **Laboratory diagnostics → Compare sky lighting
+samples**. It retains four native1080p uniform32-SPP captures, comparing the
+existing default-off `renderer.environment.productStudioImportance.enabled`
+flag with seeds7/19. Only procedural-sky NEE sampling/PDF changes; all scene,
+camera and BSDF draws stay fixed. Actual resolved flags and same-seed camera/
+continuation counts are verified. Use `?skyImportanceResolution=4k` for an
+explicit four-lane native4K diagnostic. Normal rendering and the existing
+qualification/convergence controls leave this flag off.
+
+Analyse its retained summary with
+`node scripts/verify-room-sky-importance.mjs WORKSPACE_ROOT LIGHTING_CHECKOUT SUMMARY_JSON`.
+The read-only verifier reuses pinned gpu-lighting HDR metrics, checks all
+chunks/probes/counts and reports descriptive two-seed pair-MSE ratios and energy
+differences. These do not prove converged-reference quality, absence of local
+banding, unbiasedness, confidence bounds or adaptive performance. Counters
+exclude shadow/BVH queries; diagnostic time is not a speed benchmark. See the
+[fixed protocol](docs/design/room-sky-importance-comparison.md).
+
 Native room convergence prequalification is now automated in the local scene
 lab: **Laboratory diagnostics → Capture room convergence references** resets
 the original full-fidelity filled room and captures uniform32/128/256 SPP with

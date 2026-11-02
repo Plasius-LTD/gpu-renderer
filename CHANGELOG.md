@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add a laboratory-only fixed32-SPP uniform/cosine sky-NEE comparison using the
+  existing default-off environment-importance flag. Retain actual resolved bits,
+  independent reference keys, all HDR/probe/count evidence and same-seed
+  continuation identity; restore scene controls on failure/cancellation. Add
+  portable regressions and a read-only pinned-metric attribution tool. Production
+  transport, defaults, quality thresholds and adaptive-performance gate remain
+  unchanged (#234).
+
 - Preserve the original reference-probe GPU failure or timeout when cancellation
   occurs concurrently. Check cancellation after successful waits, retaining
   unconditional timer/device cleanup and the30-second operation bound. Add

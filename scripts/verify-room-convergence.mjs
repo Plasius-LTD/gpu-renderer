@@ -58,7 +58,7 @@ export function compareRowMeans(a,b,width,height){
  }
  return {maximumAbsoluteMeanDifference,rows,scope:'signed row attribution, not proof of absence of local banding'};
 }
-function captureFile(root,id){
+export function captureFile(root,id){
  if(typeof id!=='string'||!/^room-reference-[a-zA-Z0-9-]+$/.test(id))throw Error('Invalid retained capture identity');
  const base=path.resolve(root,'output/playwright/eames-environments'),directory=inside(base,path.join(base,id));
  const files=fs.readdirSync(directory).filter(f=>f.endsWith('.json')&&!f.includes('-hdr-')).map(f=>path.join(directory,f)).filter(f=>JSON.parse(fs.readFileSync(inside(directory,f))).scope==='room-eames-interior-reference');

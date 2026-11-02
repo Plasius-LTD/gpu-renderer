@@ -8,6 +8,7 @@ import {MAX_ROUGH_SPLIT_PATH_DEPTH} from '../src/wavefront-rough-bounce-splittin
 import {opticalSelectionsFromSearch} from './fixtures/optical-selection.js';
 import * as qualification from './fixtures/room-qualification.js';
 import * as convergence from './fixtures/room-convergence.js';
+import * as skyImportance from './fixtures/room-sky-importance.js';
 import {MAX_OPTICAL_INTERFACES,DEFAULT_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG} from '../src/wavefront-optical-interface-budget.js';
 
 test('actual room page initializes, forwards and resets canonical support clearance without GPU work',async()=>{
@@ -16,15 +17,15 @@ test('actual room page initializes, forwards and resets canonical support cleara
  const source=readFileSync(filename,'utf8').replace(/^import .*;$/gm,'').replace(/^export /gm,'');
  const html=readFileSync(new URL('./fixtures/native-room-reference.html',import.meta.url),'utf8');
  const nodes=new Map([...html.matchAll(/id="([^"]+)"/g)].map(([,id])=>[id,{
-  id,value:'',hidden:true,dataset:{},listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},
+  id,value:'',hidden:true,dataset:{},listeners:{},addEventListener(type,fn){this.listeners[type]=fn;},removeEventListener(type){delete this.listeners[type];},
   get valueAsNumber(){return Number(this.value);},checkValidity(){return true;},removeAttribute(){},
  }]));
  const document={getElementById:id=>nodes.get(id)};
  nodes.get('controls').querySelectorAll=()=>[...nodes.values()].filter(n=>html.includes(`<input id="${n.id}"`)||html.includes(`<select id="${n.id}"`));
  const defaults={mode:'off',fill:.55,x:2.85,z:-.1,radius:.055,height:.18,glassIor:1.5,waterIor:1.333,supportClearance:0,distance:.45,elevation:25};
- let forwarded;
+ let forwarded,skyComparison=skyImportance.runRoomSkyImportance;
  const depthLimits={minimum:1,maximum:20,default:6};let requestedDepth;
- const context=vm.createContext({document,...ui,...qualification,...convergence,ROOM_CAPTURE_DEPTH_LIMITS:depthLimits,MAX_ROUGH_SPLIT_PATH_DEPTH,MAX_OPTICAL_INTERFACES,DEFAULT_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG,opticalSelectionsFromSearch,location:{search:''},
+ const context=vm.createContext({document,...ui,...qualification,...convergence,...skyImportance,runRoomSkyImportance:(...args)=>skyComparison(...args),ROOM_CAPTURE_DEPTH_LIMITS:depthLimits,MAX_ROUGH_SPLIT_PATH_DEPTH,MAX_OPTICAL_INTERFACES,DEFAULT_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDGET_FLAG,opticalSelectionsFromSearch,location:{search:''},
   ROOM_LIGHTING_DEFAULTS:{style:'daylight',intensity:1,minimumIntensity:0,maximumIntensity:10},
   ROOM_COAT_DEFAULTS:{weight:1,roughness:.1},GLASS_WATER_DEFAULTS:defaults,
   ROOM_DEFAULTS:{centralReference:'seating',view:'entry',fovYDegrees:52,x:1,z:2,yaw:3},
@@ -79,4 +80,16 @@ test('actual room page initializes, forwards and resets canonical support cleara
  await nodes.get('run').listeners.click();assert.match(nodes.get('status').textContent,/Invalid optical journal/);assert.equal(requests,3);
  context.location.search='?opticalJournal=.5,.5,0';nodes.get('sample-distribution').value='radial';
  await nodes.get('run').listeners.click();assert.match(nodes.get('status').textContent,/requires uniform bounded nested/);assert.equal(requests,3);
+ // Execute the actual batch glue, including failure restoration and forwarding.
+ context.location.search='';context.crypto={randomUUID:()=> 'portable-test'};
+ document.createElement=()=>({toDataURL:()=> 'data:image/png;base64,test'});
+ context.fetch=async url=>url==='/__provenance'?{ok:true,json:async()=>({captureId:'test',sources:{}})}:{ok:true,json:async()=>({})};
+ let captured;
+ skyComparison=async({configure,capture})=>{await configure(skyImportance.roomSkyImportancePlan()[1].controls);captured=await capture({environmentImportance:true});return {status:'failed',failures:captured.failures,lanes:[]};};
+ const before=[...nodes.values()].map(n=>[n,n.value]);
+ await nodes.get('sky-importance').listeners.click();
+ assert(captured,nodes.get('status').textContent);assert.equal(captured.transportFlags[skyImportance.SKY_IMPORTANCE_FLAG],true);
+ for(const [node,value]of before)assert.equal(node.value,value,'restore '+node.id);
+ assert.equal(nodes.get('sky-importance').disabled,false);assert.equal(nodes.get('cancel').disabled,true);
+ assert.match(nodes.get('status').textContent,/Sky importance failed/);
 });
