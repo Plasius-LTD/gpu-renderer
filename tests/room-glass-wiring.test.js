@@ -83,7 +83,10 @@ test('actual room page initializes, forwards and resets canonical support cleara
  // Execute the actual batch glue, including failure restoration and forwarding.
  context.location.search='';context.crypto={randomUUID:()=> 'portable-test'};
  document.createElement=()=>({toDataURL:()=> 'data:image/png;base64,test'});
- context.fetch=async url=>url==='/__provenance'?{ok:true,json:async()=>({captureId:'test',sources:{}})}:{ok:true,json:async()=>({})};
+ const saved=[];
+ context.fetch=async(url,options)=>{if(url==='/__provenance')return {ok:true,json:async()=>({captureId:'test',sources:{}})};
+  const payload=JSON.parse(options.body).result;if(payload.scope==='room-eames-interior-reference')saved.push(payload);
+  return {ok:true,json:async()=>({})};};
  let captured;
  skyComparison=async({configure,capture})=>{await configure(skyImportance.roomSkyImportancePlan()[1].controls);captured=await capture({environmentImportance:true});return {status:'failed',failures:captured.failures,lanes:[]};};
  const before=[...nodes.values()].map(n=>[n,n.value]);
@@ -92,4 +95,8 @@ test('actual room page initializes, forwards and resets canonical support cleara
  for(const [node,value]of before)assert.equal(node.value,value,'restore '+node.id);
  assert.equal(nodes.get('sky-importance').disabled,false);assert.equal(nodes.get('cancel').disabled,true);
  assert.match(nodes.get('status').textContent,/Sky importance failed/);
+ for(const button of ['run','qualification','convergence']){
+  saved.length=0;await nodes.get(button).listeners.click();assert(saved.length,button+' retains failure');
+  assert(saved.every(r=>r.transportFlags[skyImportance.SKY_IMPORTANCE_FLAG]===false),button+' keeps importance off');
+ }
 });
