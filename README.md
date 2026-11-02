@@ -8,6 +8,16 @@ sampling law. This correctness fix changes radiance/secondary counts and needs
 a new qualified fixed baseline; it is not an adaptive performance result. See
 [ADR0068](docs/adrs/adr-0068-bsdf-proposal-density.md) and Task#271.
 
+The six completed corrected1080p references currently fail the frozen3%
+convergence screen (128→256 about4.38%, independent256 pair6.19%), while passing
+the1% energy screen. They remain unqualified; the full4K capture continues.
+The CPU WGSL variance diagnostic preserves production BSDF/sampler/PDF functions
+and measures canonical versus controlled lobe probabilities in an isolated
+normal-incidence rough diffuse case. It identifies excess proposal variance
+without changing material values or adding a runtime policy. Its approximately
+95% variance reduction for a95%-diffuse control is not a whole-room noise or
+GPU-time result. See the [residual-variance protocol](docs/design/bsdf-proposal-consistency.md#residual-ordinary-variance-attribution--2-november-2026).
+
 The next prescribed-radial adaptive image screen is available offline:
 
 ```sh

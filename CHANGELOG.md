@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Retain the failed corrected1080p convergence screen at unchanged limits and
+  add CPU production-WGSL attribution of ordinary BSDF proposal variance. Compare
+  canonical and controlled shared lobe weights against an independent physical
+  BSDF integral, including null events and conditional first/second moments.
+  Preserve sampler/BSDF/PDF bodies and production shaders/defaults; isolated
+  variance reduction is not adaptive or GPU-time qualification (#271).
+
 - Prepare a read-only native adaptive image screen that revalidates complete
   corrected references before admitting radial captures. Check exact scene and
   source identity, native tile/sample/histogram accounting, optical telemetry and

@@ -1,0 +1,436 @@
+{
+  "schemaVersion": 1,
+  "status": "reference-screen-failed-variance-attribution-only",
+  "sources": {
+    "renderer": "969f6de0ddd35972215da747f7113f7bfae0f573",
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "inputCheckpoint": {
+    "checkpoint": "room-convergence-6b3b45ee-02af-4c96-b6bc-a0912115ae8e/checkpoint-10.json",
+    "sha256": "e492ba84135e4429a23dceac667eea96ed5c7c5a04abcad101d00a757ea85b5e",
+    "scope": "Six completed 1080p lanes only; original full batch remains running and unchanged"
+  },
+  "partialSummarySha256": "c96b472e19adfabf9bcf76d2543597fc3b870fdaf80fde1fa051bba8f5011d7b",
+  "completeness": "partial-single-resolution",
+  "referenceGate": [
+    {
+      "resolution": "1080p",
+      "referenceGate": {
+        "passed": false,
+        "checks": [
+          {
+            "rmse": false,
+            "energy": true
+          },
+          {
+            "rmse": false,
+            "energy": true
+          },
+          {
+            "rmse": false,
+            "energy": true
+          }
+        ],
+        "limits": {
+          "normalizedRmse": 0.03,
+          "absoluteEnergyDrift": 0.01
+        },
+        "scope": "reference prequalification only; not production image or adaptive acceptance"
+      }
+    }
+  ],
+  "imageMetrics": [
+    {
+      "resolution": "1080p",
+      "kind": "reference",
+      "candidate": {
+        "spp": 128,
+        "seed": 7
+      },
+      "reference": {
+        "spp": 256,
+        "seed": 7
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.02037149716562972,
+        "normalizedRmse": 0.04382134480791937,
+        "maxAbsoluteError": 1.6289819478988647,
+        "p95LocalError": 0.04580521583557129,
+        "p99LocalError": 0.06916260719299316,
+        "meanLuminanceAbsoluteError": 0.013992874047783136,
+        "maxLuminanceAbsoluteError": 0.9456354333162307,
+        "meanLuminance": 0.41389172244621775,
+        "referenceMeanLuminance": 0.4138795326034373,
+        "relativeEnergyDrift": 2.9452634934005368e-05
+      }
+    },
+    {
+      "resolution": "1080p",
+      "kind": "reference",
+      "candidate": {
+        "spp": 128,
+        "seed": 19
+      },
+      "reference": {
+        "spp": 256,
+        "seed": 19
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.020356640350649005,
+        "normalizedRmse": 0.043789163456613815,
+        "maxAbsoluteError": 1.0338106155395508,
+        "p95LocalError": 0.04574930667877197,
+        "p99LocalError": 0.06894391775131226,
+        "meanLuminanceAbsoluteError": 0.013983981550212864,
+        "maxLuminanceAbsoluteError": 0.9319488872051238,
+        "meanLuminance": 0.41388970325083535,
+        "referenceMeanLuminance": 0.4138904028985022,
+        "relativeEnergyDrift": -1.6904177093905389e-06
+      }
+    },
+    {
+      "resolution": "1080p",
+      "kind": "reference",
+      "candidate": {
+        "spp": 256,
+        "seed": 7
+      },
+      "reference": {
+        "spp": 256,
+        "seed": 19
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.028774529871007985,
+        "normalizedRmse": 0.06189688328745338,
+        "maxAbsoluteError": 1.6583713442087173,
+        "p95LocalError": 0.0649457573890686,
+        "p99LocalError": 0.09681236743927002,
+        "meanLuminanceAbsoluteError": 0.019942266302830143,
+        "maxLuminanceAbsoluteError": 0.9718910738274453,
+        "meanLuminance": 0.4138795326034373,
+        "referenceMeanLuminance": 0.4138904028985022,
+        "relativeEnergyDrift": -2.6263704083828735e-05
+      }
+    },
+    {
+      "resolution": "1080p",
+      "kind": "candidate",
+      "candidate": {
+        "spp": 32,
+        "seed": 7
+      },
+      "reference": {
+        "spp": 256,
+        "seed": 19
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.061133940399996034,
+        "normalizedRmse": 0.13150520237181307,
+        "maxAbsoluteError": 5.486370623111725,
+        "p95LocalError": 0.13328343629837036,
+        "p99LocalError": 0.21184992790222168,
+        "meanLuminanceAbsoluteError": 0.0409214631005404,
+        "maxLuminanceAbsoluteError": 4.245423643714189,
+        "meanLuminance": 0.4139139801138763,
+        "referenceMeanLuminance": 0.4138904028985022,
+        "relativeEnergyDrift": 5.6964875747361536e-05
+      }
+    },
+    {
+      "resolution": "1080p",
+      "kind": "candidate",
+      "candidate": {
+        "spp": 32,
+        "seed": 19
+      },
+      "reference": {
+        "spp": 256,
+        "seed": 7
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.061159800640906065,
+        "normalizedRmse": 0.13156149940665915,
+        "maxAbsoluteError": 6.175123497843742,
+        "p95LocalError": 0.13300803303718567,
+        "p99LocalError": 0.21193495392799377,
+        "meanLuminanceAbsoluteError": 0.04091423852616213,
+        "maxLuminanceAbsoluteError": 3.784524124336243,
+        "meanLuminance": 0.41385383223784755,
+        "referenceMeanLuminance": 0.4138795326034373,
+        "relativeEnergyDrift": -6.20962467704831e-05
+      }
+    }
+  ],
+  "captureEvidence": [
+    {
+      "receiptSha256": "313d6c1bf88a1988063dbe3892bb118984350ee6c38429c93a6b6d21736b111d",
+      "hdrSha256": "159faf44b31bd911b410dd8447859c3c8d576757d90f6665afc89713905b3d0f",
+      "pngSha256": "35ee1c5c994bd4152196b32fa0e779570e259db0b2981051c61bad757183b9ac",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8,
+      "resolution": "1080p",
+      "spp": 32,
+      "seed": 7,
+      "actualSamples": 66355200,
+      "captureId": "room-reference-2026-11-02T15-57-54-295Z-361eb26d-504f-4535-8bb6-5e02b0058fb4"
+    },
+    {
+      "receiptSha256": "8def89763fd1ef96288689b9f268b4b82c177e907cb383cacbc12f16894b4e24",
+      "hdrSha256": "55d4846bcb54ec2d91ab05cc340f2bdbf124ee291d3bdd833014bf7e0519f583",
+      "pngSha256": "254954e8db9faa04b1921ae0323e99ab9a29f52088b16fc9d3604fa326687c0f",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8,
+      "resolution": "1080p",
+      "spp": 32,
+      "seed": 19,
+      "actualSamples": 66355200,
+      "captureId": "room-reference-2026-11-02T16-02-07-571Z-5b278872-7eb9-411e-b8e5-6bd1604d8501"
+    },
+    {
+      "receiptSha256": "89239ebdac63f99119abff5cf4b1577c2f3ddf6740d23bdd7090699fec06b6b1",
+      "hdrSha256": "a61d8c6c7c9a0ec934343b499c85a799d2de07ebe44d0bfa901ff40dc4f4c2f0",
+      "pngSha256": "b7eff2ad2a375d4f92fff091bd9a87329319de0af8eab2dec3ae016871dabede",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8,
+      "resolution": "1080p",
+      "spp": 128,
+      "seed": 7,
+      "actualSamples": 265420800,
+      "captureId": "room-reference-2026-11-02T16-06-23-705Z-23540cae-bf15-42e9-b9ad-8ded2b265dec"
+    },
+    {
+      "receiptSha256": "80cddd6a5c52dd4fbc91afa0812dc05d78096ddb35a573408176adbbf8104c6e",
+      "hdrSha256": "e4b43a672cf4fbf8bd281fc8424ebeffb5a6275a425108af2da3d27a45b29522",
+      "pngSha256": "8daf144af72822099755f640a1a645e4f8723036e82d6d9e7aa125dd051271dd",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8,
+      "resolution": "1080p",
+      "spp": 128,
+      "seed": 19,
+      "actualSamples": 265420800,
+      "captureId": "room-reference-2026-11-02T16-21-15-084Z-f52666ab-e724-4fcb-b4ca-79bb438fd2ec"
+    },
+    {
+      "receiptSha256": "15712cd5edbfe1bffc9a9984e9d49ea194574ace15cff022d86cc0f8f18f63f9",
+      "hdrSha256": "0a9f426718cc7698210310dc8ac70f8617507eb0e4bfcbebdb85af0fc434fcae",
+      "pngSha256": "4e7df4d658df5bbfca66120440a54b4f95d5064b4c5ab0abae9edb57f7bc6ed6",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8,
+      "resolution": "1080p",
+      "spp": 256,
+      "seed": 7,
+      "actualSamples": 530841600,
+      "captureId": "room-reference-2026-11-02T16-36-24-171Z-5a465768-32b6-4828-8a38-53133f36dfa8"
+    },
+    {
+      "receiptSha256": "b5b6b11d0548c31743eeaadbade043bb2ed256c7336e339c5b052a959a0f20d4",
+      "hdrSha256": "6bb0f4e7aad4544555d290bc791de3affb6f4f05318189f89bc8037877f593bd",
+      "pngSha256": "4141beacbb84b01c08270c28fd4050d27245d5e39db1efc34182f9845d54740d",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8,
+      "resolution": "1080p",
+      "spp": 256,
+      "seed": 19,
+      "actualSamples": 530841600,
+      "captureId": "room-reference-2026-11-02T17-05-59-840Z-ad7c6426-a049-4426-828c-f9b0b92cc983"
+    }
+  ],
+  "varianceDiagnostic": {
+    "status": "isolated-CPU-attribution-not-qualified",
+    "settings": {
+      "samples": 512,
+      "meanTolerance": 0.0001,
+      "roughness": 1
+    },
+    "canonicalShaderSha256": "b50d988d92d0af5867fc3355cadad89ad8b1affe9c88bf051298df2c8acaf7b4",
+    "functionSources": {
+      "scatter_direction": "549b1e3ab7598f19da2da71ee1da0000985fcc60c79536b23cea1df2257a4359",
+      "evaluate_surface_bsdf": "55147dea6d6770a71bba6d9eeb280b310408f5060a6ac179e85741e7f13c223e",
+      "evaluate_surface_bsdf_pdf": "aa1b1d2cdb77c5f4bd8ea4b6c6c5fd8890d4e4328a1107f7642f0eddb8ce1969",
+      "surface_bsdf_sampling_weights": "397c24a98858091900a4307d08e9af7dd30da446549483a7b5d291748b6db352",
+      "importance_sample_ggx": "36c2bf4336aa8e742fbb88301998e348d0558433b43bd34efc3b0ba7efc552e2",
+      "cosine_sample_hemisphere": "80b0e30001cc415ef39975239711c31ff39901aeacf4494374946a824132c26f"
+    },
+    "diagnosticSourceSha256": "a40d6688a8bf156d0e84780b41f516070099df2cbce4e85611b992b0d304cf2f",
+    "cases": [
+      {
+        "albedo": 0.75,
+        "diffuseProbability": null,
+        "weights": {
+          "diffuse": 0.4000000059604645,
+          "ggx": 0.6000000238418579
+        },
+        "mean": 0.7322578430838895,
+        "secondMoment": 0.8241718721042447,
+        "variance": 0.2879703233463745,
+        "nullFraction": 0.30000001192092896,
+        "independentBsdfIntegral": 0.7322474226109534,
+        "settings": {
+          "samples": 512,
+          "meanTolerance": 0.0001,
+          "roughness": 1
+        },
+        "scope": "CPU WGSL analytic isolation; not physical WebGPU, full-scene causality or performance",
+        "shaderSha256": "e932d026e311ea876b014e1e5abfd235aae098b8ffa84f5d715864d36efc4fef",
+        "configSha256": "5d18f2b7e18692c5b69bfd8f694de09c95db3a08a7715367586260f17096e9c3",
+        "outputSha256": "a83ca0ae4f9504ab3d738d2f8770a77607c07015c37b7eb7a4e0257be0dc3366"
+      },
+      {
+        "albedo": 0.75,
+        "diffuseProbability": 0.8,
+        "weights": {
+          "diffuse": 0.800000011920929,
+          "ggx": 0.20000000298023224
+        },
+        "mean": 0.7322879095148931,
+        "secondMoment": 0.6011070610584209,
+        "variance": 0.06486147863672864,
+        "nullFraction": 0.10000000149011612,
+        "independentBsdfIntegral": 0.7322474226109534,
+        "settings": {
+          "samples": 512,
+          "meanTolerance": 0.0001,
+          "roughness": 1
+        },
+        "scope": "CPU WGSL analytic isolation; not physical WebGPU, full-scene causality or performance",
+        "shaderSha256": "640ac048654d57716f7b31eee81c8afa8da8e216bffee497d1d6e568f550c44a",
+        "configSha256": "5d18f2b7e18692c5b69bfd8f694de09c95db3a08a7715367586260f17096e9c3",
+        "outputSha256": "c12eef7a1d41b55351081f3a6c06c3d7ecc0f345fa0a3d41d94a1dccd3b1768c"
+      },
+      {
+        "albedo": 0.75,
+        "diffuseProbability": 0.95,
+        "weights": {
+          "diffuse": 0.949999988079071,
+          "ggx": 0.05000000074505806
+        },
+        "mean": 0.732308359882949,
+        "secondMoment": 0.5504056168723389,
+        "variance": 0.014130082917884201,
+        "nullFraction": 0.02500000037252903,
+        "independentBsdfIntegral": 0.7322474226109534,
+        "settings": {
+          "samples": 512,
+          "meanTolerance": 0.0001,
+          "roughness": 1
+        },
+        "scope": "CPU WGSL analytic isolation; not physical WebGPU, full-scene causality or performance",
+        "shaderSha256": "68bf92bf3380b219b8289361543cd368fe000de640a0898a80349f0130135e73",
+        "configSha256": "5d18f2b7e18692c5b69bfd8f694de09c95db3a08a7715367586260f17096e9c3",
+        "outputSha256": "fdf9cddb8c925e32623f8c2826b8c7e1c27dc3bc7b79b344736fdacfabbb83da"
+      },
+      {
+        "albedo": 1,
+        "diffuseProbability": null,
+        "weights": {
+          "diffuse": 0.4000000059604645,
+          "ggx": 0.6000000238418579
+        },
+        "mean": 0.9722415763368432,
+        "secondMoment": 1.4532724364222198,
+        "variance": 0.5080187536642702,
+        "nullFraction": 0.30000001192092896,
+        "independentBsdfIntegral": 0.9722277796663548,
+        "settings": {
+          "samples": 512,
+          "meanTolerance": 0.0001,
+          "roughness": 1
+        },
+        "scope": "CPU WGSL analytic isolation; not physical WebGPU, full-scene causality or performance",
+        "shaderSha256": "e932d026e311ea876b014e1e5abfd235aae098b8ffa84f5d715864d36efc4fef",
+        "configSha256": "eb33d02442af583d69b4036f03b50f5299875e571e4bb892dae7f2c4f2fb5b13",
+        "outputSha256": "63877d7725ded60706f83f9d8222cd95348e9aaaf67a31f632dd0a4cb5e678cd"
+      },
+      {
+        "albedo": 1,
+        "diffuseProbability": 0.8,
+        "weights": {
+          "diffuse": 0.800000011920929,
+          "ggx": 0.20000000298023224
+        },
+        "mean": 0.9722813943912648,
+        "secondMoment": 1.0597659135128277,
+        "variance": 0.11443480363340541,
+        "nullFraction": 0.10000000149011612,
+        "independentBsdfIntegral": 0.9722277796663548,
+        "settings": {
+          "samples": 512,
+          "meanTolerance": 0.0001,
+          "roughness": 1
+        },
+        "scope": "CPU WGSL analytic isolation; not physical WebGPU, full-scene causality or performance",
+        "shaderSha256": "640ac048654d57716f7b31eee81c8afa8da8e216bffee497d1d6e568f550c44a",
+        "configSha256": "eb33d02442af583d69b4036f03b50f5299875e571e4bb892dae7f2c4f2fb5b13",
+        "outputSha256": "2971bc563524aa8d046e3b78bf839a574b44c3268611db1bc36f91ef44941fda"
+      },
+      {
+        "albedo": 1,
+        "diffuseProbability": 0.95,
+        "weights": {
+          "diffuse": 0.949999988079071,
+          "ggx": 0.05000000074505806
+        },
+        "mean": 0.9723084870075241,
+        "secondMoment": 0.970314945543911,
+        "variance": 0.024931151637050175,
+        "nullFraction": 0.02500000037252903,
+        "independentBsdfIntegral": 0.9722277796663548,
+        "settings": {
+          "samples": 512,
+          "meanTolerance": 0.0001,
+          "roughness": 1
+        },
+        "scope": "CPU WGSL analytic isolation; not physical WebGPU, full-scene causality or performance",
+        "shaderSha256": "68bf92bf3380b219b8289361543cd368fe000de640a0898a80349f0130135e73",
+        "configSha256": "eb33d02442af583d69b4036f03b50f5299875e571e4bb892dae7f2c4f2fb5b13",
+        "outputSha256": "81c16f1dea5fa94474efa5c0d7514357e418c4b0668a2d0882c125b84d072133"
+      }
+    ],
+    "comparisons": [
+      {
+        "albedo": 0.75,
+        "diffuseProbability": 0.8,
+        "varianceRatio": 0.22523667676239123,
+        "meanDifference": 3.0066431003561433e-05
+      },
+      {
+        "albedo": 0.75,
+        "diffuseProbability": 0.95,
+        "varianceRatio": 0.0490678440531122,
+        "meanDifference": 5.0516799059430184e-05
+      },
+      {
+        "albedo": 1,
+        "diffuseProbability": 0.8,
+        "varianceRatio": 0.2252570457448721,
+        "meanDifference": 3.9818054421658644e-05
+      },
+      {
+        "albedo": 1,
+        "diffuseProbability": 0.95,
+        "varianceRatio": 0.049075258456947046,
+        "meanDifference": 6.691067068098633e-05
+      }
+    ],
+    "claim": "Normal-incidence isotropic roughness1 opaque non-metal only. Conditional BSDF continuation moments, without NEE/MIS/roulette or scene visibility. Not a whole-room causal proof, physical GPU validation, adaptive performance or runtime policy."
+  },
+  "validation": {
+    "tests": 587,
+    "failures": 0,
+    "combinedCoverage": {
+      "lines": 80.74,
+      "branches": 89.65
+    },
+    "productionShaderChanged": false,
+    "physicalDiagnosticExecuted": false,
+    "full4kReferenceComplete": false
+  },
+  "claim": "Partial1080p reference gate failed at unchanged limits. Isolated CPU proposal variance evidence only; no runtime policy, whole-scene causality, adaptive/performance or release qualification."
+}
