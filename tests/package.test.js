@@ -563,6 +563,55 @@ test("createAnimatedSceneRenderer advances route, blend, camera, and lifecycle",
   assert.equal(renderer.getSnapshot().frameState, "destroyed");
 });
 
+test("animated playback pauses for inspection and resumes without counting paused wall time", () => {
+  const callbacks = [], cancelled = [];
+  const renderer = createAnimatedSceneRenderer({
+    canvas: createFakeCanvas2d(),
+    route: [{ id: "a", position: [0, 0, 0], arriveMs: 0 }, { id: "b", position: [4, 0, 0], arriveMs: 4000 }],
+    beats: [{ id: "walk", order: 0, clipId: "walking", durationMs: 4000 }],
+    requestAnimationFrame(callback) { callbacks.push(callback); return callbacks.length; },
+    cancelAnimationFrame(handle) { cancelled.push(handle); },
+  });
+  renderer.start(); renderer.start();
+  assert.equal(callbacks.length, 1);
+  callbacks[0](100); callbacks[1](600);
+  const before = renderer.getSnapshot();
+  renderer.stop(); renderer.stop();
+  assert.deepEqual(cancelled, [3]);
+  assert.equal(renderer.getSnapshot().running, false);
+  assert.equal(renderer.getSnapshot().frameState, "paused");
+  renderer.setInspectionCamera({ position: [3, 2, 5], target: [0, 1, 0], fovYDegrees: 45 });
+  assert.equal(renderer.getSnapshot().frame, before.frame);
+  assert.deepEqual(renderer.getSnapshot().characterPosition, before.characterPosition);
+  callbacks[2](50000);
+  assert.equal(callbacks.length, 3);
+  renderer.start();
+  callbacks[2](50010); // A cancelled callback must stay stale after resume.
+  assert.equal(callbacks.length, 4);
+  callbacks[3](60000);
+  const resumed = renderer.getSnapshot();
+  assert.equal(resumed.clipTimeMs, before.clipTimeMs);
+  assert.deepEqual(resumed.characterPosition, before.characterPosition);
+  callbacks[4](60100);
+  assert.equal(renderer.getSnapshot().clipTimeMs, before.clipTimeMs + 100);
+  renderer.stop(); renderer.destroy(); renderer.stop(); renderer.start();
+  callbacks.at(-1)(70000);
+  assert.equal(renderer.getSnapshot().frameState, "destroyed");
+});
+
+test("animated playback can stop before its first frame and still resume normally", () => {
+  const callbacks = [];
+  const renderer = createAnimatedSceneRenderer({ canvas: createFakeCanvas2d(),
+    requestAnimationFrame(callback) { callbacks.push(callback); return callbacks.length; },
+  });
+  renderer.stop(); renderer.start(); renderer.stop();
+  callbacks[0](10000);
+  assert.equal(renderer.getSnapshot().frame, 0);
+  renderer.start(); callbacks[1](20000);
+  assert.equal(renderer.getSnapshot().clipTimeMs, 0);
+  renderer.destroy();
+});
+
 test("createAnimatedSceneRenderer holds stationary action beats at their route anchor", () => {
   const renderer = createAnimatedSceneRenderer({
     canvas: createFakeCanvas2d(),

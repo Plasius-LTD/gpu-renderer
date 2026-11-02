@@ -22,3 +22,13 @@ lens zoom, clipping of behind-camera geometry, reset to follow, stationary
 animation time while changing views, and lifecycle disposal. Run package CI,
 coverage (including every changed source), public contract, build and security
 gates before the approved main CD release. Qualify the actual consumer image.
+
+## Playback lifecycle qualification
+
+The workspace needs a real `stop()` method for pause and reduced motion. It must
+cancel the scheduled frame without destroying the canvas, retain the displayed
+timeline position, and allow inspection-camera redraws while paused. Resuming
+rebases the first frame to that position rather than counting paused wall time.
+Repeated starts/stops are idempotent; callbacks from an older playback generation
+must not render or schedule new work. Explicit `renderOnce` remains available to
+manual consumers. Tests must use the actual exported renderer and public types.

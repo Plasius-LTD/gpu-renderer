@@ -272,9 +272,20 @@ animationRenderer.setInspectionCamera({
 });
 // Resume the existing follow rig without restarting the animation timeline.
 animationRenderer.setInspectionCamera(null);
+animationRenderer.start();
+// Keep the displayed pose while inspecting or respecting reduced motion.
+animationRenderer.stop();
+// Resume from the displayed time, excluding time spent paused.
+animationRenderer.start();
+animationRenderer.destroy();
 ```
 
 Positions and targets must be finite three-component arrays with distinct
 positions; vertical field of view is 12–90 degrees. This additive API belongs to
 `createAnimatedSceneRenderer` (the canvas preview). It does not change the
 separate professional WebGPU animation API.
+
+`stop()` cancels automatic frame scheduling without destroying the scene. Camera
+inspection still redraws the paused pose. `start()` and `stop()` are idempotent;
+resuming excludes paused wall time, and a destroyed renderer cannot restart.
+Hosts can call `stop()` immediately after mounting when reduced motion is requested.
