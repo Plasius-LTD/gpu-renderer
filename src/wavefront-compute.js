@@ -1099,7 +1099,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
   }
 
+  let destroyed = false;
   function destroy() {
+    if (destroyed) return;
+    destroyed = true;
+    try {
     progressive?.destroy();
     frameTelemetryResources?.destroy?.();
     activeQueue.destroy?.();
@@ -1155,6 +1159,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
     context.unconfigure?.();
     allocationTracker.destroy();
+    } finally {
+      // This factory requests a dedicated device; it never borrows a caller's.
+      // Release it even when individual resource cleanup fails.
+      rawDevice.destroy?.();
+    }
   }
 
   await finishAllocationScopes();

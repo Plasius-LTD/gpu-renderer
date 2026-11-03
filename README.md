@@ -66,6 +66,11 @@ export function dispose() {
 }
 ```
 
+`destroy()` is idempotent and releases both renderer resources and its dedicated
+GPU device. Await any reference frame you intend to keep before disposal; the
+device cannot be reused afterward. The factory requests its own device and does
+not accept a borrowed device.
+
 Supply decoded triangle geometry and material/texture data through `meshes`.
 The renderer does not fetch glTF files: use a loader such as
 [`@plasius/gpu-shared`](https://www.npmjs.com/package/@plasius/gpu-shared), or adapt

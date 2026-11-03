@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Release the internally owned wavefront GPU device exactly once on disposal,
+  including one-shot render failures and repeated scene replacement (#279).
+
 - Discover exact successful release CI without GitHub's stale remote status
   index; keep all explicit success and source checks at every release boundary (#277).
 

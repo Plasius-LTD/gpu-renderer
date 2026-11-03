@@ -42,3 +42,5 @@
 - [ADR 0044: Scalable instance texture storage](./adr-0044-scalable-instance-textures.md)
 
 - [ADR 0045: Animated inspection camera](adr-0045-animated-inspection-camera.md)
+
+- [ADR 0046: Wavefront device ownership](./adr-0046-wavefront-device-ownership.md)
