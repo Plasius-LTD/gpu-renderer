@@ -3741,6 +3741,8 @@ serialWebGpuTest("wavefront renderFrame can adapt high spp down to a single in-b
 serialWebGpuTest("wavefront compute one-shot compatibility helper renders and always destroys", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();
+    let deviceDisposals = 0;
+    device.destroy = () => { deviceDisposals += 1; };
     const frame = await renderWavefrontPathTracingComputeFrame({
       canvas: createFakeWavefrontCanvas(),
       navigator: createFakeWavefrontNavigator(device, {
@@ -3759,6 +3761,42 @@ serialWebGpuTest("wavefront compute one-shot compatibility helper renders and al
     assert.equal(frame.outputProbe.maxChannel, 128);
     assert.equal(device.buffers.every((buffer) => buffer.destroyed), true);
     assert.equal(device.textures.every((texture) => texture.destroyed), true);
+    assert.equal(deviceDisposals, 1, "one-shot frames must release their owned device");
+  });
+});
+
+serialWebGpuTest("wavefront disposal releases its owned device once across repeated mounts", async () => {
+  await withWebGpuConstants(async () => {
+    for (let mount = 0; mount < 3; mount += 1) {
+      const device = new FakeWavefrontDevice(), canvas = createFakeWavefrontCanvas();
+      let deviceDisposals = 0;
+      device.destroy = () => { deviceDisposals += 1; };
+      const renderer = await createWavefrontPathTracingComputeRenderer({ canvas,
+        navigator: createFakeWavefrontNavigator(device), width: 8, height: 8,
+        tileSize: 8, samplesPerPixel: 128, maxDepth: 2 });
+      await renderer.renderFrame({ samplesPerPixel: 2, awaitGPUCompletion: true, readOutputProbe: false });
+      renderer.destroy();
+      renderer.destroy();
+      assert.equal(deviceDisposals, 1, "normal disposal must release the internally requested device exactly once");
+      assert.equal(canvas.context.configured, null);
+      assert.equal(renderer.getSnapshot().allocations.allocatedBytes, 0);
+    }
+  });
+});
+
+serialWebGpuTest("one-shot frame failure releases the device and preserves the render error", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice(), failure = new Error("submitted GPU work failed");
+    let deviceDisposals = 0;
+    device.destroy = () => { deviceDisposals += 1; };
+    device.queue.onSubmittedWorkDone = async () => { throw failure; };
+    await assert.rejects(renderWavefrontPathTracingComputeFrame({
+      canvas: createFakeWavefrontCanvas(), navigator: createFakeWavefrontNavigator(device),
+      width: 8, height: 8, samplesPerPixel: 2, awaitGPUCompletion: true,
+    }), failure);
+    assert.equal(deviceDisposals, 1);
+    assert.ok(device.buffers.every(buffer => buffer.destroyed));
+    assert.ok(device.textures.every(texture => texture.destroyed));
   });
 });
 
