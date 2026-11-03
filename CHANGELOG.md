@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Retain the completed native1080p/4K host A/B evidence: exact HDR/count/ray/
+  command identity, 7.91/31.64MiB less known host budget backing storage and no
+  meaningful completed-job speed gain. Record GPU tile hotspots and separately
+  tracked optical, any-hit, compact-storage and material-proposal investigations;
+  no runtime candidate or performance improvement is claimed (#169, site#2362).
+
 - Resume controlled performance experiments under explicit provisional user
   acceptance of convergence, retaining failed reference screens (ADR0069).
   Add byte-identical per-tile configuration batching and independent lazy

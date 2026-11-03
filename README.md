@@ -24,6 +24,13 @@ CPU-only native tile workload measurements can be reproduced with
 `node scripts/benchmark-native-host-packing.mjs LIGHTING_CHECKOUT`; these do not
 render models or measure FPS. Whole-job native timings must be inspected before
 claiming frame-time benefit. See the [frozen host protocol](docs/design/native-host-performance.md).
+The [completed native host comparison](docs/evidence/native-host-performance-2026-11-03.md)
+verifies exact1080p/4K HDR/count/ray/command identity and saves7.91/31.64MiB of
+known host budget backing storage. It shows no meaningful completed-job gain.
+The [GPU follow-on priorities](docs/design/native-gpu-performance-priorities.md)
+record measured tile hotspots and separately tracked optical, any-hit, storage
+and material-proposal experiments; these candidates are not yet implemented or
+proven faster.
 
 Ordinary continuation sampling now retains rejected glossy proposals as null
 events instead of replacing them with unreported diffuse draws. Unaccounted

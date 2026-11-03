@@ -1,0 +1,2380 @@
+{
+  "schemaVersion": 1,
+  "status": "host-identity-measured-not-release-qualified",
+  "claim": "Exact host A/B image/count/ray/command identity and reduced known host backing allocation; no meaningful completed-job speed gain",
+  "sources": {
+    "renderer": "7066b5eca6615c3f1977e0b1653c47039241880e",
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "sourceReportSha256": "fd1578e0362b0699c2131778526972a08b3630567abeb7c265ff825ecaf8a513",
+  "analysisSha256": "a15771e8f8d967070f198e528ad824c6d179813ac06866b6dd39975bcd89d171",
+  "adapter": {
+    "vendor": "apple",
+    "architecture": "metal-3",
+    "isFallbackAdapter": false
+  },
+  "browser": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+    "platform": "MacIntel"
+  },
+  "rawCaptureDirectory": "output/playwright/eames-environments/room-reference-2026-11-03T09-35-52-927Z-1d4aa91a-3111-4d2e-9383-f20a68f1fedc",
+  "transportShaderSha256": {
+    "default": "b50d988d92d0af5867fc3355cadad89ad8b1affe9c88bf051298df2c8acaf7b4",
+    "fixedPattern": "1ced104009b807c8329a4dd539643483976db3c0ab6547e79be84aef54e70a94"
+  },
+  "resolutions": [
+    {
+      "resolution": "1080p",
+      "width": 1920,
+      "height": 1080,
+      "identity": {
+        "exactHdr": true,
+        "exactCompletedSamples": true,
+        "exactRays": true,
+        "primaryRays": 12337920,
+        "secondaryRays": 19314442,
+        "totalPathSegments": 31652362
+      },
+      "timing": [
+        {
+          "optimized": false,
+          "rawCompletedJobMs": [
+            66129.19999998808,
+            65813.59999996424,
+            66250.69999998808
+          ],
+          "medianCompletedJobMs": 66129.19999998808,
+          "statistics": {
+            "sampleCount": 3,
+            "mean": 66064.49999998014,
+            "sampleStandardDeviation": 225.61841681472265,
+            "coefficientOfVariation": 0.0034151233539161047,
+            "confidence95": {
+              "lower": 65503.98754658599,
+              "upper": 66625.0124533743,
+              "margin": 560.5124533941508,
+              "method": "two-sided Student t interval"
+            },
+            "requiredMatchedQualityImprovement": 0.05
+          }
+        },
+        {
+          "optimized": true,
+          "rawCompletedJobMs": [
+            66321.69999998808,
+            66212.90000003576,
+            66337.30000001192
+          ],
+          "medianCompletedJobMs": 66321.69999998808,
+          "statistics": {
+            "sampleCount": 3,
+            "mean": 66290.63333334525,
+            "sampleStandardDeviation": 67.76941294374136,
+            "coefficientOfVariation": 0.0010223075197209235,
+            "confidence95": {
+              "lower": 66122.2711914135,
+              "upper": 66458.995475277,
+              "margin": 168.3621419317532,
+              "method": "two-sided Student t interval"
+            },
+            "requiredMatchedQualityImprovement": 0.05
+          }
+        }
+      ],
+      "medianJobReductionFraction": -0.0029109682258372516,
+      "memory": [
+        {
+          "resolution": "1080p",
+          "optimized": false,
+          "rendererBufferBytes": 263105556,
+          "textureInventory": [
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1920,
+                "height": 1080
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1920,
+                "height": 1080
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 1920,
+                "height": 1080
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1,
+                "height": 1
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1,
+                "height": 1
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 94,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 128,
+                "height": 128
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6675,
+                "height": 5126
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6669,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 7183,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6159,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba32float",
+              "size": {
+                "width": 52,
+                "height": 93
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            }
+          ],
+          "adaptiveBufferBytes": 9421084,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "cachedBudgetHostBytes": 18662400
+        },
+        {
+          "resolution": "1080p",
+          "optimized": true,
+          "rendererBufferBytes": 263105556,
+          "textureInventory": [
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1920,
+                "height": 1080
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1920,
+                "height": 1080
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 1920,
+                "height": 1080
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1,
+                "height": 1
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1,
+                "height": 1
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 94,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 128,
+                "height": 128
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6675,
+                "height": 5126
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6669,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 7183,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6159,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba32float",
+              "size": {
+                "width": 52,
+                "height": 93
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            }
+          ],
+          "adaptiveBufferBytes": 9421084,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "cachedBudgetHostBytes": 10368000
+        }
+      ],
+      "avoidedHostBudgetBackingBytes": 8294400,
+      "diagnostics": [
+        {
+          "optimized": false,
+          "evidence": {
+            "file": "output/playwright/eames-environments/room-reference-2026-11-03T09-35-52-927Z-1d4aa91a-3111-4d2e-9383-f20a68f1fedc/1080p-0-host-comparison.json",
+            "receiptSha256": "aad7c3c8df85ff9fa1b833fc9d78b5a19684b044902fc1c3c2263d1a37afe3c4",
+            "hdrSha256": "d9bc30338fd23c4860c569b56d4c4be243e3fdfc0257e754cadce80b379cc8e5",
+            "pngSha256": "f360c370e8b77ce1f69d26a1c743e7c051656f61757880c1c7be27217fbebe50",
+            "verifiedPixels": 2073600,
+            "verifiedChunks": 8
+          },
+          "tileGpuMs": 64635.46982400002,
+          "cpuProfile": {
+            "schemaVersion": 1,
+            "timingBasis": "host-elapsed-not-cpu-utilization",
+            "stages": {
+              "budgetPacking": {
+                "calls": 1,
+                "failures": 0,
+                "elapsedMs": 0.19999998807907104,
+                "exclusiveMs": 0.19999998807907104,
+                "kind": "synchronous-host"
+              },
+              "uploads": {
+                "calls": 271,
+                "failures": 0,
+                "elapsedMs": 2.400000214576721,
+                "exclusiveMs": 2.400000214576721,
+                "kind": "synchronous-host"
+              },
+              "configPacking": {
+                "calls": 135,
+                "failures": 0,
+                "elapsedMs": 17.399999618530273,
+                "exclusiveMs": 15.499999403953552,
+                "kind": "synchronous-host"
+              },
+              "commandEncoding": {
+                "calls": 176,
+                "failures": 0,
+                "elapsedMs": 154.59999990463257,
+                "exclusiveMs": 154.59999990463257,
+                "kind": "synchronous-host"
+              },
+              "finish": {
+                "calls": 176,
+                "failures": 0,
+                "elapsedMs": 0.8999999761581421,
+                "exclusiveMs": 0.8999999761581421,
+                "kind": "synchronous-host"
+              },
+              "submit": {
+                "calls": 176,
+                "failures": 0,
+                "elapsedMs": 3.4000000953674316,
+                "exclusiveMs": 3.4000000953674316,
+                "kind": "synchronous-host"
+              },
+              "gpuWait": {
+                "calls": 176,
+                "failures": 0,
+                "elapsedMs": 67406.89999991655,
+                "exclusiveMs": 67406.89999991655,
+                "kind": "asynchronous-wait"
+              },
+              "telemetryReadback": {
+                "calls": 135,
+                "failures": 0,
+                "elapsedMs": 318.8000000715256,
+                "exclusiveMs": 318.8000000715256,
+                "kind": "asynchronous-wait"
+              },
+              "outputReadback": {
+                "calls": 135,
+                "failures": 0,
+                "elapsedMs": 340.00000005960464,
+                "exclusiveMs": 340.00000005960464,
+                "kind": "asynchronous-wait"
+              }
+            },
+            "commands": {
+              "commandEncoders": 176,
+              "computePasses": 23778,
+              "renderPasses": 1,
+              "pipelineChanges": 64739,
+              "bindGroupChanges": 23779,
+              "directDispatches": 21485,
+              "indirectDispatches": 43253,
+              "bufferCopies": 41984,
+              "bufferCopyBytes": 331776,
+              "clears": 1024,
+              "clearBytes": 131072,
+              "uploadCalls": 271,
+              "uploadBytes": 8881408,
+              "submissions": 176,
+              "commandBuffers": 176
+            },
+            "knownTemporaryBuffers": {
+              "count": 1294,
+              "bytes": 914688
+            },
+            "timeline": {
+              "enabled": false,
+              "emitted": 0,
+              "dropped": 0,
+              "errors": 0
+            }
+          },
+          "topFourTiles": [
+            {
+              "tileIndex": 96,
+              "tile": {
+                "x": 768,
+                "y": 768,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 10251.993088,
+              "segments": 693232,
+              "extraOpticalSegments": 289711
+            },
+            {
+              "tileIndex": 81,
+              "tile": {
+                "x": 768,
+                "y": 640,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 8155.234304,
+              "segments": 1060698,
+              "extraOpticalSegments": 357622
+            },
+            {
+              "tileIndex": 97,
+              "tile": {
+                "x": 896,
+                "y": 768,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 5956.173824,
+              "segments": 556492,
+              "extraOpticalSegments": 34575
+            },
+            {
+              "tileIndex": 82,
+              "tile": {
+                "x": 896,
+                "y": 640,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 4892.59008,
+              "segments": 1217963,
+              "extraOpticalSegments": 15845
+            }
+          ],
+          "topFourGpuFraction": 0.4526305970338419,
+          "topFourExtraOpticalFraction": 0.9671831423232811
+        },
+        {
+          "optimized": true,
+          "evidence": {
+            "file": "output/playwright/eames-environments/room-reference-2026-11-03T09-35-52-927Z-1d4aa91a-3111-4d2e-9383-f20a68f1fedc/1080p-1-host-comparison.json",
+            "receiptSha256": "6210a3b22d19bdeba3a574608327260e75f26245cb5a927546d91c7375fa44f4",
+            "hdrSha256": "d9bc30338fd23c4860c569b56d4c4be243e3fdfc0257e754cadce80b379cc8e5",
+            "pngSha256": "f360c370e8b77ce1f69d26a1c743e7c051656f61757880c1c7be27217fbebe50",
+            "verifiedPixels": 2073600,
+            "verifiedChunks": 8
+          },
+          "tileGpuMs": 64250.970112000025,
+          "cpuProfile": {
+            "schemaVersion": 1,
+            "timingBasis": "host-elapsed-not-cpu-utilization",
+            "stages": {
+              "budgetPacking": {
+                "calls": 1,
+                "failures": 0,
+                "elapsedMs": 0.10000002384185791,
+                "exclusiveMs": 0.10000002384185791,
+                "kind": "synchronous-host"
+              },
+              "uploads": {
+                "calls": 271,
+                "failures": 0,
+                "elapsedMs": 2.699999988079071,
+                "exclusiveMs": 2.699999988079071,
+                "kind": "synchronous-host"
+              },
+              "configPacking": {
+                "calls": 135,
+                "failures": 0,
+                "elapsedMs": 10.600000143051147,
+                "exclusiveMs": 8.100000143051147,
+                "kind": "synchronous-host"
+              },
+              "commandEncoding": {
+                "calls": 176,
+                "failures": 0,
+                "elapsedMs": 107.30000030994415,
+                "exclusiveMs": 107.30000030994415,
+                "kind": "synchronous-host"
+              },
+              "finish": {
+                "calls": 176,
+                "failures": 0,
+                "elapsedMs": 0.5,
+                "exclusiveMs": 0.5,
+                "kind": "synchronous-host"
+              },
+              "submit": {
+                "calls": 176,
+                "failures": 0,
+                "elapsedMs": 3.1999998688697815,
+                "exclusiveMs": 3.1999998688697815,
+                "kind": "synchronous-host"
+              },
+              "gpuWait": {
+                "calls": 176,
+                "failures": 0,
+                "elapsedMs": 65241.899999797344,
+                "exclusiveMs": 65241.899999797344,
+                "kind": "asynchronous-wait"
+              },
+              "telemetryReadback": {
+                "calls": 135,
+                "failures": 0,
+                "elapsedMs": 246.0999995470047,
+                "exclusiveMs": 246.0999995470047,
+                "kind": "asynchronous-wait"
+              },
+              "outputReadback": {
+                "calls": 135,
+                "failures": 0,
+                "elapsedMs": 284.30000042915344,
+                "exclusiveMs": 284.30000042915344,
+                "kind": "asynchronous-wait"
+              }
+            },
+            "commands": {
+              "commandEncoders": 176,
+              "computePasses": 23778,
+              "renderPasses": 1,
+              "pipelineChanges": 64739,
+              "bindGroupChanges": 23779,
+              "directDispatches": 21485,
+              "indirectDispatches": 43253,
+              "bufferCopies": 41984,
+              "bufferCopyBytes": 331776,
+              "clears": 1024,
+              "clearBytes": 131072,
+              "uploadCalls": 271,
+              "uploadBytes": 8881408,
+              "submissions": 176,
+              "commandBuffers": 176
+            },
+            "knownTemporaryBuffers": {
+              "count": 405,
+              "bytes": 630208
+            },
+            "timeline": {
+              "enabled": false,
+              "emitted": 0,
+              "dropped": 0,
+              "errors": 0
+            }
+          },
+          "topFourTiles": [
+            {
+              "tileIndex": 96,
+              "tile": {
+                "x": 768,
+                "y": 768,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 10235.0848,
+              "segments": 693232,
+              "extraOpticalSegments": 289711
+            },
+            {
+              "tileIndex": 81,
+              "tile": {
+                "x": 768,
+                "y": 640,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 8095.793152,
+              "segments": 1060698,
+              "extraOpticalSegments": 357622
+            },
+            {
+              "tileIndex": 97,
+              "tile": {
+                "x": 896,
+                "y": 768,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 5907.74272,
+              "segments": 556492,
+              "extraOpticalSegments": 34575
+            },
+            {
+              "tileIndex": 82,
+              "tile": {
+                "x": 896,
+                "y": 640,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 4875.747328,
+              "segments": 1217963,
+              "extraOpticalSegments": 15845
+            }
+          ],
+          "topFourGpuFraction": 0.4531350725016115,
+          "topFourExtraOpticalFraction": 0.9671831423232811
+        }
+      ],
+      "qualityScope": "Exact A/B identity; existing convergence provisionally accepted, not newly passed"
+    },
+    {
+      "resolution": "4k",
+      "width": 3840,
+      "height": 2160,
+      "identity": {
+        "exactHdr": true,
+        "exactCompletedSamples": true,
+        "exactRays": true,
+        "primaryRays": 49351680,
+        "secondaryRays": 77265355,
+        "totalPathSegments": 126617035
+      },
+      "timing": [
+        {
+          "optimized": false,
+          "rawCompletedJobMs": [
+            190101.40000003576,
+            194562.69999998808,
+            193913.30000001192
+          ],
+          "medianCompletedJobMs": 193913.30000001192,
+          "statistics": {
+            "sampleCount": 3,
+            "mean": 192859.13333334526,
+            "sampleStandardDeviation": 2410.238565625189,
+            "coefficientOfVariation": 0.012497404317685274,
+            "confidence95": {
+              "lower": 186871.2855735891,
+              "upper": 198846.98109310144,
+              "margin": 5987.847759756182,
+              "method": "two-sided Student t interval"
+            },
+            "requiredMatchedQualityImprovement": 0.05
+          }
+        },
+        {
+          "optimized": true,
+          "rawCompletedJobMs": [
+            194440.59999996424,
+            193860.19999998808,
+            194304.80000001192
+          ],
+          "medianCompletedJobMs": 194304.80000001192,
+          "statistics": {
+            "sampleCount": 3,
+            "mean": 194201.86666665474,
+            "sampleStandardDeviation": 303.582761911963,
+            "coefficientOfVariation": 0.0015632329756801943,
+            "confidence95": {
+              "lower": 193447.66441184864,
+              "upper": 194956.06892146083,
+              "margin": 754.2022548061019,
+              "method": "two-sided Student t interval"
+            },
+            "requiredMatchedQualityImprovement": 0.05
+          }
+        }
+      ],
+      "medianJobReductionFraction": -0.002018943517541061,
+      "memory": [
+        {
+          "resolution": "4k",
+          "optimized": false,
+          "rendererBufferBytes": 269249556,
+          "textureInventory": [
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 3840,
+                "height": 2160
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 3840,
+                "height": 2160
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3840,
+                "height": 2160
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1,
+                "height": 1
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1,
+                "height": 1
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 94,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 128,
+                "height": 128
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6675,
+                "height": 5126
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6669,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 7183,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6159,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba32float",
+              "size": {
+                "width": 52,
+                "height": 93
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            }
+          ],
+          "adaptiveBufferBytes": 34304284,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "cachedBudgetHostBytes": 74649600
+        },
+        {
+          "resolution": "4k",
+          "optimized": true,
+          "rendererBufferBytes": 269249556,
+          "textureInventory": [
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 3840,
+                "height": 2160
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 3840,
+                "height": 2160
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3840,
+                "height": 2160
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1,
+                "height": 1
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 1,
+                "height": 1
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 94,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba16float",
+              "size": {
+                "width": 128,
+                "height": 128
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6675,
+                "height": 5126
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6669,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 7183,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 6159,
+                "height": 4100
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba8unorm",
+              "size": {
+                "width": 3,
+                "height": 3
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            },
+            {
+              "format": "rgba32float",
+              "size": {
+                "width": 52,
+                "height": 93
+              },
+              "mipLevelCount": 1,
+              "sampleCount": 1
+            }
+          ],
+          "adaptiveBufferBytes": 34304284,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "cachedBudgetHostBytes": 41472000
+        }
+      ],
+      "avoidedHostBudgetBackingBytes": 33177600,
+      "diagnostics": [
+        {
+          "optimized": false,
+          "evidence": {
+            "file": "output/playwright/eames-environments/room-reference-2026-11-03T09-35-52-927Z-1d4aa91a-3111-4d2e-9383-f20a68f1fedc/4k-0-host-comparison.json",
+            "receiptSha256": "729abdc1206e2a4cf5343eedcacb48d82642869a34802bdd00adbc6cb790878f",
+            "hdrSha256": "f5b481efddf66bfef3e91b27c83735de6374baf2204e0016891a7b3ddd9a6b7a",
+            "pngSha256": "cdef3c04bb3b7458a9330fabd705987c6d8b275e9d4234653f515efbe9f7aa6a",
+            "verifiedPixels": 8294400,
+            "verifiedChunks": 32
+          },
+          "tileGpuMs": 189918.019584,
+          "cpuProfile": {
+            "schemaVersion": 1,
+            "timingBasis": "host-elapsed-not-cpu-utilization",
+            "stages": {
+              "budgetPacking": {
+                "calls": 1,
+                "failures": 0,
+                "elapsedMs": 0,
+                "exclusiveMs": 0,
+                "kind": "synchronous-host"
+              },
+              "uploads": {
+                "calls": 1021,
+                "failures": 0,
+                "elapsedMs": 20.400000274181366,
+                "exclusiveMs": 20.400000274181366,
+                "kind": "synchronous-host"
+              },
+              "configPacking": {
+                "calls": 510,
+                "failures": 0,
+                "elapsedMs": 50.40000003576279,
+                "exclusiveMs": 43.19999974966049,
+                "kind": "synchronous-host"
+              },
+              "commandEncoding": {
+                "calls": 645,
+                "failures": 0,
+                "elapsedMs": 516.0999998450279,
+                "exclusiveMs": 516.0999998450279,
+                "kind": "synchronous-host"
+              },
+              "finish": {
+                "calls": 645,
+                "failures": 0,
+                "elapsedMs": 2.6999998688697815,
+                "exclusiveMs": 2.6999998688697815,
+                "kind": "synchronous-host"
+              },
+              "submit": {
+                "calls": 645,
+                "failures": 0,
+                "elapsedMs": 10.500000357627869,
+                "exclusiveMs": 10.500000357627869,
+                "kind": "synchronous-host"
+              },
+              "gpuWait": {
+                "calls": 645,
+                "failures": 0,
+                "elapsedMs": 196271.7999998927,
+                "exclusiveMs": 196271.7999998927,
+                "kind": "asynchronous-wait"
+              },
+              "telemetryReadback": {
+                "calls": 510,
+                "failures": 0,
+                "elapsedMs": 1220.3999998569489,
+                "exclusiveMs": 1220.3999998569489,
+                "kind": "asynchronous-wait"
+              },
+              "outputReadback": {
+                "calls": 510,
+                "failures": 0,
+                "elapsedMs": 1362.0999999046326,
+                "exclusiveMs": 1362.0999999046326,
+                "kind": "asynchronous-wait"
+              }
+            },
+            "commands": {
+              "commandEncoders": 645,
+              "computePasses": 82752,
+              "renderPasses": 1,
+              "pipelineChanges": 226033,
+              "bindGroupChanges": 82753,
+              "directDispatches": 74856,
+              "indirectDispatches": 151176,
+              "bufferCopies": 146862,
+              "bufferCopyBytes": 1160568,
+              "clears": 3582,
+              "clearBytes": 458496,
+              "uploadCalls": 1021,
+              "uploadBytes": 35198976,
+              "submissions": 645,
+              "commandBuffers": 645
+            },
+            "knownTemporaryBuffers": {
+              "count": 4602,
+              "bytes": 3167616
+            },
+            "timeline": {
+              "enabled": false,
+              "emitted": 0,
+              "dropped": 0,
+              "errors": 0
+            }
+          },
+          "topFourTiles": [
+            {
+              "tileIndex": 373,
+              "tile": {
+                "x": 1664,
+                "y": 1536,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 16251.224064,
+              "segments": 1544643,
+              "extraOpticalSegments": 1092703
+            },
+            {
+              "tileIndex": 343,
+              "tile": {
+                "x": 1664,
+                "y": 1408,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 15077.474304,
+              "segments": 1877617,
+              "extraOpticalSegments": 1406135
+            },
+            {
+              "tileIndex": 374,
+              "tile": {
+                "x": 1792,
+                "y": 1536,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 10144.907264,
+              "segments": 707110,
+              "extraOpticalSegments": 138340
+            },
+            {
+              "tileIndex": 344,
+              "tile": {
+                "x": 1792,
+                "y": 1408,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 8539.734016,
+              "segments": 936891,
+              "extraOpticalSegments": 46985
+            }
+          ],
+          "topFourGpuFraction": 0.2633417290131298,
+          "topFourExtraOpticalFraction": 0.9369676207284865
+        },
+        {
+          "optimized": true,
+          "evidence": {
+            "file": "output/playwright/eames-environments/room-reference-2026-11-03T09-35-52-927Z-1d4aa91a-3111-4d2e-9383-f20a68f1fedc/4k-1-host-comparison.json",
+            "receiptSha256": "e92804275d61dc30890f68e944e23d846de4657e7c1c37dfa155f5711c1801a6",
+            "hdrSha256": "f5b481efddf66bfef3e91b27c83735de6374baf2204e0016891a7b3ddd9a6b7a",
+            "pngSha256": "cdef3c04bb3b7458a9330fabd705987c6d8b275e9d4234653f515efbe9f7aa6a",
+            "verifiedPixels": 8294400,
+            "verifiedChunks": 32
+          },
+          "tileGpuMs": 189974.3805439999,
+          "cpuProfile": {
+            "schemaVersion": 1,
+            "timingBasis": "host-elapsed-not-cpu-utilization",
+            "stages": {
+              "budgetPacking": {
+                "calls": 1,
+                "failures": 0,
+                "elapsedMs": 0,
+                "exclusiveMs": 0,
+                "kind": "synchronous-host"
+              },
+              "uploads": {
+                "calls": 1021,
+                "failures": 0,
+                "elapsedMs": 16.199999630451202,
+                "exclusiveMs": 16.199999630451202,
+                "kind": "synchronous-host"
+              },
+              "configPacking": {
+                "calls": 510,
+                "failures": 0,
+                "elapsedMs": 42.79999977350235,
+                "exclusiveMs": 35.40000009536743,
+                "kind": "synchronous-host"
+              },
+              "commandEncoding": {
+                "calls": 645,
+                "failures": 0,
+                "elapsedMs": 594.4999991059303,
+                "exclusiveMs": 594.4999991059303,
+                "kind": "synchronous-host"
+              },
+              "finish": {
+                "calls": 645,
+                "failures": 0,
+                "elapsedMs": 2.8000001311302185,
+                "exclusiveMs": 2.8000001311302185,
+                "kind": "synchronous-host"
+              },
+              "submit": {
+                "calls": 645,
+                "failures": 0,
+                "elapsedMs": 16.600000202655792,
+                "exclusiveMs": 16.600000202655792,
+                "kind": "synchronous-host"
+              },
+              "gpuWait": {
+                "calls": 645,
+                "failures": 0,
+                "elapsedMs": 193638,
+                "exclusiveMs": 193638,
+                "kind": "asynchronous-wait"
+              },
+              "telemetryReadback": {
+                "calls": 510,
+                "failures": 0,
+                "elapsedMs": 1261.9000000357628,
+                "exclusiveMs": 1261.9000000357628,
+                "kind": "asynchronous-wait"
+              },
+              "outputReadback": {
+                "calls": 510,
+                "failures": 0,
+                "elapsedMs": 1451.9999998807907,
+                "exclusiveMs": 1451.9999998807907,
+                "kind": "asynchronous-wait"
+              }
+            },
+            "commands": {
+              "commandEncoders": 645,
+              "computePasses": 82752,
+              "renderPasses": 1,
+              "pipelineChanges": 226033,
+              "bindGroupChanges": 82753,
+              "directDispatches": 74856,
+              "indirectDispatches": 151176,
+              "bufferCopies": 146862,
+              "bufferCopyBytes": 1160568,
+              "clears": 3582,
+              "clearBytes": 458496,
+              "uploadCalls": 1021,
+              "uploadBytes": 35198976,
+              "submissions": 645,
+              "commandBuffers": 645
+            },
+            "knownTemporaryBuffers": {
+              "count": 1530,
+              "bytes": 2184576
+            },
+            "timeline": {
+              "enabled": false,
+              "emitted": 0,
+              "dropped": 0,
+              "errors": 0
+            }
+          },
+          "topFourTiles": [
+            {
+              "tileIndex": 373,
+              "tile": {
+                "x": 1664,
+                "y": 1536,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 16121.856,
+              "segments": 1544643,
+              "extraOpticalSegments": 1092703
+            },
+            {
+              "tileIndex": 343,
+              "tile": {
+                "x": 1664,
+                "y": 1408,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 15002.304512,
+              "segments": 1877617,
+              "extraOpticalSegments": 1406135
+            },
+            {
+              "tileIndex": 374,
+              "tile": {
+                "x": 1792,
+                "y": 1536,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 10206.969856,
+              "segments": 707110,
+              "extraOpticalSegments": 138340
+            },
+            {
+              "tileIndex": 344,
+              "tile": {
+                "x": 1792,
+                "y": 1408,
+                "width": 128,
+                "height": 128
+              },
+              "gpuMs": 8447.721472,
+              "segments": 936891,
+              "extraOpticalSegments": 46985
+            }
+          ],
+          "topFourGpuFraction": 0.2620292888833541,
+          "topFourExtraOpticalFraction": 0.9369676207284865
+        }
+      ],
+      "qualityScope": "Exact A/B identity; existing convergence provisionally accepted, not newly passed"
+    }
+  ],
+  "cpuWorkload": {
+    "status": "CPU-workload-measured-not-frame-performance",
+    "sourceFileSha256": "0da4b9a426c9937ee8c4243b02d7d5fbb2257650838c85cc9bf85a336d690bab",
+    "rendererSourceHashes": {
+      "../src/wavefront-packers.js": "000aa664f3e0fa47b393a6f04c201fe2a7f4f2fd3998f969517c41f16b752071",
+      "../tests/fixtures/native-host-packing.js": "caf23eae9470008d6f9c5bef5f272185a85d863b892517d5f746707d7ecff03c",
+      "./benchmark-native-host-packing.mjs": "6b1c28aff4bd985339ba00dfdb17188534169af0c0ce9942ecf8d8b09247570d"
+    },
+    "resolutions": [
+      {
+        "width": 1920,
+        "height": 1080,
+        "tiles": 135,
+        "meanSpp": 5.95,
+        "byteIdentical": true,
+        "knownBackingAllocations": {
+          "legacy": 1159,
+          "template": 270
+        },
+        "knownTransientBackingBytes": {
+          "legacy": 851968,
+          "template": 567488
+        },
+        "radialBudgetHostBytes": {
+          "eager": 18662400,
+          "lazy": 10368000,
+          "avoided": 8294400
+        },
+        "timings": [
+          {
+            "round": 0,
+            "template": false,
+            "elapsedMs": 1.1793749999999932,
+            "checksum": 0
+          },
+          {
+            "round": 0,
+            "template": true,
+            "elapsedMs": 0.24774999999999636,
+            "checksum": 0
+          },
+          {
+            "round": 1,
+            "template": true,
+            "elapsedMs": 0.31058400000000574,
+            "checksum": 0
+          },
+          {
+            "round": 1,
+            "template": false,
+            "elapsedMs": 1.2591250000000116,
+            "checksum": 0
+          },
+          {
+            "round": 2,
+            "template": false,
+            "elapsedMs": 1.2360419999999976,
+            "checksum": 0
+          },
+          {
+            "round": 2,
+            "template": true,
+            "elapsedMs": 0.2154999999999916,
+            "checksum": 0
+          },
+          {
+            "round": 3,
+            "template": true,
+            "elapsedMs": 0.21795900000000756,
+            "checksum": 0
+          },
+          {
+            "round": 3,
+            "template": false,
+            "elapsedMs": 1.1275829999999871,
+            "checksum": 0
+          },
+          {
+            "round": 4,
+            "template": false,
+            "elapsedMs": 1.2665000000000077,
+            "checksum": 0
+          },
+          {
+            "round": 4,
+            "template": true,
+            "elapsedMs": 0.2659579999999835,
+            "checksum": 0
+          },
+          {
+            "round": 5,
+            "template": true,
+            "elapsedMs": 0.34387499999999704,
+            "checksum": 0
+          },
+          {
+            "round": 5,
+            "template": false,
+            "elapsedMs": 1.210833000000008,
+            "checksum": 0
+          },
+          {
+            "round": 6,
+            "template": false,
+            "elapsedMs": 1.1880419999999958,
+            "checksum": 0
+          },
+          {
+            "round": 6,
+            "template": true,
+            "elapsedMs": 0.24783299999998576,
+            "checksum": 0
+          },
+          {
+            "round": 7,
+            "template": true,
+            "elapsedMs": 0.24816699999999514,
+            "checksum": 0
+          },
+          {
+            "round": 7,
+            "template": false,
+            "elapsedMs": 1.3978329999999914,
+            "checksum": 0
+          },
+          {
+            "round": 8,
+            "template": false,
+            "elapsedMs": 1.2320829999999887,
+            "checksum": 0
+          },
+          {
+            "round": 8,
+            "template": true,
+            "elapsedMs": 0.23391699999999105,
+            "checksum": 0
+          },
+          {
+            "round": 9,
+            "template": true,
+            "elapsedMs": 0.25095799999999713,
+            "checksum": 0
+          },
+          {
+            "round": 9,
+            "template": false,
+            "elapsedMs": 1.2522909999999854,
+            "checksum": 0
+          },
+          {
+            "round": 10,
+            "template": false,
+            "elapsedMs": 1.1728749999999764,
+            "checksum": 0
+          },
+          {
+            "round": 10,
+            "template": true,
+            "elapsedMs": 0.34558300000000486,
+            "checksum": 0
+          },
+          {
+            "round": 11,
+            "template": true,
+            "elapsedMs": 0.2718749999999943,
+            "checksum": 0
+          },
+          {
+            "round": 11,
+            "template": false,
+            "elapsedMs": 1.360334000000023,
+            "checksum": 0
+          },
+          {
+            "round": 12,
+            "template": false,
+            "elapsedMs": 1.0900839999999903,
+            "checksum": 0
+          },
+          {
+            "round": 12,
+            "template": true,
+            "elapsedMs": 0.22345800000002214,
+            "checksum": 0
+          },
+          {
+            "round": 13,
+            "template": true,
+            "elapsedMs": 0.27904100000000653,
+            "checksum": 0
+          },
+          {
+            "round": 13,
+            "template": false,
+            "elapsedMs": 1.0630419999999958,
+            "checksum": 0
+          },
+          {
+            "round": 14,
+            "template": false,
+            "elapsedMs": 1.0119579999999928,
+            "checksum": 0
+          },
+          {
+            "round": 14,
+            "template": true,
+            "elapsedMs": 0.27250000000000796,
+            "checksum": 0
+          },
+          {
+            "round": 15,
+            "template": true,
+            "elapsedMs": 0.2196660000000179,
+            "checksum": 0
+          },
+          {
+            "round": 15,
+            "template": false,
+            "elapsedMs": 1.100541000000021,
+            "checksum": 0
+          },
+          {
+            "round": 16,
+            "template": false,
+            "elapsedMs": 1.1171249999999873,
+            "checksum": 0
+          },
+          {
+            "round": 16,
+            "template": true,
+            "elapsedMs": 0.21616599999998698,
+            "checksum": 0
+          },
+          {
+            "round": 17,
+            "template": true,
+            "elapsedMs": 0.22145900000001006,
+            "checksum": 0
+          },
+          {
+            "round": 17,
+            "template": false,
+            "elapsedMs": 1.0046250000000043,
+            "checksum": 0
+          },
+          {
+            "round": 18,
+            "template": false,
+            "elapsedMs": 1.0319590000000005,
+            "checksum": 0
+          },
+          {
+            "round": 18,
+            "template": true,
+            "elapsedMs": 0.2217499999999859,
+            "checksum": 0
+          },
+          {
+            "round": 19,
+            "template": true,
+            "elapsedMs": 0.30829199999999446,
+            "checksum": 0
+          },
+          {
+            "round": 19,
+            "template": false,
+            "elapsedMs": 1.0181249999999977,
+            "checksum": 0
+          }
+        ],
+        "statistics": {
+          "legacy": {
+            "sampleCount": 20,
+            "mean": 1.1660187499999979,
+            "sampleStandardDeviation": 0.11328670474920967,
+            "coefficientOfVariation": 0.09715684653373702,
+            "confidence95": {
+              "lower": 1.1129995494600362,
+              "upper": 1.2190379505399596,
+              "margin": 0.053019200539961696,
+              "method": "two-sided Student t interval"
+            },
+            "requiredMatchedQualityImprovement": 0.19431369306747404
+          },
+          "template": {
+            "sampleCount": 20,
+            "mean": 0.2581145499999991,
+            "sampleStandardDeviation": 0.04145668833027016,
+            "coefficientOfVariation": 0.16061352732835207,
+            "confidence95": {
+              "lower": 0.23871244560327273,
+              "upper": 0.27751665439672546,
+              "margin": 0.01940210439672637,
+              "method": "two-sided Student t interval"
+            },
+            "requiredMatchedQualityImprovement": 0.32122705465670415
+          }
+        }
+      },
+      {
+        "width": 3840,
+        "height": 2160,
+        "tiles": 510,
+        "meanSpp": 5.95,
+        "byteIdentical": true,
+        "knownBackingAllocations": {
+          "legacy": 4092,
+          "template": 1020
+        },
+        "knownTransientBackingBytes": {
+          "legacy": 2980224,
+          "template": 1997184
+        },
+        "radialBudgetHostBytes": {
+          "eager": 74649600,
+          "lazy": 41472000,
+          "avoided": 33177600
+        },
+        "timings": [
+          {
+            "round": 0,
+            "template": false,
+            "elapsedMs": 3.4634169999999926,
+            "checksum": 0
+          },
+          {
+            "round": 0,
+            "template": true,
+            "elapsedMs": 0.7233340000000226,
+            "checksum": 0
+          },
+          {
+            "round": 1,
+            "template": true,
+            "elapsedMs": 0.7086249999999836,
+            "checksum": 0
+          },
+          {
+            "round": 1,
+            "template": false,
+            "elapsedMs": 3.8991249999999695,
+            "checksum": 0
+          },
+          {
+            "round": 2,
+            "template": false,
+            "elapsedMs": 3.392916000000014,
+            "checksum": 0
+          },
+          {
+            "round": 2,
+            "template": true,
+            "elapsedMs": 0.9077080000000137,
+            "checksum": 0
+          },
+          {
+            "round": 3,
+            "template": true,
+            "elapsedMs": 0.9656659999999988,
+            "checksum": 0
+          },
+          {
+            "round": 3,
+            "template": false,
+            "elapsedMs": 3.42674999999997,
+            "checksum": 0
+          },
+          {
+            "round": 4,
+            "template": false,
+            "elapsedMs": 3.338707999999997,
+            "checksum": 0
+          },
+          {
+            "round": 4,
+            "template": true,
+            "elapsedMs": 0.8425000000000296,
+            "checksum": 0
+          },
+          {
+            "round": 5,
+            "template": true,
+            "elapsedMs": 0.8960839999999735,
+            "checksum": 0
+          },
+          {
+            "round": 5,
+            "template": false,
+            "elapsedMs": 3.6112080000000333,
+            "checksum": 0
+          },
+          {
+            "round": 6,
+            "template": false,
+            "elapsedMs": 3.4641659999999774,
+            "checksum": 0
+          },
+          {
+            "round": 6,
+            "template": true,
+            "elapsedMs": 0.8581249999999727,
+            "checksum": 0
+          },
+          {
+            "round": 7,
+            "template": true,
+            "elapsedMs": 0.8060409999999933,
+            "checksum": 0
+          },
+          {
+            "round": 7,
+            "template": false,
+            "elapsedMs": 3.671541999999988,
+            "checksum": 0
+          },
+          {
+            "round": 8,
+            "template": false,
+            "elapsedMs": 3.4717079999999783,
+            "checksum": 0
+          },
+          {
+            "round": 8,
+            "template": true,
+            "elapsedMs": 0.6708750000000236,
+            "checksum": 0
+          },
+          {
+            "round": 9,
+            "template": true,
+            "elapsedMs": 0.8592909999999847,
+            "checksum": 0
+          },
+          {
+            "round": 9,
+            "template": false,
+            "elapsedMs": 3.8320420000000013,
+            "checksum": 0
+          },
+          {
+            "round": 10,
+            "template": false,
+            "elapsedMs": 3.4997920000000136,
+            "checksum": 0
+          },
+          {
+            "round": 10,
+            "template": true,
+            "elapsedMs": 0.7873749999999973,
+            "checksum": 0
+          },
+          {
+            "round": 11,
+            "template": true,
+            "elapsedMs": 0.6817079999999578,
+            "checksum": 0
+          },
+          {
+            "round": 11,
+            "template": false,
+            "elapsedMs": 3.185375000000022,
+            "checksum": 0
+          },
+          {
+            "round": 12,
+            "template": false,
+            "elapsedMs": 3.369459000000006,
+            "checksum": 0
+          },
+          {
+            "round": 12,
+            "template": true,
+            "elapsedMs": 0.6953750000000127,
+            "checksum": 0
+          },
+          {
+            "round": 13,
+            "template": true,
+            "elapsedMs": 0.7439580000000205,
+            "checksum": 0
+          },
+          {
+            "round": 13,
+            "template": false,
+            "elapsedMs": 3.0794579999999883,
+            "checksum": 0
+          },
+          {
+            "round": 14,
+            "template": false,
+            "elapsedMs": 3.0887500000000045,
+            "checksum": 0
+          },
+          {
+            "round": 14,
+            "template": true,
+            "elapsedMs": 0.6380839999999921,
+            "checksum": 0
+          },
+          {
+            "round": 15,
+            "template": true,
+            "elapsedMs": 0.7312909999999988,
+            "checksum": 0
+          },
+          {
+            "round": 15,
+            "template": false,
+            "elapsedMs": 3.1696249999999964,
+            "checksum": 0
+          },
+          {
+            "round": 16,
+            "template": false,
+            "elapsedMs": 3.3751250000000255,
+            "checksum": 0
+          },
+          {
+            "round": 16,
+            "template": true,
+            "elapsedMs": 0.804458000000011,
+            "checksum": 0
+          },
+          {
+            "round": 17,
+            "template": true,
+            "elapsedMs": 0.8199160000000347,
+            "checksum": 0
+          },
+          {
+            "round": 17,
+            "template": false,
+            "elapsedMs": 3.8234170000000063,
+            "checksum": 0
+          },
+          {
+            "round": 18,
+            "template": false,
+            "elapsedMs": 3.2073329999999487,
+            "checksum": 0
+          },
+          {
+            "round": 18,
+            "template": true,
+            "elapsedMs": 0.6973750000000223,
+            "checksum": 0
+          },
+          {
+            "round": 19,
+            "template": true,
+            "elapsedMs": 0.7599170000000299,
+            "checksum": 0
+          },
+          {
+            "round": 19,
+            "template": false,
+            "elapsedMs": 3.196292000000028,
+            "checksum": 0
+          }
+        ],
+        "statistics": {
+          "legacy": {
+            "sampleCount": 20,
+            "mean": 3.428310399999998,
+            "sampleStandardDeviation": 0.24323191749837433,
+            "coefficientOfVariation": 0.07094804411478449,
+            "confidence95": {
+              "lower": 3.3144756667882382,
+              "upper": 3.542145133211758,
+              "margin": 0.11383473321176017,
+              "method": "two-sided Student t interval"
+            },
+            "requiredMatchedQualityImprovement": 0.14189608822956898
+          },
+          "template": {
+            "sampleCount": 20,
+            "mean": 0.7798853000000037,
+            "sampleStandardDeviation": 0.08931187900485921,
+            "coefficientOfVariation": 0.1145192491830001,
+            "confidence95": {
+              "lower": 0.7380865343457095,
+              "upper": 0.8216840656542979,
+              "margin": 0.041798765654294134,
+              "method": "two-sided Student t interval"
+            },
+            "requiredMatchedQualityImprovement": 0.2290384983660002
+          }
+        }
+      }
+    ]
+  },
+  "coverage": {
+    "lines": {
+      "total": 30277,
+      "covered": 24654,
+      "skipped": 0,
+      "pct": 81.42
+    },
+    "statements": {
+      "total": 30277,
+      "covered": 24654,
+      "skipped": 0,
+      "pct": 81.42
+    },
+    "functions": {
+      "total": 1038,
+      "covered": 947,
+      "skipped": 0,
+      "pct": 91.23
+    },
+    "branches": {
+      "total": 7018,
+      "covered": 6319,
+      "skipped": 0,
+      "pct": 90.03
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": 100
+    },
+    "changedSourcePaths": 163,
+    "missingChangedSourcePaths": [],
+    "denominator": "Complete src/scripts/fixtures/declarations; no exclusions added",
+    "physicalScope": "Source-pinned diagnostic frames; all12 timings precede V8 coverage"
+  },
+  "implementationCi": "https://github.com/Plasius-LTD/gpu-renderer/actions/runs/41612236134",
+  "limitations": [
+    "Three timed pairs are exploratory, not a confidence/sustained60Hz qualification",
+    "Time is completed renderer job including GPU presentation, not application/physical display pacing",
+    "Profile/HDR/ray readbacks are separate diagnostic frames",
+    "Two independent GPU instances coexist; allocation classes are per-instance, not physical VRAM",
+    "No resolution/SPP/depth/material/asset reduction or shader change"
+  ]
+}
