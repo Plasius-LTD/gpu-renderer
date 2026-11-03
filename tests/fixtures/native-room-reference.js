@@ -20,7 +20,7 @@ import {MAX_OPTICAL_INTERFACES,DEFAULT_OPTICAL_INTERFACES,OPTICAL_INTERFACE_BUDG
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 const el=id=>document.getElementById(id),run=el("run"),reset=el("reset"),cancel=el("cancel"),status=el("status"),result=el("result"),preview=el("preview"),download=el("download"),canvas=el("canvas");
-const controls=[...el("controls").querySelectorAll("input,select:not(#response-view)"),el("benchmark"),el('cloth-response'),el('qualification'),el('convergence'),el('sky-importance')];
+const controls=[...el("controls").querySelectorAll("input,select:not(#response-view)"),el("benchmark"),el('cloth-response'),el('qualification'),el('convergence'),el('sky-importance'),el('host-performance')];
 function lightingSelection(){return {style:el('lighting-style').value,intensity:el('lighting-intensity').valueAsNumber};}
 function resetLighting(){el('lighting-style').value=ROOM_LIGHTING_DEFAULTS.style;el('lighting-intensity').value=ROOM_LIGHTING_DEFAULTS.intensity;}
 el('lighting-intensity').min=String(ROOM_LIGHTING_DEFAULTS.minimumIntensity);el('lighting-intensity').max=String(ROOM_LIGHTING_DEFAULTS.maximumIntensity);
@@ -305,6 +305,12 @@ el('benchmark').addEventListener('click',async()=>{
  const {runRoomSplittingBenchmark}=await import('./native-room-splitting.js');
  const report=await runRoomSplittingBenchmark({loadAssets,clearCapture,roomCompositionControls});
  demoUi.refresh();if(report)setRoomPreviewState(document,report.status==='failed'?'failed':'complete');
+});
+el('host-performance').addEventListener('click',async()=>{
+ if(qualificationRunning||run.disabled)return;
+ const {runRoomHostPerformance}=await import('./native-room-host-performance.js');
+ await runRoomHostPerformance({loadAssets,clearCapture,roomCompositionControls,resetRoomControls});
+ demoUi.refresh();
 });
 el('cloth-response').addEventListener('click',async()=>{
  if(qualificationRunning)return;

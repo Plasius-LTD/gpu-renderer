@@ -1,5 +1,30 @@
 # @plasius/gpu-renderer
 
+Current experiment decision (3 November2026): the user provisionally accepts
+the retained convergence and authorizes performance/fidelity/memory optimisation.
+Earlier pause wording records the previous gate; failed reference measurements
+remain failed. No release, image-convergence or sustained60Hz claim is implied.
+See [ADR0069](docs/adrs/adr-0069-provisional-performance-baseline.md).
+
+**Laboratory diagnostics → Measure host packing and budget storage** compares
+legacy/eager and template/lazy host preparation on the original full filled room
+at native1080p then4K, radial32 ceiling and20 ordinary/2048 optical interfaces.
+One warmup per strategy and three alternating timed pairs are followed by
+separate exact HDR/count/ray/profile captures. Either local experiment selector
+can be tested independently via `native.hostOptimizations`; both default false.
+No shader, transport, resolution, SPP or material reduction is made. Use
+`?hostPerformanceResolution=1080p` or `4k` for explicitly partial development runs.
+The main camera controls remain within the scene. Stop retains the failure and
+restores controls. Two renderer instances coexist during the comparison;
+memory classes are reported per instance with shared budget input identified.
+Avoided uniform maps are host backing storage, not GPU/physical VRAM savings.
+
+The internal batch serializer is byte-equivalent to canonical per-sample packing.
+CPU-only native tile workload measurements can be reproduced with
+`node scripts/benchmark-native-host-packing.mjs LIGHTING_CHECKOUT`; these do not
+render models or measure FPS. Whole-job native timings must be inspected before
+claiming frame-time benefit. See the [frozen host protocol](docs/design/native-host-performance.md).
+
 Ordinary continuation sampling now retains rejected glossy proposals as null
 events instead of replacing them with unreported diffuse draws. Unaccounted
 emissive/portal continuation guidance is removed; explicit next-event lighting
@@ -8,9 +33,10 @@ sampling law. This correctness fix changes radiance/secondary counts and needs
 a new qualified fixed baseline; it is not an adaptive performance result. See
 [ADR0068](docs/adrs/adr-0068-bsdf-proposal-density.md) and Task#271.
 
-The six completed corrected1080p references currently fail the frozen3%
-convergence screen (128→256 about4.38%, independent256 pair6.19%), while passing
-the1% energy screen. They remain unqualified; the full4K capture continues.
+All twelve corrected1080p/4K references are retained. Both resolutions fail the
+frozen3% convergence screen (128→256 about4.38–4.40%, independent256 pairs
+6.19–6.21%), while passing the1% energy screen. These image-convergence results
+remain unqualified and are provisionally accepted only for current experiments.
 The CPU WGSL variance diagnostic preserves production BSDF/sampler/PDF functions
 and measures canonical versus controlled lobe probabilities in an isolated
 normal-incidence rough diffuse case. It identifies excess proposal variance

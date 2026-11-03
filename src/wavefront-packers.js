@@ -14,6 +14,9 @@ import {
 import { writeVec4 } from "./wavefront-binary.js";
 import { normalizeSceneObjects } from "./wavefront-scene-data.js";
 
+const PROJECTION_AND_SAMPLING_OFFSET = 128;
+export const FRAME_CONFIG_SAMPLE_INDEX_OFFSET = PROJECTION_AND_SAMPLING_OFFSET + 3 * Float32Array.BYTES_PER_ELEMENT;
+
 export function packWavefrontSceneObjects(sceneObjects, capacity = sceneObjects.length) {
   const normalized =
     Array.isArray(sceneObjects) && sceneObjects.length === 0
@@ -203,7 +206,7 @@ export function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
   writeVec4(floatView, 80, [...config.camera.forward, config.opticalInterfaceBudget?.enabled&&buildRange.opticalTelemetry===true?1:0]);
   writeVec4(floatView, 96, [...config.camera.right, config.opticalInterfaceBudget?.enabled?config.opticalInterfaceBudget.maximumInterfaces:0]);
   writeVec4(floatView, 112, [...config.camera.up, config.opticalInterfaceBudget?.enabled?config.maxDepth:0]);
-  writeVec4(floatView, 128, [
+  writeVec4(floatView, PROJECTION_AND_SAMPLING_OFFSET, [
     config.camera.tanHalfFovY,
     config.camera.aspect,
     sampleWeight,
@@ -244,6 +247,26 @@ export function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
     config.environmentMap.mipLevelCount ?? 1,
     config.environmentMap.hasImportanceData ? 1 : 0,
   ]);
+  return bytes;
+}
+
+// Internal host batching only. One canonical record is copied, never retained
+// across tiles/frames; all fields except the absolute ordinal stay byte-identical.
+export function createConfigPayloadBatch(config, tile, frameIndex, options = {}) {
+  const {sampleCount = config.samplesPerPixel, firstSample = 0, ...buildRange} = options;
+  const stride = config.memory.configBufferStride;
+  if (!Number.isSafeInteger(sampleCount) || sampleCount < 1 || sampleCount > 256 ||
+      !Number.isSafeInteger(firstSample) || firstSample < 0 || firstSample + sampleCount > config.samplesPerPixel || firstSample + sampleCount > 256 ||
+      !Number.isSafeInteger(stride) || stride < CONFIG_BUFFER_BYTES || stride % 4 || stride > 65536 || buildRange.sampleIndex !== undefined) {
+    throw new RangeError('Invalid frame configuration batch range or stride.');
+  }
+  const template = new Uint8Array(createConfigPayload(config, tile, frameIndex, {...buildRange, sampleIndex:firstSample}));
+  const bytes = new Uint8Array(sampleCount * stride), data = new DataView(bytes.buffer);
+  for (let slot = 0; slot < sampleCount; slot++) {
+    const offset = slot * stride;
+    bytes.set(template, offset);
+    data.setFloat32(offset + FRAME_CONFIG_SAMPLE_INDEX_OFFSET, firstSample + slot, true);
+  }
   return bytes;
 }
 

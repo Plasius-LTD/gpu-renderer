@@ -1,6 +1,5 @@
 import { createAdaptiveTilePlan } from "/src/wavefront-adaptive-tile-plan.js";
 import { createAdaptiveTileOutputPipelines } from "/src/wavefront-adaptive-tile-output.js";
-import { createConfigPayload } from "/src/wavefront-packers.js";
 import { resolveTransportExperiments } from "/src/wavefront-core.js";
 import { createGpuParallelismCounters } from "/src/wavefront-frame-runtime.js";
 import { createWavefrontCpuProfile } from "/src/wavefront-cpu-profile.js";
@@ -12,6 +11,7 @@ import {validateOpticalSelections,selectedOpticalJournals} from './optical-selec
 import {pathQueueCapacity} from '../../src/wavefront-optical-interface-budget.js';
 import {MAX_OPTICAL_TRACE_INTERFACES} from './optical-chain-trace.js';
 import {nativeSampleChunks,nativePhaseRanges} from './native-sample-chunks.js';
+import {nativeHostOptions,createNativeBudgetState,packNativeConfigBatch} from './native-host-packing.js';
 
 const check=(v,m)=>{if(!v)throw new Error(m);};
 export async function createNativeAdaptiveRunner(c) {
@@ -24,7 +24,7 @@ export async function createNativeAdaptiveRunner(c) {
   const setupStart=performance.now();
   const plan=createAdaptiveTilePlan({enabled:true,width,height,budgets});
   check(budgets.every(value=>value<=maximum),"Budget exceeds sample ceiling");
-  const words=Uint32Array.from(budgets),uniform=new Uint32Array(pixelCount).fill(maximum);
+  const hostOptimizations=nativeHostOptions(native.hostOptimizations),budgetState=createNativeBudgetState(budgets,maximum,hostOptimizations);
   const uniformPlan=plan.map(item=>({...item,expectedPrimaryRays:item.tile.width*item.tile.height*maximum,ranges:[{firstSample:0,sampleLimit:maximum}]}));
   const planSetupMs=performance.now()-setupStart;
   const output=await wait(createAdaptiveTileOutputPipelines(device,GPUShaderStage,{enabled:true}));
@@ -37,7 +37,7 @@ export async function createNativeAdaptiveRunner(c) {
   const setupError=await wait(device.popErrorScope());check(!setupError,setupError?.message);device.pushErrorScope("validation");
   const memory={...c.memory,fixtureStagingBytes:c.memory.fixtureStagingBytes+gathered.size,
     ...(c.guidePostprocess?{guidedDenoise:c.guidePostprocess.memory}:{}),
-    cachedBudgetHostBytes:budgets.byteLength+words.byteLength+uniform.byteLength};
+    cachedBudgetHostBytes:budgetState.memoryBytes()};
   return {adapter:c.adapter,memory,planSetupMs,tiles:plan.length,
     guidedPostprocess:c.guidePostprocess,
     async inspectClothResponse(options){
@@ -72,7 +72,11 @@ export async function createNativeAdaptiveRunner(c) {
       const asyncStage=(name,fn)=>cpu?cpu.measureAsync(name,fn):fn();
       const image=diagnostics?new Float32Array(pixelCount*4):null,actualHistogram={},tiles=[];
       const started=performance.now(),visibilityBefore=document.visibilityState;
-      if(adaptive)frameDevice.queue.writeBuffer(b.pixelState,0,mode==="radial"?words:uniform);
+      if(adaptive){
+        const state=stage('budgetPacking',()=>budgetState.get(mode,bytes=>cpu?.recordAllocation(bytes)));
+        memory.cachedBudgetHostBytes=budgetState.memoryBytes();
+        frameDevice.queue.writeBuffer(b.pixelState,0,state);
+      }
       let readbackMs=0,actualSamples=0;
       for(const [tileIndex,item] of selected.entries()){
         active();const {tile,ranges,expectedPrimaryRays}=item;
@@ -80,11 +84,8 @@ export async function createNativeAdaptiveRunner(c) {
         const tileStarted=performance.now(),trace={tileIndex,tile,sampleRounds:samples,expectedPrimaryRays};
         try{
         stage("configPacking",()=>{
-          const batch=new Uint8Array(samples*config.memory.configBufferStride);cpu?.recordAllocation(batch.byteLength);
-          for(let ordinal=0;ordinal<samples;ordinal++){
-            const value=createConfigPayload(config,tile,seed,{opticalTelemetry:diagnostics&&telemetry.opticalSegmentsAvailable,sampleIndex:ordinal,sampleWeight:adaptive?1:1/maximum});
-            cpu?.recordAllocation(value.byteLength);batch.set(new Uint8Array(value),ordinal*config.memory.configBufferStride);
-          }
+          const batch=packNativeConfigBatch(config,tile,seed,samples,hostOptimizations,
+            {opticalTelemetry:diagnostics&&telemetry.opticalSegmentsAvailable,sampleWeight:adaptive?1:1/maximum},cpu?bytes=>cpu.recordAllocation(bytes):undefined);
           frameDevice.queue.writeBuffer(frame,0,batch);
           if(adaptive){const phases=new Uint8Array(ranges.length*256);cpu?.recordAllocation(phases.byteLength);
             for(const [i,range] of ranges.entries())phases.set(new Uint8Array(packSharedPhase({width,height,tileX:tile.x,tileY:tile.y,tileWidth:tile.width,tileHeight:tile.height,...range})),i*256);
@@ -169,7 +170,7 @@ export async function createNativeAdaptiveRunner(c) {
       const elapsed=performance.now()-started,visibilityAfter=document.visibilityState;
       const validation=await wait(device.popErrorScope());device.pushErrorScope("validation");check(!validation&&!errors.length,validation?.message??errors[0]);
       check(opticalJournals.length===selections.length,'Missing selected optical journals');
-      return {mode,sampler,maximumSpp:maximum,roughBounceSplitting:renderer.config.roughBounceSplitting,seed,fused:adaptive&&fused,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
+      return {mode,sampler,maximumSpp:maximum,hostOptimizations,roughBounceSplitting:renderer.config.roughBounceSplitting,seed,fused:adaptive&&fused,diagnostics,profile,width,height,image,completedFrameMs:diagnostics?null:elapsed,readbackInclusiveElapsedMs:diagnostics?elapsed:null,
         maximumPathEvents:config.maximumPathEvents??config.maxDepth,opticalInterfaceBudget:config.opticalInterfaceBudget,
         opticalTraceEvents,
         ...(selections.length?{opticalJournals,timingScope:'includes selected-sample diagnostic replays; not performance'}:{}),

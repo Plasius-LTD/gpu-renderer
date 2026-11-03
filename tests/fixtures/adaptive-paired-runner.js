@@ -23,9 +23,11 @@ import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
 import {pathQueueCapacity} from '/src/wavefront-optical-interface-budget.js';
 import {observePipelineSetup} from './pipeline-setup-observer.js';
 import {withReferenceTransportSampling,REFERENCE_TRANSPORT_MODE} from './reference-transport-sampling.js';
+import {nativeHostOptions} from './native-host-packing.js';
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false,opticalInterfaceBudget={enabled:false},referenceTransportSampling=false,environmentImportance=false}={}) {
+  if(native)native={...native,hostOptimizations:nativeHostOptions(native.hostOptimizations)};
   check(typeof environmentImportance==='boolean','Environment importance must be boolean');
   check(!referenceTransportSampling||(native&&sampler==='fixed-pattern'&&!splitDepth&&!pruningVariants),'Reference transport requires native fixed-camera sampling without splitting/pruning');
   check(!opticalInterfaceBudget.enabled||(boundedDielectricBranching&&nestedMediaRefraction&&!splitDepth),'Optical interface budget requires bounded+nested transport without rough splitting');

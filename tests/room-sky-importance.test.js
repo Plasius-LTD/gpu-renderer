@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {nativeHostOptions} from './fixtures/native-host-packing.js';
 import {roomSkyImportancePlan,roomSkyImportanceSettingsFromSearch,runRoomSkyImportance,validateSkyImportanceCapture,SKY_IMPORTANCE_FLAG} from './fixtures/room-sky-importance.js';
 import {roomConvergencePlan} from './fixtures/room-convergence.js';
 import {assessSkyVariance,verifyRoomSkyImportance} from '../scripts/verify-room-sky-importance.mjs';
@@ -48,7 +49,7 @@ test('sky batch checkpoints each lane, rejects mismatched rays/duplicates and st
 });
 test('actual paired runner forwards existing flag, defaults off and rejects non-booleans before GPU',async()=>{
  const file=new URL('./fixtures/adaptive-paired-runner.js',import.meta.url),source=readFileSync(file,'utf8').replace(/^import .*;$/gm,'').replace(/^export /gm,'');let options;
- const context=vm.createContext({setTimeout,clearTimeout,navigator:{gpu:{requestAdapter:async()=>({info:{isFallbackAdapter:false}})}},
+ const context=vm.createContext({nativeHostOptions,setTimeout,clearTimeout,navigator:{gpu:{requestAdapter:async()=>({info:{isFallbackAdapter:false}})}},
   createWavefrontPathTracingComputeRenderer:async value=>{options=value;throw Error('stop before GPU');},ADAPTIVE_MAX_SAMPLES:256});new vm.Script(source,{filename:file.pathname}).runInContext(context);
  const native={width:1920,height:1080,maximumSpp:32,canvas:{}};
  for(const value of [undefined,false,true]){options=null;await assert.rejects(context.createPairedProbeRunner({},new AbortController().signal,{native,...(value===undefined?{}:{environmentImportance:value})}),/stop before GPU/);assert.equal(options[SKY_IMPORTANCE_FLAG],value??false);}

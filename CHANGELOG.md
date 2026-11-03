@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Resume controlled performance experiments under explicit provisional user
+  acceptance of convergence, retaining failed reference screens (ADR0069).
+  Add byte-identical per-tile configuration batching and independent lazy
+  uniform-host-map allocation controls, default off in the native fixture.
+  Add native CPU workload measurements, exact byte/allocation regressions and
+  full-fidelity1080p/4K paired job/HDR/ray/profile capture. No shader/transport/
+  resolution/SPP/material change or physical-VRAM/real-time claim (#169).
+
 - Retain the failed corrected1080p convergence screen at unchanged limits and
   add CPU production-WGSL attribution of ordinary BSDF proposal variance. Compare
   canonical and controlled shared lobe weights against an independent physical
