@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.61] - 2026-11-03
+
 - Release the internally owned wavefront GPU device exactly once on disposal,
   including one-shot render failures and repeated scene replacement (#279).
 
@@ -1408,3 +1422,4 @@ All notable changes to this project will be documented in this file.
 [0.2.58]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.58
 [0.2.59]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.59
 [0.2.60]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.60
+[0.2.61]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.61
