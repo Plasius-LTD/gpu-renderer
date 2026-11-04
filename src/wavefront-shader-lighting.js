@@ -396,13 +396,16 @@ fn surface_bsdf_sampling_weights(hit: HitRecord) -> vec3<f32> {
   let metallic = clamp(hit.material.y, 0.0, 1.0);
   let clearcoat = clamp(hit.materialResponse.w, 0.0, 1.0);
   let specularWeight = clamp(hit.materialExtension.y, 0.0, 1.0);
-  let diffuseWeight = clamp(
+  var diffuseWeight = clamp(
     (1.0 - metallic) * max(1.0 - specularWeight * 0.5 - clearcoat * 0.25, 0.15),
     0.0,
     1.0
   );
   let specWeight = clamp(max(metallic, specularWeight * 0.75) * (1.0 - clearcoat * 0.5), 0.0, 1.0);
   let clearcoatWeight = clamp(clearcoat, 0.0, 1.0);
+  // A cosine proposal covers the complete hemisphere for the added sheen,
+  // including metallic bases. Sampling and PDF evaluation share these weights.
+  if (sheen_enabled()) { diffuseWeight = max(diffuseWeight, clamp(max_component(hit.materialResponse.xyz), 0.0, 1.0)); }
   let totalWeight = max(diffuseWeight + specWeight + clearcoatWeight, 0.000001);
   return vec3<f32>(
     diffuseWeight / totalWeight,
@@ -413,7 +416,7 @@ fn surface_bsdf_sampling_weights(hit: HitRecord) -> vec3<f32> {
 
 fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirection: vec3<f32>) -> vec3<f32> {
   let normal = safe_normalize(hit.shadingNormal.xyz, vec3<f32>(0.0, 1.0, 0.0));
-  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
+  let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let metallic = clamp(hit.material.y, 0.0, 1.0);
   let clearcoat = clamp(hit.materialResponse.w, 0.0, 1.0);
@@ -431,7 +434,8 @@ fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirectio
   let distribution = distribution_ggx(normal, halfVector, roughness);
   let geometry = geometry_smith(normal, viewDirection, lightDirection, roughness);
   let specular = (distribution * geometry * fresnel) / max(4.0 * nDotV * nDotL, 0.000001);
-  let diffuseWeight = (1.0 - metallic) * (1.0 - clearcoat * 0.24) * (1.0 - clamp(max_component(fresnel), 0.0, 0.98));
+  let layeredCoat = layered_clearcoat_active(hit);
+  let diffuseWeight = (1.0 - metallic) * select(1.0 - clearcoat * 0.24, 1.0, layeredCoat) * (1.0 - clamp(max_component(fresnel), 0.0, 0.98));
   let diffuse = surfaceColor * diffuseWeight / 3.14159265359;
   let clearcoatHalf = safe_normalize(viewDirection + lightDirection, normal);
   let clearcoatDistribution = distribution_ggx(normal, clearcoatHalf, max(clearcoatRoughness, 0.02));
@@ -441,7 +445,30 @@ fn evaluate_surface_bsdf(hit: HitRecord, viewDirection: vec3<f32>, lightDirectio
     (clearcoatDistribution * clearcoatGeometry * clearcoatFresnel) /
     max(4.0 * nDotV * nDotL, 0.000001) *
     clearcoat;
-  return (diffuse + specular + clearcoatTerm) * mix(0.42, 1.0, occlusion);
+  var base = diffuse + specular;
+  if (sheen_enabled() && max_component(hit.materialResponse.xyz) > 0.0) {
+    let color = clamp(hit.materialResponse.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
+    let sheenRoughness = clamp(hit.specularColor.w, 0.0, 1.0);
+    let energy = max(sheen_directional_albedo(nDotV, sheenRoughness), sheen_directional_albedo(nDotL, sheenRoughness));
+    let scale = max(0.0, 1.0 - max_component(color) * energy);
+    // Clearcoat remains the top layer and attenuates the added sheen.
+    base = base * scale + color * charlie_sheen(nDotV, nDotL, saturate(dot(normal, halfVector)), sheenRoughness)
+      * select(1.0 - clearcoat * max_component(clearcoatFresnel), 1.0, layeredCoat);
+  }
+  if (layeredCoat) {
+    let coatNormal = surface_clearcoat_normal(hit);
+    let coatNv = saturate(dot(coatNormal, viewDirection));
+    let coatNl = saturate(dot(coatNormal, lightDirection));
+    let coatFresnel = coating_fresnel(clearcoat, coatNormal, viewDirection);
+    var coatTerm = vec3<f32>(0.0);
+    if (coatNv > 0.0 && coatNl > 0.0) {
+      coatTerm = vec3<f32>(coatFresnel * distribution_ggx(coatNormal, halfVector, max(clearcoatRoughness, 0.02)) *
+        geometry_smith(coatNormal, viewDirection, lightDirection, max(clearcoatRoughness, 0.02)) /
+        max(4.0 * coatNv * coatNl, 0.000001));
+    }
+    return (base * (1.0 - coatFresnel) + coatTerm) * mix(0.42, 1.0, occlusion);
+  }
+  return (base + clearcoatTerm) * mix(0.42, 1.0, occlusion);
 }
 
 fn diffuse_pdf(normal: vec3<f32>, lightDirection: vec3<f32>) -> f32 {
@@ -462,7 +489,7 @@ fn evaluate_surface_bsdf_pdf(hit: HitRecord, viewDirection: vec3<f32>, lightDire
   let weights = surface_bsdf_sampling_weights(hit);
   let diffuseTerm = diffuse_pdf(normal, lightDirection);
   let specTerm = ggx_pdf(normal, viewDirection, lightDirection, max(roughness, 0.02));
-  let clearcoatTerm = ggx_pdf(normal, viewDirection, lightDirection, max(clamp(hit.materialExtension.x, 0.0, 1.0), 0.02));
+  let clearcoatTerm = ggx_pdf(surface_clearcoat_normal(hit), viewDirection, lightDirection, max(clamp(hit.materialExtension.x, 0.0, 1.0), 0.02));
   return weights.x * diffuseTerm + weights.y * specTerm + weights.z * clearcoatTerm;
 }
 
@@ -522,6 +549,7 @@ fn medium_transmittance(mediumRefId: u32, distance: f32) -> vec3<f32> {
 const MAX_MEDIUM_STACK_DEPTH: u32 = 4u;
 
 fn medium_stack_current_id(ray: RayRecord) -> u32 {
+  if (nested_media_enabled()) { return occupied_medium(ray.mediumStack); }
   if (ray.mediumStackDepth == 0u) {
     return ray.mediumRefId;
   }
@@ -538,6 +566,7 @@ fn medium_stack_current_id(ray: RayRecord) -> u32 {
 }
 
 fn transitioned_medium_stack(ray: RayRecord, hit: HitRecord) -> vec4<u32> {
+  if (medium_transition_invalid(ray, hit)) { return ray.mediumStack; }
   var stack = ray.mediumStack;
   var depth = min(ray.mediumStackDepth, MAX_MEDIUM_STACK_DEPTH);
   let mediumId = hit.mediumRefId;
@@ -595,6 +624,7 @@ fn transmitted_medium_ref_id(ray: RayRecord, hit: HitRecord) -> u32 {
     return medium_stack_current_id(ray);
   }
   let stack = transitioned_medium_stack(ray, hit);
+  if (nested_media_enabled()) { return occupied_medium(stack); }
   if (stack.w != 0u) {
     return stack.w;
   }
@@ -665,7 +695,7 @@ fn sunlit_baseline_radiance(normal: vec3<f32>) -> vec3<f32> {
 
 fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
   let normal = surface_shading_normal(hit);
-  let origin = offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, normal);
+  let origin = offset_hit_origin(hit, normal);
   let roughness = clamp(hit.material.x, 0.0, 1.0);
   let glossiness = surface_glossiness(hit);
   let normalEnvironment = gated_environment_radiance(origin, normal);
@@ -677,7 +707,7 @@ fn terminal_surface_environment_source(ray: RayRecord, hit: HitRecord) -> vec3<f
     mix(0.88, 0.38, glossiness)
   );
   let reflectionEnvironment = prefiltered_environment_radiance(reflectionDirection, roughness);
-  let surfaceColor = clamp(max(hit.color.xyz, config.ambientColor.xyz * 0.35), vec3<f32>(0.0), vec3<f32>(1.0));
+  let surfaceColor = clamp(hit.color.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
   let f0 = surface_specular_f0(hit, surfaceColor);
   let brdfTerm = sample_brdf_lut(saturate(dot(normal, viewDirection)), roughness);
   let specularEnvironment = reflectionEnvironment * (f0 * brdfTerm.x + vec3<f32>(brdfTerm.y));
@@ -706,7 +736,7 @@ fn terminal_surface_environment_contribution(
   throughput: vec3<f32>,
   hit: HitRecord
 ) -> vec3<f32> {
-  let surfaceColor = max(hit.color.xyz, config.ambientColor.xyz);
+  let surfaceColor = max(hit.color.xyz, vec3<f32>(0.0));
   let occlusion = mix(0.75, 1.0, clamp(hit.occlusion, 0.0, 1.0));
   return sanitize_linear_radiance(
     throughput *
@@ -779,7 +809,20 @@ fn visibility_test_ray(origin: vec3<f32>, direction: vec3<f32>) -> RayRecord {
 }
 
 fn scene_visibility_blocked(origin: vec3<f32>, direction: vec3<f32>, maxDistance: f32) -> bool {
-  let testRay = visibility_test_ray(origin, direction);
+  return scene_ray_visibility_blocked(visibility_test_ray(origin, direction), maxDistance);
+}
+
+fn transport_visibility_ray(parent: RayRecord, origin: vec3<f32>, direction: vec3<f32>) -> RayRecord {
+  var testRay = visibility_test_ray(origin, direction);
+  if (transport_experiment_enabled(65536u)) {
+    testRay.mediumRefId = parent.mediumRefId;
+    testRay.mediumStack = parent.mediumStack;
+    testRay.mediumStackDepth = parent.mediumStackDepth;
+  }
+  return testRay;
+}
+
+fn scene_ray_visibility_blocked(testRay: RayRecord, maxDistance: f32) -> bool {
   let nearest = max(maxDistance, 0.001);
 
   for (var objectIndex = 0u; objectIndex < config.sceneObjectCount; objectIndex = objectIndex + 1u) {
@@ -871,7 +914,17 @@ fn sample_emissive_triangle_light(
   if (lightPdf <= 0.000001) {
     return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
   }
-  let radiance = max(lightTriangle.emission.xyz, lightTriangle.color.xyz);
+  var radiance = max(lightTriangle.emission.xyz, lightTriangle.color.xyz);
+  if (layered_clearcoat_enabled() && lightTriangle.materialResponse.w > 0.0) {
+    let facing = select(-1.0, 1.0, dot(lightNormal, -lightDirection) >= 0.0);
+    let authoredNormal = safe_normalize(lightTriangle.n0.xyz * b0 + lightTriangle.n1.xyz * b1 + lightTriangle.n2.xyz * b2, lightNormal) * facing;
+    let lightSurface = sample_surface_material(lightTriangle,
+      lightTriangle.uv0uv1.xy * b0 + lightTriangle.uv0uv1.zw * b1 + lightTriangle.uv2Pad.xy * b2,
+      vec3<f32>(b0, b1, b2), lightNormal * facing, authoredNormal);
+    let coatNormal = valid_surface_normal(lightNormal * facing, lightSurface.clearcoatNormal, -lightDirection);
+    radiance = max(lightSurface.emission.xyz, lightSurface.color.xyz) *
+      (1.0 - coating_fresnel(lightSurface.materialResponse.w, coatNormal, -lightDirection));
+  }
   if (max_component(radiance) <= 0.000001) {
     return DirectLightSample(vec4<f32>(0.0), vec4<f32>(0.0), 0.0, 0.0, 0u, 0u);
   }
@@ -889,6 +942,50 @@ fn emissive_direct_class_probability() -> f32 {
     return 1.0;
   }
   return select(1.0, 0.5, config.emissiveTriangleCount > 0u);
+}
+
+fn environment_nee_selection_probability() -> f32 {
+  // This mode draws both estimators, rather than choosing a light class.
+  if (transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING)) {
+    return 1.0;
+  }
+  return 1.0 - emissive_direct_class_probability();
+}
+
+fn environment_nee_samples_sky_only() -> bool {
+  return strict_physical_low_spp_lighting_enabled() &&
+    !environment_map_enabled() && !environment_importance_sampling_enabled();
+}
+
+fn environment_nee_direction_pdf(normal: vec3<f32>, direction: vec3<f32>) -> f32 {
+  let probability = environment_nee_selection_probability();
+  if (environment_nee_samples_sky_only()) {
+    if (dot(normal, direction) <= 0.0) { return 0.0; }
+    if (transport_experiment_enabled(TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE)) {
+      return probability * cosine_hemisphere_pdf(normal, direction);
+    }
+    return probability * uniform_hemisphere_pdf();
+  }
+  return probability * environment_direction_pdf(direction);
+}
+
+fn terminal_environment_source(ray: RayRecord, radiance: vec3<f32>) -> vec3<f32> {
+  // direction.w carries the previous vertex's competing solid-angle density.
+  // The miss has neither that surface normal nor its light-class selection.
+  if (!terminal_mis_enabled(ray) || ray.direction.w <= 0.0) { return radiance; }
+  let portalScale = environment_portal_radiance_scale(ray.origin.xyz, ray.direction.xyz);
+  let portalHit = max_component(portalScale) > 0.0001;
+  // Portal-gated ambient fallback has no direct-light sampling strategy.
+  if (config.environmentPortalCount > 0u && config.environmentPortalMode == 2u && !portalHit) {
+    return radiance;
+  }
+  let weight = power_heuristic(max(ray.throughput.w, 0.000001), ray.direction.w);
+  if (environment_nee_samples_sky_only()) {
+    let sky = procedural_sky_radiance(ray.direction.xyz) * select(vec3<f32>(1.0), portalScale, portalHit);
+    // The finite procedural sun glow is not sampled by sky NEE. Do not suppress it.
+    return max(radiance - sky, vec3<f32>(0.0)) + sky * weight;
+  }
+  return radiance * weight;
 }
 
 fn terminal_emissive_light_pdf(ray: RayRecord, hit: HitRecord) -> f32 {
@@ -975,15 +1072,13 @@ fn sample_environment_direct_light(
   var lightDirection = normal;
   var radiance = vec3<f32>(0.0);
   var pdf = 0.0;
-  if (strict_physical_low_spp_lighting_enabled() && !environment_importance_sampling_enabled()) {
+  if (environment_nee_samples_sky_only()) {
     if (transport_experiment_enabled(TRANSPORT_EXPERIMENT_PRODUCT_STUDIO_IMPORTANCE)) {
       lightDirection = cosine_sample_hemisphere(environmentUv, normal);
       radiance = procedural_sky_radiance(lightDirection);
-      pdf = cosine_hemisphere_pdf(normal, lightDirection);
     } else {
       lightDirection = sample_uniform_hemisphere_direction(environmentUv, normal);
       radiance = procedural_sky_radiance(lightDirection);
-      pdf = uniform_hemisphere_pdf();
     }
   } else {
     let environmentSample = sample_environment_importance(vec2<f32>(
@@ -992,15 +1087,23 @@ fn sample_environment_direct_light(
     ));
     lightDirection = safe_normalize(environmentSample.direction, normal);
     radiance = direct_environment_radiance(
-      offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection),
+      offset_hit_origin(hit, lightDirection),
       lightDirection
     );
-    pdf = environmentSample.pdf;
+  }
+  pdf = environment_nee_direction_pdf(normal, lightDirection);
+  if (environment_nee_samples_sky_only()) {
+    let portalScale = environment_portal_radiance_scale(offset_hit_origin(hit, lightDirection), lightDirection);
+    let portalHit = max_component(portalScale) > 0.0001;
+    radiance *= select(vec3<f32>(1.0), portalScale, portalHit);
+    if (config.environmentPortalCount > 0u && config.environmentPortalMode == 2u && !portalHit) {
+      radiance = vec3<f32>(0.0);
+    }
   }
   return DirectLightSample(
     vec4<f32>(lightDirection, 0.0),
     vec4<f32>(radiance, 0.0),
-    pdf * environmentSelectionProbability,
+    pdf,
     1000000.0,
     0u,
     1u
@@ -1035,8 +1138,7 @@ fn sample_emissive_direct_light(
 }
 
 fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> DirectLightSample {
-  let environmentSelectionProbability =
-    1.0 - emissive_direct_class_probability();
+  let environmentSelectionProbability = environment_nee_selection_probability();
   let selector = sample_dimension_1d(
     direct_light_sample_pixel_id(ray),
     ray.sampleId,
@@ -1051,7 +1153,8 @@ fn sample_direct_light(hit: HitRecord, ray: RayRecord, normal: vec3<f32>) -> Dir
 }
 
 fn direct_light_sample_contribution(ray: RayRecord, hit: HitRecord, lightSample: DirectLightSample) -> vec3<f32> {
-  let normal = surface_shading_normal(hit);
+  var normal = surface_shading_normal(hit);
+  if (rough_dielectric_active(hit)) { normal = optical_shading_normal(ray, hit); }
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
   if (lightSample.valid == 0u) {
     return vec3<f32>(0.0);
@@ -1060,23 +1163,26 @@ fn direct_light_sample_contribution(ray: RayRecord, hit: HitRecord, lightSample:
     return vec3<f32>(0.0);
   }
   let lightDirection = safe_normalize(lightSample.direction.xyz, normal);
-  let origin = offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection);
+  let origin = offset_hit_origin(hit, lightDirection);
   let nDotL = saturate(dot(normal, lightDirection));
   if (nDotL <= 0.000001) {
     return vec3<f32>(0.0);
   }
-  if (scene_visibility_blocked(origin, lightDirection, lightSample.maxDistance)) {
+  if (scene_ray_visibility_blocked(transport_visibility_ray(ray, origin, lightDirection), lightSample.maxDistance)) {
     return vec3<f32>(0.0);
   }
-  let incidentRadiance = lightSample.radiance.xyz;
+  var incidentRadiance = lightSample.radiance.xyz;
+  if (transport_experiment_enabled(65536u)) {
+    incidentRadiance *= medium_transmittance(medium_stack_current_id(ray), lightSample.maxDistance);
+  }
   if (max_component(incidentRadiance) <= 0.000001) {
     return vec3<f32>(0.0);
   }
-  let bsdf = evaluate_surface_bsdf(hit, viewDirection, lightDirection);
+  let bsdf = transport_surface_bsdf(ray, hit, viewDirection, lightDirection);
   if (max_component(bsdf) <= 0.000001) {
     return vec3<f32>(0.0);
   }
-  let bsdfPdf = evaluate_surface_bsdf_pdf(hit, viewDirection, lightDirection);
+  let bsdfPdf = transport_surface_pdf(ray, hit, viewDirection, lightDirection);
   let misWeight = power_heuristic(lightSample.pdf, bsdfPdf);
   let contribution = select(
     ray.throughput.xyz *
@@ -1090,7 +1196,8 @@ fn direct_light_sample_contribution(ray: RayRecord, hit: HitRecord, lightSample:
 }
 
 fn surface_direct_light_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f32> {
-  let normal = surface_shading_normal(hit);
+  var normal = surface_shading_normal(hit);
+  if (rough_dielectric_active(hit)) { normal = optical_shading_normal(ray, hit); }
   if (transport_experiment_enabled(TRANSPORT_EXPERIMENT_DETERMINISTIC_DIRECT_LIGHTING)) {
     let environmentLight = sample_environment_direct_light(hit, ray, normal, 0.5, 1.0);
     let emissiveLight = sample_emissive_direct_light(hit, ray, 0.0);
@@ -1106,7 +1213,8 @@ fn surface_procedural_sun_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f
   if (!strict_physical_low_spp_lighting_enabled() || environment_map_enabled()) {
     return vec3<f32>(0.0);
   }
-  let normal = surface_shading_normal(hit);
+  var normal = surface_shading_normal(hit);
+  if (rough_dielectric_active(hit)) { normal = optical_shading_normal(ray, hit); }
   let viewDirection = safe_normalize(-ray.direction.xyz, normal);
   let lightDirection = safe_normalize(
     config.environmentSunDirectionIntensity.xyz,
@@ -1116,14 +1224,14 @@ fn surface_procedural_sun_contribution(ray: RayRecord, hit: HitRecord) -> vec3<f
   if (nDotL <= 0.000001) {
     return vec3<f32>(0.0);
   }
-  let origin = offset_origin(hit.position.xyz, hit.geometricNormal.xyz, hit.shadingNormal.xyz, lightDirection);
-  if (scene_visibility_blocked(origin, lightDirection, 1000000.0)) {
+  let origin = offset_hit_origin(hit, lightDirection);
+  if (scene_ray_visibility_blocked(transport_visibility_ray(ray, origin, lightDirection), 1000000.0)) {
     return vec3<f32>(0.0);
   }
   let incidentRadiance =
     max(config.environmentSunColor.xyz, vec3<f32>(0.0)) *
     max(config.environmentSunDirectionIntensity.w, 0.0001);
-  let bsdf = evaluate_surface_bsdf(hit, viewDirection, lightDirection);
+  let bsdf = transport_surface_bsdf(ray, hit, viewDirection, lightDirection);
   return sanitize_linear_radiance(ray.throughput.xyz * bsdf * incidentRadiance * nDotL);
 }
 

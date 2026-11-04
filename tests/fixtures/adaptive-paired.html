@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fixed versus adaptive — paired GPU diagnostic</title>
+<style>body{font:16px system-ui;margin:24px;background:#10151d;color:#edf2f7}button{font:inherit;padding:10px;margin:8px}canvas{max-width:100%;height:auto;border:1px solid #728096}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#89c9ff}</style>
+<h1>Fixed versus adaptive pixels</h1><p>Controlled 128×128 scenes, identical camera and sampling sequence. Experimental pipeline, not the site renderer or an Eames benchmark. Denoise is off. Timings exclude initial setup, readback and canvas presentation.</p>
+<button id="run">Measure before and after</button><button id="cancel" disabled>Cancel measurement</button>
+<p id="progress" role="status">Ready. Requires physical WebGPU.</p><div id="previews"></div>
+<details><summary>Raw measurement receipt</summary><pre id="result">No measurements yet.</pre></details>
+<script type="module" src="./adaptive-paired.js"></script></html>

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stable-pattern correction</title>
+<style>body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}button,select{font:inherit;padding:10px;margin:6px}canvas,img{display:block;max-width:100%;height:auto;margin:12px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere}#status{min-height:3em}</style>
+<h1>Eames: stable-pattern correction</h1>
+<p>Fixed centre-first camera samples. Stable lighting differs between pixels and decisions, without frame randomization. Compare random, old shared pattern, fixed-camera/random-lighting control, and stable fast-scrambled lighting.</p>
+<p>Original geometry/textures, four bounces, denoise off, unchanged circular 5.95-SPP budgets. Experimental and off by default. Brightness screening is not complete image-quality qualification.</p>
+<label for="resolution">Native resolution</label><select id="resolution"><option value="1080p">1080p</option><option value="4K">4K</option><option value="both">Both</option></select>
+<button id="run">Run stable-pattern comparison</button><button id="cancel" disabled>Stop after pending GPU work</button>
+<p id="status" role="status" aria-live="polite">Ready</p>
+<canvas id="canvas" width="1920" height="1080" aria-label="Original Eames stable-pattern render"></canvas>
+<pre id="result" aria-label="Comparison results"></pre><section id="previews" aria-label="Retained comparisons"></section>
+<script type="module" src="./native-stable-pattern.js"></script></html>
+

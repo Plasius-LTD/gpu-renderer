@@ -1,3 +1,4 @@
+import { ADAPTIVE_PREFIX_SCAN_WGSL } from "./wavefront-adaptive-scan-shader.js";
 export const ADAPTIVE_PRIMARY_WGSL = `
 struct AdaptivePrimaryWords { words: array<u32>, };
 struct AdaptivePrimaryConfig {
@@ -50,22 +51,7 @@ fn compact_primary_tier(@builtin(global_invocation_id) id: vec3<u32>, @builtin(l
     if (!valid || (requested == config.tier && completed != 0u)) { atomicOr(&control.failure, 2u); }
     eligible = select(0u, 1u, valid && requested == config.tier && completed == 0u);
   }
-  prefix[lane.x] = eligible;
-  workgroupBarrier();
-  for (var offset = 1u; offset < 64u; offset = offset * 2u) {
-    var previous = 0u;
-    if (lane.x >= offset) { previous = prefix[lane.x - offset]; }
-    workgroupBarrier();
-    prefix[lane.x] = prefix[lane.x] + previous;
-    workgroupBarrier();
-  }
-  if (lane.x == 63u) { destinationBase = atomicAdd(&control.count, prefix[63u]); }
-  workgroupBarrier();
-  if (eligible != 0u) {
-    let destination = destinationBase + prefix[lane.x] - 1u;
-    if (destination < arrayLength(&worklist.words)) { worklist.words[destination] = id.x; }
-    else { atomicOr(&control.failure, 4u); }
-  }
+${ADAPTIVE_PREFIX_SCAN_WGSL}
 }
 
 @compute @workgroup_size(1)

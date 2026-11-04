@@ -1,0 +1,14 @@
+{
+  "status": "rejected",
+  "scope": "rejected-initial-shared-scheduler-capture-summary",
+  "timestamp": "2026-09-20T14:09:17.293Z",
+  "captureId": "paired-adaptive-2026-09-20T14-08-52-099Z",
+  "rendererCommit": "765c7c6e40c111d9fc52a21f1c86c6c2d07bde3d",
+  "lightingCommit": "b23af8d4c79ce23c28c5134886569b84a73c9079",
+  "fixedShaderSha256": "c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb",
+  "sharedShaderSha256": "c72ea75f5da72bcc06dd19f40568e431f331d6f31a1f1cc8aff298f02a147864",
+  "timedFrames": 0,
+  "completedWarmups": 1,
+  "error": "[Buffer \"wavefront-adaptive-dispatch\"] usage (Indirect|Storage(read-write)) includes writable usage and another usage in the same synchronization scope.\n - While validating compute pass usage.\n - While finishing [CommandEncoder (unlabeled)].\n",
+  "disposition": "Not performance or correctness evidence. Physical validation exposed a writable-storage/indirect argument binding conflict. Separate phase and execution layouts in commit 33427bd44ceb113f0b78bf343b907c9fc8c78c05 fixed it; a failure-first layout regression test now covers the separation."
+}

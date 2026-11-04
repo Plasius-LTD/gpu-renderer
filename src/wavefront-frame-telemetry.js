@@ -1,9 +1,6 @@
 import { GPU_READBACK_COMPLETION_TIMEOUT_MS } from "./wavefront-core.js";
 import { createBuffer } from "./wavefront-gpu-resources.js";
 
-const TIMESTAMP_QUERY_COUNT = 2;
-const TIMESTAMP_BUFFER_BYTES = TIMESTAMP_QUERY_COUNT * BigUint64Array.BYTES_PER_ELEMENT;
-
 function hasGpuFeature(features, name) {
   if (typeof features?.has === "function") {
     return features.has(name);
@@ -26,6 +23,13 @@ function freezeRayCountTelemetry(values = {}) {
     capturedRayCounts: values.capturedRayCounts ?? 0,
     expectedRayCounts: values.expectedRayCounts ?? 0,
     reason: values.reason ?? null,
+    ...(values.histogramDomain ? {
+      histogramDomain: values.histogramDomain,
+      queuePathSegments: values.queuePathSegments ?? null,
+      additionalOpticalSegments: values.additionalOpticalSegments ?? null,
+      capturedOpticalSegmentRecords: values.capturedOpticalSegmentRecords ?? 0,
+      expectedOpticalSegmentRecords: values.expectedOpticalSegmentRecords ?? 0,
+    } : {}),
   });
 }
 
@@ -53,11 +57,11 @@ function safeErrorReason(error) {
     : "unknown-telemetry-readback-failure";
 }
 
-function timestampDurationMs(values) {
-  if (values.length < TIMESTAMP_QUERY_COUNT || values[1] < values[0]) {
+function timestampDurationMs(values, finalIndex) {
+  if (values.length <= finalIndex || values[finalIndex] < values[0]) {
     return null;
   }
-  const durationNanoseconds = values[1] - values[0];
+  const durationNanoseconds = values[finalIndex] - values[0];
   const durationMs = Number(durationNanoseconds) / 1_000_000;
   return Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : null;
 }
@@ -66,17 +70,26 @@ export function createWavefrontFrameTelemetryResources({
   device,
   constants,
   maxRayCountRecords,
+  maxOpticalSegmentRecords = 0,
+  // Internal diagnostic option. Default public-renderer descriptors stay unchanged.
+  timestampPassPairs = false,
 }) {
+  const timestampQueryCount = timestampPassPairs ? 4 : 2;
+  const timestampBufferBytes = timestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT;
   const rayRecordCapacity = Math.max(1, Math.trunc(Number(maxRayCountRecords) || 1));
   const rayBufferBytes = rayRecordCapacity * Uint32Array.BYTES_PER_ELEMENT;
+  if (!Number.isSafeInteger(maxOpticalSegmentRecords) || maxOpticalSegmentRecords < 0) throw new RangeError('Invalid optical telemetry capacity');
+  const opticalBufferBytes = maxOpticalSegmentRecords * Uint32Array.BYTES_PER_ELEMENT;
   const mapMode = constants.map;
   if (!mapMode || typeof mapMode.READ !== "number") {
     return Object.freeze({
       available: false,
+      opticalSegmentsAvailable: false,
       reason: "gpu-map-read-unavailable",
       memoryBytes: 0,
       beginFrame() {},
       recordActiveRayCount() {},
+      recordOpticalSegmentCount() {},
       decorateFirstPass(descriptor) {
         return descriptor;
       },
@@ -112,6 +125,15 @@ export function createWavefrontFrameTelemetryResources({
     rayBufferBytes,
     "plasius.wavefront.rayCounts.readback"
   );
+  let opticalCountBuffer = null, opticalReadbackBuffer = null;
+  try {
+    if (opticalBufferBytes) {
+      opticalCountBuffer = createBuffer(device, constants.buffer.COPY_DST | constants.buffer.COPY_SRC, opticalBufferBytes, 'plasius.wavefront.opticalSegments');
+      opticalReadbackBuffer = createBuffer(device, constants.buffer.COPY_DST | constants.buffer.MAP_READ, opticalBufferBytes, 'plasius.wavefront.opticalSegments.readback');
+    }
+  } catch (error) {
+    opticalCountBuffer?.destroy?.(); rayCountBuffer.destroy?.(); rayCountReadbackBuffer.destroy?.(); throw error;
+  }
 
   const timestampFeatureAvailable = hasGpuFeature(device?.features, "timestamp-query");
   const timestampApiAvailable =
@@ -129,18 +151,18 @@ export function createWavefrontFrameTelemetryResources({
       timestampQuerySet = device.createQuerySet({
         label: "plasius.wavefront.timestamps",
         type: "timestamp",
-        count: TIMESTAMP_QUERY_COUNT,
+        count: timestampQueryCount,
       });
       timestampResolveBuffer = createBuffer(
         device,
         constants.buffer.QUERY_RESOLVE | constants.buffer.COPY_SRC,
-        TIMESTAMP_BUFFER_BYTES,
+        timestampBufferBytes,
         "plasius.wavefront.timestamps.resolve"
       );
       timestampReadbackBuffer = createBuffer(
         device,
         constants.buffer.COPY_DST | constants.buffer.MAP_READ,
-        TIMESTAMP_BUFFER_BYTES,
+        timestampBufferBytes,
         "plasius.wavefront.timestamps.readback"
       );
       timestampSetupReason = null;
@@ -168,18 +190,29 @@ export function createWavefrontFrameTelemetryResources({
   let timestampEnded = false;
   let rayReadbackMapped = false;
   let timestampReadbackMapped = false;
+  let opticalRecordCount = 0, opticalOverflow = false, opticalMapped = false;
 
   const memoryBytes =
-    rayBufferBytes * 2 +
-    (timestampQuerySet ? TIMESTAMP_BUFFER_BYTES * 2 : 0);
+    rayBufferBytes * 2 + opticalBufferBytes * 2 +
+    (timestampQuerySet ? timestampBufferBytes * 2 : 0);
 
   function beginFrame() {
     active = true;
     recordCount = 0;
     recordOverflow = false;
+    opticalRecordCount = 0;
+    opticalOverflow = false;
     bounceIndices = [];
     timestampStarted = false;
     timestampEnded = false;
+  }
+
+  function recordOpticalSegmentCount(encoder, counterBuffer) {
+    if (!active || !opticalCountBuffer) return;
+    if (opticalRecordCount >= maxOpticalSegmentRecords) { opticalOverflow = true; return; }
+    // The final reserved counter word is reset by primary generation/bootstrap.
+    encoder.copyBufferToBuffer(counterBuffer, 27 * 4, opticalCountBuffer, opticalRecordCount * 4, 4);
+    opticalRecordCount += 1;
   }
 
   function recordActiveRayCount(encoder, counterBuffer, bounceIndex) {
@@ -211,6 +244,7 @@ export function createWavefrontFrameTelemetryResources({
       timestampWrites: {
         querySet: timestampQuerySet,
         beginningOfPassWriteIndex: 0,
+        ...(timestampPassPairs ? { endOfPassWriteIndex: 1 } : {}),
       },
     };
   }
@@ -224,7 +258,8 @@ export function createWavefrontFrameTelemetryResources({
       ...descriptor,
       timestampWrites: {
         querySet: timestampQuerySet,
-        endOfPassWriteIndex: 1,
+        ...(timestampPassPairs ? { beginningOfPassWriteIndex: 2 } : {}),
+        endOfPassWriteIndex: timestampQueryCount - 1,
       },
     };
   }
@@ -232,17 +267,18 @@ export function createWavefrontFrameTelemetryResources({
   async function readFrame({
     expectedPrimaryRays = 0,
     expectedRayCounts = recordCount,
+    expectedOpticalSegmentRecords = 0,
     waitForSubmittedGpuWork,
   } = {}) {
     active = false;
-    if (recordOverflow || recordCount !== expectedRayCounts) {
+    if (recordOverflow || recordCount !== expectedRayCounts || opticalOverflow || opticalRecordCount !== expectedOpticalSegmentRecords) {
       return Object.freeze({
         rayCounts: freezeRayCountTelemetry({
           status: "failed",
           expectedPrimaryRays,
           capturedRayCounts: recordCount,
           expectedRayCounts,
-          reason: recordOverflow
+          reason: opticalOverflow ? 'optical-segment-record-capacity-exceeded' : opticalRecordCount !== expectedOpticalSegmentRecords ? `optical-segment-record-mismatch:${opticalRecordCount}/${expectedOpticalSegmentRecords}` : recordOverflow
             ? "ray-count-record-capacity-exceeded"
             : `ray-count-record-mismatch:${recordCount}/${expectedRayCounts}`,
         }),
@@ -260,6 +296,7 @@ export function createWavefrontFrameTelemetryResources({
       recordCount * Uint32Array.BYTES_PER_ELEMENT
     );
     encoder.copyBufferToBuffer(rayCountBuffer, 0, rayCountReadbackBuffer, 0, rayCopyBytes);
+    if (opticalRecordCount) encoder.copyBufferToBuffer(opticalCountBuffer, 0, opticalReadbackBuffer, 0, opticalRecordCount * 4);
     const canResolveTimestamps =
       timestampQuerySet &&
       timestampStarted &&
@@ -269,7 +306,7 @@ export function createWavefrontFrameTelemetryResources({
       encoder.resolveQuerySet(
         timestampQuerySet,
         0,
-        TIMESTAMP_QUERY_COUNT,
+        timestampQueryCount,
         timestampResolveBuffer,
         0
       );
@@ -278,7 +315,7 @@ export function createWavefrontFrameTelemetryResources({
         0,
         timestampReadbackBuffer,
         0,
-        TIMESTAMP_BUFFER_BYTES
+        timestampBufferBytes
       );
     }
     device.queue.submit([encoder.finish()]);
@@ -296,6 +333,15 @@ export function createWavefrontFrameTelemetryResources({
       const rayCounts = new Uint32Array(rayCopy, 0, recordCount);
       rayCountReadbackBuffer.unmap();
       rayReadbackMapped = false;
+
+      let additionalOpticalSegments = 0;
+      if (opticalRecordCount) {
+        await opticalReadbackBuffer.mapAsync(mapMode.READ);
+        opticalMapped = true;
+        const opticalCounts = new Uint32Array(opticalReadbackBuffer.getMappedRange().slice(0, opticalRecordCount * 4));
+        for (const count of opticalCounts) additionalOpticalSegments += count;
+        opticalReadbackBuffer.unmap(); opticalMapped = false;
+      }
 
       let maximumBounceIndex = 0;
       for (const bounceIndex of bounceIndices) {
@@ -317,6 +363,9 @@ export function createWavefrontFrameTelemetryResources({
         }
       }
       const primaryCountsMatch = observedPrimaryRays === expectedPrimaryRays;
+      const queuePathSegments = totalPathSegments;
+      totalPathSegments += additionalOpticalSegments;
+      secondaryRays += additionalOpticalSegments;
       const rayTelemetry = freezeRayCountTelemetry({
         status: primaryCountsMatch ? "available" : "failed",
         source: "gpu-active-queue-readback",
@@ -327,6 +376,8 @@ export function createWavefrontFrameTelemetryResources({
         bounceHistogram,
         capturedRayCounts: recordCount,
         expectedRayCounts,
+        ...(opticalBufferBytes ? {histogramDomain:'queue-iteration',queuePathSegments,additionalOpticalSegments,
+          capturedOpticalSegmentRecords:opticalRecordCount,expectedOpticalSegmentRecords} : {}),
         reason: primaryCountsMatch
           ? null
           : `primary-ray-count-mismatch:${observedPrimaryRays}/${expectedPrimaryRays}`,
@@ -341,11 +392,11 @@ export function createWavefrontFrameTelemetryResources({
           timestampReadbackMapped = true;
           const timestampCopy = timestampReadbackBuffer
             .getMappedRange()
-            .slice(0, TIMESTAMP_BUFFER_BYTES);
+            .slice(0, timestampBufferBytes);
           const timestamps = new BigUint64Array(timestampCopy);
           timestampReadbackBuffer.unmap();
           timestampReadbackMapped = false;
-          totalGpuTimeMs = timestampDurationMs(timestamps);
+          totalGpuTimeMs = timestampDurationMs(timestamps, timestampQueryCount - 1);
           timestampQueryStatus = totalGpuTimeMs === null ? "failed" : "available";
           timestampReason =
             totalGpuTimeMs === null ? "timestamp-query-returned-invalid-range" : null;
@@ -368,6 +419,7 @@ export function createWavefrontFrameTelemetryResources({
         reason: timestampReason,
       });
     } catch (error) {
+      if (opticalMapped) { opticalReadbackBuffer.unmap(); opticalMapped = false; }
       if (rayReadbackMapped) {
         rayCountReadbackBuffer.unmap();
         rayReadbackMapped = false;
@@ -396,6 +448,8 @@ export function createWavefrontFrameTelemetryResources({
     active = false;
     rayCountBuffer.destroy?.();
     rayCountReadbackBuffer.destroy?.();
+    opticalCountBuffer?.destroy?.();
+    opticalReadbackBuffer?.destroy?.();
     timestampQuerySet?.destroy?.();
     timestampResolveBuffer?.destroy?.();
     timestampReadbackBuffer?.destroy?.();
@@ -403,10 +457,12 @@ export function createWavefrontFrameTelemetryResources({
 
   return Object.freeze({
     available: true,
+    opticalSegmentsAvailable: opticalBufferBytes > 0,
     reason: null,
     memoryBytes,
     beginFrame,
     recordActiveRayCount,
+    recordOpticalSegmentCount,
     decorateFirstPass,
     decorateFinalPass,
     readFrame,

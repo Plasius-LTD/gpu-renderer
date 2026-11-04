@@ -14,6 +14,9 @@ import {
 import { writeVec4 } from "./wavefront-binary.js";
 import { normalizeSceneObjects } from "./wavefront-scene-data.js";
 
+const PROJECTION_AND_SAMPLING_OFFSET = 128;
+export const FRAME_CONFIG_SAMPLE_INDEX_OFFSET = PROJECTION_AND_SAMPLING_OFFSET + 3 * Float32Array.BYTES_PER_ELEMENT;
+
 export function packWavefrontSceneObjects(sceneObjects, capacity = sceneObjects.length) {
   const normalized =
     Array.isArray(sceneObjects) && sceneObjects.length === 0
@@ -63,7 +66,7 @@ export function packWavefrontSceneObjects(sceneObjects, capacity = sceneObjects.
       object.specularColor[0] ?? 1,
       object.specularColor[1] ?? 1,
       object.specularColor[2] ?? 1,
-      1,
+      object.materialExtensions?.sheenRoughness ?? 0,
     ]);
   });
 
@@ -95,12 +98,13 @@ export function packWavefrontTriangles(triangles, capacity = triangles.length) {
     uintView[u32 + 5] = triangle.mediumRefId;
     uintView[u32 + 6] = triangle.materialSlot ?? 0;
     uintView[u32 + 7] = 0;
-    writeVec4(floatView, byteOffset + 32, [...triangle.v0, 0]);
-    writeVec4(floatView, byteOffset + 48, [...triangle.v1, 0]);
-    writeVec4(floatView, byteOffset + 64, [...triangle.v2, 0]);
-    writeVec4(floatView, byteOffset + 80, [...triangle.n0, 0]);
-    writeVec4(floatView, byteOffset + 96, [...triangle.n1, 0]);
-    writeVec4(floatView, byteOffset + 112, [...triangle.n2, 0]);
+    // UV1 uses otherwise-unused W lanes; XYZ geometry and record stride are unchanged.
+    writeVec4(floatView, byteOffset + 32, [...triangle.v0, triangle.uvs1?.[0] ?? 0]);
+    writeVec4(floatView, byteOffset + 48, [...triangle.v1, triangle.uvs1?.[2] ?? 0]);
+    writeVec4(floatView, byteOffset + 64, [...triangle.v2, triangle.uvs1?.[4] ?? 0]);
+    writeVec4(floatView, byteOffset + 80, [...triangle.n0, triangle.uvs1?.[1] ?? 0]);
+    writeVec4(floatView, byteOffset + 96, [...triangle.n1, triangle.uvs1?.[3] ?? 0]);
+    writeVec4(floatView, byteOffset + 112, [...triangle.n2, triangle.uvs1?.[5] ?? 0]);
     writeVec4(floatView, byteOffset + 128, [...triangle.uv0, ...triangle.uv1]);
     writeVec4(floatView, byteOffset + 144, [...triangle.uv2, 0, 0]);
     writeVec4(floatView, byteOffset + 160, triangle.color);
@@ -199,10 +203,10 @@ export function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
   data.setUint32(56, config.gpuMeshSource.meshes.count, true);
   data.setUint32(60, config.bvhNodeCapacity, true);
   writeVec4(floatView, 64, [...config.camera.position, 1]);
-  writeVec4(floatView, 80, [...config.camera.forward, 0]);
-  writeVec4(floatView, 96, [...config.camera.right, 0]);
-  writeVec4(floatView, 112, [...config.camera.up, 0]);
-  writeVec4(floatView, 128, [
+  writeVec4(floatView, 80, [...config.camera.forward, config.opticalInterfaceBudget?.enabled&&buildRange.opticalTelemetry===true?1:0]);
+  writeVec4(floatView, 96, [...config.camera.right, config.opticalInterfaceBudget?.enabled?config.opticalInterfaceBudget.maximumInterfaces:0]);
+  writeVec4(floatView, 112, [...config.camera.up, config.opticalInterfaceBudget?.enabled?config.maxDepth:0]);
+  writeVec4(floatView, PROJECTION_AND_SAMPLING_OFFSET, [
     config.camera.tanHalfFovY,
     config.camera.aspect,
     sampleWeight,
@@ -243,6 +247,26 @@ export function createConfigPayload(config, tile, frameIndex, buildRange = {}) {
     config.environmentMap.mipLevelCount ?? 1,
     config.environmentMap.hasImportanceData ? 1 : 0,
   ]);
+  return bytes;
+}
+
+// Internal host batching only. One canonical record is copied, never retained
+// across tiles/frames; all fields except the absolute ordinal stay byte-identical.
+export function createConfigPayloadBatch(config, tile, frameIndex, options = {}) {
+  const {sampleCount = config.samplesPerPixel, firstSample = 0, ...buildRange} = options;
+  const stride = config.memory.configBufferStride;
+  if (!Number.isSafeInteger(sampleCount) || sampleCount < 1 || sampleCount > 256 ||
+      !Number.isSafeInteger(firstSample) || firstSample < 0 || firstSample + sampleCount > config.samplesPerPixel || firstSample + sampleCount > 256 ||
+      !Number.isSafeInteger(stride) || stride < CONFIG_BUFFER_BYTES || stride % 4 || stride > 65536 || buildRange.sampleIndex !== undefined) {
+    throw new RangeError('Invalid frame configuration batch range or stride.');
+  }
+  const template = new Uint8Array(createConfigPayload(config, tile, frameIndex, {...buildRange, sampleIndex:firstSample}));
+  const bytes = new Uint8Array(sampleCount * stride), data = new DataView(bytes.buffer);
+  for (let slot = 0; slot < sampleCount; slot++) {
+    const offset = slot * stride;
+    bytes.set(template, offset);
+    data.setFloat32(offset + FRAME_CONFIG_SAMPLE_INDEX_OFFSET, firstSample + slot, true);
+  }
   return bytes;
 }
 

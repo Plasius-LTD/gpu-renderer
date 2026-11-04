@@ -10,6 +10,7 @@ import {
 import { ADAPTIVE_CAMERA_SAMPLE_BYTE_SIZE, ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE } from "./wavefront-adaptive-resolve-constants.js";
 import { ADAPTIVE_PRIMARY_CONFIG_BYTE_SIZE, ADAPTIVE_PRIMARY_CONTROL_BYTE_SIZE } from "./wavefront-adaptive-primary-constants.js";
 import { ACCUMULATION_RECORD_BYTES } from "./wavefront-core.js";
+import {REFINEMENT_CONFIG_BYTES,REFINEMENT_STATUS_BYTES} from './wavefront-refinement-gpu.js';
 
 export const DEFAULT_ADAPTIVE_ALLOCATION_CAP_BYTES = 128 * 1024 ** 2;
 export const ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES = 256;
@@ -60,7 +61,7 @@ function admitDevice(plan, limits) {
     const alignment = limits?.minUniformBufferOffsetAlignment;
     const bindingSize = limits?.maxUniformBufferBindingSize;
     if (!Number.isSafeInteger(alignment) || alignment <= 0 || ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES % alignment !== 0
-      || !Number.isSafeInteger(bindingSize) || bindingSize < Math.max(ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE, ADAPTIVE_PRIMARY_CONFIG_BYTE_SIZE)) {
+      || !Number.isSafeInteger(bindingSize) || bindingSize < Math.max(ADAPTIVE_RESOLVE_CONFIG_BYTE_SIZE, ADAPTIVE_PRIMARY_CONFIG_BYTE_SIZE,plan.bytes.refinementConfig??0)) {
       return refuse(plan, "adaptive-device-uniform-limits");
     }
   }
@@ -78,11 +79,12 @@ export function planAdaptiveResources(options = {}, limits) {
     return Object.freeze({ enabled: false, reason: "adaptive-disabled",
       bytes: Object.freeze(bytes), buffers: Object.freeze([]) });
   }
-  for (const key of ["firstHitDistance", "normalMaterialRisk", "history", "countResolve", "primaryWorklist"]) {
+  for (const key of ["firstHitDistance", "normalMaterialRisk", "history", "countResolve", "primaryWorklist", "persistentRadiance"]) {
     if (options[key] !== undefined && typeof options[key] !== "boolean") {
       throw new TypeError(`${key} must be a boolean.`);
     }
   }
+  if (options.persistentRadiance === true && options.countResolve !== true) throw new TypeError('Persistent radiance requires countResolve.');
   const width = integer("width", options.width, 1, U32_MAX);
   const height = integer("height", options.height, 1, U32_MAX);
   const pixelCount = integer("pixelCount", width * height, 1, U32_MAX);
@@ -96,10 +98,14 @@ export function planAdaptiveResources(options = {}, limits) {
   bytes.worklist = tilePixelCapacity * ADAPTIVE_WORKLIST_ENTRY_BYTE_SIZE;
   bytes.dispatch = ADAPTIVE_DISPATCH_ARGUMENTS_BYTE_SIZE;
   bytes.history = options.history === true ? 2 * Math.ceil(pixelCount / 32) * ADAPTIVE_HISTORY_WORD_BYTE_SIZE : 0;
+  if (options.persistentRadiance === true) {
+    bytes.refinementConfig = REFINEMENT_CONFIG_BYTES;
+    bytes.refinementStatus = REFINEMENT_STATUS_BYTES;
+  }
   if (options.countResolve === true) {
     const slots = integer("resolveConfigSlots", options.resolveConfigSlots === undefined ? 1 : options.resolveConfigSlots, 1, 1_000_000);
     bytes.cameraSamples = tilePixelCapacity * ADAPTIVE_CAMERA_SAMPLE_BYTE_SIZE;
-    bytes.radianceSums = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
+    bytes.radianceSums = (options.persistentRadiance === true ? pixelCount : tilePixelCapacity) * ACCUMULATION_RECORD_BYTES;
     bytes.resolvedRadiance = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
     bytes.resolveConfig = slots * ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES;
   }
@@ -109,9 +115,9 @@ export function planAdaptiveResources(options = {}, limits) {
     bytes.primaryConfig = slots * ADAPTIVE_RESOLVE_CONFIG_SLOT_BYTES;
   }
   bytes.total = Object.values(bytes).reduce((sum, value) => sum + value, 0);
-  const buffers = ["pixelState", "firstHitDistance", "normalMaterialRisk", "worklist", "dispatch", "cameraSamples", "radianceSums", "resolvedRadiance", "resolveConfig", "primaryControl", "primaryConfig"]
+  const buffers = ["pixelState", "firstHitDistance", "normalMaterialRisk", "worklist", "dispatch", "cameraSamples", "radianceSums", "resolvedRadiance", "resolveConfig", "primaryControl", "primaryConfig", "refinementConfig", "refinementStatus"]
     .filter((key) => bytes[key] > 0)
-    .map((key) => Object.freeze({ key, size: bytes[key], indirect: key === "dispatch", uniform: key === "resolveConfig" || key === "primaryConfig" }));
+    .map((key) => Object.freeze({ key, size: bytes[key], indirect: key === "dispatch", uniform: ["resolveConfig", "primaryConfig", "refinementConfig"].includes(key) }));
   if (bytes.history) {
     for (const key of ["previousHistory", "currentHistory"]) {
       buffers.push(Object.freeze({ key, size: bytes.history / 2, indirect: false }));

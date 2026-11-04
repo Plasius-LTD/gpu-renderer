@@ -1,5 +1,6 @@
 import { WAVEFRONT_TERMINATION_METRICS_WGSL, WAVEFRONT_COUNTERS_WGSL } from "./wavefront-primary-shared-shader.js";
 import { WAVEFRONT_SAMPLE_DIMENSIONS_WGSL, WAVEFRONT_SAMPLE_SEQUENCE_WGSL, WAVEFRONT_STABLE_SAMPLE_ROUTING_WGSL } from "./wavefront-sampling-dimensions.js";
+import { PATH_NODE_STRUCT_WGSL } from "./wavefront-path-tree-shader.js";
 
 export const WAVEFRONT_SHADER_LAYOUT_WGSL = `
 const RAY_FLAG_GUIDED_EMISSIVE: u32 = 1u;
@@ -12,6 +13,7 @@ const SCATTER_LOBE_CLEARCOAT: u32 = 3u;
 const SCATTER_LOBE_DELTA_REFLECTION: u32 = 4u;
 const SCATTER_LOBE_DELTA_TRANSMISSION: u32 = 5u;
 ${WAVEFRONT_SAMPLE_DIMENSIONS_WGSL}
+${PATH_NODE_STRUCT_WGSL}
 
 ${WAVEFRONT_CAMERA_RAY_RECORD_WGSL}
 
@@ -26,11 +28,11 @@ struct HitRecord {
   materialRefId: u32,
   mediumRefId: u32,
   materialSlot: u32,
-  pad0: u32,
-  pad1: u32,
+  clearcoatNormalXY: vec2<f32>,
   distance: f32,
   occlusion: f32,
-  pad2: vec2<f32>,
+  clearcoatNormalZ: f32,
+  pad2: f32,
   position: vec4<f32>,
   geometricNormal: vec4<f32>,
   shadingNormal: vec4<f32>,
@@ -64,6 +66,7 @@ struct SceneObject {
 };
 
 struct TriangleRecord {
+  // vN.xyz/nN.xyz are geometry; paired vN.w/nN.w store TEXCOORD_1 for vertex N.
   triangleId: u32,
   meshId: u32,
   materialKind: u32,
@@ -209,8 +212,8 @@ struct Candidate {
 struct EnvironmentPortal {
   kind: u32,
   flags: u32,
-  _pad0: u32,
-  _pad1: u32,
+  reserved0: u32,
+  reserved1: u32,
   position: vec4<f32>,
   normal: vec4<f32>,
   tangent: vec4<f32>,
@@ -240,7 +243,7 @@ struct EnvironmentPortal {
 @group(0) @binding(19) var<storage, read> environmentPortals: array<EnvironmentPortal>;
 @group(0) @binding(20) var environmentMapTexture: texture_2d<f32>;
 @group(0) @binding(21) var environmentMapSampler: sampler;
-@group(0) @binding(22) var<storage, read_write> pathVertices: array<vec4<f32>>;
+@group(0) @binding(22) var<storage, read_write> pathNodes: array<PathNode>;
 @group(0) @binding(23) var baseColorAtlasTexture: texture_2d<f32>;
 @group(0) @binding(24) var metallicRoughnessAtlasTexture: texture_2d<f32>;
 @group(0) @binding(25) var normalAtlasTexture: texture_2d<f32>;
@@ -263,6 +266,7 @@ struct EnvironmentPortal {
 @group(0) @binding(42) var iridescenceAtlasTexture: texture_2d<f32>;
 @group(0) @binding(43) var iridescenceThicknessAtlasTexture: texture_2d<f32>;
 @group(0) @binding(44) var anisotropyAtlasTexture: texture_2d<f32>;
+@group(0) @binding(45) var materialTextureMetadata: texture_2d<f32>;
 
 ${WAVEFRONT_SAMPLE_SEQUENCE_WGSL}
 
@@ -282,6 +286,7 @@ struct SurfaceMaterialSample {
   specularColor: vec4<f32>,
   shadingNormal: vec3<f32>,
   occlusion: f32,
+  clearcoatNormal: vec3<f32>,
 };
 `;
 import { WAVEFRONT_CAMERA_RAY_RECORD_WGSL, WAVEFRONT_CAMERA_FRAME_CONFIG_WGSL, WAVEFRONT_SAFE_NORMALIZE_WGSL } from "./wavefront-camera-shared-shader.js";

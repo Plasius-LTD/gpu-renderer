@@ -39,7 +39,7 @@ test("prepared coordinator defaults off and does not inspect resources", () => {
   } })), null);
 });
 
-for (const depth of [1, 4, 8, 32]) test(`prepared coordinator orders bootstrap/camera/shared bounces at depth ${depth}`, () => {
+for (const depth of [1, 4, 8, 20, 32]) test(`prepared coordinator orders bootstrap/camera/shared bounces at depth ${depth}`, () => {
   const f = fixture(depth), coordinator = createAdaptivePreparedSampleEncoder(f.options);
   coordinator.encode(f.encoder, f.request);
   assert.equal(f.snapshots(), 1);

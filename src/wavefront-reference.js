@@ -91,6 +91,17 @@ function repairReferenceShadingNormal(geometricNormal, shadingNormal) {
   return dot(normal, geometricNormal) < 0 ? scale(normal, -1) : normal;
 }
 
+// Reference counterpart of valid_surface_normal; all inputs are unit vectors.
+export function repairWavefrontReferenceNormal(geometricNormal, shadingNormal, view) {
+  const n = repairReferenceShadingNormal(geometricNormal, shadingNormal);
+  const reflected = subtract(scale(n, 2 * dot(n, view)), view);
+  const height = dot(reflected, geometricNormal);
+  const threshold = Math.min(0.01, 0.9 * Math.max(0, dot(view, geometricNormal)));
+  if (height >= threshold && dot(n, view) > 0) return n;
+  const safeReflection = normalize(add(reflected, scale(geometricNormal, threshold - height)), geometricNormal);
+  return normalize(add(view, safeReflection), geometricNormal);
+}
+
 function readOptionalMaxDistance(value) {
   if (value === undefined || value === null) {
     return Number.POSITIVE_INFINITY;
@@ -177,6 +188,10 @@ export function intersectWavefrontReferenceTriangle(ray, triangle, options = {})
   if (Math.abs(determinant) < 0.0000001) {
     return null;
   }
+  const insideMedium = ray.mediumStackDepth > 0 ? ray.mediumStack?.[Math.min(ray.mediumStackDepth, 4) - 1] : (ray.mediumRefId ?? 0);
+  const mediumExit = triangle.mediumRefId > 0 && triangle.mediumRefId === insideMedium &&
+    ((triangle.materialExtension?.[2] ?? 0) > 0.001 || triangle.material[2] < 0.999);
+  if (determinant < 0 && (triangle.flags & 0x40000000) === 0 && !mediumExit) return null;
 
   const invDet = 1 / determinant;
   const tvec = subtract(ray.origin, triangle.v0);
@@ -205,7 +220,7 @@ export function intersectWavefrontReferenceTriangle(ray, triangle, options = {})
     triangle.n0[1] * w + triangle.n1[1] * u + triangle.n2[1] * v,
     triangle.n0[2] * w + triangle.n1[2] * u + triangle.n2[2] * v,
   ];
-  const shadingNormal = repairReferenceShadingNormal(orientedGeometric, interpolated);
+  const shadingNormal = repairWavefrontReferenceNormal(orientedGeometric, interpolated, scale(ray.direction, -1));
   const uv = [
     triangle.uv0[0] * w + triangle.uv1[0] * u + triangle.uv2[0] * v,
     triangle.uv0[1] * w + triangle.uv1[1] * u + triangle.uv2[1] * v,
@@ -393,6 +408,9 @@ function normalizeWavefrontReferenceHit(input = {}) {
   const materialExtension = Array.isArray(input.materialExtension) ? input.materialExtension : [];
   return Object.freeze({
     color: Object.freeze(coerceWavefrontVec3(input.color, [0.8, 0.8, 0.8])),
+    layeredClearcoat: input.layeredClearcoat === true,
+    clearcoatNormal: Object.freeze(normalize(coerceWavefrontVec3(input.clearcoatNormal,
+      coerceWavefrontVec3(input.shadingNormal, [0, 1, 0])), [0, 1, 0])),
     shadingNormal: Object.freeze(
       normalize(coerceWavefrontVec3(input.shadingNormal, [0, 1, 0]), [0, 1, 0])
     ),
@@ -452,12 +470,12 @@ function surfaceBsdfSamplingWeightsReference(hit) {
   ]);
 }
 
-function evaluateWavefrontSurfaceBsdfReference(hitInput, viewDirectionInput, lightDirectionInput, ambientColor = [0.018, 0.022, 0.026]) {
+function evaluateWavefrontSurfaceBsdfReference(hitInput, viewDirectionInput, lightDirectionInput) {
   const hit = normalizeWavefrontReferenceHit(hitInput);
   const normal = normalize(hit.shadingNormal, [0, 1, 0]);
   const viewDirection = normalize(viewDirectionInput, normal);
   const lightDirection = normalize(lightDirectionInput, normal);
-  const surfaceColor = clampVec3(maxVec3(hit.color, scale(asVec3(ambientColor, [0.018, 0.022, 0.026]), 0.35)), 0, 1);
+  const surfaceColor = clampVec3(hit.color, 0, 1);
   const roughness = clamp(hit.material[0], 0, 1);
   const metallic = clamp(hit.material[1], 0, 1);
   const clearcoat = clamp(hit.materialResponse[3], 0, 1);
@@ -479,7 +497,7 @@ function evaluateWavefrontSurfaceBsdfReference(hitInput, viewDirectionInput, lig
     (value) => (distribution * geometry * value) / Math.max(4 * nDotV * nDotL, 0.000001)
   );
   const diffuseWeight =
-    (1 - metallic) * (1 - clearcoat * 0.24) * (1 - clamp(maxComponentVec3(fresnel), 0, 0.98));
+    (1 - metallic) * (hit.layeredClearcoat ? 1 : 1 - clearcoat * 0.24) * (1 - clamp(maxComponentVec3(fresnel), 0, 0.98));
   const diffuse = surfaceColor.map((value) => (value * diffuseWeight) / Math.PI);
   const clearcoatHalf = normalize(add(viewDirection, lightDirection), normal);
   const clearcoatVDotH = clamp(dot(viewDirection, clearcoatHalf), 0, 1);
@@ -496,6 +514,15 @@ function evaluateWavefrontSurfaceBsdfReference(hitInput, viewDirectionInput, lig
       clearcoat
   );
   const occlusionWeight = mixScalar(0.42, 1, occlusion);
+  if (hit.layeredClearcoat && clearcoat > 0) {
+    const coatNv = clamp(dot(hit.clearcoatNormal, viewDirection), 0, 1);
+    const coatNl = clamp(dot(hit.clearcoatNormal, lightDirection), 0, 1);
+    const coatFresnel = clearcoat * (0.04 + 0.96 * (1 - coatNv) ** 5);
+    const coat = coatNv > 0 && coatNl > 0 ? coatFresnel *
+      distributionGgx(clamp(dot(hit.clearcoatNormal, halfVector), 0, 1), Math.max(clearcoatRoughness, 0.02)) *
+      geometrySmith(coatNv, coatNl, Math.max(clearcoatRoughness, 0.02)) / Math.max(4 * coatNv * coatNl, 0.000001) : 0;
+    return Object.freeze(addVec3(diffuse, specular).map(value => (value * (1 - coatFresnel) + coat) * occlusionWeight));
+  }
   return Object.freeze(
     addVec3(addVec3(diffuse, specular), clearcoatTerm).map((value) => value * occlusionWeight)
   );
@@ -525,7 +552,7 @@ function evaluateWavefrontSurfaceBsdfPdfReference(hitInput, viewDirectionInput, 
     weights[1] * ggxPdfReference(normal, viewDirection, lightDirection, Math.max(roughness, 0.02)) +
     weights[2] *
       ggxPdfReference(
-        normal,
+        hit.layeredClearcoat && hit.materialResponse[3] > 0 ? hit.clearcoatNormal : normal,
         viewDirection,
         lightDirection,
         Math.max(clamp(hit.materialExtension[0], 0, 1), 0.02)
@@ -596,7 +623,6 @@ export function validateWavefrontBsdfSample({
   lightDirection = [0, 1, 0],
   sampledPdf,
   lightPdf = 0,
-  ambientColor = [0.018, 0.022, 0.026],
 } = {}) {
   const normalizedHit = normalizeWavefrontReferenceHit(hit);
   const normal = normalize(normalizedHit.shadingNormal, [0, 1, 0]);
@@ -605,8 +631,7 @@ export function validateWavefrontBsdfSample({
   const bsdf = evaluateWavefrontSurfaceBsdfReference(
     normalizedHit,
     resolvedViewDirection,
-    resolvedLightDirection,
-    ambientColor
+    resolvedLightDirection
   );
   const expectedPdf = evaluateWavefrontSurfaceBsdfPdfReference(
     normalizedHit,
@@ -656,8 +681,7 @@ export function estimateWavefrontDirectionalHemisphericalReflectance(
     const bsdf = evaluateWavefrontSurfaceBsdfReference(
       normalizedHit,
       resolvedViewDirection,
-      lightDirection,
-      options.ambientColor ?? [0.018, 0.022, 0.026]
+      lightDirection
     );
     const nDotL = clamp(dot(normal, lightDirection), 0, 1);
     total = addVec3(total, bsdf.map((value) => value * nDotL * ((2 * Math.PI) / sampleCount)));
@@ -692,7 +716,7 @@ export function computeWavefrontTerminalEnvironmentContributionReference(
     reflectionDirection
   ).slice(0, 3);
   const surfaceColor = clampVec3(
-    maxVec3(hit.color, scale(asVec3(config.ambientColor, [0.018, 0.022, 0.026]), 0.35)),
+    hit.color,
     0,
     1
   );
@@ -730,7 +754,7 @@ export function computeWavefrontTerminalEnvironmentContributionReference(
   const contribution = sanitizeWavefrontSampleRadiance(
     scale(
       multiplyVec3(
-        multiplyVec3(sanitizeWavefrontThroughput(throughputInput), maxVec3(hit.color, ambientColor)),
+        multiplyVec3(sanitizeWavefrontThroughput(throughputInput), maxVec3(hit.color, [0, 0, 0])),
         source
       ),
       occlusion

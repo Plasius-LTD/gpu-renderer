@@ -102,6 +102,8 @@ export function createWavefrontFrameStats({
       width: config.width,
       height: config.height,
       maxDepth: config.maxDepth,
+      maximumPathEvents: config.maximumPathEvents??config.maxDepth,
+      opticalInterfaceBudget: config.opticalInterfaceBudget??null,
       tiles: tiles.length,
       tileSize: config.tileSize,
       samplesPerPixel: targetSamplesPerPixel,

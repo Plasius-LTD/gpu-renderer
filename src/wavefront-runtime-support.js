@@ -340,7 +340,7 @@ export function estimateSubmittedGpuWorkTiming(
     1,
     Number(config?.renderedSamplesPerPixel ?? config?.samplesPerPixel ?? 1)
   );
-  const maxDepth = Math.max(1, Number(config?.maxDepth ?? 1));
+  const maxDepth = Math.max(1, Number(config?.maximumPathEvents ?? config?.maxDepth ?? 1));
   const deferredResolvePasses = config?.deferredPathResolve ? 1 : 0;
   const denoisePasses = config?.denoise ? (samplesPerPixel < 4 ? 2 : 1) : 0;
   const tiles = Math.max(1, Number(tileCount ?? 1));

@@ -1,0 +1,284 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-21",
+  "status": "six-native-integrity-lanes-passed-image-qualification-open",
+  "task": "Plasius-LTD/gpu-renderer#234",
+  "feature": "Plasius-LTD/plasius-ltd-site#2114",
+  "runtimeCommit": "665e2bd9a01122a312a71e61d7888f14f41ea137",
+  "shaderSha256": "998cbc8590e7c19fde02466697c549e2b83de23966330bd54b0f8a9520d34e14",
+  "sources": {
+    "renderer": "665e2bd9a01122a312a71e61d7888f14f41ea137",
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "controls": {
+    "distribution": "uniform",
+    "samplesPerPixel": 32,
+    "maxDepth": 20,
+    "sampler": "fixed-pattern with independently keyed transport",
+    "denoise": false,
+    "splitting": 0,
+    "boundedDielectric": true,
+    "nestedMedia": true,
+    "roughDielectric": false,
+    "supportClearanceMeters": 0.0001
+  },
+  "aggregate": {
+    "path": "output/playwright/eames-environments/room-qualification-acea036d-5be6-4900-9e61-261db7901267/summary.json",
+    "sha256": "b780c6fe1e127b907466ee5669147b03827f36e037ad31ce84756d85789314cd",
+    "status": "captures-complete-image-review-pending",
+    "failures": []
+  },
+  "totals": {
+    "lanes": 6,
+    "completedCameraSamples": 995328000,
+    "verifiedImagePixels": 31104000,
+    "verifiedHdrChunks": 120
+  },
+  "lanes": [
+    {
+      "path": "output/playwright/eames-environments/room-reference-2026-10-21T10-14-08-993Z-9a925d03-cb09-411d-8a78-909c30e82c20/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json",
+      "receiptSha256": "45a68bbdb6693e44092427c021744318a035ab33723adf54fb04b8fb6a784337",
+      "resolution": [
+        3840,
+        2160
+      ],
+      "glass": "empty",
+      "focus": "glass",
+      "actualSamples": 265420800,
+      "histogram": {
+        "32": 8294400
+      },
+      "hdrSha256": "269c226ddba7a1f50546c015bd23ab19f646a8cef22fde894510ff137df6e3cb",
+      "pngSha256": "9bf924ad6cf0fa2ef8652e0a3a94f80d4a53eb1dce19991ce4c2c6450e7b4e19",
+      "verifiedChunks": 32,
+      "verifiedPixels": 8294400,
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      }
+    },
+    {
+      "path": "output/playwright/eames-environments/room-reference-2026-10-21T10-29-00-027Z-c42c5d32-ac5c-41b1-a1f7-b4bfcc913ee4/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json",
+      "receiptSha256": "a93732f1679501c54381bac0aaffcb90180538e896af419e47f943ac4388f6ae",
+      "resolution": [
+        3840,
+        2160
+      ],
+      "glass": "filled",
+      "focus": "glass",
+      "actualSamples": 265420800,
+      "histogram": {
+        "32": 8294400
+      },
+      "hdrSha256": "cb0d164f3944f015121ada9c4fc01475d52c8af767b598f959fa4e3a7f9c6ccf",
+      "pngSha256": "ffbcb896e16b50ecbb483f226062fdc6afa97f0ea1155343aab959dae53aee08",
+      "verifiedChunks": 32,
+      "verifiedPixels": 8294400,
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      }
+    },
+    {
+      "path": "output/playwright/eames-environments/room-reference-2026-10-21T10-44-38-334Z-f8e045c6-ef9c-4adc-8a79-02e1126cc022/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json",
+      "receiptSha256": "f508938e3b019fdf26d2a018143c698bf22ad3c295482f59206b657f75eebcbf",
+      "resolution": [
+        3840,
+        2160
+      ],
+      "glass": "filled",
+      "focus": "room",
+      "actualSamples": 265420800,
+      "histogram": {
+        "32": 8294400
+      },
+      "hdrSha256": "28c2f54a2190507ccbd6ffa7c5c27c1fae1769a49f028209497adcebbe661f5b",
+      "pngSha256": "840a243e9552846c6166da9c24c8dcfe471155544f2c46d9931b3462056c6017",
+      "verifiedChunks": 32,
+      "verifiedPixels": 8294400,
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      }
+    },
+    {
+      "path": "output/playwright/eames-environments/room-reference-2026-10-21T10-59-11-622Z-dca8d006-d3e4-482e-b424-a2712b61ee4d/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json",
+      "receiptSha256": "f6097e478a1522d44852c67a824cbada323eda5c8a727522c251f56553f53991",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "glass": "empty",
+      "focus": "glass",
+      "actualSamples": 66355200,
+      "histogram": {
+        "32": 2073600
+      },
+      "hdrSha256": "3e5647af483efeb99a35970908f17f6eae2d240b7cb43b25629619ff3ebac962",
+      "pngSha256": "1c7ec2df8cb10d22dbe862dbf6ca95719981086aa4062d0de05e19111344054e",
+      "verifiedChunks": 8,
+      "verifiedPixels": 2073600,
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      }
+    },
+    {
+      "path": "output/playwright/eames-environments/room-reference-2026-10-21T11-03-22-722Z-e2ee317b-da8f-4fbc-a18d-ec58d7825c1c/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json",
+      "receiptSha256": "b2eed82d426fd3baa21ac85d096305e7c575d04172fc9aaa46febebaaba4d01e",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "glass": "filled",
+      "focus": "glass",
+      "actualSamples": 66355200,
+      "histogram": {
+        "32": 2073600
+      },
+      "hdrSha256": "2dcd9f3f003080b3bb02bddb49e3ca82d2d988a8a66b70890b71c0061149a32a",
+      "pngSha256": "ad2453e4e5f2e9ce14c5d934bc7e1f47378e10a194846cf4a6b10b43fb0a3372",
+      "verifiedChunks": 8,
+      "verifiedPixels": 2073600,
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      }
+    },
+    {
+      "path": "output/playwright/eames-environments/room-reference-2026-10-21T11-07-49-667Z-d2f8a4dc-229b-4ac9-8e48-7c4859d8e5ee/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json",
+      "receiptSha256": "1153ac812148be67fb0389a4427d26e9528cd5a6e61543f55af50fb3c73d48b2",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "glass": "filled",
+      "focus": "room",
+      "actualSamples": 66355200,
+      "histogram": {
+        "32": 2073600
+      },
+      "hdrSha256": "790ef69cb3f6a2b3065d1c70a86c0d6aa5dbc7db02fe140d3d03ac2e6758429e",
+      "pngSha256": "e318c4897da92da497988ab662593e6edf16910352547a9db61493032aa24117",
+      "verifiedChunks": 8,
+      "verifiedPixels": 2073600,
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      }
+    }
+  ],
+  "imageReview": {
+    "banding": "still visible at uniform32 in filled glass; not fixed",
+    "native1080pHdrAndPng": "all three hashes exactly match preserved e2a0922 controls",
+    "convergenceEnergySilhouette": "not qualified; no frozen truth-reference tolerance pass claimed",
+    "performance": "paused; no timing or memory improvement claim",
+    "unsupportedClaims": [
+      "256-SPP/20-depth qualification",
+      "other devices",
+      "production or release qualification"
+    ]
+  },
+  "diagnostics": {
+    "commit": "04e28a30a59fa0569daadc6cb1e2ea21f70a0b3f",
+    "runtimeSourceChangesFrom665": "none",
+    "selectedSuccessfulSamples": "not executed: normal browser dropdown automation requires unavailable approval; no bypass attempted",
+    "expectedPlanPath": "output/playwright/rim-qualification-2026-10-21-xBdChm/selected-journal-acceptance.json",
+    "supportingAnalyticControl": "continuous-cylinder dominant transmission/TIR branch only; not a full-room reference",
+    "independentBlenderControl": "crashed exit139 without an image; exact crash point unknown; not evidence"
+  },
+  "localValidation": {
+    "tests": 481,
+    "lineCoveragePercent": 96.45,
+    "branchCoveragePercent": 83.2,
+    "changedExecutableSrcFilesPresentInLcov": 59,
+    "nonExecutableDeclaration": "index.d.ts checked by typecheck and clean type consumer, not executable LCOV",
+    "lint": "pass",
+    "typesAndCleanConsumer": "pass",
+    "build": "pass",
+    "publicPackage": "pass",
+    "zeroThreeChecks": 9,
+    "runtimeAuditVulnerabilities": 0
+  },
+  "ci": [
+    {
+      "commit": "665e2bd9a01122a312a71e61d7888f14f41ea137",
+      "run": 39583017550,
+      "conclusion": "success"
+    },
+    {
+      "commit": "ba51cc2fa782aa5807018b09e149e1e0bd039fb3",
+      "run": 39584404650,
+      "conclusion": "success"
+    },
+    {
+      "commit": "04e28a30a59fa0569daadc6cb1e2ea21f70a0b3f",
+      "run": 39588632326,
+      "conclusion": "success"
+    }
+  ],
+  "preservation": "All earlier failures, journals, raw HDR/PNG, private model assets and intermediate captures remain local and unchanged; no images/assets copied into the package.",
+  "release": "Draft PR216 and Task234 remain open; no merge/release/local package publication or CD completion claim. Three.js prohibited."
+}

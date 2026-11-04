@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Renderer CPU attribution</title>
+<style>body{font:16px system-ui;background:#10151d;color:#edf2f7;margin:2rem;max-width:1000px}button,label{margin:0.5rem;padding:0.7rem}button{font:inherit}pre{white-space:pre-wrap;overflow-wrap:anywhere}canvas{max-width:100%;height:auto}a{color:#8fd5ff}</style></head>
+<body><h1>Renderer CPU attribution</h1><p>Fixed32, shared adaptive and fused adaptive. Alternating profiling off/on; same image, samples and rays required. Host elapsed time and GPU waiting are separate. Small synthetic scenes, not site or matched-quality qualification.</p>
+<button id="run">Measure CPU breakdown</button><button id="cancel" disabled>Cancel</button>
+<p><a href="./frame-loop.html">Verify completion-driven frame scheduling</a></p>
+<label><input type="checkbox" id="timeline">Include bounded browser timing markers (adds overhead)</label>
+<p id="progress" role="status" aria-live="polite">Ready. Evidence requires the provenance/capture server.</p>
+<div id="previews"></div><pre id="result" aria-label="Measurement receipt"></pre>
+<script type="module" src="./adaptive-cpu-profile.js"></script></body></html>

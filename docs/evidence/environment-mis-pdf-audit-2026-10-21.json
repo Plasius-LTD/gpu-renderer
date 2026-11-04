@@ -1,0 +1,49 @@
+{
+  "scope": "Source-exact scalar PDF/floor analytic unit-Lambertian constant-sky control; NOT a whole-integrator execution, image or full-band attribution",
+  "source": "d53ced33554cab6d669d2d8104ca15cfcf86add2",
+  "files": {
+    "lightingSha256": "22b72b97c2c18cd08e54b9dab1526e9931bfe25bbff7635ec9b8fa9de89400e9",
+    "kernelsSha256": "15d951ecc5097d133f6eff8b7f3f834d55c225bf0468a722a2af5914083750cf"
+  },
+  "quadratureSamples": 1000000,
+  "existingPowerHeuristicFloor": 0.000001,
+  "modes": [
+    {
+      "mode": "uniform-hemisphere",
+      "sourceScalarContractMean": 1.2252836441050623,
+      "matchedPdfControl": 0.9999999999999999,
+      "matchedControlExpectedIncludingExistingFloor": 1,
+      "physicalUnitLambertianTarget": 1,
+      "contractPass": false
+    },
+    {
+      "mode": "cosine-hemisphere",
+      "sourceScalarContractMean": 1.3229229322959013,
+      "matchedPdfControl": 0.9999975325990396,
+      "matchedControlExpectedIncludingExistingFloor": 0.9999975325988997,
+      "physicalUnitLambertianTarget": 1,
+      "contractPass": false
+    }
+  ],
+  "earlierPrototype": "environment-mis-audit.mjs/.json omits the tiny existing scalar floor; retained, not source-exact evidence",
+  "bandingStatus": "not cleared",
+  "adaptivePerformance": "paused",
+  "runtimeCorrectionImplemented": false,
+  "tracking": "Plasius-LTD/gpu-renderer#234",
+  "acceptanceComment": "https://github.com/Plasius-LTD/gpu-renderer/issues/234#issuecomment-6317491410",
+  "derivation": {
+    "uniformHemisphere": "q=1/(2*pi)",
+    "cosineHemisphere": "q=cos(theta)/pi",
+    "incorrectTerminalCompetitor": "qTerminal=1/(4*pi)",
+    "bsdf": "p=cos(theta)/pi",
+    "integral": "integral_0^1 2*c*(power(q(c),p(c))+power(p(c),qTerminal(c))) dc",
+    "power": "a*a / max(a*a+b*b,1e-6)",
+    "matchedCosineFloor": "1-pi*pi*1e-6/4"
+  },
+  "limitations": [
+    "double-precision scalar quadrature of source distributions/floor, not final assembled integrator execution",
+    "no occlusion, emitter mixture, normal mapping, medium or path termination in this analytic control",
+    "not an image-error measurement or full-band attribution",
+    "new correction and physical energy/convergence qualification remain required"
+  ]
+}

@@ -109,9 +109,9 @@ fn prepareMeshTrianglesAndLeaves(@builtin(global_invocation_id) globalId: vec3<u
   let n0 = select(faceNormal, safe_normalize(vertex0.normal.xyz, faceNormal), vertex0.normal.w > 0.5);
   let n1 = select(faceNormal, safe_normalize(vertex1.normal.xyz, faceNormal), vertex1.normal.w > 0.5);
   let n2 = select(faceNormal, safe_normalize(vertex2.normal.xyz, faceNormal), vertex2.normal.w > 0.5);
-  let uv0 = select(vec2<f32>(0.0), vertex0.uv.xy, vertex0.uv.z > 0.5);
-  let uv1 = select(vec2<f32>(0.0), vertex1.uv.xy, vertex1.uv.z > 0.5);
-  let uv2 = select(vec2<f32>(0.0), vertex2.uv.xy, vertex2.uv.z > 0.5);
+  let uv0 = vertex0.uv.xy;
+  let uv1 = vertex1.uv.xy;
+  let uv2 = vertex2.uv.xy;
 
   var preparedTriangle = TriangleRecord();
   preparedTriangle.triangleId = triangleIndex;
@@ -121,12 +121,12 @@ fn prepareMeshTrianglesAndLeaves(@builtin(global_invocation_id) globalId: vec3<u
   preparedTriangle.materialRefId = mesh.materialRefId;
   preparedTriangle.mediumRefId = mesh.mediumRefId;
   preparedTriangle.materialSlot = mesh.materialSlot;
-  preparedTriangle.v0 = vec4<f32>(vertex0.position.xyz, 0.0);
-  preparedTriangle.v1 = vec4<f32>(vertex1.position.xyz, 0.0);
-  preparedTriangle.v2 = vec4<f32>(vertex2.position.xyz, 0.0);
-  preparedTriangle.n0 = vec4<f32>(n0, 0.0);
-  preparedTriangle.n1 = vec4<f32>(n1, 0.0);
-  preparedTriangle.n2 = vec4<f32>(n2, 0.0);
+  preparedTriangle.v0 = vec4<f32>(vertex0.position.xyz, vertex0.uv.z);
+  preparedTriangle.v1 = vec4<f32>(vertex1.position.xyz, vertex1.uv.z);
+  preparedTriangle.v2 = vec4<f32>(vertex2.position.xyz, vertex2.uv.z);
+  preparedTriangle.n0 = vec4<f32>(n0, vertex0.uv.w);
+  preparedTriangle.n1 = vec4<f32>(n1, vertex1.uv.w);
+  preparedTriangle.n2 = vec4<f32>(n2, vertex2.uv.w);
   preparedTriangle.uv0uv1 = vec4<f32>(uv0, uv1);
   preparedTriangle.uv2Pad = vec4<f32>(uv2, 0.0, 0.0);
   preparedTriangle.color = mesh.color;
@@ -280,11 +280,11 @@ fn make_miss(ray: RayRecord) -> HitRecord {
     0u,
     0u,
     0u,
-    0u,
-    0u,
+    vec2<f32>(0.0),
     -1.0,
     1.0,
-    vec2<f32>(0.0),
+    0.0,
+    0.0,
     vec4<f32>(ray.origin.xyz + ray.direction.xyz * 1000.0, 1.0),
     vec4<f32>(-ray.direction.xyz, 0.0),
     vec4<f32>(-ray.direction.xyz, 0.0),
@@ -310,10 +310,10 @@ fn intersect_sphere(ray: RayRecord, object: SceneObject) -> Candidate {
   }
   let sqrtD = sqrt(discriminant);
   var distance = -halfB - sqrtD;
-  if (distance <= 0.001) {
+  if (distance <= transport_ray_minimum()) {
     distance = -halfB + sqrtD;
   }
-  if (distance <= 0.001) {
+  if (distance <= transport_ray_minimum()) {
     return no_candidate();
   }
   let position = ray.origin.xyz + ray.direction.xyz * distance;
@@ -355,10 +355,14 @@ fn intersect_box(ray: RayRecord, object: SceneObject) -> Candidate {
   let tFar = max(t0, t1);
   let entry = max(max(tNear.x, tNear.y), tNear.z);
   let exit = min(min(tFar.x, tFar.y), tFar.z);
-  if (exit < max(entry, 0.001)) {
+  if (exit < max(entry, transport_ray_minimum())) {
     return no_candidate();
   }
-  let distance = max(entry, 0.001);
+  if (nested_media_enabled() && exit <= transport_ray_minimum()) {
+    return no_candidate();
+  }
+  var distance = max(entry, 0.001);
+  if (nested_media_enabled()) { distance = select(exit, entry, entry > transport_ray_minimum()); }
   let position = ray.origin.xyz + ray.direction.xyz * distance;
   let rel = (position - object.center.xyz) / max(object.halfExtent.xyz, vec3<f32>(0.001));
   let absRel = abs(rel);
@@ -398,7 +402,16 @@ fn intersect_bounds(ray: RayRecord, boundsMin: vec3<f32>, boundsMax: vec3<f32>, 
   let tFar = max(t0, t1);
   let entry = max(max(tNear.x, tNear.y), tNear.z);
   let exit = min(min(tFar.x, tFar.y), tFar.z);
-  return exit >= max(entry, 0.001) && entry <= nearest;
+  if (nested_media_enabled()) {
+    // Conservative broad-phase interval only. Final triangle/cursor tests stay
+    // strict; shared-edge projection must not be rejected by slab round-off.
+    let unitRoundoff = 0.000000059604644775390625;
+    let gamma3 = (3.0 * unitRoundoff) / (1.0 - 3.0 * unitRoundoff);
+    let allowance = 2.0 * gamma3;
+    return exit + abs(exit) * allowance >= max(entry, transport_ray_minimum()) &&
+      entry <= nearest + abs(nearest) * allowance;
+  }
+  return exit >= max(entry, transport_ray_minimum()) && entry <= nearest;
 }
 
 fn repair_shading_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>) -> vec3<f32> {
@@ -407,6 +420,18 @@ fn repair_shading_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>) -
     normal = -normal;
   }
   return normal;
+}
+
+fn valid_surface_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>, view: vec3<f32>) -> vec3<f32> {
+  let normal = repair_shading_normal(geometricNormal, shadingNormal);
+  let reflected = 2.0 * dot(normal, view) * normal - view;
+  let height = dot(reflected, geometricNormal);
+  let threshold = min(0.01, 0.9 * max(0.0, dot(view, geometricNormal)));
+  if (height >= threshold && dot(normal, view) > 0.0) { return normal; }
+  // Project the invalid reflection above geometry, then use its view bisector.
+  // Store this once; evaluation, sampling and PDFs must share the same normal.
+  let safeReflection = safe_normalize(reflected + (threshold - height) * geometricNormal, geometricNormal);
+  return safe_normalize(view + safeReflection, geometricNormal);
 }
 
 fn no_candidate() -> Candidate {
@@ -457,32 +482,50 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
   let edge2 = triangle.v2.xyz - triangle.v0.xyz;
   let pvec = cross(ray.direction.xyz, edge2);
   let det = dot(edge1, pvec);
-  if (abs(det) < 0.0000001) {
+  if (!nested_media_enabled() && abs(det) < 0.0000001) {
+    return no_candidate();
+  }
+  let mediumExit = triangle.mediumRefId != 0u &&
+    (triangle.mediumRefId == medium_stack_current_id(ray) ||
+      (nested_media_enabled() && medium_stack_contains(ray, triangle.mediumRefId))) &&
+    (triangle.materialExtension.z > 0.001 || triangle.material.z < 0.999 ||
+      (nested_media_enabled() && (triangle.materialKind == 2u || triangle.materialKind == 3u)));
+  if (!nested_media_enabled() && det < 0.0 && (triangle.flags & 0x40000000u) == 0u && !mediumExit) {
     return no_candidate();
   }
 
-  let invDet = 1.0 / det;
-  let tvec = ray.origin.xyz - triangle.v0.xyz;
-  let u = dot(tvec, pvec) * invDet;
-  if (u < 0.0 || u > 1.0) {
-    return no_candidate();
+  var u = 0.0;
+  var v = 0.0;
+  var w = 0.0;
+  var distance = 0.0;
+  if (nested_media_enabled()) {
+    let coordinates = optical_triangle_coordinates(ray, triangle);
+    if (coordinates.w <= transport_ray_minimum()) { return no_candidate(); }
+    w = coordinates.x; u = coordinates.y; v = coordinates.z;
+    distance = coordinates.w;
+  } else {
+    let invDet = 1.0 / det;
+    let tvec = ray.origin.xyz - triangle.v0.xyz;
+    u = dot(tvec, pvec) * invDet;
+    if (u < 0.0 || u > 1.0) { return no_candidate(); }
+    let qvec = cross(tvec, edge1);
+    v = dot(ray.direction.xyz, qvec) * invDet;
+    if (v < 0.0 || u + v > 1.0) { return no_candidate(); }
+    distance = dot(edge2, qvec) * invDet;
+    if (distance <= transport_ray_minimum()) { return no_candidate(); }
+    w = 1.0 - u - v;
   }
 
-  let qvec = cross(tvec, edge1);
-  let v = dot(ray.direction.xyz, qvec) * invDet;
-  if (v < 0.0 || u + v > 1.0) {
-    return no_candidate();
+  var geometric = safe_normalize(cross(edge1, edge2), vec3<f32>(0.0, 1.0, 0.0));
+  if (nested_media_enabled()) {
+    let areaNormal=cross(edge1,edge2);
+    let areaScale=max(max(abs(areaNormal.x),abs(areaNormal.y)),abs(areaNormal.z));
+    if (areaScale==0.0) { return no_candidate(); }
+    geometric=normalize(areaNormal/areaScale);
   }
-
-  let distance = dot(edge2, qvec) * invDet;
-  if (distance <= 0.001) {
-    return no_candidate();
-  }
-
-  let geometric = safe_normalize(cross(edge1, edge2), vec3<f32>(0.0, 1.0, 0.0));
   let frontFace = select(0u, 1u, dot(ray.direction.xyz, geometric) < 0.0);
+  if (nested_media_enabled() && frontFace==0u && (triangle.flags & 0x40000000u)==0u && !mediumExit) { return no_candidate(); }
   let orientedGeometric = select(-geometric, geometric, frontFace == 1u);
-  let w = 1.0 - u - v;
   let interpolated =
     triangle.n0.xyz * w +
     triangle.n1.xyz * u +

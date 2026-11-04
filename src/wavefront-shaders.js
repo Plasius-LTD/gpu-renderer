@@ -4,6 +4,13 @@ import { WAVEFRONT_SHADER_KERNELS_WGSL } from "./wavefront-shader-kernels.js";
 import { WAVEFRONT_SHADER_LAYOUT_WGSL } from "./wavefront-shader-layout.js";
 import { WAVEFRONT_SHADER_LIGHTING_WGSL } from "./wavefront-shader-lighting.js";
 import { WAVEFRONT_SHADER_MATERIALS_WGSL } from "./wavefront-shader-materials.js";
+import { PATH_TREE_WGSL } from "./wavefront-path-tree-shader.js";
+import { withProgressiveSampling } from "./wavefront-sampling-dimensions.js";
+import { withRoughBounceSplitting } from './wavefront-rough-bounce-splitting.js';
+import { DIELECTRIC_TRANSPORT_WGSL } from './wavefront-dielectric-shader.js';
+import { ROUGH_DIELECTRIC_WGSL } from './wavefront-rough-dielectric-shader.js';
+import {OPTICAL_INTERFACE_BUDGET_WGSL} from './wavefront-optical-interface-budget.js';
+import {OPTICAL_CHAIN_WGSL} from './wavefront-optical-chain-shader.js';
 export { PRESENT_WGSL } from "./wavefront-present-shader.js";
 
 function readPositiveInteger(name, value, fallback) {
@@ -22,6 +29,11 @@ export const WAVEFRONT_COMPUTE_WGSL = [
   WAVEFRONT_SHADER_MATERIALS_WGSL,
   WAVEFRONT_SHADER_LIGHTING_WGSL,
   WAVEFRONT_SHADER_BVH_WGSL,
+  PATH_TREE_WGSL,
+  DIELECTRIC_TRANSPORT_WGSL,
+  ROUGH_DIELECTRIC_WGSL,
+  OPTICAL_INTERFACE_BUDGET_WGSL,
+  OPTICAL_CHAIN_WGSL,
   WAVEFRONT_SHADER_KERNELS_WGSL,
 ].join("\n");
 
@@ -34,5 +46,6 @@ export function createWavefrontPathTracingComputeShaderSource(options = {}) {
   if (workgroupSize !== WAVEFRONT_COMPUTE_WORKGROUP_SIZE) {
     throw new Error(`wavefront mesh compute currently requires workgroupSize=${WAVEFRONT_COMPUTE_WORKGROUP_SIZE}`);
   }
-  return WAVEFRONT_COMPUTE_WGSL;
+  if(options.roughBounceSplitting?.enabled && !['stable-pattern','stable-camera-random'].includes(options.progressiveSampling))throw new Error('Rough splitting requires stable sampling.');
+  return withRoughBounceSplitting(withProgressiveSampling(WAVEFRONT_COMPUTE_WGSL, options.progressiveSampling ?? false),options.roughBounceSplitting,true);
 }

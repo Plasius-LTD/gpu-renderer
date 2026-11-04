@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "status": "known-failure-not-an-acceptance-pass",
+  "rendererCommit": "7002c0e2ff66879ce54e97fb3d1b920d2d5b9c75",
+  "source": "Original public parametric glass rounded to binary32; no private model vertices",
+  "captureReceiptSha256": "ac9be55a6612c2d9de6919988a50eea4e7a08c285860c510d61e9d7dd518fedf",
+  "pixel": 2747573,
+  "sample": 14,
+  "primary": {
+    "origin": [3.176982879638672,-0.4139057993888855,0.1437508463859558],
+    "direction": [-0.7575232982635498,-0.2696583867073059,-0.594510555267334],
+    "primitive": 353396,
+    "vertices": [
+      [2.8993279933929443,-0.5140840411186218,-0.07567412406206131],
+      [2.895740509033203,-0.5140840411186218,-0.07744327932596207],
+      [2.894167184829712,-0.5140840411186218,-0.07450000196695328]
+    ],
+    "capturedBarycentric": [0.00002435777787468396,0.8868099451065063,0.11316579580307007],
+    "capturedPosition": [2.8955624103546143,-0.5140840411186218,-0.077110156416893],
+    "normalProjectedError": 0,
+    "geometricNormal": [0,1,0]
+  },
+  "continuedDirection": [-0.507306694984436,-0.764024019241333,-0.39863157272338867],
+  "reference": {
+    "method": "Independent double-precision geometry on the original binary32 ray and vertices; not radiance transport",
+    "primaryDistance": 0.3715005602198175,
+    "primaryPoint": [2.8955625499541995,-0.5140840411186218,-0.07711015795245352],
+    "nextPrimitive": 353589,
+    "nextFrontFace": false,
+    "nextDistanceFromUnroundedReferencePoint": 1.5327470607704688e-7,
+    "nextVertices": [
+      [2.895740509033203,-0.5140840411186218,-0.07744327932596207],
+      [2.894167184829712,-0.6820840239524841,-0.07450000196695328],
+      [2.894167184829712,-0.5140840411186218,-0.07450000196695328]
+    ]
+  },
+  "capturedNext": {"primitive":353696,"frontFace":true,"distance":0.1548803448677063,"medium":92,"failureReason":2},
+  "numericalReproduction": "Current canonical optical_triangle_position returns capturedPosition exactly; independent intersection from it misses the nearby exit and selects the captured far-wall entry."
+}

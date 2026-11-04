@@ -1,0 +1,365 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "native-optical-control-integrity",
+  "status": "all-six-integrity-pass-image-correctness-not-cleared",
+  "renderer": "d53ced33554cab6d669d2d8104ca15cfcf86add2",
+  "canonicalShaderSha256": "998cbc8590e7c19fde02466697c549e2b83de23966330bd54b0f8a9520d34e14",
+  "aggregate": {
+    "path": "room-qualification-763ed9da-791a-48f7-8dee-b5a269421099/summary.json",
+    "sha256": "ca017b9f93478d8933b31d8ef0fed623bbd6ab8f044ec20657e06410a0dc6964",
+    "status": "captures-complete-image-review-pending",
+    "failures": []
+  },
+  "artifactsRoot": "output/playwright/eames-environments",
+  "results": [
+    {
+      "receiptSha256": "2df75add7325fbe35f95301389563e2eb590894b25e0d103b961ec01251bbc0e",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "d53ced33554cab6d669d2d8104ca15cfcf86add2",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 3840,
+        "height": 2160,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "glass",
+      "glass": "empty",
+      "actualSamples": 265420800,
+      "histogram": {
+        "32": 8294400
+      },
+      "hdrSha256": "0ccf87212ad9c460e6a3da2d1359aa99d25b6b465a2b419f0e5fb85f2c0a7581",
+      "pngSha256": "80e5afecbbd1d9c50006510b1c56a50ea84658003b32cd28206324f708b779fa",
+      "verifiedChunks": 32,
+      "verifiedPixels": 8294400,
+      "meanLinearLuminance": 0.5485313853820188,
+      "rgbRms": 0.6601972292794598,
+      "minRadiance": 0,
+      "maxRadiance": 31.435039520263672,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "independentNormalMaxError": 2.579719238227085e-8,
+      "receiptPath": "room-reference-2026-10-21T13-04-51-322Z-48653014-15cc-4001-99f9-bc0ace0c95df/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "9c052a3cd966ccaef34ad6a6abaaa01cf5f6a50e0aac16a0c66e89b2a4648f6c",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "d53ced33554cab6d669d2d8104ca15cfcf86add2",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 3840,
+        "height": 2160,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "glass",
+      "glass": "filled",
+      "actualSamples": 265420800,
+      "histogram": {
+        "32": 8294400
+      },
+      "hdrSha256": "c59647d987b9f22802256060c8c793694b61c03577fe744aa12a220a7643091c",
+      "pngSha256": "988aa745f6518f7509854255c46a4ffadccaf6cdf4b5f4c7a53314c538d2eddb",
+      "verifiedChunks": 32,
+      "verifiedPixels": 8294400,
+      "meanLinearLuminance": 0.5466106075296833,
+      "rgbRms": 0.657885395350147,
+      "minRadiance": 0,
+      "maxRadiance": 31.435039520263672,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "independentNormalMaxError": 2.579719238227085e-8,
+      "receiptPath": "room-reference-2026-10-21T13-19-36-226Z-585b07ff-0002-44cb-85ce-33f65645e08e/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "971ffccb91eb34f69b83063c789914ec4abc257a048443ac3324cf0f682983a2",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "d53ced33554cab6d669d2d8104ca15cfcf86add2",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 3840,
+        "height": 2160,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "room",
+      "glass": "filled",
+      "actualSamples": 265420800,
+      "histogram": {
+        "32": 8294400
+      },
+      "hdrSha256": "cadcf79eec673a23485663bf47b905685c037a1acf0efa142fab1d5c9c6d153f",
+      "pngSha256": "0a7c74d2337eb2f4e206e7101d37808da6b669091cebb14d730ec20d4851a0ed",
+      "verifiedChunks": 32,
+      "verifiedPixels": 8294400,
+      "meanLinearLuminance": 0.6148523960973081,
+      "rgbRms": 0.6997931445544439,
+      "minRadiance": 0,
+      "maxRadiance": 50.36769104003906,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "independentNormalMaxError": 2.579719238227085e-8,
+      "receiptPath": "room-reference-2026-10-21T13-35-02-844Z-30874472-f38f-4bc6-ad0f-23094d6a0f65/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "7a3bd49285b1f4460c2c187d4faa1b2672c559d5fdd817b8c746f061cd8dbff3",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "d53ced33554cab6d669d2d8104ca15cfcf86add2",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 1920,
+        "height": 1080,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "glass",
+      "glass": "empty",
+      "actualSamples": 66355200,
+      "histogram": {
+        "32": 2073600
+      },
+      "hdrSha256": "7ebb45143deda779bf05155dd6f865089e9b4384dd45e912fd56814d1aa07d36",
+      "pngSha256": "bc9ed6cf731053f613de7a18deb77b03da7065b17f7538bf313db67e46740466",
+      "verifiedChunks": 8,
+      "verifiedPixels": 2073600,
+      "meanLinearLuminance": 0.5486699802886441,
+      "rgbRms": 0.6613580773880594,
+      "minRadiance": 0,
+      "maxRadiance": 41.894893646240234,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "independentNormalMaxError": 2.579719238227085e-8,
+      "receiptPath": "room-reference-2026-10-21T13-49-27-678Z-07cf9353-7885-4041-a49d-c26433b42f55/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "759b7cdea4de0671082e3e847c7527bedfbbd6af748f52c8fd44c3d52dc5ca48",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "d53ced33554cab6d669d2d8104ca15cfcf86add2",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 1920,
+        "height": 1080,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "glass",
+      "glass": "filled",
+      "actualSamples": 66355200,
+      "histogram": {
+        "32": 2073600
+      },
+      "hdrSha256": "e050e56eb765a97471b6502bf1c7268aadf53c35b7db127644bbed01183bf88f",
+      "pngSha256": "688aae9a67549de301d04055185da8ead46ae32c6cd980bd41c1afd87bb370c3",
+      "verifiedChunks": 8,
+      "verifiedPixels": 2073600,
+      "meanLinearLuminance": 0.546763412628575,
+      "rgbRms": 0.6589716881996183,
+      "minRadiance": 0,
+      "maxRadiance": 41.894893646240234,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "independentNormalMaxError": 2.579719238227085e-8,
+      "receiptPath": "room-reference-2026-10-21T13-53-36-472Z-5f9b9f49-2ea1-43ee-87ae-93241acd48cf/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json"
+    },
+    {
+      "receiptSha256": "bc2bb29d3d8bbf3efd4cbf434a9df93133d3e7fa9b1239be28cbe7876e80d2e2",
+      "status": "captured-reference-not-qualified",
+      "sources": {
+        "renderer": "d53ced33554cab6d669d2d8104ca15cfcf86add2",
+        "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+        "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+        "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+      },
+      "settings": {
+        "width": 1920,
+        "height": 1080,
+        "maxDepth": 20,
+        "maximumSpp": 32,
+        "sampler": "fixed-pattern",
+        "denoise": false
+      },
+      "failures": [],
+      "completeImage": true,
+      "distribution": "uniform",
+      "focus": "room",
+      "glass": "filled",
+      "actualSamples": 66355200,
+      "histogram": {
+        "32": 2073600
+      },
+      "hdrSha256": "3501944285912683e24be17ef028afb8e3518071ba4dd4df93e6b36327c7a2d1",
+      "pngSha256": "4fe61a724c225816ba36c1189e8a709d66e9aa0e8dccf36553fcf9a8babee44e",
+      "verifiedChunks": 8,
+      "verifiedPixels": 2073600,
+      "meanLinearLuminance": 0.6148572354442244,
+      "rgbRms": 0.6992043873729776,
+      "minRadiance": 0,
+      "maxRadiance": 37.921634674072266,
+      "adapter": {
+        "vendor": "apple",
+        "architecture": "metal-3",
+        "isFallbackAdapter": false
+      },
+      "cleanupPassed": true,
+      "preflights": {
+        "dielectric": true,
+        "optical": true,
+        "parity": "passed",
+        "uv": true,
+        "surface": true,
+        "material": true
+      },
+      "independentNormalMaxError": 2.579719238227085e-8,
+      "receiptPath": "room-reference-2026-10-21T13-58-00-083Z-6f1bf6b1-d69d-4b21-a8f7-0f49323afbd2/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json"
+    }
+  ],
+  "totals": {
+    "completedCameraSamples": 995328000,
+    "nativePixels": 31104000,
+    "hdrChunks": 120
+  },
+  "normalCorrection": {
+    "physicalCases": 4,
+    "maxComponentError": 2.579719238227085e-8,
+    "tolerance": 0.000001,
+    "selectedAndOrdinaryHdrAndPngIdentical": true
+  },
+  "localHostInventory": {
+    "gpu": "Apple M2 Max",
+    "cores": 38,
+    "method": "read-only filtered system_profiler SPDisplaysDataType; browser adapter separately reports Apple/metal-3"
+  },
+  "gates": {
+    "captureIntegrity": true,
+    "normalMapIdentity": true,
+    "controlsRestored": true,
+    "bandingCleared": false,
+    "imageConvergence": false,
+    "energyQualified": false,
+    "adaptivePerformance": "paused",
+    "whitePaperImprovementClaims": false
+  },
+  "remaining": [
+    "secondary procedural environment MIS PDF mismatch; scalar counterexample retained separately, runtime fix not implemented",
+    "refracted explicit directional-sun support and band attribution not isolated",
+    "independent converged-image/error/energy/silhouette qualification incomplete",
+    "no 256-SPP stress or feature-off fixed-dispatcher physical equivalence inferred"
+  ],
+  "software": {
+    "tests": 483,
+    "lineCoveragePercent": 96.45,
+    "branchCoveragePercent": 83.27,
+    "changedExecutableSrcFilesInLcov": 59,
+    "runtimeCi": {
+      "id": 39603988783,
+      "conclusion": "success"
+    }
+  },
+  "retention": "All earlier and new receipts/images/private assets remain unchanged locally; no merge/release/publication"
+}

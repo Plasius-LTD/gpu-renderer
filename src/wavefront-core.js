@@ -30,7 +30,7 @@ export const EMISSIVE_TRIANGLE_INDEX_BYTES = 4;
 export const ENVIRONMENT_PORTAL_RECORD_BYTES = 96;
 export const MEDIUM_TABLE_ROWS = 2;
 export const ACCUMULATION_RECORD_BYTES = 16;
-export const PATH_VERTEX_RECORD_BYTES = 16;
+export const PATH_VERTEX_RECORD_BYTES = 64;
 export const GPU_SUBMITTED_WORK_TIMEOUT_MS = 5_000;
 export const GPU_READBACK_COMPLETION_TIMEOUT_MS = 60_000;
 export const GPU_MAX_SUBMITTED_WORK_TIMEOUT_MS = 60_000;
@@ -57,8 +57,9 @@ export const COUNTER_TRANSPORT_CACHED_INDIRECT_LUMINANCE_OFFSET = 21;
 export const COUNTER_TRANSPORT_RESIDUAL_LUMINANCE_OFFSET = 22;
 export const COUNTER_TRANSPORT_ZERO_TERMINATION_OFFSET = 23;
 export const COUNTER_TRANSPORT_CHECKSUM_OFFSET = 24;
+export const COUNTER_PATH_FAILURE_OFFSET = 26;
 export const TRACE_STORAGE_BUFFER_BINDINGS = 10;
-export const TRACE_SAMPLED_TEXTURE_BINDINGS = 21;
+export const TRACE_SAMPLED_TEXTURE_BINDINGS = 22;
 export const BRDF_LUT_UPLOAD_CACHE = new Map();
 export const HIT_TYPE_SURFACE = 0;
 export const HIT_TYPE_EMISSIVE = 1;
@@ -99,6 +100,7 @@ export const DEFAULT_ENVIRONMENT_LIGHTING = Object.freeze({
 });
 
 export const EMPTY_TERMINATION_METRICS = Object.freeze({
+  pathCompletionValid: null,
   termination: Object.freeze({
     emissive: 0,
     environment: 0,
@@ -349,10 +351,39 @@ export const WAVEFRONT_TRANSPORT_EXPERIMENT_BITS = Object.freeze({
   productTransportTelemetry: 1 << 5,
   sourceStableDirectLighting: 1 << 6,
   deterministicLowSppIndirect: 1 << 7,
+  owenSobol: 1 << 8,
+  independentRandom: 1 << 9,
+  fixedPattern: 1 << 10,
+  stablePattern: 1 << 11,
+  sheen: 1 << 12,
+  layeredClearcoat: 1 << 13,
+  boundedDielectricBranching: 1 << 14,
+  nestedMediaRefraction: 1 << 15,
+  roughDielectricTransport: 1 << 16,
+  opticalInterfaceBudget: 1 << 17,
 });
 
 export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLighting = false) {
   const requested = Object.freeze({
+    opticalInterfaceBudget: readBooleanFeatureFlag(options, "renderer.transport.opticalInterfaceBudget.enabled", flags => flags?.renderer?.transport?.opticalInterfaceBudget?.enabled),
+    roughDielectricTransport: readBooleanFeatureFlag(options, "renderer.transport.roughDielectricTransport.enabled", flags => flags?.renderer?.transport?.roughDielectricTransport?.enabled),
+    boundedDielectricBranching: readBooleanFeatureFlag(options, "renderer.transport.boundedDielectricBranching.enabled", flags => flags?.renderer?.transport?.boundedDielectricBranching?.enabled),
+    nestedMediaRefraction: readBooleanFeatureFlag(options, "renderer.transport.nestedMediaRefraction.enabled", flags => flags?.renderer?.transport?.nestedMediaRefraction?.enabled),
+    layeredClearcoat: readBooleanFeatureFlag(options, "renderer.materials.layeredClearcoat.enabled", flags => flags?.renderer?.materials?.layeredClearcoat?.enabled),
+    sheen: readBooleanFeatureFlag(options, "renderer.materials.sheen.enabled", flags => flags?.renderer?.materials?.sheen?.enabled),
+    stablePattern: readBooleanFeatureFlag(options, "renderer.sampling.stablePattern.enabled", (flags) => flags?.renderer?.sampling?.stablePattern?.enabled ?? flags?.renderer?.sampling?.stablePattern),
+    fixedPattern: readBooleanFeatureFlag(
+      options, "renderer.sampling.fixedPattern.enabled",
+      (flags) => flags?.renderer?.sampling?.fixedPattern?.enabled ?? flags?.renderer?.sampling?.fixedPattern
+    ),
+    owenSobol: readBooleanFeatureFlag(
+      options, "renderer.sampling.owenSobol.enabled",
+      (flags) => flags?.renderer?.sampling?.owenSobol?.enabled ?? flags?.renderer?.sampling?.owenSobol
+    ),
+    independentRandom: readBooleanFeatureFlag(
+      options, "renderer.sampling.independentRandom.enabled",
+      (flags) => flags?.renderer?.sampling?.independentRandom?.enabled ?? flags?.renderer?.sampling?.independentRandom
+    ),
     stableSampleRouting: readBooleanFeatureFlag(
       options,
       "renderer.transport.stableSampleRouting.enabled",
@@ -396,7 +427,23 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
       (flags) => flags?.renderer?.diagnostics?.productTransportTelemetry
     ),
   });
+  if (requested.roughDielectricTransport && !requested.nestedMediaRefraction) {
+    throw new RangeError('roughDielectricTransport requires renderer.transport.nestedMediaRefraction.enabled');
+  }
+  if (requested.opticalInterfaceBudget && (!requested.boundedDielectricBranching || !requested.nestedMediaRefraction)) {
+    throw new RangeError('opticalInterfaceBudget requires boundedDielectricBranching and nestedMediaRefraction');
+  }
   const effective = Object.freeze({
+    opticalInterfaceBudget: requested.opticalInterfaceBudget,
+    roughDielectricTransport: requested.roughDielectricTransport,
+    boundedDielectricBranching: requested.boundedDielectricBranching,
+    nestedMediaRefraction: requested.nestedMediaRefraction,
+    sheen: requested.sheen,
+    layeredClearcoat: requested.layeredClearcoat,
+    fixedPattern: requested.fixedPattern,
+    stablePattern: requested.stablePattern,
+    owenSobol: requested.owenSobol,
+    independentRandom: requested.independentRandom,
     stableSampleRouting: requested.stableSampleRouting,
     strictZeroOverflow: requested.strictZeroOverflow && strictPhysicalLowSppLighting,
     deferLowSppRussianRoulette:
@@ -416,6 +463,9 @@ export function resolveTransportExperiments(options = {}, strictPhysicalLowSppLi
       requested.deterministicLowSppIndirect && strictPhysicalLowSppLighting,
   });
   let bitmask = 0;
+  if ([requested.owenSobol, requested.independentRandom, requested.fixedPattern, requested.stablePattern].filter(Boolean).length > 1) {
+    throw new Error("Owen Sobol, independent random, fixed and stable pattern sampler flags are mutually exclusive.");
+  }
   for (const [key, bit] of Object.entries(WAVEFRONT_TRANSPORT_EXPERIMENT_BITS)) {
     if (effective[key]) {
       bitmask |= bit;

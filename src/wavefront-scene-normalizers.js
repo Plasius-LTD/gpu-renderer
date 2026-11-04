@@ -1,3 +1,4 @@
+import { normalizeSecondaryUvs } from "./wavefront-uvs.js";
 import {
   MATERIAL_EMISSIVE,
   MATERIAL_TRANSPARENT,
@@ -221,6 +222,8 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
           readFiniteNumber("mesh uv", value, 0)
         )
       : null;
+  const doubleSided = input.doubleSided ?? input.material?.doubleSided ?? false;
+  if (typeof doubleSided !== "boolean") throw new Error("mesh doubleSided must be a boolean.");
   const materialKindInput = input.materialKind ?? input.material?.kind;
   const materialKind = readMaterialKind(materialKindInput);
   const materialExtensions = normalizeWavefrontMaterialExtensions(input);
@@ -263,8 +266,11 @@ export function normalizeWavefrontMesh(input = {}, meshIndex = 0) {
     indices: Object.freeze(indices),
     normals: normals ? Object.freeze(normals) : null,
     uvs: uvs ? Object.freeze(uvs) : null,
+    ...normalizeSecondaryUvs(input, vertexCount, materialExtensions.textures),
     materialKind: resolvedMaterialKind,
-    flags: readNonNegativeInteger("mesh flags", input.flags, 0),
+    doubleSided,
+    // Bit 30 is renderer-owned; only the explicit material policy can set it.
+    flags: ((readNonNegativeInteger("mesh flags", input.flags, 0) & ~0x40000000) | (doubleSided ? 0x40000000 : 0)) >>> 0,
     materialRefId: readNonNegativeInteger(
       "mesh materialRefId",
       input.materialRefId ?? input.material?.id ?? input.materialId,

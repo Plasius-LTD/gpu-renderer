@@ -1,0 +1,402 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "9c9e330989cbac35a18d5a8d0c8c57a915449828",
+  "provenance": {
+    "source": "immutable-git-objects",
+    "fixtureUrl": "http://127.0.0.1:5195/tests/fixtures/adaptive-bootstrap.html",
+    "observation": "Browser-visible receipt served from the clean stated commit; values transcribed without rounding. This recaptures the corrected PathNode transport; earlier source-bound receipts remain historical."
+  },
+  "receipt": {
+    "status": "passed",
+    "timestamp": "2026-09-20T07:48:39.642Z",
+    "scope": "compaction-bootstrap-camera-only",
+    "bootstrapShaderSha256": "9c0c0d083c3a9b93c3e300199a8ec683edac38255b9e5451e0d29b8776892986",
+    "cameraShaderSha256": "67cf1167c87f7432ad2f9aa61433908a66eea4cae7aa6f7d040ce63d7d264c18",
+    "fixedShaderSha256": "c0a78da83cb60ed59a1bc56ead48d7e258c01ce402836d464c5b713b24c38fcb",
+    "fixtureSha256": "8cfe69e86318ec48f53e33c0ea021fb52afb3606dc4c562f28a678202370b513",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "results": [
+      {
+        "name": "depth-1-ordinal-0",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "depth-1-ordinal-31",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "depth-4-ordinal-0",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "depth-4-ordinal-31",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "depth-8-ordinal-0",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "depth-8-ordinal-31",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "depth-32-ordinal-0",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "depth-32-ordinal-31",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "tier-1",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "tier-2",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "tier-4",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "tier-8",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "tier-16",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "tier-32",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "tier-64",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "tier-128",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "tier-256",
+        "selectedPixels": 65,
+        "generatedRays": 65,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "empty-tier",
+        "selectedPixels": 0,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "full-tile",
+        "selectedPixels": 16384,
+        "generatedRays": 16384,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 0
+      },
+      {
+        "name": "upstream-failure",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 2
+      },
+      {
+        "name": "reserved-control",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "reserved-tile",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "bad-id",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 16
+      },
+      {
+        "name": "bad-count",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "short-queue",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "short-worklist",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "short-path",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "short-sums",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "undersized-dispatch",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "tile-mismatch",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "zero-width",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "pixel-count",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "zero-depth",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "excess-depth",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "weighted",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "deferred-off",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "ordinal-at-tier",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "NaN-ordinal",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "fractional-ordinal",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "period-below-tier",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      },
+      {
+        "name": "period-above-256",
+        "selectedPixels": 65,
+        "generatedRays": 0,
+        "counterReset": true,
+        "selectedOnlyPathReset": true,
+        "unselectedAndPaddingUntouched": true,
+        "failure": 8
+      }
+    ],
+    "adapter": {
+      "vendor": "apple",
+      "architecture": "metal-3",
+      "isFallbackAdapter": false
+    },
+    "adaptiveAllocatedBytes": 214560,
+    "generatedRays": 17489,
+    "validationErrors": 0,
+    "unexpectedDeviceLoss": false,
+    "bootstrapAdditionalBufferBytes": 0,
+    "fixtureBufferBytes": 30179760,
+    "adaptiveBytesAfterCleanup": 0
+  }
+}

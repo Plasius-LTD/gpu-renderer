@@ -27,6 +27,7 @@ export function createWavefrontTraceBindGroup({
   environmentSamplingResource,
   mediumTextureResource,
   extensionAtlasResources = {},
+  materialTextureResource,
   label,
 }) {
   return device.createBindGroup({
@@ -70,6 +71,7 @@ export function createWavefrontTraceBindGroup({
       { binding: 42, resource: extensionAtlasResources.iridescence.view },
       { binding: 43, resource: extensionAtlasResources.iridescenceThickness.view },
       { binding: 44, resource: extensionAtlasResources.anisotropy.view },
+      { binding: 45, resource: materialTextureResource.view },
     ],
   });
 }

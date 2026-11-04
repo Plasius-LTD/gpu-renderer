@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en" data-scene="eames"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Original Eames native adaptive trace</title>
+<style>body{background:#10151d;color:#edf2f7;font:16px system-ui;margin:24px}button{font:inherit;padding:10px;margin:6px}canvas,img{display:block;max-width:100%;height:auto;margin:12px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere}#status{min-height:3em}</style>
+<h1>Original Eames: native 1080p and 4K adaptive trace</h1>
+<p>265,468 source model triangles, nine primitives and all five original 1024×1024 textures. Uses the shared Product Studio loader, room, materials, camera and procedural studio lighting. Missing or reduced assets fail admission.</p>
+<p>Centred circular area bands: 5% at 32 SPP, 10% at 16, 15% at 8, 20% at 4, 25% at 2, 25% at 1. Mean 5.95 SPP. Fixed32 control, four-bounce ceiling, denoise off, no automatic budget reduction.</p>
+<p>This is the full-source Eames renderer workload, not a full site/application or sustained 60 Hz qualification. Loading/BVH setup and readback diagnostics are reported separately from completed-frame timing. Reduced-SPP image quality is not yet qualified.</p>
+<button id="run">Trace original Eames at 1080p and 4K</button><button id="cancel" disabled>Stop after pending GPU work</button>
+<p id="status" role="status" aria-live="polite">Ready — full source fidelity required</p>
+<canvas id="canvas" width="1920" height="1080" aria-label="Original Eames native renderer output"></canvas>
+<section id="previews" aria-label="Retained budget maps and Eames render previews"></section>
+<pre id="result"></pre>
+<script type="module" src="./native-adaptive-trace.js"></script></html>

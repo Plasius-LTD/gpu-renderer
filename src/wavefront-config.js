@@ -52,6 +52,7 @@ import {
   subtract,
 } from "./wavefront-core.js";
 import { writeVec4 } from "./wavefront-binary.js";
+import {resolveOpticalInterfaceBudget,OPTICAL_INTERFACE_BUDGET_FLAG} from './wavefront-optical-interface-budget.js';
 import {
   collectWavefrontMediums,
   createWavefrontEmissiveTriangleIndexSource,
@@ -343,10 +344,15 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
   );
   const denoise = options.denoise !== false;
   const deferredPathResolve = options.deferredPathResolve !== false;
-  const queueBytes = tilePixelCapacity * RAY_RECORD_BYTES;
-  const hitBytes = tilePixelCapacity * HIT_RECORD_BYTES;
+  const transport=resolveTransportExperiments(options);
+  resolveOpticalInterfaceBudget(options,{enabled:transport.effective.opticalInterfaceBudget,maxDepth,tilePixelCapacity,
+    strict:resolveStrictPhysicalLowSppLighting(options),deferred:deferredPathResolve,roughSplitting:options.roughBounceSplitting?.enabled});
+  roughSplitAdditionalBytes(tilePixelCapacity,maxDepth,options.roughBounceSplitting);
+  const queueFactor = options.roughBounceSplitting?.enabled ? 2**options.roughBounceSplitting.splitDepth : 1;
+  const queueBytes = tilePixelCapacity * queueFactor * RAY_RECORD_BYTES;
+  const hitBytes = tilePixelCapacity * queueFactor * HIT_RECORD_BYTES;
   const accumulationBytes = tilePixelCapacity * ACCUMULATION_RECORD_BYTES;
-  const pathVertexBytes = tilePixelCapacity * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
+  const pathVertexBytes = tilePixelCapacity * queueFactor * (maxDepth + 1) * PATH_VERTEX_RECORD_BYTES;
   const sceneObjectBytes = sceneObjectCapacity * SCENE_OBJECT_RECORD_BYTES;
   const triangleBytes = allocatedRecordBytes(triangleCapacity, TRIANGLE_RECORD_BYTES);
   const materialTableBytes = 0;
@@ -441,6 +447,12 @@ export function estimateWavefrontPathTracingMemory(options = {}) {
 
 export function estimateWavefrontPathTracingMemoryForConfig(config, limits = {}) {
   return estimateWavefrontPathTracingMemory({
+    [OPTICAL_INTERFACE_BUDGET_FLAG]:config.opticalInterfaceBudget?.enabled??false,
+    opticalInterfaceBudget:config.opticalInterfaceBudget?.enabled?{maximumInterfaces:config.opticalInterfaceBudget.maximumInterfaces,maximumAdditionalBytes:config.opticalInterfaceBudget.maximumAdditionalBytes}:undefined,
+    'renderer.transport.boundedDielectricBranching.enabled':config.transportExperiments?.effective.boundedDielectricBranching??false,
+    'renderer.transport.nestedMediaRefraction.enabled':config.transportExperiments?.effective.nestedMediaRefraction??false,
+    strictPhysicalLowSppLighting:config.strictPhysicalLowSppLighting,
+    roughBounceSplitting: config.roughBounceSplitting,
     width: config.width,
     height: config.height,
     tileSize: config.tileSize,
@@ -588,12 +600,37 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
   const deferredPathResolve = resolveDeferredPathResolve(options);
   const strictPhysicalLowSppLighting = resolveStrictPhysicalLowSppLighting(options);
   const transportExperiments = resolveTransportExperiments(options, strictPhysicalLowSppLighting);
+  if (transportExperiments.effective.roughDielectricTransport || transportExperiments.effective.nestedMediaRefraction) {
+    const opticalMode = transportExperiments.effective.roughDielectricTransport ? 'Rough dielectric' : 'Smooth partial dielectric';
+    for (const surface of [...meshes, ...sceneObjects]) {
+      if (!([2, 3].includes(surface.materialKind) || surface.transmission > 0.001)) continue;
+      if (!transportExperiments.effective.roughDielectricTransport && !(surface.mediumRefId && surface.transmission < 1)) continue;
+      if (surface.materialKind === 1 || surface.metallic > 0 || surface.clearcoat > 0) {
+        throw new RangeError(`${opticalMode} volume transport does not yet combine metallic or clearcoat lobes.`);
+      }
+      if (!surface.mediumRefId || !mediums.some(medium => medium.id === surface.mediumRefId)) {
+        throw new RangeError(`${opticalMode} volume transport requires a non-air medium for every optical surface.`);
+      }
+      if (surface.opacity < 1 || surface.color[3] < 1) {
+        throw new RangeError(`${opticalMode} volume transport does not implement alpha coverage; use opacity 1 and explicit transmission.`);
+      }
+    }
+  }
+  const roughBounceSplitting=resolveRoughBounceSplitting(options);
+  if(roughBounceSplitting.enabled && (!transportExperiments.effective.stablePattern || !deferredPathResolve || !strictPhysicalLowSppLighting)) {
+    throw new Error('Rough splitting requires stable sampling, deferred resolve and strict physical lighting.');
+  }
+  const opticalInterfaceBudget=resolveOpticalInterfaceBudget(options,{enabled:transportExperiments.effective.opticalInterfaceBudget,
+    maxDepth,tilePixelCapacity,strict:strictPhysicalLowSppLighting,deferred:deferredPathResolve,roughSplitting:roughBounceSplitting.enabled});
+  roughSplitAdditionalBytes(tilePixelCapacity,maxDepth,roughBounceSplitting);
 
   return Object.freeze({
     mode: rendererWavefrontComputeMode,
     width,
     height,
     maxDepth,
+    maximumPathEvents:opticalInterfaceBudget.maximumPathEvents,
+    opticalInterfaceBudget,
     tileSize,
     samplesPerPixel,
     maxFramePassesPerSubmission,
@@ -630,6 +667,7 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     deferredPathResolve,
     strictPhysicalLowSppLighting,
     transportExperiments,
+    roughBounceSplitting,
     transportExperimentFlags: transportExperiments.bitmask,
     presentationOutput: resolveWavefrontPresentationOutput(options.presentationOutput),
     displayQuality: options.displayQuality === true,
@@ -637,6 +675,12 @@ export function createWavefrontPathTracingComputeConfig(options = {}) {
     denoise: options.denoise !== false,
     frameIndex: readNonNegativeInteger("frameIndex", options.frameIndex, 0),
     memory: estimateWavefrontPathTracingMemory({
+      [OPTICAL_INTERFACE_BUDGET_FLAG]:opticalInterfaceBudget.enabled,
+      opticalInterfaceBudget:opticalInterfaceBudget.enabled?{maximumInterfaces:opticalInterfaceBudget.maximumInterfaces,maximumAdditionalBytes:opticalInterfaceBudget.maximumAdditionalBytes}:undefined,
+      'renderer.transport.boundedDielectricBranching.enabled':transportExperiments.effective.boundedDielectricBranching,
+      'renderer.transport.nestedMediaRefraction.enabled':transportExperiments.effective.nestedMediaRefraction,
+      strictPhysicalLowSppLighting,
+      roughBounceSplitting,
       width,
       height,
       tileSize,
@@ -664,3 +708,4 @@ export function supportsWavefrontPathTracingCompute(options = {}) {
   const navigatorRef = options.navigator ?? globalThis.navigator;
   return typeof navigatorRef?.gpu?.requestAdapter === "function";
 }
+import {resolveRoughBounceSplitting,roughSplitAdditionalBytes} from './wavefront-rough-bounce-splitting.js';

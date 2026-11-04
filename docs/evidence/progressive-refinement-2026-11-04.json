@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 1,
+  "status": "native-prefix-identity-verified-not-performance-qualified",
+  "feature": 2367,
+  "story": 2368,
+  "sources": {
+    "renderer": "e5f7bdc90047a6aa03a83b8420d3f4724b1d9f5b",
+    "lighting": "aa40455bf8f3279fb329fe97b9935bfbc0c60b64",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102",
+    "performance": "484ed17f41d57237e879e7a8413b447a40c24119",
+    "performanceBuild": {
+      "bundleSha256": "0e856d61bc3bf4173ae468dc727fd4b33d0ca11ec6048a8331df6fbee49b9c7f",
+      "sourceMapSha256": "d4a37d1fd318c3217278cce70b9e318aeb02102fa4838a9a1bc853018476cb11",
+      "sourceCount": 9
+    }
+  },
+  "sourceReportSha256": "eab0b1669c66a6a04f607b04a70c7d820fd2bdeeea0044dcacf2cd88df320f94",
+  "adapter": {
+    "vendor": "apple",
+    "architecture": "metal-3",
+    "isFallbackAdapter": false
+  },
+  "scene": {
+    "triangles": 354246,
+    "proxyGeometry": false,
+    "referenceModels": 2
+  },
+  "configuration": {
+    "sequencePeriod": 8,
+    "movingCeiling": 4,
+    "bounces": 20,
+    "opticalInterfaces": 2048,
+    "sampler": "fixed-pattern",
+    "denoise": false,
+    "splitting": false,
+    "budgetReduction": false,
+    "configurationEvidence": "Immutable harness inputs; original phase receipts did not separately retain resolved settings"
+  },
+  "resolutions": [
+    {
+      "resolution": "1080p",
+      "width": 1920,
+      "height": 1080,
+      "bitwiseHdrMismatches": 0,
+      "maxAbsoluteError": 0,
+      "focusAverageSpp": 2.109173900462963,
+      "captures": [
+        {
+          "phase": "coverage",
+          "samples": 2073600,
+          "histogram": {
+            "1": 2073600
+          },
+          "hdrSha256": "30d832cdc79b299ab004181fd591b5875fd784cd8d839edfe50e3599644c9d77",
+          "verifiedPixels": 2073600,
+          "verifiedChunks": 8
+        },
+        {
+          "phase": "focus",
+          "samples": 4373583,
+          "histogram": {
+            "1": 857873,
+            "2": 673599,
+            "4": 542128
+          },
+          "hdrSha256": "3964805dd7517db0993c16dce824eb97b350e29e28ee770c513a657b3b5c18f0",
+          "verifiedPixels": 2073600,
+          "verifiedChunks": 8
+        },
+        {
+          "phase": "stationary",
+          "samples": 16588800,
+          "histogram": {
+            "8": 2073600
+          },
+          "hdrSha256": "fa74ddb199782feebe8a224444d8c6104799d78b60cd40bb1a2db3f57db5b984",
+          "verifiedPixels": 2073600,
+          "verifiedChunks": 8
+        },
+        {
+          "phase": "canonical",
+          "samples": 16588800,
+          "histogram": {
+            "8": 2073600
+          },
+          "hdrSha256": "fa74ddb199782feebe8a224444d8c6104799d78b60cd40bb1a2db3f57db5b984",
+          "verifiedPixels": 2073600,
+          "verifiedChunks": 8
+        },
+        {
+          "phase": "reset-coverage",
+          "samples": 2073600,
+          "histogram": {
+            "1": 2073600
+          },
+          "hdrSha256": "4f85299f1a08cb072937a7665da2e38b47086207488c1fd68df30d42c06efd01",
+          "verifiedPixels": 2073600,
+          "verifiedChunks": 8
+        }
+      ],
+      "allocations": {
+        "rendererBuffers": 261446676,
+        "adaptiveBuffers": 42330524,
+        "historySubset": 33177600,
+        "telemetry": 43072,
+        "fixtureStaging": 589824,
+        "hostBudgetBacking": 0
+      },
+      "diagnosticIntervals": [
+        {
+          "stage": "coverage",
+          "batches": 9,
+          "issuedWorkUnits": 135,
+          "diagnosticBatchIntervalMs": 8277.300000071526
+        },
+        {
+          "stage": "focus",
+          "batches": 17,
+          "issuedWorkUnits": 270,
+          "diagnosticBatchIntervalMs": 14635.299999952316
+        },
+        {
+          "stage": "stationary",
+          "batches": 26,
+          "issuedWorkUnits": 405,
+          "diagnosticBatchIntervalMs": 38587.10000026226
+        }
+      ]
+    },
+    {
+      "resolution": "4k",
+      "width": 3840,
+      "height": 2160,
+      "bitwiseHdrMismatches": 0,
+      "maxAbsoluteError": 0,
+      "focusAverageSpp": 2.109237919560185,
+      "captures": [
+        {
+          "phase": "coverage",
+          "samples": 8294400,
+          "histogram": {
+            "1": 8294400
+          },
+          "hdrSha256": "15f355da9caaca21f0a6a601a3a08ddde80bb5004de5ee67a1a5594900fbf2a4",
+          "verifiedPixels": 8294400,
+          "verifiedChunks": 32
+        },
+        {
+          "phase": "focus",
+          "samples": 17494863,
+          "histogram": {
+            "1": 3431559,
+            "2": 2694030,
+            "4": 2168811
+          },
+          "hdrSha256": "436e863ce4eabbc921a2605b10f73b310b357b0bd10d8bef96c546649c5fd406",
+          "verifiedPixels": 8294400,
+          "verifiedChunks": 32
+        },
+        {
+          "phase": "stationary",
+          "samples": 66355200,
+          "histogram": {
+            "8": 8294400
+          },
+          "hdrSha256": "0559aaef656a69c6eb289689b39aa20cec44115619f6dab75d0234effd7647d4",
+          "verifiedPixels": 8294400,
+          "verifiedChunks": 32
+        },
+        {
+          "phase": "canonical",
+          "samples": 66355200,
+          "histogram": {
+            "8": 8294400
+          },
+          "hdrSha256": "0559aaef656a69c6eb289689b39aa20cec44115619f6dab75d0234effd7647d4",
+          "verifiedPixels": 8294400,
+          "verifiedChunks": 32
+        },
+        {
+          "phase": "reset-coverage",
+          "samples": 8294400,
+          "histogram": {
+            "1": 8294400
+          },
+          "hdrSha256": "971238dd933777f5c7f2871f020cb7da6ea5f0436a97cb418cd3b45ac010653a",
+          "verifiedPixels": 8294400,
+          "verifiedChunks": 32
+        }
+      ],
+      "allocations": {
+        "rendererBuffers": 262982676,
+        "adaptiveBuffers": 166746524,
+        "historySubset": 132710400,
+        "telemetry": 43072,
+        "fixtureStaging": 589824,
+        "hostBudgetBacking": 0
+      },
+      "diagnosticIntervals": [
+        {
+          "stage": "coverage",
+          "batches": 32,
+          "issuedWorkUnits": 510,
+          "diagnosticBatchIntervalMs": 27211.89999985695
+        },
+        {
+          "stage": "focus",
+          "batches": 64,
+          "issuedWorkUnits": 1020,
+          "diagnosticBatchIntervalMs": 43397.400000452995
+        },
+        {
+          "stage": "stationary",
+          "batches": 96,
+          "issuedWorkUnits": 1530,
+          "diagnosticBatchIntervalMs": 139412.099999547
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Experimental source-pinned development contracts; no production flag activation",
+    "Scripted interaction/focus phases use a stationary camera to verify history ownership; actual moving-view qualification remains separate",
+    "No reprojection/variance stopping; changed integrands invalidate history",
+    "Budget predicts indivisible work, not a guaranteed display frame; timings include diagnostic status readback",
+    "Prior failed convergence screens remain failed under provisional user acceptance",
+    "Full-scene convergence/32..256-SPP and matched-quality timing remain separate gates",
+    "Original per-phase receipt omits settings/provenance; derived verification receipts bind immutable parent report and unchanged bytes. Originals remain intact.",
+    "The original reset supplied a resolved camera basis as options, changing its look-at target; it proves changed-view count reset only. Authored same-view reset is corrected and tested separately.",
+    "Per-phase count histograms were retained, not full per-pixel SPP masks. No spatial-overlay qualification is claimed."
+  ],
+  "controls": {
+    "fixed256": {
+      "status": "passed",
+      "width": 128,
+      "height": 128,
+      "sequencePeriod": 256,
+      "movingCeiling": 17,
+      "splitting": false,
+      "sampler": "fixed-pattern"
+    },
+    "split256": {
+      "status": "warm-retry-passed-cold-stability-unqualified",
+      "width": 128,
+      "height": 128,
+      "sequencePeriod": 256,
+      "movingCeiling": 17,
+      "splitDepth": 1,
+      "sampler": "stable-pattern",
+      "priorTimeoutRetained": true
+    }
+  },
+  "validation": {
+    "rendererUnitTests": 608,
+    "performanceUnitTests": 61,
+    "lightingUnitTests": 177,
+    "siteFlagTests": 38,
+    "performanceLineCoverage": 90.38,
+    "lightingLineCoverage": 81.22,
+    "siteFlagSuiteLineCoverage": 83.25
+  },
+  "productionFlagsEnabled": false,
+  "performanceClaim": false,
+  "nativeBudgetControl": {
+    "status": "native-prefix-identity-verified-not-performance-qualified",
+    "resolution": "1080p",
+    "sourceReportSha256": "10c69120ee8697b1aa238024664ba6fb085f8106a8cd8e85cffb71b1675132aa",
+    "sources": {
+      "renderer": "be391112bb8cac6195bc709959e223423e17df71",
+      "lighting": "bc6f6f84756e2cb96df66281c730f1e736f9ee8d",
+      "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+      "site": "21d43a9b63722f1ce69175a5a42b53304ee79102",
+      "performance": "484ed17f41d57237e879e7a8413b447a40c24119",
+      "performanceBuild": {
+        "bundleSha256": "0e856d61bc3bf4173ae468dc727fd4b33d0ca11ec6048a8331df6fbee49b9c7f",
+        "sourceMapSha256": "d4a37d1fd318c3217278cce70b9e318aeb02102fa4838a9a1bc853018476cb11",
+        "sourceCount": 9
+      }
+    },
+    "ceiling": 2,
+    "budgetMs": 16.666666666666668,
+    "foveation": false,
+    "counts": [
+      {
+        "phase": "coverage",
+        "samples": 2073600,
+        "hdrSha256": "30d832cdc79b299ab004181fd591b5875fd784cd8d839edfe50e3599644c9d77"
+      },
+      {
+        "phase": "focus",
+        "samples": 2073600,
+        "hdrSha256": "30d832cdc79b299ab004181fd591b5875fd784cd8d839edfe50e3599644c9d77"
+      },
+      {
+        "phase": "stationary",
+        "samples": 4147200,
+        "hdrSha256": "a9a7eb67842a44953b665199445c5c8dbe80c4ca554bc9e43ef9e5b93999050f"
+      },
+      {
+        "phase": "canonical",
+        "samples": 4147200,
+        "hdrSha256": "a9a7eb67842a44953b665199445c5c8dbe80c4ca554bc9e43ef9e5b93999050f"
+      },
+      {
+        "phase": "reset-coverage",
+        "samples": 2073600,
+        "hdrSha256": "30d832cdc79b299ab004181fd591b5875fd784cd8d839edfe50e3599644c9d77"
+      }
+    ],
+    "bitwiseHdrMismatches": 0,
+    "identicalViewReset": true,
+    "optionalMovingWorkSkipped": true,
+    "predictedMandatoryUnitOverruns": 260,
+    "actualDiagnosticBatchOverruns": 261,
+    "timingClaim": false
+  },
+  "transportShaderSha256": {
+    "default": "b50d988d92d0af5867fc3355cadad89ad8b1affe9c88bf051298df2c8acaf7b4",
+    "fixedPattern": "1ced104009b807c8329a4dd539643483976db3c0ab6547e79be84aef54e70a94"
+  }
+}

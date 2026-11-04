@@ -1,4 +1,5 @@
 import { ADAPTIVE_COUNT_BITS, ADAPTIVE_COUNT_MASK } from "./wavefront-adaptive-shader.js";
+import { ADAPTIVE_CAMERA_SAMPLE_RECORD_WGSL, ADAPTIVE_RESOLVE_CONFIG_RECORD_WGSL } from "./wavefront-adaptive-sample-records.js";
 
 export const ADAPTIVE_SAMPLE_FAILURE_MASK = 0x80000000;
 export const ADAPTIVE_RESOLVE_WGSL = `
@@ -8,30 +9,10 @@ const ADAPTIVE_FAILURE_MASK: u32 = ${ADAPTIVE_SAMPLE_FAILURE_MASK}u;
 
 struct AdaptivePixelState { word: u32, };
 struct AdaptivePixels { records: array<AdaptivePixelState>, };
-struct AdaptiveCameraSample {
-  radiance: vec3<f32>,
-  sourcePixelId: u32,
-  sampleOrdinal: u32,
-  status: u32,
-  reserved0: u32,
-  reserved1: u32,
-};
+${ADAPTIVE_CAMERA_SAMPLE_RECORD_WGSL}
 struct AdaptiveSamples { records: array<AdaptiveCameraSample>, };
 struct AdaptiveRadiance { records: array<vec4<f32>>, };
-struct AdaptiveResolveConfig {
-  canvasWidth: u32,
-  canvasHeight: u32,
-  tileX: u32,
-  tileY: u32,
-  tileWidth: u32,
-  tileHeight: u32,
-  sampleOrdinal: u32,
-  frameValid: u32,
-  selectedTier: u32,
-  reserved0: u32,
-  reserved1: u32,
-  reserved2: u32,
-};
+${ADAPTIVE_RESOLVE_CONFIG_RECORD_WGSL}
 @group(0) @binding(0) var<storage, read_write> pixels: AdaptivePixels;
 @group(0) @binding(1) var<storage, read> samples: AdaptiveSamples;
 @group(0) @binding(2) var<storage, read_write> sums: AdaptiveRadiance;

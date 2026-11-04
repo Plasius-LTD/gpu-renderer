@@ -211,6 +211,6 @@ test("pipeline compilation failures propagate without returning partial pipeline
   }
 });
 
-test("the fixed assembled transport remains byte-identical", () => {
-  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "6314e7ac17898b87cd8fc0b9bce46743237b8c5f8099ca31b8040c49726564d0");
+test("the Task 232 opt-in material-corrected fixed shader remains canonical", () => {
+  assert.equal(createHash("sha256").update(WAVEFRONT_COMPUTE_WGSL).digest("hex"), "b50d988d92d0af5867fc3355cadad89ad8b1affe9c88bf051298df2c8acaf7b4"); // Task271 intentional BSDF correction; the rejected prior shader is separately reconstructed.
 });

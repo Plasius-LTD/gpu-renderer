@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "status": "descriptive-attribution-not-qualified",
+  "resolution": "1080p",
+  "sources": {
+    "renderer": "34dc85284e5c3e7796a76ee74496bacd51780b8a",
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "summarySha256": "2c2bc176e9bf539a7e05c00ad1934cdf47386fb7a6244f5aa8587fea4d6c6b54",
+  "metricsSourceSha256": "7d26bd7a71164e09aba27ee1e9bead5b88064206e2d6deb2d0a4d557b7b6d994",
+  "sameSeedContinuationCountsMatch": true,
+  "counterScope": "Camera and continuation segments only; shadow/BVH queries and total GPU time are not counted here.",
+  "assessment": {
+    "withinModePairMseRatio": 1.0084568265340417,
+    "energyScreen": false,
+    "energyLimit": 0.01,
+    "claim": "Two-replicate descriptive attribution only; no confidence bound, converged reference, unbiasedness proof, adaptive/performance or memory acceptance."
+  },
+  "comparisons": [
+    {
+      "candidate": {
+        "seed": 7,
+        "importance": false
+      },
+      "reference": {
+        "seed": 19,
+        "importance": false
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.21558039679629187,
+        "normalizedRmse": 0.33713671913843585,
+        "maxAbsoluteError": 55.40111833810806,
+        "p95LocalError": 0.38199102878570557,
+        "p99LocalError": 0.759159505367279,
+        "meanLuminanceAbsoluteError": 0.10853804177515133,
+        "maxLuminanceAbsoluteError": 49.0252312926203,
+        "meanLuminance": 0.5606712031575831,
+        "referenceMeanLuminance": 0.5605488825795928,
+        "relativeEnergyDrift": 0.00021821571996975264
+      }
+    },
+    {
+      "candidate": {
+        "seed": 7,
+        "importance": true
+      },
+      "reference": {
+        "seed": 19,
+        "importance": true
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.2164900406799692,
+        "normalizedRmse": 0.34373455144891873,
+        "maxAbsoluteError": 55.461908638477325,
+        "p95LocalError": 0.38188380002975464,
+        "p99LocalError": 0.7596837878227234,
+        "meanLuminanceAbsoluteError": 0.10862514372501476,
+        "maxLuminanceAbsoluteError": 49.09294408775865,
+        "meanLuminance": 0.5517543464911744,
+        "referenceMeanLuminance": 0.5516496012022295,
+        "relativeEnergyDrift": 0.00018987648811255624
+      }
+    },
+    {
+      "candidate": {
+        "seed": 7,
+        "importance": true
+      },
+      "reference": {
+        "seed": 7,
+        "importance": false
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.03245754190643674,
+        "normalizedRmse": 0.05069431777349044,
+        "maxAbsoluteError": 9.422653198242188,
+        "p95LocalError": 0.0638081431388855,
+        "p99LocalError": 0.10126465559005737,
+        "meanLuminanceAbsoluteError": 0.019452491858935887,
+        "maxLuminanceAbsoluteError": 8.958520018005371,
+        "meanLuminance": 0.5517543464911744,
+        "referenceMeanLuminance": 0.5606712031575831,
+        "relativeEnergyDrift": -0.01590389628750468
+      }
+    },
+    {
+      "candidate": {
+        "seed": 19,
+        "importance": true
+      },
+      "reference": {
+        "seed": 19,
+        "importance": false
+      },
+      "metrics": {
+        "pixels": 2073600,
+        "rgbRmse": 0.03318362656867285,
+        "normalizedRmse": 0.05189441691699228,
+        "maxAbsoluteError": 9.159595489501953,
+        "p95LocalError": 0.0638660192489624,
+        "p99LocalError": 0.10116994380950928,
+        "meanLuminanceAbsoluteError": 0.019460062208049345,
+        "maxLuminanceAbsoluteError": 8.569215787124634,
+        "meanLuminance": 0.5516496012022295,
+        "referenceMeanLuminance": 0.5605488825795928,
+        "relativeEnergyDrift": -0.015876013054222222
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "capture": "room-reference-2026-11-02T13-29-08-412Z-5ec45b4f-3fa6-4531-b60e-e52cca07cb36",
+      "receiptSha256": "91225d23840b2db2ad825e0ac7c14744cc096874cb0c3c881e51bc66d8a5838a",
+      "hdrSha256": "ea87f7de04b12e93ae21c76d16d3fae4d1d850b2eb3489f4dda319e085ca2a18",
+      "pngSha256": "4802c955222bcd60eb4f07acfe1c41a0ccae6ee631dbe88e619a897070a0f750",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8
+    },
+    {
+      "capture": "room-reference-2026-11-02T13-35-21-165Z-43644a14-7e35-4862-bf73-aa94a113bb2b",
+      "receiptSha256": "4a5dcca51925607e244f443de2932468a7104b3783ed6ec5b8a39aac43d0c554",
+      "hdrSha256": "463fe20ae88262d9c438e9d99913760147df6b5a3bdcfbeaa67a9dba6c4c9ed8",
+      "pngSha256": "a1d38353cec13ed3a750914f83f1de28158c5a8cc482fe4e2763a39733f99b5f",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8
+    },
+    {
+      "capture": "room-reference-2026-11-02T13-41-23-287Z-f977706d-b313-4495-859d-7c7a136cca7c",
+      "receiptSha256": "01d33bc2331c667dd05a21e2c18c2845f43168e4a1b7aabfaf820dcccc28b941",
+      "hdrSha256": "734845cf50a6d78a2fe6038d604c5a1ea09da20b894fb783c66a366f2ad3070f",
+      "pngSha256": "6514e588b4edd0a041b6a0528887ef16f9ed69ef7c30b5ffd9cfda295485cdc1",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8
+    },
+    {
+      "capture": "room-reference-2026-11-02T13-47-29-492Z-ebb0b745-c5d8-4291-8f92-dffd5f140522",
+      "receiptSha256": "399435f8be89903bf7d21a5092772082912b75404a8b2b40c3a336016a1549b4",
+      "hdrSha256": "966b8f0aeb510a85f333ca7ce5a3d45ffc64bce52f287336f11356dd0416c5af",
+      "pngSha256": "9f14ec6ee8fcc01a2f69eb9a622a7c641429aa31a6b4c7ffc9112cda471e0a71",
+      "verifiedPixels": 2073600,
+      "verifiedChunks": 8
+    }
+  ]
+}

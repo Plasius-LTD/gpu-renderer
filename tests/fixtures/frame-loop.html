@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Completion-driven rendering</title>
+<style>body{font:16px system-ui;background:#10151d;color:#edf2f7;margin:2rem;max-width:1000px}button{font:inherit;padding:.7rem;margin:.5rem}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#8fd5ff}</style></head>
+<body><h1>Completion-driven rendering</h1>
+<p>Fixed, shared adaptive and fused adaptive frames. Checks identity against direct rendering and counts independent CPU heartbeats during GPU waits. This is scheduling verification, not a speedup or matched-quality claim.</p>
+<button id="run">Verify frame loop</button><button id="stop" disabled>Stop after current frame</button>
+<p id="status" role="status" aria-live="polite">Ready. Uses the source-bound capture server.</p>
+<pre id="progress" aria-label="Live frame progress"></pre><pre id="result" aria-label="Verification receipt"></pre>
+<script type="module" src="./frame-loop.js"></script></body></html>

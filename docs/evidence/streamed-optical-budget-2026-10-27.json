@@ -1,0 +1,389 @@
+{
+  "schema": 1,
+  "status": "optical-controls-pass-native-integrity-pass-adaptive-paused",
+  "task": "https://github.com/Plasius-LTD/gpu-renderer/issues/234",
+  "pullRequest": "https://github.com/Plasius-LTD/gpu-renderer/pull/216",
+  "renderer": "a326c837b6909fdaa53339fb6c59dc2e4baba1c1",
+  "shaderSha256": "1679475a3e08f26ea681c7bb0ea056c640a315936b91e9dbb8e23c86de23b733",
+  "dependencies": {
+    "lighting": "bac0d5c0aeda57ef29878eb2f92c60ff0775a8ce",
+    "shared": "b68f8682735fa8bffb5179d5e11342521a2f9446",
+    "site": "21d43a9b63722f1ce69175a5a42b53304ee79102"
+  },
+  "policy": {
+    "flag": "renderer.transport.opticalInterfaceBudget.enabled",
+    "defaultEnabled": false,
+    "ordinaryLimit": 20,
+    "testedOpticalLimit": 2048,
+    "defaultOpticalLimit": 64,
+    "maximumPhysicalEvents": 2068,
+    "logicalQueueCapacity": 20,
+    "additionalPathNodeBytes": 0,
+    "frameBytes": 320,
+    "rayBytes": 96,
+    "nodeBytes": 64
+  },
+  "optical": {
+    "capture": "room-reference-2026-10-27T18-21-38-565Z-e648b079-4621-4294-b605-e95f929745e4",
+    "summarySha256": "d061d4dfa5a4e0bf38d0623ac60e8019d8eefd711971b4607fb8c24ad8c238bf",
+    "dimensions": [
+      512,
+      288
+    ],
+    "spp": 256,
+    "totalCameraSamples": 150994944,
+    "imageGateVersion": 2,
+    "tolerances": {
+      "mean": 0.02,
+      "row": 0.05,
+      "allPixelRgb": 0.05
+    },
+    "lanes": [
+      {
+        "name": "furnace-filled",
+        "receiptSha256": "89d3de807ad2d614a2f368c86ba7f0f851225755fe0f9176a6ecad7d3fb878da",
+        "hdrSha256": "58202ec914f1f20eab0b22b0fc5a9b65043e8b0a495e2f914432921141c6d807",
+        "actualSamples": 37748736,
+        "centralMeanError": 7.08588250297737e-8,
+        "maxRowError": 7.947285962650597e-8,
+        "maximumRgbError": 0.0234375,
+        "error": null
+      },
+      {
+        "name": "furnace-empty",
+        "receiptSha256": "e7edf7f58c98fd3a51d2c1c041d821bf709f119ca1025268ca6b4f17734edc25",
+        "hdrSha256": "80080b65f64b32392eb08129eb3f2b1f4625f0682c90db97fae9890306fdd510",
+        "actualSamples": 37748736,
+        "centralMeanError": 7.050083916659844e-8,
+        "maxRowError": 7.947285962650597e-8,
+        "maximumRgbError": 0.0234375,
+        "error": null
+      },
+      {
+        "name": "furnace-index-one",
+        "receiptSha256": "cc49336be9475ccff8dc1f25def8f6bac56fb722f89b06d0be76f242c05b2285",
+        "hdrSha256": "bdd7ecdecb555948594382858c79ebb0c6042bd2483c49042d8069241ded93f6",
+        "actualSamples": 37748736,
+        "centralMeanError": 7.070220631177904e-8,
+        "maxRowError": 7.947285962650597e-8,
+        "maximumRgbError": 0.0234375,
+        "error": null
+      },
+      {
+        "name": "pedestal-contrast",
+        "receiptSha256": "9f8642833c3f3d9029e98befb11ff0bcd8cf3bd023f29af00d0862cd4d7882ba",
+        "hdrSha256": "779363d47c99658e879e4dbb8bd73364a5dc5fc18430a8b4f105061ed0965215",
+        "actualSamples": 37748736,
+        "error": null
+      }
+    ],
+    "independentReference": {
+      "directory": "output/playwright/optical-contrast1024-2026-10-27-qo9rJW",
+      "linearSha256": "8c561f178465ed991a1cdbc5b40d420761d4482b15b7e3a66597afb8d3388555",
+      "scriptSha256": "11ccf4d7a137b0d6702a2c4bd27258087f1976a6a6d797371998c1c24d769366",
+      "actualDepthPolicy": {
+        "max_bounces": 1024,
+        "transmission_bounces": 1024,
+        "glossy_bounces": 1024,
+        "transparent_max_bounces": 1024,
+        "min_light_bounces": 1024
+      },
+      "rowRmse": 0.009292930595710378,
+      "nativeMean": 0.5672720384842775,
+      "referenceMean": 0.5665202470378833,
+      "scope": "linear row attribution over frozen central glass region; not full-room accuracy or convergence"
+    }
+  },
+  "native": {
+    "status": "all-six-integrity-pass",
+    "aggregate": "output/playwright/eames-environments/room-qualification-8f89d199-b597-46cc-a86a-c3640766004f/summary.json",
+    "aggregateSha256": "901715fabcae5091d94173deb3a2555c85c6ac56c69496c07c475f2b68df1911",
+    "spp": 32,
+    "actualSamples": 995328000,
+    "verifiedChunks": 120,
+    "totalPathSegments": 3517310839,
+    "lanes": [
+      {
+        "receipt": "output/playwright/eames-environments/room-reference-2026-10-27T18-35-07-737Z-ad475d80-649a-4db0-b20a-ccbe847d8cab/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json",
+        "receiptSha256": "06f9979eb0a832dca907cf684632d3039cb6829ab0dc65514374c999fb79e911",
+        "width": 1920,
+        "height": 1080,
+        "glass": "empty",
+        "focus": "glass",
+        "actualSamples": 66355200,
+        "hdrSha256": "43b0c4c0dd90b2ef6618c6437c27301309f5d9de7b9be1ade14717f965ffe187",
+        "meanLinearLuminance": 0.5070409967770998,
+        "rayCounts": {
+          "tiles": 135,
+          "primaryRays": 66355200,
+          "secondaryRays": 173164835,
+          "totalPathSegments": 239520035
+        },
+        "maximumMisPdfError": 1.2841276653130507e-8,
+        "maximumMisMeanError": 0.000003934119149562321,
+        "memory": {
+          "rendererBufferBytes": 262824228,
+          "fixtureAdaptiveBufferBytes": 9421084,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "textureInventoryRetained": true,
+          "physicalVramResidency": null
+        },
+        "triangleCount": 353862,
+        "cleanupPassed": true
+      },
+      {
+        "receipt": "output/playwright/eames-environments/room-reference-2026-10-27T18-42-35-108Z-fb4027af-f29c-425c-a121-8937fcd58611/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json",
+        "receiptSha256": "56597ecf6b1b7580d788f007e0eea41b179523f52b4d4759a036bd4b17785ab5",
+        "width": 1920,
+        "height": 1080,
+        "glass": "filled",
+        "focus": "glass",
+        "actualSamples": 66355200,
+        "hdrSha256": "726e36813e9496f33ac843bc329d1b4fc4db0cc5fb428884aab02414181160a1",
+        "meanLinearLuminance": 0.505558304505779,
+        "rayCounts": {
+          "tiles": 135,
+          "primaryRays": 66355200,
+          "secondaryRays": 182605347,
+          "totalPathSegments": 248960547
+        },
+        "maximumMisPdfError": 1.2841276653130507e-8,
+        "maximumMisMeanError": 0.000003934119149562321,
+        "memory": {
+          "rendererBufferBytes": 263105556,
+          "fixtureAdaptiveBufferBytes": 9421084,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "textureInventoryRetained": true,
+          "physicalVramResidency": null
+        },
+        "triangleCount": 354246,
+        "cleanupPassed": true
+      },
+      {
+        "receipt": "output/playwright/eames-environments/room-reference-2026-10-27T18-52-49-533Z-f8bc215d-f1c2-4650-b8cd-d9be30b973ae/room-eames-1920x1080-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json",
+        "receiptSha256": "4062f5cbabc25fb5e8e1cd12d7b71fc2a7b91a555d0cc69c56dd67d27b9606cd",
+        "width": 1920,
+        "height": 1080,
+        "glass": "filled",
+        "focus": "room",
+        "actualSamples": 66355200,
+        "hdrSha256": "843653247b7b6923c80f903c7e3566b075c7fc9bea85d9f69908368189a97ea2",
+        "meanLinearLuminance": 0.5606971124079559,
+        "rayCounts": {
+          "tiles": 135,
+          "primaryRays": 66355200,
+          "secondaryRays": 148641194,
+          "totalPathSegments": 214996394
+        },
+        "maximumMisPdfError": 1.2841276653130507e-8,
+        "maximumMisMeanError": 0.000003934119149562321,
+        "memory": {
+          "rendererBufferBytes": 263105556,
+          "fixtureAdaptiveBufferBytes": 9421084,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "textureInventoryRetained": true,
+          "physicalVramResidency": null
+        },
+        "triangleCount": 354246,
+        "cleanupPassed": true
+      },
+      {
+        "receipt": "output/playwright/eames-environments/room-reference-2026-10-27T18-58-36-329Z-4499be9a-f38b-4242-892c-e1c4248f3fac/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-empty-fill0.55-glass-closeup-support-clearance0.0001.json",
+        "receiptSha256": "543ac670d1b12ae4025f8277f5ce8c4807253f05dbfefbd6ed3446854d1f5785",
+        "width": 3840,
+        "height": 2160,
+        "glass": "empty",
+        "focus": "glass",
+        "actualSamples": 265420800,
+        "hdrSha256": "eb2dcde53a5d3913fb1b9c342b9b58b3feedfcc3356697675145335f887692ce",
+        "meanLinearLuminance": 0.5069114736242759,
+        "rayCounts": {
+          "tiles": 510,
+          "primaryRays": 265420800,
+          "secondaryRays": 692410954,
+          "totalPathSegments": 957831754
+        },
+        "maximumMisPdfError": 1.2841276653130507e-8,
+        "maximumMisMeanError": 0.000003934119149562321,
+        "memory": {
+          "rendererBufferBytes": 268968228,
+          "fixtureAdaptiveBufferBytes": 34304284,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "textureInventoryRetained": true,
+          "physicalVramResidency": null
+        },
+        "triangleCount": 353862,
+        "cleanupPassed": true
+      },
+      {
+        "receipt": "output/playwright/eames-environments/room-reference-2026-10-27T19-22-16-120Z-364cefe0-73a9-4891-abd8-2ec39e742737/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-glass-closeup-support-clearance0.0001.json",
+        "receiptSha256": "91932d0923249c1ee6b2764eda4b92a8ce3f98f9f05d9be60be0f4745e3e0853",
+        "width": 3840,
+        "height": 2160,
+        "glass": "filled",
+        "focus": "glass",
+        "actualSamples": 265420800,
+        "hdrSha256": "302a2fbb0526ef8fcb4cbd7f4c4617769b85e6a8a0f5b1fa22af9145c2be9a57",
+        "meanLinearLuminance": 0.5054521454824961,
+        "rayCounts": {
+          "tiles": 510,
+          "primaryRays": 265420800,
+          "secondaryRays": 730612123,
+          "totalPathSegments": 996032923
+        },
+        "maximumMisPdfError": 1.2841276653130507e-8,
+        "maximumMisMeanError": 0.000003934119149562321,
+        "memory": {
+          "rendererBufferBytes": 269249556,
+          "fixtureAdaptiveBufferBytes": 34304284,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "textureInventoryRetained": true,
+          "physicalVramResidency": null
+        },
+        "triangleCount": 354246,
+        "cleanupPassed": true
+      },
+      {
+        "receipt": "output/playwright/eames-environments/room-reference-2026-10-27T19-55-37-656Z-89df5e6a-0338-4bb2-9acf-326c2bb9306b/room-eames-3840x2160-fixed-pattern-20-bounces-uniform-daylight-glass-filled-fill0.55-support-clearance0.0001.json",
+        "receiptSha256": "da7d58636c0f5cb75c1df52013604fac6ddae805c24eef3b025388fed07f699d",
+        "width": 3840,
+        "height": 2160,
+        "glass": "filled",
+        "focus": "room",
+        "actualSamples": 265420800,
+        "hdrSha256": "1ae5bc9357ff60011357d10a24d3bc1393c3d55d2240992702722208a212ad5b",
+        "meanLinearLuminance": 0.5606926418286153,
+        "rayCounts": {
+          "tiles": 510,
+          "primaryRays": 265420800,
+          "secondaryRays": 594548386,
+          "totalPathSegments": 859969186
+        },
+        "maximumMisPdfError": 1.2841276653130507e-8,
+        "maximumMisMeanError": 0.000003934119149562321,
+        "memory": {
+          "rendererBufferBytes": 269249556,
+          "fixtureAdaptiveBufferBytes": 34304284,
+          "telemetryBufferBytes": 43072,
+          "fixtureStagingBytes": 589824,
+          "textureInventoryRetained": true,
+          "physicalVramResidency": null
+        },
+        "triangleCount": 354246,
+        "cleanupPassed": true
+      }
+    ]
+  },
+  "pairedDifferences": [
+    {
+      "width": 1920,
+      "glass": "empty",
+      "focus": "glass",
+      "bitIdenticalPixelFraction": 0.8120187114197531,
+      "brighterPixels": 200358,
+      "darkerPixels": 189440,
+      "pairedRgbRmse": 0.0257303969818689,
+      "meanBefore": 0.5066643871132506,
+      "meanAfter": 0.5070409967770998,
+      "meanRelativeChange": 0.0007433118913191539,
+      "scope": "paired differences versus rejected optical20; not image error or convergence"
+    },
+    {
+      "width": 1920,
+      "glass": "filled",
+      "focus": "glass",
+      "bitIdenticalPixelFraction": 0.8063676697530864,
+      "brighterPixels": 213253,
+      "darkerPixels": 188263,
+      "pairedRgbRmse": 0.027878049249080283,
+      "meanBefore": 0.5048114244511075,
+      "meanAfter": 0.505558304505779,
+      "meanRelativeChange": 0.0014795228841810726,
+      "scope": "paired differences versus rejected optical20; not image error or convergence"
+    },
+    {
+      "width": 1920,
+      "glass": "filled",
+      "focus": "room",
+      "bitIdenticalPixelFraction": 0.8732344714506173,
+      "brighterPixels": 131483,
+      "darkerPixels": 131378,
+      "pairedRgbRmse": 0.004057241967037878,
+      "meanBefore": 0.5606552701695902,
+      "meanAfter": 0.5606971124079559,
+      "meanRelativeChange": 0.00007463095522686203,
+      "scope": "paired differences versus rejected optical20; not image error or convergence"
+    },
+    {
+      "width": 3840,
+      "glass": "empty",
+      "focus": "glass",
+      "bitIdenticalPixelFraction": 0.812534481095679,
+      "brighterPixels": 799392,
+      "darkerPixels": 755522,
+      "pairedRgbRmse": 0.011663365700772917,
+      "meanBefore": 0.5065602670759017,
+      "meanAfter": 0.5069114736242759,
+      "meanRelativeChange": 0.0006933164150466631,
+      "scope": "paired differences versus rejected optical20; not image error or convergence"
+    },
+    {
+      "width": 3840,
+      "glass": "filled",
+      "focus": "glass",
+      "bitIdenticalPixelFraction": 0.8067860243055556,
+      "brighterPixels": 851396,
+      "darkerPixels": 751198,
+      "pairedRgbRmse": 0.017545437127600254,
+      "meanBefore": 0.5047231301627684,
+      "meanAfter": 0.5054521454824961,
+      "meanRelativeChange": 0.0014443865877369344,
+      "scope": "paired differences versus rejected optical20; not image error or convergence"
+    },
+    {
+      "width": 3840,
+      "glass": "filled",
+      "focus": "room",
+      "bitIdenticalPixelFraction": 0.8732749807098765,
+      "brighterPixels": 524461,
+      "darkerPixels": 526647,
+      "pairedRgbRmse": 0.004183299663772253,
+      "meanBefore": 0.5606533149754767,
+      "meanAfter": 0.5606926418286153,
+      "meanRelativeChange": 0.00007014469028931991,
+      "scope": "paired differences versus rejected optical20; not image error or convergence"
+    }
+  ],
+  "validation": {
+    "tests": 539,
+    "lineCoveragePercent": 96.53,
+    "branchCoveragePercent": 83.43,
+    "changedExecutableSrcFilesInLcov": 63,
+    "lint": true,
+    "typecheck": true,
+    "build": true,
+    "package": true,
+    "zeroThree": true,
+    "productionAuditVulnerabilities": 0,
+    "developmentAuditHighFindings": 9,
+    "latestImplementationCi": {
+      "commit": "c3bd5fa3d3a4c97cbb702280f8ee754838ae5892",
+      "run": 40560221076,
+      "status": "success"
+    }
+  },
+  "limitations": [
+    "Native captures pass integrity/preflight, not full-room convergence or photorealism",
+    "Broad pedestal contrast has independent support; do not erase it",
+    "Finite2048 horizon and5% furnace tolerance are not universal unbiasedness",
+    "Default-off and default64 policy unchanged;64 filled control remains rejected",
+    "Cold setup timeout and unchunked execution timeout remain preserved",
+    "No adaptive matched-quality performance,60Hz,total-memory or physical-VRAM improvement claim",
+    "No release, main/CD or publication"
+  ]
+}
