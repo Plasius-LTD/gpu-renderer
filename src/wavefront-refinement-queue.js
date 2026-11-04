@@ -46,7 +46,10 @@ export function createRefinementQueue(options={}) {
    }
    return null;
   },
-  complete(ticket) {checkTicket(ticket);if(ticket.range.firstSample===0)covered.add(ticket.tile.index);outstanding=null;},
+  complete(ticket) {
+   checkTicket(ticket);if(ticket.range.firstSample===0)covered.add(ticket.tile.index);outstanding=null;
+   if(tileIndex===ordered.length||(rangeIndex===0&&covered.size===tiles.length)){rangeIndex++;tileIndex=0;}
+  },
   fail(ticket,reason) {checkTicket(ticket);failed=String(reason);outstanding=null;},
   reset(reason='explicit-reset') {
    epoch++;outstanding=null;failed=null;covered.clear();endpoints.clear();endpoints.add(1);

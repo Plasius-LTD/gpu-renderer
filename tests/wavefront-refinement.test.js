@@ -56,6 +56,13 @@ test('invalid plans and coordinates fail before issuing GPU work',()=>{
  q.update({...plan('focus'),canRun:false});assert.equal(q.next(),null);
  q.update(plan('focus'));const ticket=q.next();assert.throws(()=>q.complete({...ticket}),/ticket/);
 });
+test('completion marks the frontier immediately without an empty follow-up GPU batch',()=>{
+ const q=createRefinementQueue({enabled:true,width:1,height:1,maximumSamplesPerPixel:8});
+ q.update(plan('coverage',1));q.complete(q.next());assert.equal(q.snapshot().finished,true);
+ q.update(plan('stationary'));
+ for(const end of [2,4,8]){const t=q.next();assert.equal(t.range.sampleLimit,end);q.complete(t);}
+ assert.equal(q.snapshot().finished,true);assert.equal(q.next(),null);
+});
 test('progressive history admission accounts full-screen FP32 sums and keeps old allocation default',()=>{
  const ordinary=planAdaptiveResources({enabled:true,width:3840,height:2160,countResolve:true});
  assert.equal(ordinary.bytes.radianceSums,16384*16);
