@@ -20,6 +20,8 @@ import { createTimestampSpanEncoder } from "./paired-timestamp-span.js";
 import { createSharedSampleRanges, packSharedPhase, createSharedAdaptivePipelines, encodeSharedPhase, encodeSharedSample } from "/src/wavefront-adaptive-shared.js";
 import { createPrunedContinuationPipelines } from "/src/wavefront-pruned-continuations.js";
 import { createNativeAdaptiveRunner } from "./native-adaptive-runner.js";
+import {createNativeRefinementRunner} from './native-refinement-runner.js';
+import {DEFAULT_REFINEMENT_ALLOCATION_CAP_BYTES} from '/src/wavefront-refinement-gpu.js';
 import {pathQueueCapacity} from '/src/wavefront-optical-interface-budget.js';
 import {observePipelineSetup} from './pipeline-setup-observer.js';
 import {withReferenceTransportSampling,REFERENCE_TRANSPORT_MODE} from './reference-transport-sampling.js';
@@ -28,6 +30,7 @@ import {nativeHostOptions} from './native-host-packing.js';
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 export async function createPairedProbeRunner(scene, signal, {pruningVariants=false,native=null,sampler="legacy",splitDepth=0,guidedDenoise=false,sheen=false,layeredClearcoat=false,boundedDielectricBranching=false,nestedMediaRefraction=false,roughDielectricTransport=false,opticalInterfaceBudget={enabled:false},referenceTransportSampling=false,environmentImportance=false}={}) {
   if(native)native={...native,hostOptimizations:nativeHostOptions(native.hostOptimizations)};
+  const persistentRadiance=native?.refinement?.policy?.enabled===true;
   check(typeof environmentImportance==='boolean','Environment importance must be boolean');
   check(!referenceTransportSampling||(native&&sampler==='fixed-pattern'&&!splitDepth&&!pruningVariants),'Reference transport requires native fixed-camera sampling without splitting/pruning');
   check(!opticalInterfaceBudget.enabled||(boundedDielectricBranching&&nestedMediaRefraction&&!splitDepth),'Optical interface budget requires bounded+nested transport without rough splitting');
@@ -111,14 +114,15 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
     const textureInventory=textures.map(item=>({format:item.format,size:item.size,mipLevelCount:item.mipLevelCount??1,sampleCount:item.sampleCount??1}));
     const get=name=>{const value=buffers.get(`plasius.wavefront.${name}`);check(value,`Missing ${name}`);return value;};
     const queue=get("activeQueue"), counters=get("counters"), paths=get("pathVertices"), frame=get("frameConfig"), accumulation=get("accumulation");
-    owner=createAdaptiveResourceOwner(device,GPUBufferUsage,{enabled:true,width,height,tilePixelCapacity:pixels,primaryWorklist:true,primaryConfigSlots:native?6:3,countResolve:true,resolveConfigSlots:maximum+11});
+    owner=createAdaptiveResourceOwner(device,GPUBufferUsage,{enabled:true,width,height,tilePixelCapacity:pixels,primaryWorklist:true,primaryConfigSlots:native?6:3,countResolve:true,resolveConfigSlots:maximum+11,
+      ...(persistentRadiance?{persistentRadiance:true,maximumAllocationBytes:native.refinement.maximumAllocationBytes??DEFAULT_REFINEMENT_ALLOCATION_CAP_BYTES}:{})});
     const resources=await wait(owner.acquire()); check(resources.status==="ready",resources.reason); const b=resources.buffers;
     const compact=await wait(createAdaptivePrimaryPipelines(device,GPUShaderStage,{enabled:true}));
     const bootstrap=await wait(createAdaptiveBootstrapPipelines(device,GPUShaderStage,{enabled:true}));
     const camera=await wait(createAdaptiveCameraRayPipeline(device,GPUShaderStage,{enabled:true,progressiveSampling}));
     const producer=await wait(createAdaptiveCompletionPipeline(device,GPUShaderStage,{enabled:true,roughBounceSplitting:renderer.config.roughBounceSplitting}));
     const resolve=await wait(createAdaptiveResolvePipelines(device,GPUShaderStage,{enabled:true}));
-    const shared=await wait(createSharedAdaptivePipelines(device,GPUShaderStage,{enabled:true,progressiveSampling,roughBounceSplitting:renderer.config.roughBounceSplitting}));
+    const shared=await wait(createSharedAdaptivePipelines(device,GPUShaderStage,{enabled:true,progressiveSampling,roughBounceSplitting:renderer.config.roughBounceSplitting,persistentRadiance}));
     const variants={};
     if(pruningVariants)for(const [name,options] of Object.entries({zero:{zeroEmptyDispatch:true},fused:{fusedHits:true},combined:{fusedHits:true,zeroEmptyDispatch:true}}))variants[name]=await wait(createPrunedContinuationPipelines(device,tracePipelineLayout,{...options,progressiveSampling}));
     const group=(layout,entries)=>device.createBindGroup({layout,entries:entries.map(([binding,buffer,size])=>({binding,resource:{buffer,...(size?{size}:{})}}))});
@@ -153,7 +157,7 @@ export async function createPairedProbeRunner(scene, signal, {pruningVariants=fa
       const {createGuidedRoomPostprocess}=await import('./native-guided-postprocess.js');
       guidePostprocess=await wait(createGuidedRoomPostprocess({device,native,b,frame,counters,queue,descriptors,frameEncoder,makeBuffer,read,wait,active}));
     }
-    if(native){const nativeRunner=await createNativeAdaptiveRunner({native,sampler,guidePostprocess,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
+    if(native){const nativeRunner=await (persistentRadiance?createNativeRefinementRunner:createNativeAdaptiveRunner)({native,sampler,guidePostprocess,device,renderer,b,resources,frame,counters,accumulation,frameEncoder,shared,sharedGroup,sharedPhaseGroup,
       tracePipelineLayout,pipelines,variants,telemetry,timestampPairs,read,makeBuffer,group,descriptors,wait,active,destroy,errors,owner,
       setMode(diagnostic,fused){activeTelemetry=diagnostic?telemetry:null;activePreparedPipelines=fused?variants.fused:null;},
       setConfig(value){config=value;},adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:false},

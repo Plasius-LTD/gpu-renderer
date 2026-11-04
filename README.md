@@ -1,5 +1,20 @@
 # @plasius/gpu-renderer
 
+The progressive refinement laboratory starts with one complete sample everywhere,
+then admits focus work from gpu-performance's budget plan and catches up all
+stationary pixels. GPU FP32 sums and packed actual counts persist only for a valid
+view/integrand; camera changes reset them. Absolute sample ordinals and transport
+stay unchanged. The separate192MiB cap accounts history honestly; the old128MiB
+default and disabled path stay intact. This is experimental source development,
+not released consumer integration or a60Hz/performance claim. See
+[ADR0070](docs/adrs/adr-0070-interaction-progressive-sampling.md) and the
+[design](docs/design/interaction-progressive-sampling.md). Laboratory diagnostics
+expose a progressive test; the immutable room server must explicitly mount a
+clean, source-bound gpu-performance build. Query controls are `refinementTotal`,
+`refinementMoving`, `refinementBudgetMs`, `refinementUnits`, `refinementResolution`
+and independent `refinementFocus`, `refinementStationary`, `refinementPerformance`
+(`on`/`off`). Production remote flags remain default off.
+
 Current experiment decision (3 November2026): the user provisionally accepts
 the retained convergence and authorizes performance/fidelity/memory optimisation.
 Earlier pause wording records the previous gate; failed reference measurements

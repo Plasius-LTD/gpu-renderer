@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Add experimental coverage-first progressive GPU sum/count storage, bounded
+  focus/stationary work ownership, GPU target generation and native-room prefix
+  qualification controls (#286, site#2367). Preserve absolute camera ordinals,
+  complete-path normalization and existing disabled allocation/source defaults.
+  History admission uses a separate explicit192MiB cap. Released consumer
+  integration, moving-camera qualification and matched-quality gains remain gates.
+
 - Retain the completed native1080p/4K host A/B evidence: exact HDR/count/ray/
   command identity, 7.91/31.64MiB less known host budget backing storage and no
   meaningful completed-job speed gain. Record GPU tile hotspots and separately

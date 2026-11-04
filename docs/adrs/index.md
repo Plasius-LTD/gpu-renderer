@@ -63,3 +63,4 @@
 - [ADR 0067: Stream bounded zero-direct optical chains](adr-0067-streamed-bounded-optical-chains.md)
 - [ADR 0068: Match ordinary continuation proposals and densities](adr-0068-bsdf-proposal-density.md)
 - [ADR 0069: Provisional performance baseline with preserved convergence evidence](adr-0069-provisional-performance-baseline.md)
+- [ADR 0070: Interaction-responsive progressive sampling](adr-0070-interaction-progressive-sampling.md)
