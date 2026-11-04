@@ -17,6 +17,13 @@ All notable changes to this project will be documented in this file.
   complete-path normalization and existing disabled allocation/source defaults.
   History admission uses a separate explicit192MiB cap. Released consumer
   integration, moving-camera qualification and matched-quality gains remain gates.
+- Retain native1080p/4K progressive-to-canonical8-SPP bitwise HDR equality,
+  full-scene budget admission and independent256-ordinal/reset controls. Preserve
+  the rough-split cold-operation timeout despite a successful warm retry; no
+  convergence, sustained60Hz, matched-quality speedup or total-memory claim.
+- Finish progressive queue frontiers immediately after their last GPU work unit,
+  avoiding an empty completion batch; preserve original GPU/observer errors and
+  invalidate failed history before reuse, with requirements-first regressions.
 
 - Retain the completed native1080p/4K host A/B evidence: exact HDR/count/ray/
   command identity, 7.91/31.64MiB less known host budget backing storage and no

@@ -14,6 +14,10 @@ clean, source-bound gpu-performance build. Query controls are `refinementTotal`,
 `refinementMoving`, `refinementBudgetMs`, `refinementUnits`, `refinementResolution`
 and independent `refinementFocus`, `refinementStationary`, `refinementPerformance`
 (`on`/`off`). Production remote flags remain default off.
+The [native prefix ledger](docs/evidence/progressive-refinement-2026-11-04.md)
+records exact8-SPP progressive/canonical HDR identity at1080p/4K, the independent
+256-ordinal and performance-admission controls, added history allocation and
+remaining qualification limits. This is not a frame-rate improvement claim.
 
 Current experiment decision (3 November2026): the user provisionally accepts
 the retained convergence and authorizes performance/fidelity/memory optimisation.
