@@ -313,8 +313,10 @@ el('host-performance').addEventListener('click',async()=>{
  demoUi.refresh();
 });
 el('refinement').addEventListener('click',async()=>{
+ if(qualificationRunning||run.disabled)return;
  const {runRoomRefinement}=await import('./native-room-refinement.js');
- await runRoomRefinement({loadAssets,clearCapture,roomCompositionControls,resetRoomControls});
+ const report=await runRoomRefinement({loadAssets,clearCapture,roomCompositionControls,resetRoomControls});
+ demoUi.refresh();if(report)setRoomPreviewState(document,report.status==='failed'?'failed':'complete');
 });
 el('cloth-response').addEventListener('click',async()=>{
  if(qualificationRunning)return;

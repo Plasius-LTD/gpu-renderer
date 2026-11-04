@@ -83,6 +83,9 @@ export async function createNativeRefinementRunner(c) {
     await validate();if(work.snapshot().previewComplete)await publish();
     const result={...work.snapshot(),phase:plan.phase,issuedWorkUnits:issued,elapsedMs:performance.now()-started,budgetReason:plan.budgetReason,estimatedWorkMs:plan.estimatedWorkMs};
     history.push(result);return result;
+   }catch(error){
+    if(!needsReset){work.reset('gpu-or-job-failure');needsReset=true;lastKey=null;}
+    throw error;
    }finally{busy=false;}
   },
   reset({reason='explicit-reset',camera,frameSeed=7}={}) {

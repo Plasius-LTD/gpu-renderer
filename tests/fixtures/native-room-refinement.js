@@ -32,11 +32,18 @@ export async function runRoomRefinement({loadAssets,clearCapture,roomComposition
    const runner=await createPairedProbeRunner(composed.scene,abort.signal,{sampler:'fixed-pattern',boundedDielectricBranching:true,nestedMediaRefraction:true,opticalInterfaceBudget:lane.opticalInterfaceBudget,native:{...settings,canvas,refinement:{policy}}});runners.push(runner);
    check(composed.evidence.referenceModels.length===2&&runner.sceneSnapshot.triangleCount===composed.evidence.sceneTriangleCount,'Full-scene refinement admission failed');
    report.adapter=runner.adapter;report.memory??=[];report.memory.push({resolution,...runner.memory});
+   report.lanes??=[];report.lanes.push({resolution,settings,sceneSnapshot:runner.sceneSnapshot});
    let cost;
    const capture=async(name,provided,captureCanvas=canvas)=>{
     const frame=provided??await runner.readImage(),linearImage={sha256:await hashBytes(frame.image.buffer),bytes:frame.image.byteLength,chunks:[]};let index=0;
     for await(const chunk of encodeLinearImageChunks(frame.image))linearImage.chunks.push({byteOffset:chunk.byteOffset,byteLength:chunk.byteLength,sha256:chunk.sha256,artifact:await save(`${resolution}-${name}-hdr-${index++}`,marker.toDataURL(),{provenance:report.provenance,chunk})});
-    const item={resolution,phase:name,actualSamples:frame.actualSamples,actualHistogram:frame.actualHistogram,linearImage};item.artifact=await save(`${resolution}-${name}`,captureCanvas.toDataURL(),item);report.captures.push(item);await checkpoint();return frame;
+    const dataUrl=captureCanvas.toDataURL(),item={resolution,phase:name,actualSamples:frame.actualSamples,actualHistogram:frame.actualHistogram,linearImage};
+    item.artifact=await save(`${resolution}-${name}`,dataUrl,item);report.captures.push(item);
+    if(['coverage','focus','stationary'].includes(name)){
+     el('preview').src=dataUrl;el('preview').hidden=false;el('download').href=dataUrl;el('download').download=`${resolution}-${name}-progressive.png`;
+     el('comparison-label').textContent=`Experimental ${resolution} ${name} · ${frame.actualSamples.toLocaleString()} actual camera samples`;
+    }
+    await checkpoint();return frame;
    };
    let final;
    for(const stage of ['coverage','focus',...(controlsConfig.stationary?['stationary']:[])]){
