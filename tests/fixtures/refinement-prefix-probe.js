@@ -5,7 +5,7 @@ const check=(v,m)=>{if(!v)throw Error(m);};
 const equal=(a,b)=>{const x=new Uint32Array(a.buffer),y=new Uint32Array(b.buffer);return x.length===y.length&&x.every((n,i)=>n===y[i]);};
 // Small actual-transport regression, not a native performance workload.
 export async function runRefinementPrefixProbe({maximum=256,moving=17,splitDepth=1}={}){
- const width=17,height=13,sampler=splitDepth?'stable-pattern':'fixed-pattern',scene={...createPairedProbeScene('diffuse-silhouette'),probeDepth:2};
+ const width=128,height=128,sampler=splitDepth?'stable-pattern':'fixed-pattern',scene={...createPairedProbeScene('diffuse-silhouette'),probeDepth:2};
  const controller=new AbortController(),runners=[],canvas=()=>{const c=document.createElement('canvas');c.width=width;c.height=height;return c;};
  const policy=normalizeWavefrontRefinementPolicy({enabled:true,maximumSamplesPerPixel:maximum,movingMaximumSamplesPerPixel:moving,maximumWorkUnitsPerBatch:16,stationaryRefinement:true,foveation:{enabled:true}});
  try{
