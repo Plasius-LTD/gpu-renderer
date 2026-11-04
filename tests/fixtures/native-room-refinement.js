@@ -73,7 +73,9 @@ export async function runRoomRefinement({loadAssets,clearCapture,roomComposition
     report.comparison??=[];report.comparison.push({resolution,mismatches,maxAbsoluteError,canonicalHdrSha256:await hashBytes(canonical.image.buffer),progressiveHdrSha256:await hashBytes(final.image.buffer),actualSamples:canonical.actualSamples});
     check(mismatches===0,'Partitioned/canonical radiance identity failed');reference.destroy();runners.pop();
    }
-   runner.reset({reason:'camera-cut-regression',camera:runner.sceneSnapshot.camera});check(!runner.snapshot().previewComplete,'Camera reset retained stale history');
+   // FrameConfig.camera is a resolved basis, not a camera-options object with
+   // a look-at target. Reuse the authored options to test an identical view.
+   runner.reset({reason:'camera-cut-regression',camera:composed.scene.camera});check(!runner.snapshot().previewComplete,'Camera reset retained stale history');
    const resetPlan=planWavefrontRefinement(policy,{moving:true,previewComplete:false,frameTimeBudgetMs:0});
    while(!runner.snapshot().previewComplete)await runner.runBatch(resetPlan);
    const resetFrame=await capture('reset-coverage');check(resetFrame.actualSamples===settings.width*settings.height,'Reset did not discard prior samples');
