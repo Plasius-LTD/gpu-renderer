@@ -33,12 +33,12 @@ export async function createWavefrontProgressiveResources({device, constants, co
   return Object.freeze({
     get samples(){return samples;},
     reset(){samples=0;},
-    encode(encoder,offset,batchSamples){
+    encode(encoder,offset,batchSamples,viewport=config){
       device.queue.writeBuffer(counts,0,new Uint32Array([samples,batchSamples,0,0]));
       const pass=encoder.beginComputePass({label:'plasius.wavefront.progressivePass'});
       pass.setPipeline(pipeline);pass.setBindGroup(0,bindGroup,[offset]);
-      pass.dispatchWorkgroups(Math.ceil(config.width/8),Math.ceil(config.height/8));pass.end();
-      encoder.copyTextureToTexture({texture},{texture:radianceTexture},{width:config.width,height:config.height,depthOrArrayLayers:1});
+      pass.dispatchWorkgroups(Math.ceil(viewport.width/8),Math.ceil(viewport.height/8));pass.end();
+      encoder.copyTextureToTexture({texture},{texture:radianceTexture},{width:viewport.width,height:viewport.height,depthOrArrayLayers:1});
       samples+=batchSamples;
     },
     destroy(){history.destroy();counts.destroy();texture.destroy();},

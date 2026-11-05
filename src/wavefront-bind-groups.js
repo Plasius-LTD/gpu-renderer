@@ -199,6 +199,7 @@ export function createWavefrontPresentBindGroup({
   presentBindGroupLayout,
   outputView,
   sampler,
+  configBuffer,
 }) {
   return device.createBindGroup({
     label: "plasius.wavefront.presentBindGroup",
@@ -206,6 +207,7 @@ export function createWavefrontPresentBindGroup({
     entries: [
       { binding: 0, resource: outputView },
       { binding: 1, resource: sampler },
+      { binding: 2, resource: { buffer: configBuffer, size: 16 } },
     ],
   });
 }

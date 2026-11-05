@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Per-frame renderScale uses a bounded viewport within existing GPU allocations, resets progressive history on resolution changes, and restores full resolution when omitted.
 
 - **Changed**
   - (placeholder)

@@ -18,6 +18,7 @@
     "tests/feedback-diagnostics.types.ts",
     "tests/native-surfaces.types.ts",
     "tests/canonical-wavefront-meshes.types.ts",
-    "tests/instancing.types.ts"
+    "tests/instancing.types.ts",
+    "tests/render-scale.types.ts"
   ]
 }
