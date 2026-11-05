@@ -33,8 +33,8 @@ export function createWavefrontFrameEncoder({
   return Object.freeze({
     getAccumulatedSamples() { return progressive?.samples ?? 0; },
     encodeProgressive(encoder, configOffset, parallelism, samples) {
-      progressive.encode(encoder, configOffset, samples);
       const config = resolveConfig();
+      progressive.encode(encoder, configOffset, samples, config);
       recordDirectDispatch(parallelism, [Math.ceil(config.width / 8), Math.ceil(config.height / 8)], WORKGROUP_SIZE);
     },
     encodeTileSample(encoder, tile, configOffset, parallelism) {

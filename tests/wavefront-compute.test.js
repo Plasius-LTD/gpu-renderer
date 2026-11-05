@@ -4007,3 +4007,76 @@ serialWebGpuTest('driver allocation errors pop both scopes and release the canva
     assert.ok(device.buffers.every(b=>b.destroyed));assert.ok(device.textures.every(t=>t.destroyed));
   });
 });
+
+serialWebGpuTest('frame render scale preserves allocations and restores full stationary history', async () => {
+ await withWebGpuConstants(async () => {
+  const device=new FakeWavefrontDevice(),canvas=createFakeWavefrontCanvas();
+  const renderer=await createWavefrontPathTracingComputeRenderer({canvas,navigator:createFakeWavefrontNavigator(device),width:32,height:20,tileSize:16,maxDepth:2,samplesPerPixel:8,progressive:true,denoise:true});
+  const allocated=renderer.getSnapshot().allocations.allocatedBytes;
+  const counts=[device.buffers.length,device.textures.length,device.pipelineLabels.length];
+  const full=renderer.renderOnce({samplesPerPixel:2});assert.equal(full.primaryRays,1280);
+  const motion=renderer.renderOnce({renderScale:.5,samplesPerPixel:1});
+  assert.equal(motion.primaryRays,160);assert.equal(motion.width,16);assert.equal(motion.height,10);
+  assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,1);
+  renderer.renderOnce({renderScale:.5,samplesPerPixel:2});assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,3);
+  const restored=await renderer.renderFrame({samplesPerPixel:8,readOutputProbe:false});
+  assert.equal(restored.primaryRays,5120);assert.equal(restored.width,32);assert.equal(restored.height,20);
+  assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,8);
+  assert.deepEqual([canvas.width,canvas.height],[32,20]);
+  assert.equal(renderer.getSnapshot().allocations.allocatedBytes,allocated);
+  assert.deepEqual([device.buffers.length,device.textures.length,device.pipelineLabels.length],counts);
+  assert.equal(renderer.getSnapshot().allocationWidth,32);assert.equal(renderer.getSnapshot().renderScale,1);
+  renderer.destroy();assert.equal(renderer.getSnapshot().allocations.allocatedBytes,0);
+ });
+});
+
+serialWebGpuTest('frame render scale rejects invalid inputs before mutation and isolates pending frames', async () => {
+ await withWebGpuConstants(async () => {
+  const device=new FakeWavefrontDevice();
+  const renderer=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),navigator:createFakeWavefrontNavigator(device),width:32,height:20,tileSize:16});
+  for(const renderScale of [0,-1,2,NaN,Infinity,null,'0.5']) {
+   const before=renderer.getSnapshot().frame,submissions=device.queue.submissions.length;
+   assert.throws(()=>renderer.renderOnce({renderScale}),/renderScale/);
+   await assert.rejects(renderer.renderFrame({renderScale}),/renderScale/);
+   assert.equal(renderer.getSnapshot().frame,before);assert.equal(device.queue.submissions.length,submissions);
+  }
+  let release;device.queue.onSubmittedWorkDone=()=>new Promise(resolve=>{release=resolve;});
+  const pending=renderer.renderFrame({renderScale:.5,readOutputProbe:false});
+  try {
+   await assert.rejects(renderer.renderFrame({renderScale:1}),/pending/);
+   assert.throws(()=>renderer.renderOnce(),/pending/);
+   assert.throws(()=>renderer.renderOnce({},{}),/pending/);
+   assert.throws(()=>renderer.updateCamera({position:[0,2,5]}),/pending/);
+   assert.throws(()=>renderer.updateSceneObjects([]),/pending/);
+   assert.throws(()=>renderer.resetAccumulation(),/pending/);
+   assert.equal(renderer.getSnapshot().width,16);
+  } finally { release();await pending;device.queue.onSubmittedWorkDone=async()=>{}; }
+  assert.equal((await renderer.renderFrame({readOutputProbe:false})).width,32);
+  renderer.destroy();
+ });
+});
+
+serialWebGpuTest('scaled odd viewports retain full camera projection across live scene changes', async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(), navigator: createFakeWavefrontNavigator(device),
+      width: 33, height: 21, tileSize: 16, maxDepth: 2, samplesPerPixel: 2, progressive: true,
+    });
+    renderer.renderOnce({renderScale: .5, samplesPerPixel: 1});
+    const camera = renderer.updateCamera({position: [1, 2, 5], target: [0, 0, 0]});
+    assert.equal(camera.camera.aspect, 33 / 21);
+    assert.deepEqual([camera.width, camera.height], [16, 10]);
+    const changed = renderer.updateSceneObjects([]);
+    assert.equal(changed.camera.aspect, 33 / 21);
+    assert.deepEqual([changed.width, changed.height], [16, 10]);
+    const scaled = await renderer.renderFrame({renderScale: .5, readStats: true, readOutputProbe: false});
+    assert.equal(scaled.primaryRays, 320);
+    const allocations = renderer.getSnapshot().allocations.allocatedBytes;
+    const full = await renderer.renderFrame({readStats: true, readOutputProbe: false});
+    assert.equal(full.primaryRays, 1386);
+    assert.equal(renderer.getSnapshot().allocations.allocatedBytes, allocations);
+    assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel, 2);
+    renderer.destroy();
+  });
+});

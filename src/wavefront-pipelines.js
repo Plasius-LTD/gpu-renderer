@@ -123,6 +123,7 @@ export function createWavefrontBindGroupLayouts(device, constants, instanced = f
     entries: [
       { binding: 0, visibility: constants.shader.FRAGMENT, texture: { sampleType: "float" } },
       { binding: 1, visibility: constants.shader.FRAGMENT, sampler: { type: "filtering" } },
+      { binding: 2, visibility: constants.shader.FRAGMENT, buffer: { type: "uniform", minBindingSize: 16 } },
     ],
   });
 

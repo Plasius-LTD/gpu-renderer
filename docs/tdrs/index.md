@@ -7,3 +7,4 @@
 - [TDR 0005: Feedback Diagnostic Bucketing](./tdr-0005-feedback-diagnostic-bucketing.md)
 
 - [TDR 0006: Instanced scene qualification](tdr-0006-instanced-scene-qualification.md)
+- [TDR 0009: Frame viewport qualification](tdr-0009-frame-viewport-qualification.md)

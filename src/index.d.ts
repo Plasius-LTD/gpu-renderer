@@ -1206,9 +1206,11 @@ export interface WavefrontPathTracingComputeRenderer {
   readonly device: GPUDevice;
   readonly format: GPUTextureFormat | string;
   readonly config: WavefrontPathTracingComputeConfig;
-  renderOnce(options?: { samplesPerPixel?: number }): WavefrontPathTracingComputeFrameStats;
+  renderOnce(options?: { samplesPerPixel?: number; renderScale?: number }): WavefrontPathTracingComputeFrameStats;
   resetAccumulation(): void;
   renderFrame(options?: {
+    /** Active frame resolution within persistent allocations; (0,1], omitted restores full resolution. */
+    renderScale?: number;
     readStats?: boolean;
     readOutputProbe?: boolean;
     awaitGPUCompletion?: boolean;
@@ -1231,6 +1233,9 @@ export interface WavefrontPathTracingComputeRenderer {
   getSnapshot(): Readonly<{
     /** Submitted samples; await GPU completion before reporting completed progress. */
     accumulatedSamplesPerPixel: number;
+    allocationWidth: number;
+    allocationHeight: number;
+    renderScale: number;
     frame: number;
     width: number;
     height: number;
@@ -1292,6 +1297,9 @@ export interface WavefrontFrameTimingTelemetry {
 }
 
 export interface WavefrontPathTracingComputeFrameStats {
+  readonly allocationWidth: number;
+  readonly allocationHeight: number;
+  readonly renderScale: number;
   readonly frame: number;
   readonly width: number;
   readonly height: number;

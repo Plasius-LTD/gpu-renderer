@@ -180,6 +180,17 @@ may submit a smaller batch. Await batches serially and stop scheduling when your
 sample target is reached or the view is hidden. `renderFrame()` waits for GPU
 completion by default.
 
+For a motion preview, pass `renderScale: 0.64` to `renderFrame`. The active
+resolution shrinks within the original scene/texture allocations; the full canvas
+and camera projection remain stable. Omit the option (or pass1) when input stops
+to restore full-resolution refinement. Resolution changes discard progressive
+history, so preview samples never contaminate a full-quality reference. Scale
+must be finite and greater than zero and at most one. Host performance policy
+owns the scale/sample decision; a reduced preview is not a completed reference.
+Frame statistics report active `width`/`height` and `renderScale`, separately from
+`allocationWidth`/`allocationHeight`. Await each frame before another submission;
+a second submission while `renderFrame` is pending rejects explicitly.
+
 Camera and scene changes reset accumulated radiance. `updateCamera()` preserves
 the loaded meshes, materials and acceleration resources; do not call it between
 refinement passes if the view has not changed. `resetAccumulation()` discards
