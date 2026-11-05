@@ -15,6 +15,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.62] - 2026-11-05
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
   - Visit nearer instance-tree children first and reuse ray inverse directions
     and pending bounds distances, preserving canonical geometry-tree order and
     equal-distance winners, full geometry,
@@ -1427,3 +1441,4 @@ All notable changes to this project will be documented in this file.
 [0.2.59]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.59
 [0.2.60]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.60
 [0.2.61]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.61
+[0.2.62]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.62
