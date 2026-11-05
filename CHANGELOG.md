@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Allow non-progressive frame callers to cap bounce depth independently of the configured renderer ceiling, with effective depth diagnostics and isolated sample-cost history (#287).
+
 - **Added**
   - (placeholder)
 

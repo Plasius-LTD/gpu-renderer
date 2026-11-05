@@ -32,7 +32,8 @@ export function dispatchWavefrontFrame({
         batch.reserve(config.maxDepth + 1),
         tile,
         configOffset,
-        parallelism
+        parallelism,
+        config.maxDepth
       );
       if (config.deferredPathResolve) {
         frameEncoder.encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
@@ -137,7 +138,8 @@ export function dispatchWavefrontFrameAwaitingGpu({
           batch.reserve(config.maxDepth + 1),
           tile,
           configOffset,
-          parallelism
+          parallelism,
+          config.maxDepth
         );
         if (config.deferredPathResolve) {
           frameEncoder.encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);

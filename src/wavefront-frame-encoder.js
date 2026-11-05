@@ -37,7 +37,7 @@ export function createWavefrontFrameEncoder({
       const config = resolveConfig();
       recordDirectDispatch(parallelism, [Math.ceil(config.width / 8), Math.ceil(config.height / 8)], WORKGROUP_SIZE);
     },
-    encodeTileSample(encoder, tile, configOffset, parallelism) {
+    encodeTileSample(encoder, tile, configOffset, parallelism, maxDepth) {
       const config = resolveConfig();
       const bindGroups = resolveBindGroups();
       const frameTelemetry = getFrameTelemetry();
@@ -54,7 +54,7 @@ export function createWavefrontFrameEncoder({
       recordDirectDispatch(parallelism, [tileWorkgroups], WORKGROUP_SIZE);
       generatePass.end();
 
-      for (let bounceIndex = 0; bounceIndex < config.maxDepth; bounceIndex += 1) {
+      for (let bounceIndex = 0; bounceIndex < (maxDepth ?? config.maxDepth); bounceIndex += 1) {
         frameTelemetry?.recordActiveRayCount(encoder, counterBuffer, bounceIndex);
         encoder.copyBufferToBuffer(
           counterBuffer,
