@@ -425,19 +425,49 @@ fn intersect_box(ray: RayRecord, object: SceneObject) -> Candidate {
   );
 }
 
-fn intersect_bounds(ray: RayRecord, boundsMin: vec3<f32>, boundsMax: vec3<f32>, nearest: f32) -> bool {
-  let inv = vec3<f32>(
-    safe_inverse(ray.direction.x),
-    safe_inverse(ray.direction.y),
-    safe_inverse(ray.direction.z)
+struct BvhStackEntry {
+  index: u32,
+  distance: f32,
+};
+struct BvhChildren {
+  near: BvhStackEntry,
+  far: BvhStackEntry,
+};
+
+fn traversal_inverse_direction(ray: RayRecord) -> vec3<f32> {
+  return vec3<f32>(
+    safe_inverse(ray.direction.x), safe_inverse(ray.direction.y), safe_inverse(ray.direction.z)
   );
-  let t0 = (boundsMin - ray.origin.xyz) * inv;
-  let t1 = (boundsMax - ray.origin.xyz) * inv;
+}
+
+// Negative means a miss; admitted entries are clamped to the same ray epsilon.
+fn bounds_entry_distance(origin: vec3<f32>, inverseDirection: vec3<f32>, boundsMin: vec3<f32>, boundsMax: vec3<f32>) -> f32 {
+  let t0 = (boundsMin - origin) * inverseDirection;
+  let t1 = (boundsMax - origin) * inverseDirection;
   let tNear = min(t0, t1);
   let tFar = max(t0, t1);
-  let entry = max(max(tNear.x, tNear.y), tNear.z);
+  let entry = max(max(max(tNear.x, tNear.y), tNear.z), 0.001);
   let exit = min(min(tFar.x, tFar.y), tFar.z);
-  return exit >= max(entry, 0.001) && entry <= nearest;
+  return select(-1.0, entry, exit >= entry);
+}
+
+fn intersect_bounds(ray: RayRecord, boundsMin: vec3<f32>, boundsMax: vec3<f32>, nearest: f32) -> bool {
+  let entry = bounds_entry_distance(ray.origin.xyz, traversal_inverse_direction(ray), boundsMin, boundsMax);
+  return entry >= 0.0 && entry <= nearest;
+}
+
+fn ordered_bvh_children(origin: vec3<f32>, inverseDirection: vec3<f32>, node: BvhNode) -> BvhChildren {
+  let left = bvhNodes[node.childOrFirst];
+  let right = bvhNodes[node.rightChild];
+  let leftEntry = BvhStackEntry(node.childOrFirst,
+    bounds_entry_distance(origin, inverseDirection, left.boundsMin.xyz, left.boundsMax.xyz));
+  let rightEntry = BvhStackEntry(node.rightChild,
+    bounds_entry_distance(origin, inverseDirection, right.boundsMin.xyz, right.boundsMax.xyz));
+  // Equal entries retain the canonical right-first visit order.
+  if (leftEntry.distance >= 0.0 && (rightEntry.distance < 0.0 || leftEntry.distance < rightEntry.distance)) {
+    return BvhChildren(leftEntry, rightEntry);
+  }
+  return BvhChildren(rightEntry, leftEntry);
 }
 
 fn repair_shading_normal(geometricNormal: vec3<f32>, shadingNormal: vec3<f32>) -> vec3<f32> {
@@ -548,13 +578,14 @@ fn intersect_triangle(ray: RayRecord, triangle: TriangleRecord, triangleIndex: u
   );
 }
 
-fn intersect_geometry_bvh(ray: RayRecord, initialNearest: f32, root: u32) -> Candidate {
+fn intersect_geometry_bvh(ray: RayRecord, initialNearest: f32, root: u32, includeLimit: bool) -> Candidate {
   var nearest = initialNearest;
   var best = no_candidate();
   if (config.bvhNodeCount == 0u || config.triangleCount == 0u) {
     return best;
   }
 
+  let inverseDirection = traversal_inverse_direction(ray);
   var stack = array<u32, 64>();
   var stackSize = 1u;
   stack[0] = root;
@@ -571,7 +602,8 @@ fn intersect_geometry_bvh(ray: RayRecord, initialNearest: f32, root: u32) -> Can
     }
 
     let node = bvhNodes[nodeIndex];
-    if (!intersect_bounds(ray, node.boundsMin.xyz, node.boundsMax.xyz, nearest)) {
+    let entryDistance = bounds_entry_distance(ray.origin.xyz, inverseDirection, node.boundsMin.xyz, node.boundsMax.xyz);
+    if (entryDistance < 0.0 || entryDistance > nearest) {
       continue;
     }
 
@@ -582,7 +614,7 @@ fn intersect_geometry_bvh(ray: RayRecord, initialNearest: f32, root: u32) -> Can
           continue;
         }
         let current = intersect_triangle(ray, triangles[triangleIndex], triangleIndex);
-        if (current.hit == 1u && current.distance < nearest) {
+        if (current.hit == 1u && (current.distance < nearest || (best.hit == 0u && includeLimit && current.distance == nearest))) {
           nearest = current.distance;
           best = current;
         }
