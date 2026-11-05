@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.63] - 2026-11-05
+
+- **Added**
   - Per-frame renderScale uses a bounded viewport within existing GPU allocations, resets progressive history on resolution changes, and restores full resolution when omitted.
 
 - **Changed**
@@ -1442,3 +1456,4 @@ All notable changes to this project will be documented in this file.
 [0.2.60]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.60
 [0.2.61]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.61
 [0.2.62]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.62
+[0.2.63]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.63
