@@ -146,6 +146,17 @@ texture uploads also use sequential chunks no larger than 8 MiB. More instances
 still require ray traversal and shading work: qualify performance at your target
 resolution, sampling and material complexity.
 
+Closest-hit traversal visits the nearer instance-tree child first, then prunes
+bounds beyond the nearest accepted hit. Geometry trees retain their canonical
+right-first order.
+Inverse ray directions and pending instance bounds distances are reused. Equal-distance
+hits retain the original right-first leaf and within-leaf triangle ordering for
+both CPU-built and GPU-built geometry trees; this does not change sample counts, bounces,
+materials or triangle intersection arithmetic. See the
+[traversal design](docs/design/forest-traversal-throughput.md) for qualification
+and the rejected deferred-shading experiment. Frame-rate targets still belong
+to the application's performance governor and require device-specific validation.
+
 ## Choose a rendering API
 
 | API | Purpose |

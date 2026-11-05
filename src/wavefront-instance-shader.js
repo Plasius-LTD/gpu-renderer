@@ -43,18 +43,27 @@ fn triangle_for_candidate(candidate: Candidate) -> TriangleRecord {
 fn intersect_bvh(ray: RayRecord, initialNearest: f32) -> Candidate {
   var nearest = initialNearest;
   var best = no_candidate();
-  var stack = array<u32, 64>();
+  let inverseDirection = traversal_inverse_direction(ray);
+  let root = bvhNodes[0];
+  var stack = array<BvhStackEntry, 64>();
   var stackSize = 1u;
-  stack[0] = 0u;
+  stack[0] = BvhStackEntry(0u, bounds_entry_distance(ray.origin.xyz, inverseDirection, root.boundsMin.xyz, root.boundsMax.xyz));
   loop {
     if (stackSize == 0u) { break; }
     stackSize -= 1u;
-    let node = bvhNodes[stack[stackSize]];
-    if (!intersect_bounds(ray, node.boundsMin.xyz, node.boundsMax.xyz, nearest)) { continue; }
+    let entry = stack[stackSize];
+    if (entry.distance < 0.0 || entry.distance > nearest) { continue; }
+    let node = bvhNodes[entry.index];
     if (node.triangleCount == 0u) {
-      stack[stackSize] = node.childOrFirst;
-      stack[stackSize + 1u] = node.rightChild;
-      stackSize += 2u;
+      let children = ordered_bvh_children(ray.origin.xyz, inverseDirection, node);
+      if (children.far.distance >= 0.0 && children.far.distance <= nearest && stackSize < 64u) {
+        stack[stackSize] = children.far;
+        stackSize += 1u;
+      }
+      if (children.near.distance >= 0.0 && children.near.distance <= nearest && stackSize < 64u) {
+        stack[stackSize] = children.near;
+        stackSize += 1u;
+      }
     } else {
       let instanceIndex = node.childOrFirst;
       let instance = read_mesh_instance(instanceIndex);
@@ -62,8 +71,9 @@ fn intersect_bvh(ray: RayRecord, initialNearest: f32) -> Candidate {
       localRay.origin = instance.inverse * vec4<f32>(ray.origin.xyz, 1.0);
       // Keep this direction unnormalized so t remains the world-space ray parameter.
       localRay.direction = instance.inverse * vec4<f32>(ray.direction.xyz, 0.0);
-      var candidate = intersect_geometry_bvh(localRay, nearest, instance.root);
-      if (candidate.hit == 1u && candidate.distance < nearest) {
+      var candidate = intersect_geometry_bvh(localRay, nearest, instance.root, best.hit == 1u);
+      let equalWinner = best.hit == 1u && candidate.distance == nearest && instanceIndex > best.instanceIndex;
+      if (candidate.hit == 1u && (candidate.distance < nearest || equalWinner)) {
         candidate.geometricNormal = instance_normal(instance, candidate.geometricNormal);
         candidate.shadingNormal = repair_shading_normal(candidate.geometricNormal,
           instance_normal(instance, candidate.shadingNormal));
@@ -83,6 +93,6 @@ fn triangle_for_candidate(candidate: Candidate) -> TriangleRecord {
   return triangles[candidate.triangleIndex];
 }
 fn intersect_bvh(ray: RayRecord, initialNearest: f32) -> Candidate {
-  return intersect_geometry_bvh(ray, initialNearest, 0u);
+  return intersect_geometry_bvh(ray, initialNearest, 0u, false);
 }
 `;

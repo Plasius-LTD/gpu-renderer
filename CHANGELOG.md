@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Changed**
+  - Visit nearer instance-tree children first and reuse ray inverse directions
+    and pending bounds distances, preserving canonical geometry-tree order and
+    equal-distance winners, full geometry,
+    sample counts and shading arithmetic (#292).
   - (placeholder)
 
 - **Fixed**
