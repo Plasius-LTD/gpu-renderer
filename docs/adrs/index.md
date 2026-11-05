@@ -44,6 +44,8 @@
 - [ADR 0045: Animated inspection camera](adr-0045-animated-inspection-camera.md)
 
 - [ADR 0046: Wavefront device ownership](./adr-0046-wavefront-device-ownership.md)
+- [ADR 0048: Preserve primary camera source radiance](./adr-0048-primary-terminal-visibility.md)
+
 - [ADR 0050: Frame-local viewport](adr-0050-frame-local-render-viewport.md)
 
 - [ADR 0051: Select the quarantine runner group](adr-0051-select-quarantine-runner-group.md)
