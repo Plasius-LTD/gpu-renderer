@@ -1206,6 +1206,8 @@ export interface WavefrontPathTracingComputeRenderer {
   readonly device: GPUDevice;
   readonly format: GPUTextureFormat | string;
   readonly config: WavefrontPathTracingComputeConfig;
+  /** Indicates support for a non-persistent renderFrame maxDepth ceiling. */
+  readonly supportsFrameMaxDepth?: true;
   renderOnce(options?: { samplesPerPixel?: number }): WavefrontPathTracingComputeFrameStats;
   resetAccumulation(): void;
   renderFrame(options?: {
@@ -1215,6 +1217,8 @@ export interface WavefrontPathTracingComputeRenderer {
     submittedWorkTimeoutMs?: number;
     samplesPerPixel?: number;
     minimumSamplesPerPixel?: number;
+    /** Integer from one to the configured depth; changed depth is invalid with progressive accumulation. */
+    maxDepth?: number;
     frameTimeBudgetMs?: number;
     probe?: { x?: number; y?: number };
   }): Promise<WavefrontPathTracingComputeFrameStats>;
@@ -1295,6 +1299,7 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly frame: number;
   readonly width: number;
   readonly height: number;
+  /** Depth used by this frame; the renderer snapshot retains the configured maximum. */
   readonly maxDepth: number;
   readonly tiles: number;
   readonly tileSize: number;

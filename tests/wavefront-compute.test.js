@@ -3738,6 +3738,91 @@ serialWebGpuTest("wavefront renderFrame can adapt high spp down to a single in-b
   });
 });
 
+serialWebGpuTest("per-frame bounce ceiling reaches WGSL and both dispatch paths without changing the reference", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(), navigator: createFakeWavefrontNavigator(device),
+      width: 16, height: 16, maxDepth: 4, samplesPerPixel: 8, denoise: false, deferredPathResolve: true,
+    });
+    const allocationCount = device.buffers.length;
+    const depths = [];
+    const write = device.queue.writeBuffer;
+    device.queue.writeBuffer = (buffer, offset, data) => {
+      if (buffer.descriptor?.label === "plasius.wavefront.frameConfig") {
+        depths.push(new DataView(data).getUint32(28, true));
+      }
+      write(buffer, offset, data);
+    };
+    const frame = async (options, depth, spp) => {
+      const start = device.computePassDescriptors.length;
+      depths.length = 0;
+      const result = await renderer.renderFrame({ readOutputProbe: false, ...options });
+      assert.equal(result.maxDepth, depth);
+      assert.equal(result.renderedSamplesPerPixel, spp);
+      assert.equal(result.primaryRays, 256 * spp);
+      const passes = device.computePassDescriptors.slice(start).filter(p => p.label.startsWith("plasius.wavefront.bounce."));
+      assert.equal(passes.length, depth * spp);
+      assert.ok(depths.length && depths.every(value => value === depth));
+    };
+    assert.equal(renderer.supportsFrameMaxDepth, true);
+    for (const maxDepth of [0, 5, -1, 1.5, NaN, null, "2"]) {
+      const before = device.queue.submissions.length;
+      await assert.rejects(renderer.renderFrame({ maxDepth }), /maxDepth/);
+      assert.equal(device.queue.submissions.length, before);
+    }
+    await frame({ maxDepth: 1, samplesPerPixel: 1 }, 1, 1);
+    await frame({ maxDepth: 2, samplesPerPixel: 8 }, 2, 8);
+    await frame({ samplesPerPixel: 1 }, 4, 1);
+    assert.equal(renderer.getSnapshot().maxDepth, 4);
+    assert.equal(device.buffers.length, allocationCount);
+    renderer.destroy();
+  });
+});
+
+serialWebGpuTest("frame sample admission learns costs separately for each explicit bounce ceiling", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(), navigator: createFakeWavefrontNavigator(device),
+      width: 16, height: 16, maxDepth: 4, samplesPerPixel: 8, denoise: false,
+    });
+    const original = Object.getOwnPropertyDescriptor(globalThis, "performance");
+    let time = 0, duration = 5;
+    Object.defineProperty(globalThis, "performance", { configurable: true, value: { now: () => time } });
+    device.queue.onSubmittedWorkDone = async () => { time += duration; };
+    try {
+      const frame = options => renderer.renderFrame({ readOutputProbe: false, ...options });
+      await frame({ samplesPerPixel: 1, maxDepth: 1 });
+      duration = 80;
+      await frame({ samplesPerPixel: 1 });
+      duration = 15;
+      const budget = { samplesPerPixel: 8, frameTimeBudgetMs: 20, minimumSamplesPerPixel: 1 };
+      assert.equal((await frame({ ...budget, maxDepth: 2 })).renderedSamplesPerPixel, 1);
+      assert.equal((await frame({ ...budget, maxDepth: 1 })).renderedSamplesPerPixel, 4);
+      assert.equal((await frame(budget)).renderedSamplesPerPixel, 1);
+    } finally {
+      Object.defineProperty(globalThis, "performance", original);
+      renderer.destroy();
+    }
+  });
+});
+
+serialWebGpuTest("a changed per-frame bounce ceiling cannot enter progressive radiance history", async () => {
+  await withWebGpuConstants(async () => {
+    const device = new FakeWavefrontDevice();
+    const renderer = await createWavefrontPathTracingComputeRenderer({
+      canvas: createFakeWavefrontCanvas(), navigator: createFakeWavefrontNavigator(device),
+      width: 16, height: 16, maxDepth: 4, progressive: true,
+    });
+    const before = device.queue.submissions.length;
+    await assert.rejects(renderer.renderFrame({ maxDepth: 1 }), /progressive/i);
+    assert.equal(device.queue.submissions.length, before);
+    assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel, 0);
+    renderer.destroy();
+  });
+});
+
 serialWebGpuTest("wavefront compute one-shot compatibility helper renders and always destroys", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();

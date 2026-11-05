@@ -607,6 +607,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   let activeCameraOptions = options.camera ?? DEFAULT_CAMERA;
   let lastCompletedFrameTimeMs = null;
   let lastCompletedSamplesPerPixel = Math.max(1, config.samplesPerPixel);
+  let previewDepthTimings;
   let lastGpuParallelism = createGpuParallelismDiagnostics(
     gpuAdapterParallelism,
     createGpuParallelismCounters()
@@ -626,13 +627,15 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     return frameTelemetryResources;
   }
 
-  function resolveRenderedSamplesPerPixel(renderOptions = {}, awaitGPUCompletion = true) {
+  function resolveRenderedSamplesPerPixel(renderOptions = {}, awaitGPUCompletion = true, previewDepth) {
+    const timing = previewDepth === undefined
+      ? { lastCompletedFrameTimeMs, lastCompletedSamplesPerPixel }
+      : previewDepthTimings?.get(previewDepth);
     return resolveWavefrontRenderedSamplesPerPixel({
       config,
       renderOptions,
       awaitGPUCompletion,
-      lastCompletedFrameTimeMs,
-      lastCompletedSamplesPerPixel,
+      ...timing,
     });
   }
 
@@ -645,9 +648,10 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     targetSamplesPerPixel,
     frameTimeBudgetMs,
     budgetConstrained,
+    frameConfig = config,
   }) {
     const stats = createWavefrontFrameStats({
-      config,
+      config: frameConfig,
       tiles,
       frame,
       frameIndex,
@@ -676,7 +680,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
   }
 
-  function writeFrameConfigSlot(slot, tile, frameIndex, buildRange = {}) {
+  function writeFrameConfigSlot(slot, tile, frameIndex, buildRange = {}, frameConfig = config) {
     if (slot >= frameConfigSlotCount) {
       throw new Error("Wavefront frame config slot capacity exceeded.");
     }
@@ -684,15 +688,15 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     device.queue.writeBuffer(
       configBuffer,
       offset,
-      createConfigPayload(config, tile, frameIndex, buildRange)
+      createConfigPayload(frameConfig, tile, frameIndex, buildRange)
     );
     return offset;
   }
 
-  function createFrameConfigWriter(frameIndex) {
+  function createFrameConfigWriter(frameIndex, frameConfig) {
     let slot = 0;
     return (tile, buildRange = {}) => {
-      const offset = writeFrameConfigSlot(slot, tile, frameIndex, buildRange);
+      const offset = writeFrameConfigSlot(slot, tile, frameIndex, buildRange, frameConfig);
       slot += 1;
       return offset;
     };
@@ -718,30 +722,30 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     return submitted;
   }
 
-  function dispatchFrame(frameIndex, parallelism, renderedSamplesPerPixel = config.samplesPerPixel) {
+  function dispatchFrame(frameIndex, parallelism, renderedSamplesPerPixel, frameConfig) {
     return dispatchWavefrontFrame({
-      config,
+      config: frameConfig,
       tiles,
       device,
       frameIndex,
       parallelism,
       renderedSamplesPerPixel,
       frameEncoder,
-      createFrameConfigWriter,
+      createFrameConfigWriter: index => createFrameConfigWriter(index, frameConfig),
     });
   }
 
-  function renderOnce(renderOptions = {}, resolvedSamplingPlan = null) {
+  function submitFrame(samplingPlan, frameConfig) {
     const frameStartTimeMs = nowMs();
     frame += 1;
     const frameIndex = frame + config.frameIndex;
-    const samplingPlan = resolvedSamplingPlan ?? resolveRenderedSamplesPerPixel(renderOptions, false);
     const parallelismCounters = createGpuParallelismCounters();
     const accelerationBuildSubmitted = dispatchGpuAccelerationBuild(frameIndex, parallelismCounters);
     const frameSubmissionCount = dispatchFrame(
       frameIndex,
       parallelismCounters,
-      samplingPlan.renderedSamplesPerPixel
+      samplingPlan.renderedSamplesPerPixel,
+      frameConfig
     );
     const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
     return Object.freeze({
@@ -754,6 +758,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         targetSamplesPerPixel: samplingPlan.targetSamplesPerPixel,
         frameTimeBudgetMs: samplingPlan.frameTimeBudgetMs,
         budgetConstrained: samplingPlan.budgetConstrained,
+        frameConfig,
       }),
       gpuWorkerJobs: createGpuWorkerJobDiagnostics(
         lastGpuParallelism,
@@ -770,21 +775,26 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
   }
 
+  function renderOnce(renderOptions = {}) {
+    return submitFrame(resolveRenderedSamplesPerPixel(renderOptions, false), config);
+  }
+
   function dispatchFrameAwaitingGpu(
     frameIndex,
     parallelism,
-    renderedSamplesPerPixel = config.samplesPerPixel,
-    optionsForFrame = {}
+    renderedSamplesPerPixel,
+    optionsForFrame,
+    frameConfig
   ) {
     return dispatchWavefrontFrameAwaitingGpu({
-      config,
+      config: frameConfig,
       tiles,
       device,
       frameIndex,
       parallelism,
       renderedSamplesPerPixel,
       frameEncoder,
-      writeFrameConfigSlot,
+      writeFrameConfigSlot: (slot, tile, index, range) => writeFrameConfigSlot(slot, tile, index, range, frameConfig),
       optionsForFrame,
     });
   }
@@ -801,8 +811,20 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   }
 
   async function renderFrame(renderOptions = {}) {
+    const previewDepth = renderOptions.maxDepth;
+    let frameConfig = config;
+    if (previewDepth !== undefined) {
+      if (!Number.isSafeInteger(previewDepth) || previewDepth < 1 || previewDepth > config.maxDepth) {
+        throw new RangeError(`Frame maxDepth must be an integer between 1 and ${config.maxDepth}.`);
+      }
+      if (previewDepth !== config.maxDepth) {
+        if (config.progressive) throw new Error("Cannot change maxDepth in progressive accumulation.");
+        // Use a dense, shorter per-ray path layout within the existing allocation.
+        frameConfig = { ...config, maxDepth: previewDepth };
+      }
+    }
     const awaitGPUCompletion = renderOptions.awaitGPUCompletion !== false;
-    const samplingPlan = resolveRenderedSamplesPerPixel(renderOptions, awaitGPUCompletion);
+    const samplingPlan = resolveRenderedSamplesPerPixel(renderOptions, awaitGPUCompletion, previewDepth);
     const useThrottledHighSamplePath =
       awaitGPUCompletion && samplingPlan.renderedSamplesPerPixel >= 8;
     const telemetryRequested = renderOptions.readStats === true;
@@ -827,7 +849,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
         if (accelerationBuildSubmitted) {
           const accelerationWaitOptions = {
             ...estimateSubmittedGpuWorkTiming(
-              { ...config, renderedSamplesPerPixel: 1 },
+              { ...frameConfig, renderedSamplesPerPixel: 1 },
               1,
               renderOptions.submittedWorkTimeoutMs,
               { includeAccelerationBuild: true }
@@ -850,17 +872,18 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
               startingSlot: frameConfigSlot,
               includeDenoise: tileIndex + 1 >= tiles.length,
               includePresent: tileIndex + 1 >= tiles.length,
-            }
+            },
+            frameConfig
           );
           frameSubmissionCount = tileRangeDispatch.submissionCount;
           frameConfigSlot = tileRangeDispatch.slot;
           const tileWaitOptions = {
             ...estimateSubmittedGpuWorkTiming(
-              { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
+              { ...frameConfig, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
               1,
               renderOptions.submittedWorkTimeoutMs,
               {
-                includeDenoise: tileIndex + 1 >= tiles.length && config.denoise,
+                includeDenoise: tileIndex + 1 >= tiles.length && frameConfig.denoise,
                 includePresent: tileIndex + 1 >= tiles.length,
               }
             ),
@@ -877,10 +900,11 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           targetSamplesPerPixel: samplingPlan.targetSamplesPerPixel,
           frameTimeBudgetMs: samplingPlan.frameTimeBudgetMs,
           budgetConstrained: samplingPlan.budgetConstrained,
+          frameConfig,
         });
       } else {
         const submittedWorkTiming = estimateSubmittedGpuWorkTiming(
-          { ...config, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
+          { ...frameConfig, renderedSamplesPerPixel: samplingPlan.renderedSamplesPerPixel },
           tiles.length,
           renderOptions.submittedWorkTimeoutMs,
           { includeAccelerationBuild: config.gpuAccelerationBuildRequired && !accelerationBuilt }
@@ -895,7 +919,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
               timeoutMs: submittedWorkTiming.timeoutMs,
               maxWaitMs: submittedWorkTiming.maxWaitMs,
             };
-        frameStats = renderOnce(renderOptions, samplingPlan);
+        frameStats = submitFrame(samplingPlan, frameConfig);
         if (awaitGPUCompletion) {
           await waitForSubmittedGpuWork(submissionWaitOptions);
         }
@@ -905,13 +929,20 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     }
     const frameTimeMs = Math.max(0, nowMs() - frameStartTimeMs);
     if (awaitGPUCompletion) {
-      lastCompletedFrameTimeMs = frameTimeMs;
-      lastCompletedSamplesPerPixel = frameStats.renderedSamplesPerPixel ?? frameStats.samplesPerPixel;
+      const samples = frameStats.renderedSamplesPerPixel ?? frameStats.samplesPerPixel;
+      if (previewDepth === undefined) {
+        lastCompletedFrameTimeMs = frameTimeMs;
+        lastCompletedSamplesPerPixel = samples;
+      } else {
+        (previewDepthTimings ??= new Map()).set(previewDepth, {
+          lastCompletedFrameTimeMs: frameTimeMs, lastCompletedSamplesPerPixel: samples,
+        });
+      }
     }
     const expectedPrimaryRays =
-      config.width * config.height * samplingPlan.renderedSamplesPerPixel;
+      frameConfig.width * frameConfig.height * samplingPlan.renderedSamplesPerPixel;
     const expectedRayCounts =
-      tiles.length * samplingPlan.renderedSamplesPerPixel * config.maxDepth;
+      tiles.length * samplingPlan.renderedSamplesPerPixel * frameConfig.maxDepth;
     const telemetryReadback = telemetryCanRecord
       ? await telemetryResourcesForFrame.readFrame({
           expectedPrimaryRays,
@@ -1173,6 +1204,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     device: rawDevice,
     format,
     config,
+    supportsFrameMaxDepth: true,
     renderOnce,
     renderFrame,
     readOutputProbe,

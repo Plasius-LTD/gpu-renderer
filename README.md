@@ -161,6 +161,16 @@ All factories are exported from `@plasius/gpu-renderer`. Keep the import and GPU
 initialization inside the route that needs them. The host owns loading/error UI,
 visibility policy, accessible controls, and disposal when leaving the view.
 
+## Motion preview bounce budget
+
+An awaited `renderFrame({ maxDepth, samplesPerPixel, frameTimeBudgetMs })` can
+lower the bounce ceiling for an individual non-progressive preview. Choose an
+integer from 1 through the renderer's configured depth. Frame statistics report
+the effective depth; the renderer snapshot keeps the configured ceiling. Hosts
+can check `supportsFrameMaxDepth` before enabling the policy. Omitting
+`maxDepth` uses the configured transport depth for settled and reference frames.
+Changing depth during progressive accumulation is rejected before submission.
+
 ## Progressive rendering
 
 Set `progressive: true` when creating the wavefront renderer. Its creation-time
