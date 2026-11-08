@@ -1,6 +1,6 @@
 # ADR 0048: Preserve primary camera source radiance
 
-- Status: Proposed; physical verification required
+- Status: Accepted; fixed-path physical verification passed
 - Task: gpu-renderer#212; Story: plasius-ltd-site#2168; Feature: #2114
 - Inherited adaptive rollout control: `renderer.sampling.adaptivePerPixel.enabled`
 
@@ -18,8 +18,10 @@ estimator error and affect unrelated transport.
 The bounded fixed path from ADR 0039 already has a single continuation per
 camera path. The correction needs no split-tree storage, host dispatch change,
 new public interface, or dependency. Adaptive split-path qualification stays
-with #210. Keep adaptive rollout off. Roll back only to an approved GPU-native
-release.
+with #210. Qualify this correction with adaptive dispatch inactive. The site flag
+controls rollout permission separately; this package change does not
+activate adaptive dispatch or change the stored flag. Roll back only to an
+approved GPU-native release.
 
 The [evidence procedure](../evidence/task-212-primary-terminal-visibility.md)
 separates the raw physical source check from broader Product Studio reference
