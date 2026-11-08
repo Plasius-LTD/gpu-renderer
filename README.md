@@ -191,6 +191,11 @@ Frame statistics report active `width`/`height` and `renderScale`, separately fr
 `allocationWidth`/`allocationHeight`. Await each frame before another submission;
 a second submission while `renderFrame` is pending rejects explicitly.
 
+The fixed wavefront path keeps directly visible environment and emissive
+radiance at full weight. Terminal multiple importance sampling applies only
+to eligible secondary rays; delta events keep their existing weight.
+See [the primary visibility decision](docs/adrs/adr-0048-primary-terminal-visibility.md).
+
 Camera and scene changes reset accumulated radiance. `updateCamera()` preserves
 the loaded meshes, materials and acceleration resources; do not call it between
 refinement passes if the view has not changed. `resetAccumulation()` discards

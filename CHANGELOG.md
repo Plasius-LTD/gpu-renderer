@@ -18,7 +18,8 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Preserve directly visible environment and emissive radiance by excluding
+    primary camera hits from terminal MIS (#212).
 
 - **Security**
   - (placeholder)
