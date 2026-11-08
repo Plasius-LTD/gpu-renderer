@@ -162,7 +162,7 @@ to the application's performance governor and require device-specific validation
 | API | Purpose |
 | --- | --- |
 | `createWavefrontPathTracingComputeRenderer` | Tiled, mesh-BVH path tracing with material transport, environment lighting and optional progressive accumulation |
-| `createNativeSceneRenderer` | Native raster triangles, authored surface maps, shadows and optional animated water |
+| `createNativeSceneRenderer` | Native raster triangles, authored maps, shadows and optional water; `renderAsync` supports bounded GPU completion |
 | `createGpuRenderer` | Device/canvas setup, clear pass, frame hooks and XR binding for a host-owned pipeline |
 | `createProfessionalAnimatedSceneRenderer` | The validated WebGPU animation scene path with skinned assets and root-motion requirements |
 | `createAnimatedSceneRenderer` | The existing canvas animation-adventure surface |

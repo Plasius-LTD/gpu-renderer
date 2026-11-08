@@ -39,6 +39,7 @@ function gpuFixture() {
       submit() {
         calls.push(["submit"]);
       },
+      onSubmittedWorkDone: () => Promise.resolve(),
     },
     createBuffer: (d) => resource("buffer", d),
     createTexture: (d) => {
@@ -76,6 +77,9 @@ function gpuFixture() {
       },
       finish: () => ({}),
     }),
+    destroy() {
+      calls.push(["device-destroy"]);
+    },
   };
   const context = {
     configure() {},
@@ -108,6 +112,305 @@ const frame = () => ({
   vertices,
   camera: { eye: [0, 3, 8], target: [0, 1, 0], fov: 54 },
   time: 1,
+});
+
+test("async native frames await completion and reject competing submissions before writes", async () => {
+  const f = gpuFixture();
+  let complete;
+  f.device.queue.onSubmittedWorkDone = () =>
+    new Promise((resolve) => {
+      complete = resolve;
+    });
+  const renderer = await createNativeSceneRenderer(f);
+  let resolved = false;
+  const pending = renderer.renderAsync(frame()).then((result) => {
+    resolved = true;
+    return result;
+  });
+  const writes = f.calls.filter((c) => c[0] === "write").length;
+  await Promise.resolve();
+  assert.equal(resolved, false);
+  assert.equal(renderer.getSnapshot().submittedFrames, 1);
+  await assert.rejects(renderer.renderAsync(frame()), /busy/i);
+  assert.throws(() => renderer.render(frame()), /busy/i);
+  assert.equal(f.calls.filter((c) => c[0] === "write").length, writes);
+  assert.equal(f.calls.filter((c) => c[0] === "submit").length, 1);
+  complete();
+  assert.equal((await pending).submittedFrames, 1);
+  f.device.queue.onSubmittedWorkDone = async () => {};
+  assert.equal((await renderer.renderAsync(frame())).submittedFrames, 2);
+  renderer.render(frame());
+  assert.equal(renderer.getSnapshot().submittedFrames, 3);
+  renderer.destroy();
+});
+
+test("invalid async inputs and already-aborted work leave a reusable renderer", async () => {
+  const f = gpuFixture(),
+    renderer = await createNativeSceneRenderer(f);
+  for (const timeoutMs of [0, -1, 1.5, 60001, NaN, Infinity, "10"]) {
+    await assert.rejects(
+      renderer.renderAsync(frame(), { timeoutMs }),
+      /timeout/i,
+    );
+  }
+  for (const signal of [null, {}, { aborted: false }]) {
+    await assert.rejects(renderer.renderAsync(frame(), { signal }), /signal/i);
+  }
+  const abort = new AbortController();
+  abort.abort("private host reason");
+  await assert.rejects(
+    renderer.renderAsync(frame(), { signal: abort.signal }),
+    (error) => {
+      assert.match(error.message, /aborted/i);
+      assert.ok(!error.message.includes("private host reason"));
+      return true;
+    },
+  );
+  await assert.rejects(
+    renderer.renderAsync({ ...frame(), vertices: new Float32Array([NaN]) }),
+    /vertices/i,
+  );
+  assert.equal(f.calls.filter((c) => c[0] === "submit").length, 0);
+  assert.equal(renderer.getSnapshot().available, true);
+  assert.equal(
+    (await renderer.renderAsync(frame(), { timeoutMs: 60000 })).submittedFrames,
+    1,
+  );
+  renderer.destroy();
+});
+
+test("completion support is required before async submission without breaking sync callers", async () => {
+  const f = gpuFixture();
+  delete f.device.queue.onSubmittedWorkDone;
+  const renderer = await createNativeSceneRenderer(f);
+  await assert.rejects(renderer.renderAsync(frame()), /completion/i);
+  assert.equal(f.calls.filter((c) => c[0] === "submit").length, 0);
+  renderer.render(frame());
+  assert.equal(renderer.getSnapshot().submittedFrames, 1);
+  renderer.destroy();
+});
+
+test("aborting submitted native work releases resources and removes the abort listener", async (t) => {
+  const f = gpuFixture(),
+    abort = new AbortController();
+  let complete;
+  f.device.queue.onSubmittedWorkDone = () =>
+    new Promise((resolve) => {
+      complete = resolve;
+    });
+  const remove = t.mock.method(abort.signal, "removeEventListener");
+  const renderer = await createNativeSceneRenderer(f);
+  const pending = renderer.renderAsync(frame(), { signal: abort.signal });
+  const rejected = assert.rejects(pending, /aborted/i);
+  abort.abort();
+  await rejected;
+  assert.equal(renderer.getSnapshot().available, false);
+  assert.equal(
+    remove.mock.calls.filter((c) => c.arguments[0] === "abort").length,
+    1,
+  );
+  assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+  complete();
+  await Promise.resolve();
+  renderer.destroy();
+  assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+  await assert.rejects(renderer.renderAsync(frame()), /destroyed/i);
+});
+
+test("native frame deadlines terminate stalled GPU work", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const f = gpuFixture();
+  f.device.queue.onSubmittedWorkDone = () => new Promise(() => {});
+  const renderer = await createNativeSceneRenderer(f);
+  const rejected = assert.rejects(
+    renderer.renderAsync(frame(), { timeoutMs: 10 }),
+    /timed out/i,
+  );
+  t.mock.timers.tick(10);
+  await rejected;
+  assert.equal(renderer.getSnapshot().available, false);
+  assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+});
+
+test("successful completion removes its deadline and abort listener", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const f = gpuFixture(),
+    abort = new AbortController();
+  const remove = t.mock.method(abort.signal, "removeEventListener");
+  const renderer = await createNativeSceneRenderer(f);
+  await renderer.renderAsync(frame(), { signal: abort.signal });
+  assert.equal(
+    remove.mock.calls.filter((c) => c.arguments[0] === "abort").length,
+    1,
+  );
+  t.mock.timers.tick(60001);
+  abort.abort();
+  assert.equal(renderer.getSnapshot().available, true);
+  renderer.destroy();
+});
+
+test("queue failures reject native completion and release the device", async () => {
+  for (const synchronous of [false, true]) {
+    const f = gpuFixture();
+    f.device.queue.onSubmittedWorkDone = () => {
+      if (synchronous) throw new Error("private driver error");
+      return Promise.reject(new Error("private driver error"));
+    };
+    const renderer = await createNativeSceneRenderer(f);
+    await assert.rejects(renderer.renderAsync(frame()), (error) => {
+      assert.match(error.message, /completion failed/i);
+      assert.ok(!error.message.includes("private driver error"));
+      return true;
+    });
+    assert.equal(renderer.getSnapshot().available, false);
+    assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+  }
+});
+
+test("device loss and explicit teardown settle pending work before late completion", async () => {
+  for (const lose of [false, true]) {
+    const f = gpuFixture();
+    let complete;
+    f.device.queue.onSubmittedWorkDone = () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      });
+    const renderer = await createNativeSceneRenderer(f);
+    const rejected = assert.rejects(
+      renderer.renderAsync(frame()),
+      lose ? /device.*lost/i : /destroyed/i,
+    );
+    if (lose) f.loseDevice();
+    else renderer.destroy();
+    await rejected;
+    assert.equal(renderer.getSnapshot().available, false);
+    assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+    complete();
+    await Promise.resolve();
+    renderer.destroy();
+    assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+  }
+});
+
+test("partial GPU submission failures terminate the renderer without leaking driver details", async () => {
+  for (const operation of ["writeBuffer", "submit"]) {
+    const f = gpuFixture();
+    const renderer = await createNativeSceneRenderer(f);
+    f.device.queue[operation] = () => {
+      throw new Error("private driver failure");
+    };
+    await assert.rejects(renderer.renderAsync(frame()), (error) => {
+      assert.match(error.message, /submission failed/i);
+      assert.ok(!error.message.includes("private driver failure"));
+      return true;
+    });
+    assert.equal(renderer.getSnapshot().available, false);
+    assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+    assert.equal(
+      f.calls.filter((c) => c[0] === "texture").length,
+      f.calls.filter((c) => c[0] === "destroy" && c[1] === "texture").length,
+    );
+  }
+});
+
+test("teardown attempts all resources even when context cleanup fails", async () => {
+  const f = gpuFixture();
+  f.canvas.getContext().unconfigure = () => {
+    throw new Error("cleanup failure");
+  };
+  const renderer = await createNativeSceneRenderer(f);
+  renderer.render(frame());
+  assert.throws(() => renderer.destroy(), /cleanup failure/);
+  assert.equal(renderer.getSnapshot().available, false);
+  assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+  assert.equal(
+    f.calls.filter((c) => c[0] === "texture").length,
+    f.calls.filter((c) => c[0] === "destroy" && c[1] === "texture").length,
+  );
+  renderer.destroy();
+});
+
+test("a terminal async wait still rejects when resource cleanup throws", async () => {
+  const f = gpuFixture();
+  f.canvas.getContext().unconfigure = () => {
+    throw new Error("cleanup failure");
+  };
+  f.device.queue.onSubmittedWorkDone = () => {
+    throw new Error("queue failure");
+  };
+  const renderer = await createNativeSceneRenderer(f);
+  await assert.rejects(renderer.renderAsync(frame()), /completion failed/i);
+  assert.equal(renderer.getSnapshot().available, false);
+  assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+});
+
+test("a missing completion promise terminates submitted work", async () => {
+  const f = gpuFixture();
+  f.device.queue.onSubmittedWorkDone = () => undefined;
+  const renderer = await createNativeSceneRenderer(f);
+  await assert.rejects(renderer.renderAsync(frame()), /completion failed/i);
+  assert.equal(renderer.getSnapshot().available, false);
+});
+
+test("the default deadline bounds the wait and consumes a late queue rejection", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const f = gpuFixture();
+  let rejectCompletion;
+  f.device.queue.onSubmittedWorkDone = () =>
+    new Promise((_, reject) => {
+      rejectCompletion = reject;
+    });
+  const renderer = await createNativeSceneRenderer(f);
+  const rejected = assert.rejects(renderer.renderAsync(frame()), /timed out/i);
+  t.mock.timers.tick(4999);
+  assert.equal(renderer.getSnapshot().available, true);
+  t.mock.timers.tick(1);
+  await rejected;
+  rejectCompletion(new Error("late driver failure"));
+  await Promise.resolve();
+  assert.equal(renderer.getSnapshot().available, false);
+  assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+});
+
+test("an abort during submission is observed before waiting for completion", async () => {
+  const f = gpuFixture(),
+    controller = new AbortController();
+  const renderer = await createNativeSceneRenderer(f);
+  f.device.queue.submit = () => controller.abort();
+  await assert.rejects(
+    renderer.renderAsync(frame(), { signal: controller.signal }),
+    /aborted/i,
+  );
+  assert.equal(renderer.getSnapshot().available, false);
+  assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+});
+
+test("unavailable callbacks cannot prevent device-loss cleanup", async () => {
+  for (const synchronous of [false, true]) {
+    const f = gpuFixture();
+    let complete;
+    f.device.queue.onSubmittedWorkDone = () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      });
+    const renderer = await createNativeSceneRenderer({
+      ...f,
+      onUnavailable() {
+        if (synchronous) throw new Error("host callback failure");
+        return Promise.reject(new Error("host callback failure"));
+      },
+    });
+    const rejected = assert.rejects(
+      renderer.renderAsync(frame()),
+      /device.*lost/i,
+    );
+    f.loseDevice();
+    await rejected;
+    complete();
+    await Promise.resolve();
+    assert.equal(renderer.getSnapshot().available, false);
+    assert.equal(f.calls.filter((c) => c[0] === "device-destroy").length, 1);
+  }
 });
 
 test("native scene submits actual geometry, shadows, reflection and water with antialiasing", async () => {
@@ -347,16 +650,39 @@ test("native materials upload independent clearcoat strength and roughness", asy
 
 test("coating maps are bound in main and reflected draws and released on teardown", async () => {
   const f = gpuFixture();
-  const renderer = await createNativeSceneRenderer({ ...f, materials: [{ clearcoat: 1,
-    clearcoatRoughness: 1, clearcoatMap: { width: 1, height: 1, data: new Uint8Array([0, 128, 255, 255]) } }] });
-  renderer.render({ ...frame(), water: true, texcoords: new Float32Array(6),
-    surfaces: [{ firstVertex: 0, vertexCount: 3, materialIndex: 0 }] });
-  const bindings = f.calls.filter(c => c[0] === "bind" && c[1] === 2);
+  const renderer = await createNativeSceneRenderer({
+    ...f,
+    materials: [
+      {
+        clearcoat: 1,
+        clearcoatRoughness: 1,
+        clearcoatMap: {
+          width: 1,
+          height: 1,
+          data: new Uint8Array([0, 128, 255, 255]),
+        },
+      },
+    ],
+  });
+  renderer.render({
+    ...frame(),
+    water: true,
+    texcoords: new Float32Array(6),
+    surfaces: [{ firstVertex: 0, vertexCount: 3, materialIndex: 0 }],
+  });
+  const bindings = f.calls.filter((c) => c[0] === "bind" && c[1] === 2);
   assert.equal(bindings.length, 3);
   assert.equal(bindings[0][2], bindings[2][2]);
-  assert.ok(bindings[0][2].entries.find(e => e.binding === 5)?.resource);
-  assert.ok(f.calls.some(c => c[0] === "upload-texture" && c[1] === "native.material.1.clearcoatMap"));
+  assert.ok(bindings[0][2].entries.find((e) => e.binding === 5)?.resource);
+  assert.ok(
+    f.calls.some(
+      (c) =>
+        c[0] === "upload-texture" && c[1] === "native.material.1.clearcoatMap",
+    ),
+  );
   renderer.destroy();
-  assert.equal(f.calls.filter(c => c[0] === "texture").length,
-    f.calls.filter(c => c[0] === "destroy" && c[1] === "texture").length);
+  assert.equal(
+    f.calls.filter((c) => c[0] === "texture").length,
+    f.calls.filter((c) => c[0] === "destroy" && c[1] === "texture").length,
+  );
 });

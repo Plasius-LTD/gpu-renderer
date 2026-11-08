@@ -12,7 +12,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
-  - (placeholder)
+  - Native scene `renderAsync(frame, { signal, timeoutMs })` awaits GPU queue
+    completion with one outstanding frame, cancellation and a bounded deadline.
+    Terminal failures release owned resources, including when individual cleanup
+    operations fail; synchronous rendering remains available between async frames.
 
 - **Changed**
   - (placeholder)

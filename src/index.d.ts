@@ -1724,6 +1724,14 @@ export function createNativeSceneRenderer(options: {
   onUnavailable?: (message: string) => void;
 }): Promise<{
   render(frame: NativeSceneFrame): NativeSceneSnapshot;
+  /** Await owned GPU completion; rejects competing submissions while pending.
+   * Abort/timeout/queue failure destroys this renderer. Default timeout: 5000ms.
+   */
+  renderAsync(frame: NativeSceneFrame, options?: {
+    signal?: AbortSignal;
+    /** Integer deadline in milliseconds, from 1 to 60000. */
+    timeoutMs?: number;
+  }): Promise<NativeSceneSnapshot>;
   getSnapshot(): NativeSceneSnapshot;
   destroy(): void;
 }>;

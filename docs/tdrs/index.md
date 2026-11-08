@@ -8,3 +8,5 @@
 
 - [TDR 0006: Instanced scene qualification](tdr-0006-instanced-scene-qualification.md)
 - [TDR 0009: Frame viewport qualification](tdr-0009-frame-viewport-qualification.md)
+
+- [TDR 0010: Native raster completion verification](tdr-0010-native-raster-completion.md)

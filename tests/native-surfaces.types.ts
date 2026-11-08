@@ -26,6 +26,11 @@ const frame: NativeSceneFrame = {
   camera: { eye: [0, 1, 3], target: [0, 0, 0] },
 };
 renderer.render(frame);
+const completed = await renderer.renderAsync(frame, { signal: new AbortController().signal, timeoutMs: 5000 });
+const completedFrames: number = completed.submittedFrames;
+void completedFrames;
+// @ts-expect-error completion deadlines use numeric milliseconds.
+void renderer.renderAsync(frame, { timeoutMs: "5000" });
 // Existing callers still compile unchanged.
 renderer.render({ vertices: frame.vertices, camera: frame.camera });
 // @ts-expect-error material uploads use decoded RGBA8 bytes, never float colour arrays.
