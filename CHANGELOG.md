@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.64] - 2026-11-08
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Resolve each legacy wavefront tile once after the final batch, avoiding
     config-slot exhaustion in fixed high-SPP frames (#299).
 
@@ -1459,3 +1473,4 @@ All notable changes to this project will be documented in this file.
 [0.2.61]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.61
 [0.2.62]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.62
 [0.2.63]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.63
+[0.2.64]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.64
