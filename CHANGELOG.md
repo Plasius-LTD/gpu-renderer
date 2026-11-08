@@ -22,7 +22,8 @@ All notable changes to this project will be documented in this file.
     config-slot exhaustion in fixed high-SPP frames (#299).
 
 - **Security**
-  - (placeholder)
+  - Bind trusted push CI and scheduled npm audit to the approved quarantine
+    runner group (#301).
 
 ## [0.2.63] - 2026-11-05
 

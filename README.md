@@ -253,7 +253,9 @@ The development guide also describes the source layout. See
 
 CI keeps the administrative contributor registry outside Git and npm package
 artifacts using exact, case-normalised path checks. CI runs only for pushes to
-repository-owned branches on explicit `[self-hosted, Linux, X64]` runners.
+repository-owned branches in `Public CI - Quarantined` with literal
+`[self-hosted, Linux, X64]` labels. The explicit group prevents the Default
+group from accepting matching jobs. See [ADR-0051](docs/adrs/adr-0051-select-quarantine-runner-group.md).
 External fork pull requests trigger no CI execution; a maintainer must review
 and move a contribution to a repository-owned branch to produce required checks.
 Before branch CI starts, an authorised maintainer reviews the exact commit and
@@ -268,7 +270,7 @@ other group restrictions. Never admit mutable branch or PR refs. See
 [ADR-0028](docs/adrs/adr-0028-locked-branch-runner-admission.md) for the procedure.
 The trusted admission, build-test, and artifact-integrity checks keep their
 existing names for branch protection. Scheduled dependency validation also uses
-bounded self-hosted capacity and accepts only `main`. Release preparation and
+the same bounded runner group and accepts only `main`. Release preparation and
 publication use a two-run exact-main protocol on GitHub-hosted Node.js 24.18.0
 LTS. A read-only job seals the package tarball and SBOM before a dependency-free
 production job publishes that exact artifact through npm OIDC with provenance;
