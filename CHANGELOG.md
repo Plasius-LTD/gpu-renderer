@@ -18,7 +18,8 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Resolve each legacy wavefront tile once after the final batch, avoiding
+    config-slot exhaustion in fixed high-SPP frames (#299).
 
 - **Security**
   - (placeholder)
