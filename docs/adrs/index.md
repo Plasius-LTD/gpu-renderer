@@ -45,3 +45,5 @@
 
 - [ADR 0046: Wavefront device ownership](./adr-0046-wavefront-device-ownership.md)
 - [ADR 0050: Frame-local viewport](adr-0050-frame-local-render-viewport.md)
+
+- [ADR 0051: Select the quarantine runner group](adr-0051-select-quarantine-runner-group.md)

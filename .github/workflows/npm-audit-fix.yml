@@ -16,7 +16,9 @@ env:
 jobs:
   audit-fix:
     if: ${{ github.ref == 'refs/heads/main' }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on:
+      group: Public CI - Quarantined
+      labels: [self-hosted, Linux, X64]
     timeout-minutes: 30
     steps:
       - name: Checkout

@@ -10,15 +10,20 @@ const ciWorkflow = read(".github/workflows/ci.yml");
 const cdWorkflow = read(".github/workflows/cd.yml");
 const releasePrepareWorkflow = read(".github/workflows/release-prepare.yml");
 const npmConfig = read(".npmrc");
+const approvedRunner = /^ {4}runs-on:\n {6}group: Public CI - Quarantined\n {6}labels: \[self-hosted, Linux, X64\]$/gmu;
+
+function assertApprovedRunners(workflow, expected) {
+  assert.equal((workflow.match(/^\s*runs-on:/gmu) ?? []).length, expected);
+  assert.equal((workflow.match(approvedRunner) ?? []).length, expected,
+    "Every runner must use the approved quarantine group and fixed labels");
+}
+
 
 test("CI validates trusted repository pushes on explicit self-hosted runners", () => {
   assert.match(ciWorkflow, /push:\s*\n\s+branches: \["\*\*"\]/u);
   assert.doesNotMatch(ciWorkflow, /^\s*(?:pull_request|pull_request_target):/mu);
   assert.doesNotMatch(ciWorkflow, /ubuntu-latest|fromJSON|inputs\./u);
-  assert.equal(
-    (ciWorkflow.match(/runs-on: \[self-hosted, Linux, X64\]/gu) ?? []).length,
-    3,
-  );
+  assertApprovedRunners(ciWorkflow, 3);
   assert.match(ciWorkflow, /name: Trusted head admission/u);
   assert.match(ciWorkflow, /if: \$\{\{ github\.event_name == 'push' \}\}/u);
   assert.equal((ciWorkflow.match(/needs: trusted_head/gu) ?? []).length, 2);
@@ -32,7 +37,7 @@ test("CI validates trusted repository pushes on explicit self-hosted runners", (
 
 test("scheduled dependency validation uses bounded trusted self-hosted capacity", () => {
   const auditWorkflow = read(".github/workflows/npm-audit-fix.yml");
-  assert.match(auditWorkflow, /runs-on: \[self-hosted, Linux, X64\]/u);
+  assertApprovedRunners(auditWorkflow, 1);
   assert.match(auditWorkflow, /if: \$\{\{ github\.ref == 'refs\/heads\/main' \}\}/u);
   assert.match(auditWorkflow, /timeout-minutes: 30/u);
   assert.match(auditWorkflow, /package-manager-cache: false/u);

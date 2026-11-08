@@ -143,7 +143,8 @@ export function dispatchWavefrontFrameAwaitingGpu({
           frameEncoder.encodeTileOutput(batch.reserve(1), tile, configOffset, parallelism);
         }
       }
-      if (!config.deferredPathResolve && sampleRangeEnd >= renderedSamplesPerPixel) {
+      // Legacy resolve reads the completed tile and owns one config slot per tile.
+      if (!config.deferredPathResolve && sampleEnd === renderedSamplesPerPixel) {
         const outputConfigOffset = writeFrameConfigSlot(slot, tile, frameIndex, {
           sampleIndex: 0,
           sampleWeight: 1 / renderedSamplesPerPixel,

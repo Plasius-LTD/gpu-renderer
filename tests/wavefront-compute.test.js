@@ -3670,6 +3670,45 @@ serialWebGpuTest("wavefront awaited high-spp path keeps tile-local accumulation 
   });
 });
 
+serialWebGpuTest("awaited 128-SPP frames resolve each legacy tile only after its final batch", async () => {
+  await withWebGpuConstants(async () => {
+    const samples = 128;
+    const tileCount = 2;
+    for (const deferredPathResolve of [false, true]) {
+      const device = new FakeWavefrontDevice();
+      const renderer = await createWavefrontPathTracingComputeRenderer({
+        canvas: createFakeWavefrontCanvas(),
+        navigator: createFakeWavefrontNavigator(device),
+        width: 32,
+        height: 16,
+        tileSize: 16,
+        maxDepth: 2,
+        samplesPerPixel: samples,
+        maxFramePassesPerSubmission: 32,
+        denoise: false,
+        deferredPathResolve,
+      });
+      try {
+        const frame = await renderer.renderFrame({ readOutputProbe: false });
+        assert.equal(frame.renderedSamplesPerPixel, samples);
+        assert.equal(frame.tiles, tileCount);
+        assert.equal(frame.frameConfigSlots, tileCount * (samples + (deferredPathResolve ? 0 : 1)));
+        const passes = device.computePassDescriptors
+          .map(({ label }) => label)
+          .filter((label) => label === "plasius.wavefront.generatePrimaryRaysPass" || label === "plasius.wavefront.outputPass");
+        const generate = "plasius.wavefront.generatePrimaryRaysPass";
+        const output = "plasius.wavefront.outputPass";
+        const tilePasses = deferredPathResolve
+          ? Array.from({ length: samples }, () => [generate, output]).flat()
+          : [...Array(samples).fill(generate), output];
+        assert.deepEqual(passes, [...tilePasses, ...tilePasses]);
+      } finally {
+        renderer.destroy();
+      }
+    }
+  });
+});
+
 serialWebGpuTest("wavefront awaited high-spp path does not reuse frame-config slots across submissions", async () => {
   await withWebGpuConstants(async () => {
     const device = new FakeWavefrontDevice();
