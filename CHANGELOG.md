@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.65] - 2026-11-08
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Preserve directly visible environment and emissive radiance by excluding
     primary camera hits from terminal MIS (#212).
 
@@ -1475,3 +1489,4 @@ All notable changes to this project will be documented in this file.
 [0.2.62]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.62
 [0.2.63]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.63
 [0.2.64]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.64
+[0.2.65]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.65
