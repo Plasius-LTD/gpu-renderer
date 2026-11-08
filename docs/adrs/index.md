@@ -49,3 +49,5 @@
 - [ADR 0050: Frame-local viewport](adr-0050-frame-local-render-viewport.md)
 
 - [ADR 0051: Select the quarantine runner group](adr-0051-select-quarantine-runner-group.md)
+
+- [ADR 0052: Bounded native raster completion](adr-0052-bounded-native-raster-completion.md)

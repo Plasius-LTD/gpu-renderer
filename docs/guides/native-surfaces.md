@@ -21,6 +21,54 @@ Enable only through the consumer's remote `gpu-demo.scene-fidelity.enabled`
 decision and existing access capability. See [design](../design/native-showcase-surfaces.md)
 and [ADR-0030](../adrs/adr-0030-native-showcase-surfaces.md) for rollout and limits.
 
+### Awaiting a native frame
+
+Use `renderAsync` when the host needs to limit outstanding GPU work:
+
+```js
+import { createNativeSceneRenderer } from "@plasius/gpu-renderer";
+
+const renderer = await createNativeSceneRenderer({
+  canvas: document.querySelector("canvas"),
+});
+const frame = {
+  vertices: new Float32Array([
+    -1, 0, 0, 0, 0, 1, 0.8, 0.2, 0.1, 0.6, 0, 0,
+     1, 0, 0, 0, 0, 1, 0.8, 0.2, 0.1, 0.6, 0, 0,
+     0, 2, 0, 0, 0, 1, 0.8, 0.2, 0.1, 0.6, 0, 0,
+  ]),
+  camera: { eye: [0, 2, 6], target: [0, 1, 0] },
+  water: false,
+};
+try {
+  await renderer.renderAsync(frame, { timeoutMs: 5000 });
+} finally {
+  renderer.destroy();
+}
+```
+
+The returned promise resolves with the submitted frame's snapshot after
+[WebGPU queue completion](https://www.w3.org/TR/webgpu/#dom-gpuqueue-onsubmittedworkdone).
+It does not measure display presentation or guarantee visual correctness.
+The deadline defaults to 5,000ms; integer values from 1 to 60,000ms are accepted.
+Browser scheduling may delay timer callbacks. An optional `AbortSignal` cancels
+the wait. A pre-aborted signal, invalid frame/options or unavailable completion
+API rejects before GPU writes and leaves the renderer reusable.
+
+While an async frame is outstanding, both `render` and `renderAsync` reject
+additional submissions before writing buffers. Nothing is queued. Hosts can keep
+one latest CPU snapshot and submit it after the current promise settles, while
+simulation continues independently. Existing synchronous callers are unchanged
+when no async frame is pending.
+
+After submission, cancellation, deadline expiry, queue failure, device loss or
+`destroy()` rejects pending work and releases owned resources. A failed upload or
+submission also terminates the async renderer. Retry by constructing a fresh
+renderer; late queue settlement cannot revive it. Teardown attempts every owned
+resource even if a cleanup operation throws. Direct `destroy()` reports its first
+cleanup error; async failures retain their original controlled error. See
+[ADR-0052](../adrs/adr-0052-bounded-native-raster-completion.md).
+
 ### Authored materials in native surfaces
 
 `createNativeSceneRenderer({ canvas, materials })` accepts up to 16 opaque

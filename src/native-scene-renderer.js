@@ -170,6 +170,7 @@ export async function createNativeSceneRenderer(options = {}) {
   let uvBuffer = null;
   let vertexCapacity = 0;
   let pendingFrame = null;
+  let pendingCompletion = null;
   let submittedFrames = 0;
   let vertexCount = 0;
   const owned = new Set();
@@ -184,10 +185,21 @@ export async function createNativeSceneRenderer(options = {}) {
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
-    base?.destroy();
-    for (const resource of owned) resource.destroy();
+    pendingCompletion?.(new Error("Native scene renderer was destroyed."));
+    pendingFrame = null;
+    let cleanupError;
+    const attempt = (cleanup) => {
+      try {
+        cleanup();
+      } catch (error) {
+        cleanupError ??= error;
+      }
+    };
+    attempt(() => base?.destroy());
+    for (const resource of owned) attempt(() => resource.destroy());
     owned.clear();
-    base?.device.destroy?.();
+    attempt(() => base?.device.destroy?.());
+    if (cleanupError) throw cleanupError;
   };
 
   try {
@@ -198,11 +210,20 @@ export async function createNativeSceneRenderer(options = {}) {
     });
     const { device, format } = base;
     device.lost?.then(() => {
+      const notify = !destroyed;
       available = false;
-      if (!destroyed)
-        options.onUnavailable?.(
-          "WebGPU device lost. Reload the demo to reconnect.",
-        );
+      pendingCompletion?.(new Error("WebGPU device was lost."));
+      if (notify) {
+        try {
+          Promise.resolve(
+            options.onUnavailable?.(
+              "WebGPU device lost. Reload the demo to reconnect.",
+            ),
+          ).catch(() => {});
+        } catch {
+          /* Host callbacks cannot prevent completion cleanup. */
+        }
+      }
     });
     const module = device.createShaderModule({
       label: "plasius.native-scene",
@@ -622,70 +643,147 @@ export async function createNativeSceneRenderer(options = {}) {
       pass.end();
     }
 
+    const assertReady = () => {
+      if (destroyed) throw new Error("Native scene renderer was destroyed.");
+      if (!available) throw new Error("WebGPU device was lost.");
+      if (pendingCompletion) throw new Error("Native scene renderer is busy.");
+    };
+    const getSnapshot = () => ({
+      backend: "webgpu-raster",
+      available: available && !destroyed,
+      submittedFrames,
+      vertexCount,
+      shadowMapSize: SHADOW_SIZE,
+      samples: 4,
+      width: targets?.width ?? 0,
+      height: targets?.height ?? 0,
+    });
+    const submit = (validatedFrame) => {
+      pendingFrame = validatedFrame;
+      const data = pendingFrame.vertices;
+      ensureTargets();
+      if (data.byteLength > vertexCapacity) {
+        if (vertexBuffer) release(vertexBuffer);
+        if (uvBuffer) release(uvBuffer);
+        vertexCapacity = Math.min(
+          maxVertices * STRIDE * 4,
+          Math.max(4096, 2 ** Math.ceil(Math.log2(data.byteLength))),
+        );
+        uvBuffer = own(
+          device.createBuffer({
+            label: "native.surface-uvs",
+            size: Math.ceil(vertexCapacity / (STRIDE * 4)) * 8,
+            usage: 0x28,
+          }),
+        );
+        vertexBuffer = own(
+          device.createBuffer({
+            label: "native.surface-vertices",
+            size: vertexCapacity,
+            usage: 0x28,
+          }),
+        );
+      }
+      if (pendingFrame.texcoords?.byteLength)
+        device.queue.writeBuffer(uvBuffer, 0, pendingFrame.texcoords);
+      vertexCount = data.length / STRIDE;
+      if (data.byteLength) device.queue.writeBuffer(vertexBuffer, 0, data);
+      device.queue.writeBuffer(
+        uniformBuffer,
+        0,
+        frameUniforms(pendingFrame, targets.width, targets.height),
+      );
+      device.queue.writeBuffer(
+        reflectionBuffer,
+        0,
+        frameUniforms(
+          pendingFrame,
+          targets.reflectionWidth,
+          targets.reflectionHeight,
+          true,
+        ),
+      );
+      base.renderOnce(pendingFrame.time * 1000);
+      submittedFrames++;
+      return getSnapshot();
+    };
+    const terminate = () => {
+      try {
+        destroy();
+      } catch {
+        /* Preserve the original frame failure after best-effort cleanup. */
+      }
+    };
+
     return {
       render(input) {
-        if (destroyed) throw new Error("Native scene renderer was destroyed.");
-        if (!available) throw new Error("WebGPU device was lost.");
-        pendingFrame = validateFrame(input, maxVertices, materialCount);
-        const data = pendingFrame.vertices;
-        ensureTargets();
-        if (data.byteLength > vertexCapacity) {
-          if (vertexBuffer) release(vertexBuffer);
-          if (uvBuffer) release(uvBuffer);
-          vertexCapacity = Math.min(
-            maxVertices * STRIDE * 4,
-            Math.max(4096, 2 ** Math.ceil(Math.log2(data.byteLength))),
+        assertReady();
+        return submit(validateFrame(input, maxVertices, materialCount));
+      },
+      async renderAsync(input, { signal, timeoutMs = 5000 } = {}) {
+        if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000)
+          throw new RangeError(
+            "Native frame timeout must be an integer from 1 to 60000ms.",
           );
-          uvBuffer = own(
-            device.createBuffer({
-              label: "native.surface-uvs",
-              size: Math.ceil(vertexCapacity / (STRIDE * 4)) * 8,
-              usage: 0x28,
-            }),
-          );
-          vertexBuffer = own(
-            device.createBuffer({
-              label: "native.surface-vertices",
-              size: vertexCapacity,
-              usage: 0x28,
-            }),
-          );
+        if (
+          signal !== undefined &&
+          (!signal ||
+            typeof signal.aborted !== "boolean" ||
+            typeof signal.addEventListener !== "function" ||
+            typeof signal.removeEventListener !== "function")
+        )
+          throw new TypeError("Native frame signal must be an AbortSignal.");
+        if (signal?.aborted) throw new Error("Native scene render aborted.");
+        if (typeof device.queue.onSubmittedWorkDone !== "function")
+          throw new Error("Native GPU completion is unavailable.");
+        assertReady();
+        const validatedFrame = validateFrame(input, maxVertices, materialCount);
+        let snapshot;
+        try {
+          snapshot = submit(validatedFrame);
+        } catch {
+          terminate();
+          throw new Error("Native GPU submission failed.");
         }
-        if (pendingFrame.texcoords?.byteLength)
-          device.queue.writeBuffer(uvBuffer, 0, pendingFrame.texcoords);
-        vertexCount = data.length / STRIDE;
-        if (data.byteLength) device.queue.writeBuffer(vertexBuffer, 0, data);
-        device.queue.writeBuffer(
-          uniformBuffer,
-          0,
-          frameUniforms(pendingFrame, targets.width, targets.height),
-        );
-        device.queue.writeBuffer(
-          reflectionBuffer,
-          0,
-          frameUniforms(
-            pendingFrame,
-            targets.reflectionWidth,
-            targets.reflectionHeight,
-            true,
-          ),
-        );
-        base.renderOnce(pendingFrame.time * 1000);
-        submittedFrames++;
-        return this.getSnapshot();
+        return new Promise((resolve, reject) => {
+          let settled = false,
+            timer;
+          const finish = (error, terminal = false) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", abort);
+            pendingCompletion = null;
+            if (terminal) terminate();
+            if (error) reject(error);
+            else resolve(snapshot);
+          };
+          const abort = () =>
+            finish(new Error("Native scene render aborted."), true);
+          pendingCompletion = (error) => finish(error, true);
+          timer = setTimeout(
+            () => finish(new Error("Native GPU completion timed out."), true),
+            timeoutMs,
+          );
+          signal?.addEventListener("abort", abort, { once: true });
+          if (signal?.aborted) {
+            abort();
+            return;
+          }
+          try {
+            const completion = device.queue.onSubmittedWorkDone();
+            if (!completion || typeof completion.then !== "function")
+              throw new Error("Missing completion promise.");
+            Promise.resolve(completion).then(
+              () => finish(),
+              () => finish(new Error("Native GPU completion failed."), true),
+            );
+          } catch {
+            finish(new Error("Native GPU completion failed."), true);
+          }
+        });
       },
-      getSnapshot() {
-        return {
-          backend: "webgpu-raster",
-          available: available && !destroyed,
-          submittedFrames,
-          vertexCount,
-          shadowMapSize: SHADOW_SIZE,
-          samples: 4,
-          width: targets?.width ?? 0,
-          height: targets?.height ?? 0,
-        };
-      },
+      getSnapshot,
       destroy,
     };
   } catch (error) {
