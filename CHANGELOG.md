@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.66] - 2026-11-08
+
+- **Added**
   - Native scene `renderAsync(frame, { signal, timeoutMs })` awaits GPU queue
     completion with one outstanding frame, cancellation and a bounded deadline.
     Terminal failures release owned resources, including when individual cleanup
@@ -1493,3 +1507,4 @@ All notable changes to this project will be documented in this file.
 [0.2.63]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.63
 [0.2.64]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.64
 [0.2.65]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.65
+[0.2.66]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.66
