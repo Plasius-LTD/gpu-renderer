@@ -6,8 +6,8 @@ import {
   getRendererWorkerManifest,
   getRendererWorkerProfile,
   supportsWebGpu,
-} from "../dist/index.js";
-import { mountGpuShowcase } from "../node_modules/@plasius/gpu-shared/dist/index.js";
+} from "@plasius/gpu-renderer";
+import { mountGpuShowcase } from "@plasius/gpu-shared";
 
 const root = globalThis.document?.getElementById("app");
 if (!root) {

@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@plasius/gpu-renderer moonlit harbor demo</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@plasius/gpu-renderer": "../dist/index.js",
+          "@plasius/gpu-camera": "../node_modules/@plasius/gpu-camera/dist/index.js",
+          "@plasius/gpu-shared": "../node_modules/@plasius/gpu-shared/dist/index.js",
+          "@plasius/gpu-shared/feedback-diagnostics": "../node_modules/@plasius/gpu-shared/dist/feedback-diagnostics.js",
+          "@plasius/schema/feedback-diagnostics-vocabulary": "../node_modules/@plasius/schema/dist/feedback-diagnostics-vocabulary.js"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

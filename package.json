@@ -26,7 +26,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "demo": "python3 -m http.server --directory ..",
+    "demo": "python3 -m http.server --bind 127.0.0.1",
     "typecheck": "node scripts/check-source-syntax.cjs && tsc -p tsconfig.types.json && node scripts/verify-clean-type-consumer.cjs",
     "audit:eslint": "eslint . --max-warnings=0",
     "audit:deps": "npm ls --all --omit=optional --omit=peer > /dev/null 2>&1 || true",

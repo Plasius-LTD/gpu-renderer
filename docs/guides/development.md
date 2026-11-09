@@ -2,20 +2,23 @@
 
 ## Demo
 
-Run the demo server from the repo root:
+From the repo root, install from the lockfile, build, and start the demo server:
 
 ```sh
-cd gpu-renderer
+npm run zero-three:source
+npm ci --legacy-peer-deps
+npm run build
 npm run demo
 ```
 
-Then open `http://localhost:8000/gpu-renderer/demo/`.
+Open `http://127.0.0.1:8000/demo/`. The Python 3 server binds to loopback and
+serves the current checkout. Pass a port with `npm run demo -- 8080` if needed.
 
-The demo now mounts the mesh BVH WebGPU wavefront renderer directly and passes a
-`@plasius/gpu-lighting` environment preset into the render. It reports the
-active wavefront depth, tile count, triangle/BVH counts, lighting preset, probe
-luminance, and hot buffer memory so it is clear whether the renderer is tracing
-mesh paths rather than only showing planning metadata.
+The harbor uses the public renderer and shared showcase entries. The demo's
+HTML import map points those package names and the ESM dependencies they need
+at their local published exports. This keeps lazy showcase modules and assets
+at their original paths. When dependency exports change, update the map and
+run `node --test tests/demo-imports.test.js` after building.
 
 ## Setup and validation
 
@@ -27,8 +30,8 @@ npm run zero-three:source
 npm ci --legacy-peer-deps
 npm run lint
 npm run typecheck
-npm run test:coverage
 npm run build
+npm run test:coverage
 npm run pack:check
 npm run zero-three
 ```
