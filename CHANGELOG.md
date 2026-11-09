@@ -18,7 +18,8 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
-  - (placeholder)
+  - Load the renderer's local harbor demo from a frozen install using public
+    package entries and a browser import map (#35).
 
 - **Security**
   - (placeholder)

@@ -248,8 +248,8 @@ route capabilities and rollout policy before mounting a scene.
 For checkout setup and required validation, start with the
 [development guide](https://github.com/Plasius-LTD/gpu-renderer/blob/main/docs/guides/development.md).
 
-`npm run demo` requires Python 3 and serves the parent workspace. With the checkout
-named `gpu-renderer`, visit `http://localhost:8000/gpu-renderer/demo/`.
+`npm run demo` requires Python 3. After a frozen install and `npm run build`,
+start the server from the checkout and open `http://127.0.0.1:8000/demo/`.
 The development guide also describes the source layout. See
 [CONTRIBUTING.md](https://github.com/Plasius-LTD/gpu-renderer/blob/main/CONTRIBUTING.md).
 
