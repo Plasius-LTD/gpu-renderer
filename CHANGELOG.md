@@ -18,6 +18,20 @@ All notable changes to this project will be documented in this file.
   - (placeholder)
 
 - **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.67] - 2026-11-09
+
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
   - Load the renderer's local harbor demo from a frozen install using public
     package entries and a browser import map (#35).
 
@@ -1509,3 +1523,4 @@ All notable changes to this project will be documented in this file.
 [0.2.64]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.64
 [0.2.65]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.65
 [0.2.66]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.66
+[0.2.67]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.67
