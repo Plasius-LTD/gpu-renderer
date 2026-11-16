@@ -202,6 +202,16 @@ Frame statistics report active `width`/`height` and `renderScale`, separately fr
 `allocationWidth`/`allocationHeight`. Await each frame before another submission;
 a second submission while `renderFrame` is pending rejects explicitly.
 
+For interruptible reference work, pass `maxTileSize: 128` and an `AbortSignal`
+to `renderFrame`. The tile limit must be an integer from 8 through the renderer's
+allocated tile size. Each tile completes before the next is submitted. Aborting
+drains the submitted tile, rejects with the signal's reason, and discards partial
+progressive history; await that rejection before updating the camera or submitting
+another frame. GPU work already submitted cannot be cancelled. An uninterrupted
+frame still renders every requested pixel, sample and bounce, then denoises and
+presents normally. These options require GPU completion waits; omitting them
+preserves normal batching. See [cooperative reference frames](docs/adrs/adr-0055-cooperative-reference-frames.md).
+
 The fixed wavefront path keeps directly visible environment and emissive
 radiance at full weight. Terminal multiple importance sampling applies only
 to eligible secondary rays; delta events keep their existing weight.

@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Allow awaited reference frames to use bounded tiles and cooperative cancellation so new camera work need not wait for an obsolete full-frame batch; preserve all stationary samples and discard aborted progressive history.
+
 - **Added**
   - (placeholder)
 

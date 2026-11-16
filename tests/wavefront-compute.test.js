@@ -4119,3 +4119,68 @@ serialWebGpuTest('scaled odd viewports retain full camera projection across live
     renderer.destroy();
   });
 });
+
+serialWebGpuTest('cooperative frames reject invalid or aborted work before mutation', async () => {
+ await withWebGpuConstants(async()=>{
+  const device=new FakeWavefrontDevice();
+  const renderer=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),navigator:createFakeWavefrontNavigator(device),width:32,height:20,tileSize:16});
+  try{
+   const before=renderer.getSnapshot(),submissions=device.queue.submissions.length;
+   for(const maxTileSize of [0,4,17,NaN,Infinity,8.5,'8',null])await assert.rejects(renderer.renderFrame({maxTileSize,readOutputProbe:false}),/maxTileSize/);
+   for(const signal of [null,{},true])await assert.rejects(renderer.renderFrame({signal,readOutputProbe:false}),/signal/);
+   await assert.rejects(renderer.renderFrame({maxTileSize:8,awaitGPUCompletion:false}),/await/);
+   const abort=new AbortController(),reason=new Error('obsolete camera');abort.abort(reason);
+   await assert.rejects(renderer.renderFrame({signal:abort.signal,renderScale:.5}),error=>error===reason);
+   assert.equal(renderer.getSnapshot().frame,before.frame);assert.equal(renderer.getSnapshot().width,before.width);
+   assert.equal(device.queue.submissions.length,submissions);
+  }finally{renderer.destroy();}
+ });
+});
+
+serialWebGpuTest('cooperative cancellation drains one tile and preserves exclusion before motion recovery', async () => {
+ await withWebGpuConstants(async()=>{
+  const device=new FakeWavefrontDevice();
+  const renderer=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),navigator:createFakeWavefrontNavigator(device),width:32,height:20,tileSize:16,maxDepth:2,samplesPerPixel:4,progressive:true});
+  const abort=new AbortController(),reason=new Error('camera moved');let release;
+  device.queue.onSubmittedWorkDone=()=>new Promise(resolve=>{release=resolve;});
+  const allocated=renderer.getSnapshot().allocations.allocatedBytes;
+  const pending=renderer.renderFrame({maxTileSize:8,signal:abort.signal,samplesPerPixel:4,readStats:false,readOutputProbe:false});
+  const rejected=assert.rejects(pending,error=>error===reason);
+  abort.abort(reason);
+  await assert.rejects(renderer.renderFrame({renderScale:.5}),/pending/);
+  assert.equal(device.renderPasses,0,'an incomplete reference is not presented');
+  assert.equal(device.queue.submissions.length,1,'only one bounded tile is submitted');
+  release();await rejected;
+  assert.equal(device.queue.submissions.length,1,'obsolete tiles must not be submitted');
+  assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,0);
+  assert.equal(renderer.getSnapshot().allocations.allocatedBytes,allocated);
+  device.queue.onSubmittedWorkDone=async()=>{};
+  device.rayCountReadbackValues=Array.from({length:12},(_,tile)=>Array.from({length:4},()=>[tile<8?64:32,0]).flat()).flat();
+  const recovered=await renderer.renderFrame({maxTileSize:8,samplesPerPixel:4,readStats:true,readOutputProbe:false});
+  assert.equal(recovered.primaryRays,32*20*4);
+  assert.equal(recovered.rayCounts.status,'available');
+  assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,4);
+  const full=await renderer.renderFrame({samplesPerPixel:4,readOutputProbe:false});
+  assert.equal(full.primaryRays,32*20*4);
+  assert.equal(renderer.getSnapshot().accumulatedSamplesPerPixel,8);
+  assert.ok(renderer.getSnapshot().allocations.allocatedBytes>=allocated,'only requested telemetry may allocate');
+  renderer.destroy();assert.equal(renderer.getSnapshot().allocations.allocatedBytes,0);
+ });
+});
+
+serialWebGpuTest('smaller cooperative tiles expand existing telemetry capacity without losing records',async()=>{
+ await withWebGpuConstants(async()=>{
+  const device=new FakeWavefrontDevice();
+  const renderer=await createWavefrontPathTracingComputeRenderer({canvas:createFakeWavefrontCanvas(),navigator:createFakeWavefrontNavigator(device),width:16,height:16,tileSize:16,maxDepth:2,samplesPerPixel:1});
+  try{
+   device.rayCountReadbackValues=[256,0];
+   assert.equal((await renderer.renderFrame({readStats:true,readOutputProbe:false})).rayCounts.status,'available');
+   const first=device.buffers.find(b=>b.descriptor.label==='plasius.wavefront.rayCounts');
+   device.rayCountReadbackValues=[64,0,64,0,64,0,64,0];
+   const smaller=await renderer.renderFrame({maxTileSize:8,readStats:true,readOutputProbe:false});
+   assert.equal(first.destroyed,true);assert.equal(smaller.rayCounts.status,'available');
+   assert.equal(smaller.rayCounts.capturedRayCounts,8);assert.equal(smaller.frameTileSize,8);
+   assert.equal(renderer.getSnapshot().cooperativeFrameCancellation,true);
+  }finally{renderer.destroy();}
+ });
+});

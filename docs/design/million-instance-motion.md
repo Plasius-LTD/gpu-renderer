@@ -65,3 +65,24 @@ Deliver package changes through exact-main approved `cd.yml`; verify registry
 integrity/provenance before site adoption. Exact site CI, actual production CD,
 public build identity, sensitive-environment secretref evidence and public GPU
 qualification precede closure. No local publishing or alternative deployment.
+
+## Interruptible stationary work
+
+Real-site receipts on 16 November show a full-resolution four-sample batch taking
+about 287 ms while camera input is queued. GPU work already submitted cannot be
+cancelled by JavaScript. Stop submitting obsolete reference work at safe tile
+boundaries, and let the owning shared runtime submit the newest motion preview.
+
+Add optional `maxTileSize` and `signal` to awaited `renderFrame`. A smaller tile
+uses the existing full-resolution buffers and the same pixel/sample/frame seeds.
+Await each submitted tile before reusing config slots or checking cancellation.
+Cancellation rejects with the signal reason, clears progressive history, and
+never reports an incomplete frame as completed. Preserve single-frame exclusion
+until the submitted work drains, and keep the renderer usable afterwards.
+
+Defaults retain existing batching. The host/runtime selects work limits; renderer
+does not add an independent quality governor. Telemetry capacity must cover the
+actual tile count. Validation includes invalid/pre-aborted calls before mutation,
+mid-frame cancellation, no further submission/presentation after cancellation,
+exact full-quality recovery, unchanged allocations without telemetry, and real
+forest/million-instance interruption and stationary image/HDR controls.
