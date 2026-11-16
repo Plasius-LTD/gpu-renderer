@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.68] - 2026-11-16
+
 - Reduce transient BVH bounds and instance-transform allocations during large-scene preparation while preserving stable hierarchy ordering and full stationary transport.
 - Keep GPU device-loss observation bounded during repeated camera frames, removing each completed or timed-out waiter without weakening loss detection.
 
@@ -1527,3 +1541,4 @@ All notable changes to this project will be documented in this file.
 [0.2.65]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.65
 [0.2.66]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.66
 [0.2.67]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.67
+[0.2.68]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.68
