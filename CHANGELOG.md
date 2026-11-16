@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.69] - 2026-11-16
+
 - Allow awaited reference frames to use bounded tiles and cooperative cancellation so new camera work need not wait for an obsolete full-frame batch; preserve all stationary samples and discard aborted progressive history.
 
 - **Added**
@@ -1544,3 +1558,4 @@ All notable changes to this project will be documented in this file.
 [0.2.66]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.66
 [0.2.67]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.67
 [0.2.68]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.68
+[0.2.69]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.69
