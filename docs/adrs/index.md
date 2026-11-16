@@ -51,3 +51,6 @@
 - [ADR 0051: Select the quarantine runner group](adr-0051-select-quarantine-runner-group.md)
 
 - [ADR 0052: Bounded native raster completion](adr-0052-bounded-native-raster-completion.md)
+
+- [ADR 0053: Reduce transient instance preparation allocations](adr-0053-bounded-instance-preparation.md)
+- [ADR 0054: Bounded GPU device-loss observation](adr-0054-bounded-device-loss-observation.md)

@@ -70,6 +70,8 @@ export function dispose() {
 GPU device. Await any reference frame you intend to keep before disposal; the
 device cannot be reused afterward. The factory requests its own device and does
 not accept a borrowed device.
+Repeated awaited frames share one device-loss observer. Completed, rejected and
+timed-out waits release their listener while active waits still fail on loss.
 
 Supply decoded triangle geometry and material/texture data through `meshes`.
 The renderer does not fetch glTF files: use a loader such as
@@ -145,6 +147,15 @@ diagnostics include the actual requested texture size and TLAS buffer. Instance
 texture uploads also use sequential chunks no larger than 8 MiB. More instances
 still require ray traversal and shading work: qualify performance at your target
 resolution, sampling and material complexity.
+
+Scene preparation uses one build-owned BVH ordering array and applies conservative
+instance bounds padding while constructing nodes. Frozen placement transforms
+shared by model primitives reuse their validated affine/inverse values within
+that build only. Mutable caller inputs are copied and later builds revalidate
+them. Node order, median splits, tie handling and stationary transport remain
+unchanged. Instance counts describe retained mesh primitives; a model with three
+primitives contributes three instances. Preparation time and CPU memory remain
+separate costs from steady camera rendering.
 
 Closest-hit traversal visits the nearer instance-tree child first, then prunes
 bounds beyond the nearest accepted hit. Geometry trees retain their canonical

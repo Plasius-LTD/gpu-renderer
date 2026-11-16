@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Reduce transient BVH bounds and instance-transform allocations during large-scene preparation while preserving stable hierarchy ordering and full stationary transport.
+- Keep GPU device-loss observation bounded during repeated camera frames, removing each completed or timed-out waiter without weakening loss detection.
+
 - **Added**
   - (placeholder)
 

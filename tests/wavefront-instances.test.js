@@ -36,6 +36,38 @@ test('reflected nonuniform transforms retain inverse and conservative world boun
   assert.deepEqual(plan.records[0].inverse,[-.5,0,0,0, 0,1/3,0,0, 0,0,2,0, 5,-2/3,-8,1]);
   assert.equal(plan.records[0].handedness,-1);
 });
+test('mesh primitives sharing an immutable placement share affine storage without sharing bounds',()=>{
+  const transform=Object.freeze(matrix(3));
+  const second={...mesh,id:8,positions:mesh.positions.map(v=>v*2)};
+  const list=[{id:1,meshId:7,transform},{id:2,meshId:8,transform}];
+  const plan=prepareWavefrontInstances([mesh,second],list);
+  assert.equal(plan.records[0].transform,plan.records[1].transform);
+  assert.equal(plan.records[0].inverse,plan.records[1].inverse);
+  assert.notDeepEqual(plan.records[0].bounds,plan.records[1].bounds);
+  assert.ok(Object.isFrozen(plan.records[0].transform));
+  // Build-local storage cannot retain a previous scene or mutable caller data.
+  assert.notEqual(prepareWavefrontInstances([mesh,second],list).records[0].transform,plan.records[0].transform);
+  const mutable=matrix(4), first=prepareWavefrontInstances([mesh],[{id:1,meshId:7,transform:mutable}]);
+  mutable[12]=9;
+  const next=prepareWavefrontInstances([mesh],[{id:1,meshId:7,transform:mutable}]);
+  assert.equal(first.records[0].transform[12],4);
+  assert.equal(next.records[0].transform[12],9);
+});
+
+test('world bounds retain all eight transformed corners for rotated and sheared placements',()=>{
+  for(const transform of [
+    [1,.3,-.2,0, .7,2,.1,0, .8,.2,-3,0, 123.4,-5.6,78.9,1],
+    [0,1,0,0, -1,0,0,0, 0,0,2,0, -30,17,8,1],
+  ]) {
+    const volume={...mesh,positions:[-2,-3,-4, 2,3,4, -1,2,0]};
+    const record=prepareWavefrontInstances([volume],[{id:1,meshId:7,transform}]).records[0];
+    const m=record.transform, points=Array.from({length:8},(_,corner)=>{
+      const p=[0,1,2].map(a=>(corner&(1<<a))?[2,3,4][a]:[-2,-3,-4][a]);
+      return [0,1,2].map(r=>m[r]*p[0]+m[4+r]*p[1]+m[8+r]*p[2]+m[12+r]);
+    });
+    assert.deepEqual(record.bounds,{min:[0,1,2].map(a=>Math.min(...points.map(p=>p[a]))),max:[0,1,2].map(a=>Math.max(...points.map(p=>p[a])))});
+  }
+});
 test('instanced emissive sources are refused until per-instance light sampling is supported',()=>{
   assert.throws(()=>createWavefrontPathTracingComputeConfig({meshes:[{...mesh,emission:[1,1,1,1]}],instances:instances(2)}),/emissive/iu);
 });
