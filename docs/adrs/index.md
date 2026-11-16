@@ -54,3 +54,4 @@
 
 - [ADR 0053: Reduce transient instance preparation allocations](adr-0053-bounded-instance-preparation.md)
 - [ADR 0054: Bounded GPU device-loss observation](adr-0054-bounded-device-loss-observation.md)
+- [ADR 0055: Cooperative reference frames](adr-0055-cooperative-reference-frames.md)

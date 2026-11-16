@@ -7,3 +7,11 @@ void renderer.renderFrame({renderScale:1,samplesPerPixel:4,awaitGPUCompletion:tr
 const scale: number=renderer.getSnapshot().renderScale;void scale;
 // @ts-expect-error Numeric scale is required.
 renderer.renderOnce({renderScale:'half'});
+void renderer.renderFrame({maxTileSize:128,signal:new AbortController().signal}).then(frame=>{
+ const tileSize:number=frame.frameTileSize;void tileSize;
+});
+const cancellation:boolean=renderer.getSnapshot().cooperativeFrameCancellation;void cancellation;
+// @ts-expect-error Tile limits are numeric.
+renderer.renderFrame({maxTileSize:'128'});
+// @ts-expect-error A real abort signal is required.
+renderer.renderFrame({signal:{aborted:false}});

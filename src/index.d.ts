@@ -1211,6 +1211,10 @@ export interface WavefrontPathTracingComputeRenderer {
   renderFrame(options?: {
     /** Active frame resolution within persistent allocations; (0,1], omitted restores full resolution. */
     renderScale?: number;
+    /** Optional cooperative tile bound (8 through the allocated tile size). Awaited frames only. */
+    maxTileSize?: number;
+    /** Stops obsolete work after the submitted tile drains; rejects with the abort reason. */
+    signal?: AbortSignal;
     readStats?: boolean;
     readOutputProbe?: boolean;
     awaitGPUCompletion?: boolean;
@@ -1236,6 +1240,8 @@ export interface WavefrontPathTracingComputeRenderer {
     allocationWidth: number;
     allocationHeight: number;
     renderScale: number;
+    frameTileSize: number;
+    cooperativeFrameCancellation: true;
     frame: number;
     width: number;
     height: number;
@@ -1300,6 +1306,7 @@ export interface WavefrontPathTracingComputeFrameStats {
   readonly allocationWidth: number;
   readonly allocationHeight: number;
   readonly renderScale: number;
+  readonly frameTileSize: number;
   readonly frame: number;
   readonly width: number;
   readonly height: number;

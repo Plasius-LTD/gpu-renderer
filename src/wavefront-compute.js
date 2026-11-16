@@ -1,4 +1,4 @@
-import { resolveWavefrontRenderViewport } from './wavefront-render-viewport.js';
+import { resolveWavefrontRenderViewport, resolveWavefrontFrameControl } from './wavefront-render-viewport.js';
 import { uploadWavefrontBuffer } from './wavefront-upload.js';
 import { planInstanceTexture, uploadInstanceTexture } from './wavefront-instance-texture.js';
 import { createGpuAllocationTracker, openGpuAllocationErrorScopes } from './gpu-allocation-budget.js';
@@ -315,7 +315,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   );
   const allocationWidth = config.width, allocationHeight = config.height;
   const allocationTiles = createTiles(config.width, config.height, config.tileSize);
-  let tiles = allocationTiles, renderScale = 1, pendingFrame = false;
+  let tiles = allocationTiles, renderScale = 1, frameTileSize = config.tileSize, pendingFrame = false;
   const configBufferStride = memory.configBufferStride;
   const outputConfigSlotCount = config.deferredPathResolve ? 0 : tiles.length;
   const frameConfigSlotCount = Math.max(
@@ -588,7 +588,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
   });
   const progressive = await createWavefrontProgressiveResources({device, constants, config, configBuffer, radianceTexture, radianceView, outputView});
   let activeFrameTelemetry = null;
-  let frameTelemetryResources = null;
+  let frameTelemetryResources = null, frameTelemetryCapacity = 0;
   const frameEncoder = createWavefrontFrameEncoder({
     getConfig: () => config,
     progressive,
@@ -619,13 +619,16 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     waitForSubmittedGpuWorkForDevice(device, waitOptions);
 
   function ensureFrameTelemetryResources() {
-    if (!frameTelemetryResources) {
+    const requiredCapacity = Math.max(allocationTiles.length, tiles.length) * config.samplesPerPixel * config.maxDepth;
+    if (!frameTelemetryResources || requiredCapacity > frameTelemetryCapacity) {
+      frameTelemetryResources?.destroy();
+      frameTelemetryResources = null;
       frameTelemetryResources = createWavefrontFrameTelemetryResources({
         device,
         constants,
-        maxRayCountRecords:
-          allocationTiles.length * config.samplesPerPixel * config.maxDepth,
+        maxRayCountRecords: requiredCapacity,
       });
+      frameTelemetryCapacity = requiredCapacity;
     }
     return frameTelemetryResources;
   }
@@ -668,7 +671,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
       budgetConstrained,
     });
     lastGpuParallelism = stats.gpuParallelism;
-    return Object.freeze({ ...stats.frameStats, allocationWidth, allocationHeight, renderScale });
+    return Object.freeze({ ...stats.frameStats, allocationWidth, allocationHeight, renderScale, frameTileSize });
   }
 
   async function readTerminationMetrics() {
@@ -735,11 +738,15 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     });
   }
 
-  function applyRenderScale(value) {
+  function applyRenderScale(value, tileSize = config.tileSize) {
     const viewport = resolveWavefrontRenderViewport(allocationWidth, allocationHeight, value);
-    if (viewport.width !== config.width || viewport.height !== config.height) {
+    const dimensionsChanged = viewport.width !== config.width || viewport.height !== config.height;
+    if (dimensionsChanged || frameTileSize !== tileSize) {
+      tiles = createTiles(viewport.width, viewport.height, tileSize);
+      frameTileSize = tileSize;
+    }
+    if (dimensionsChanged) {
       config = Object.freeze({ ...config, width: viewport.width, height: viewport.height });
-      tiles = createTiles(config.width, config.height, config.tileSize);
       progressive?.reset();
       lastCompletedFrameTimeMs = null;
       lastCompletedSamplesPerPixel = 1;
@@ -823,17 +830,22 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
 
   async function renderFrame(renderOptions = {}) {
     if (pendingFrame) throw new Error("A wavefront frame is pending GPU completion.");
-    applyRenderScale(renderOptions.renderScale);
+    const control = resolveWavefrontFrameControl(renderOptions, config.tileSize);
+    applyRenderScale(renderOptions.renderScale, control.tileSize);
     pendingFrame = true;
-    try { return await renderFrameInternal(renderOptions); }
+    try { return await renderFrameInternal(renderOptions, control); }
+    catch (error) {
+      if (control.signal?.aborted) progressive?.reset();
+      throw error;
+    }
     finally { pendingFrame = false; }
   }
 
-  async function renderFrameInternal(renderOptions) {
+  async function renderFrameInternal(renderOptions, control) {
     const awaitGPUCompletion = renderOptions.awaitGPUCompletion !== false;
     const samplingPlan = resolveRenderedSamplesPerPixel(renderOptions, awaitGPUCompletion);
     const useThrottledHighSamplePath =
-      awaitGPUCompletion && samplingPlan.renderedSamplesPerPixel >= 8;
+      awaitGPUCompletion && (samplingPlan.renderedSamplesPerPixel >= 8 || control.cooperative);
     const telemetryRequested = renderOptions.readStats === true;
     const telemetryCanRecord = telemetryRequested && awaitGPUCompletion;
     const telemetryResourcesForFrame = telemetryCanRecord
@@ -866,6 +878,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
           await waitForSubmittedGpuWork(accelerationWaitOptions);
         }
         for (let tileIndex = 0; tileIndex < tiles.length; tileIndex += 1) {
+          control.signal?.throwIfAborted();
           const tileRangeDispatch = dispatchFrameAwaitingGpu(
             frameIndex,
             parallelismCounters,
@@ -876,7 +889,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
               tileStartIndex: tileIndex,
               tileEndIndex: tileIndex + 1,
               startingSubmissionCount: frameSubmissionCount,
-              startingSlot: frameConfigSlot,
+              startingSlot: control.cooperative ? 0 : frameConfigSlot,
               includeDenoise: tileIndex + 1 >= tiles.length,
               includePresent: tileIndex + 1 >= tiles.length,
             }
@@ -896,6 +909,7 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
             allowTimeout: false,
           };
           await waitForSubmittedGpuWork(tileWaitOptions);
+          control.signal?.throwIfAborted();
         }
         frameStats = createFrameStats({
           frameIndex,
@@ -1098,7 +1112,8 @@ export async function createWavefrontPathTracingComputeRenderer(options = {}) {
     return Object.freeze({
       frame,
       accumulatedSamplesPerPixel: progressive?.samples ?? 0,
-      allocationWidth, allocationHeight, renderScale,
+      allocationWidth, allocationHeight, renderScale, frameTileSize,
+      cooperativeFrameCancellation: true,
       width: config.width,
       height: config.height,
       maxDepth: config.maxDepth,
