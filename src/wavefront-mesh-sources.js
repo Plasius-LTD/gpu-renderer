@@ -8,7 +8,6 @@ import {
   clamp,
   cross,
   emissionPower,
-  mergeBounds,
   normalize,
   readNonNegativeInteger,
   readVector,
@@ -144,73 +143,62 @@ function createMeshTriangleRecords(meshes, gpuMaterialSource = null) {
   });
 }
 
-function chooseSplitAxis(triangles) {
-  const centroidBounds = triangles.reduce(
-    (bounds, triangle) => {
-      const pointBounds = { min: triangle.centroid, max: triangle.centroid };
-      return mergeBounds(bounds, pointBounds);
-    },
-    null
-  );
-  const extent = subtract(centroidBounds.max, centroidBounds.min);
-  if (extent[0] >= extent[1] && extent[0] >= extent[2]) {
-    return 0;
+/** Stable median hierarchy; optional relative padding is used only for TLAS bounds. */
+export function buildWavefrontBoundsBvh(triangles, maxLeafTriangles = 4, boundsPadding = 0) {
+  if (!Number.isFinite(boundsPadding) || boundsPadding < 0) {
+    throw new Error("BVH bounds padding must be finite and nonnegative.");
   }
-  return extent[1] >= extent[2] ? 1 : 2;
-}
-
-export function buildWavefrontBoundsBvh(triangles, maxLeafTriangles = 4) {
   if (triangles.length === 0) {
     return Object.freeze({ nodes: Object.freeze([]), triangles: Object.freeze([]) });
   }
 
   const nodes = [];
-  const orderedTriangles = [];
-
-  function buildNode(nodeTriangles) {
+  // One mutable ordering owned by this build. Source records remain immutable.
+  const orderedTriangles = [...triangles];
+  function sortRange(start, end, axis) {
+    const sorted = orderedTriangles.slice(start, end).sort((left, right) => left.centroid[axis] - right.centroid[axis]);
+    for (let index = start; index < end; index++) orderedTriangles[index] = sorted[index - start];
+  }
+  function buildNode(start, end) {
     const nodeIndex = nodes.length;
     nodes.push(null);
-    const bounds = nodeTriangles.reduce((current, triangle) => mergeBounds(current, triangle.bounds), null);
-
-    if (nodeTriangles.length <= maxLeafTriangles) {
-      const firstTriangle = orderedTriangles.length;
-      orderedTriangles.push(...nodeTriangles);
-      nodes[nodeIndex] = Object.freeze({
-        bounds: Object.freeze({
-          min: Object.freeze(bounds.min),
-          max: Object.freeze(bounds.max),
-        }),
-        firstTriangle,
-        triangleCount: nodeTriangles.length,
-        leftChild: 0,
-        rightChild: 0,
-      });
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    const centroidMin = [Infinity, Infinity, Infinity], centroidMax = [-Infinity, -Infinity, -Infinity];
+    for (let index = start; index < end; index++) {
+      const record = orderedTriangles[index];
+      for (let axis = 0; axis < 3; axis++) {
+        min[axis] = Math.min(min[axis], record.bounds.min[axis]);
+        max[axis] = Math.max(max[axis], record.bounds.max[axis]);
+        centroidMin[axis] = Math.min(centroidMin[axis], record.centroid[axis]);
+        centroidMax[axis] = Math.max(centroidMax[axis], record.centroid[axis]);
+      }
+    }
+    if (boundsPadding > 0) {
+      for (let axis = 0; axis < 3; axis++) {
+        const pad = Math.max(1, Math.abs(min[axis]), Math.abs(max[axis])) * boundsPadding;
+        min[axis] -= pad;
+        max[axis] += pad;
+      }
+    }
+    const bounds = Object.freeze({ min: Object.freeze(min), max: Object.freeze(max) });
+    const count = end - start;
+    if (count <= maxLeafTriangles) {
+      nodes[nodeIndex] = Object.freeze({ bounds, firstTriangle: start,
+        triangleCount: count, leftChild: 0, rightChild: 0 });
       return nodeIndex;
     }
-
-    const axis = chooseSplitAxis(nodeTriangles);
-    const sorted = [...nodeTriangles].sort((left, right) => left.centroid[axis] - right.centroid[axis]);
-    const midpoint = Math.max(1, Math.floor(sorted.length / 2));
-    const leftChild = buildNode(sorted.slice(0, midpoint));
-    const rightChild = buildNode(sorted.slice(midpoint));
-    nodes[nodeIndex] = Object.freeze({
-      bounds: Object.freeze({
-        min: Object.freeze(bounds.min),
-        max: Object.freeze(bounds.max),
-      }),
-      firstTriangle: leftChild,
-      triangleCount: 0,
-      leftChild,
-      rightChild,
-    });
+    const extent = subtract(centroidMax, centroidMin);
+    const axis = extent[0] >= extent[1] && extent[0] >= extent[2] ? 0 : extent[1] >= extent[2] ? 1 : 2;
+    // Preserve the published stable sort order, including equal-centroid ties.
+    sortRange(start, end, axis);
+    const midpoint = start + Math.floor(count / 2);
+    const leftChild = buildNode(start, midpoint), rightChild = buildNode(midpoint, end);
+    nodes[nodeIndex] = Object.freeze({ bounds, firstTriangle: leftChild,
+      triangleCount: 0, leftChild, rightChild });
     return nodeIndex;
   }
-
-  buildNode(triangles);
-  return Object.freeze({
-    nodes: Object.freeze(nodes),
-    triangles: Object.freeze(orderedTriangles),
-  });
+  buildNode(0, orderedTriangles.length);
+  return Object.freeze({ nodes: Object.freeze(nodes), triangles: Object.freeze(orderedTriangles) });
 }
 
 export function createWavefrontMeshAcceleration(meshes = [], gpuMaterialSource = null) {

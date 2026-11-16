@@ -42,8 +42,13 @@ function boundsOf(local, transform) {
   const localMin=local.min,localMax=local.max;
   const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
   for(let corner=0;corner<8;corner++) {
-    const p=transformInstancePoint(transform,[0,1,2].map(a=>(corner&(1<<a))?localMax[a]:localMin[a]));
-    for(let a=0;a<3;a++){min[a]=Math.min(min[a],p[a]);max[a]=Math.max(max[a],p[a]);}
+    const x=(corner&1)?localMax[0]:localMin[0];
+    const y=(corner&2)?localMax[1]:localMin[1];
+    const z=(corner&4)?localMax[2]:localMin[2];
+    for(let a=0;a<3;a++) {
+      const value=transform[a]*x+transform[4+a]*y+transform[8+a]*z+transform[12+a];
+      min[a]=Math.min(min[a],value);max[a]=Math.max(max[a],value);
+    }
   }
   if(![...min,...max].every(Number.isFinite)) throw new Error('Instance mesh has invalid bounds.');
   return freeze({min:freeze(min),max:freeze(max)});
@@ -59,13 +64,20 @@ export function prepareWavefrontInstances(meshes, instances) {
     }
     byId.set(mesh.id,mesh);localBounds.set(mesh.id,meshBounds(mesh));
   }
-  const ids=new Set(),used=new Set();
+  const ids=new Set(),used=new Set(),affines=new WeakMap();
   const records=instances.map(instance=>{
     if(!instance||!uint(instance.id)||ids.has(instance.id)) throw new Error('Instance IDs must be unique unsigned integers.');
     const mesh=byId.get(instance.meshId);
     if(!mesh) throw new Error('Instance references an unknown mesh.');
     ids.add(instance.id);used.add(mesh.id);
-    const affine=affineTransform(instance.transform);
+    // Authored model primitives share a placement. Cache only immutable inputs
+    // and only within this build, so caller mutations and later scenes stay isolated.
+    const cacheable=Array.isArray(instance.transform)&&Object.isFrozen(instance.transform);
+    let affine=cacheable?affines.get(instance.transform):undefined;
+    if(!affine) {
+      affine=affineTransform(instance.transform);
+      if(cacheable) affines.set(instance.transform,affine);
+    }
     const bounds=boundsOf(localBounds.get(mesh.id),affine.transform);
     return freeze({...affine,id:instance.id,meshId:mesh.id,bounds,
       centroid:freeze(bounds.min.map((v,a)=>(v+bounds.max[a])/2))});
@@ -75,13 +87,10 @@ export function prepareWavefrontInstances(meshes, instances) {
 }
 
 export function buildWavefrontInstances(meshes, plan, materialSource) {
-  const tlas=buildWavefrontBoundsBvh(plan.records,1);
-  // Outward padding covers f32 matrix multiplication and packed-bound rounding.
-  const nodes=tlas.nodes.map(node=>{
-    const pad=node.bounds.min.map((v,a)=>Math.max(1,Math.abs(v),Math.abs(node.bounds.max[a]))*1e-6);
-    return freeze({...node,bounds:freeze({min:freeze(node.bounds.min.map((v,a)=>v-pad[a])),
-      max:freeze(node.bounds.max.map((v,a)=>v+pad[a]))})});
-  }),triangles=[],roots=new Map();
+  // Apply outward f32 padding as each node is built, avoiding a second full
+  // tree of node/bounds objects at large instance counts.
+  const tlas=buildWavefrontBoundsBvh(plan.records,1,1e-6);
+  const nodes=[...tlas.nodes],triangles=[],roots=new Map();
   for(const [meshIndex,mesh] of meshes.entries()) {
     const blas=createWavefrontMeshAcceleration([mesh],materialSource);
     const nodeOffset=nodes.length,triangleOffset=triangles.length;
