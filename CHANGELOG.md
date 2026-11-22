@@ -11,6 +11,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Added**
+  - (placeholder)
+
+- **Changed**
+  - (placeholder)
+
+- **Fixed**
+  - (placeholder)
+
+- **Security**
+  - (placeholder)
+
+## [0.2.70] - 2026-11-22
+
 - Resolve newly required shared-demo public imports and verify bounded rejection of adversarial glob patterns against patched minimatch.
 
 - Refresh supported npm dependency and security tooling baselines; preserve runtime API contracts (weekly maintenance, 2026-11-22).
@@ -1563,3 +1577,4 @@ All notable changes to this project will be documented in this file.
 [0.2.67]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.67
 [0.2.68]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.68
 [0.2.69]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.69
+[0.2.70]: https://github.com/Plasius-LTD/gpu-renderer/releases/tag/v0.2.70
