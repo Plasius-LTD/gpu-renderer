@@ -48,8 +48,12 @@ test('pattern preprocessing stays within a bounded worker budget', () => {
     const {Minimatch}=require('minimatch');
     const pattern=Array.from({length:18},(_,i)=>'p'+i+'/**/..').join('/')+'/file';
     // The configured expansion budget must also bound globstar preprocessing.
-    const matcher=new Minimatch(pattern,{optimizationLevel:2,braceExpandMax:64});
-    if(matcher.globParts.length>64) process.exit(3);
+    try {
+      const matcher=new Minimatch(pattern,{optimizationLevel:2,braceExpandMax:64});
+      if(matcher.globParts.length>64) process.exit(3);
+    } catch (error) {
+      if (!(error instanceof RangeError) || error.message !== "optimizationLevel 2: too many patterns from '**/..'") throw error;
+    }
     if(!new Minimatch('**/*.{ts,tsx}',{optimizationLevel:2}).match('src/view.tsx')) process.exit(2);
   `], { cwd: path.resolve(__dirname, '..'), timeout: 2000, maxBuffer: 4096 });
   assert.equal(probe.status, 0, `pattern must finish without amplification: ${probe.error?.code ?? probe.signal ?? probe.status}`);

@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Resolve newly required shared-demo public imports and verify bounded rejection of adversarial glob patterns against patched minimatch.
+
+- Refresh supported npm dependency and security tooling baselines; preserve runtime API contracts (weekly maintenance, 2026-11-22).
+
 - **Added**
   - (placeholder)
 

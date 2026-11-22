@@ -52,19 +52,19 @@
   "author": "Plasius LTD <development@plasius.co.uk>",
   "license": "Apache-2.0",
   "dependencies": {
-    "@plasius/gpu-camera": "^0.1.18",
-    "@plasius/gpu-model-core": "^0.5.0",
-    "@plasius/gpu-shared": "^1.1.1",
-    "@plasius/gpu-xr": "^0.1.17",
+    "@plasius/gpu-camera": "^0.1.19",
+    "@plasius/gpu-model-core": "^0.7.2",
+    "@plasius/gpu-shared": "^1.11.2",
+    "@plasius/gpu-xr": "^0.1.18",
     "@types/webxr": "^0.5.24"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@plasius/gpu-shader": "0.1.4",
-    "c8": "^11.0.0",
-    "eslint": "^10.9.1",
-    "globals": "^17.11.0",
-    "tsup": "^8.5.1",
+    "@plasius/gpu-shader": "0.1.11",
+    "c8": "^12.0.0",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "tsup": "^9.0.0",
     "typescript": "^7.0.2"
   },
   "repository": {
@@ -91,8 +91,8 @@
   "overrides": {
     "brace-expansion": "5.0.12",
     "esbuild": "^0.28.1",
-    "minimatch": "11.0.1",
-    "glob": "14.0.2"
+    "minimatch": "^11.0.9",
+    "glob": "^14.0.6"
   },
   "engines": {
     "node": ">=24"
